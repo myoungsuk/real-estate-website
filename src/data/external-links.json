@@ -1,5 +1,15 @@
 [
   {
+    "id": "naver-blog-sample-20260825",
+    "type": "blog",
+    "status": "published",
+    "title": "[샘플] 대전 천동 리더스시티 8월 신규 소식",
+    "summary": "테스트용으로 등록한 샘플 블로그 글입니다. 실제 게시물이 아닙니다.",
+    "url": "https://blog.naver.com/PostView.naver?blogId=p5468300&logNo=000000000000",
+    "publishedAt": "2026-08-25",
+    "thumbnail": null
+  },
+  {
     "id": "naver-blog-224382351730",
     "type": "blog",
     "status": "published",
