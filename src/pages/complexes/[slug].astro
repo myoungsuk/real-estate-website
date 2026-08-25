@@ -2,10 +2,10 @@
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import PageIntro from "../../components/PageIntro.astro";
 import ContactPanel from "../../components/ContactPanel.astro";
-import complexes from "../../data/complexes.json";
+import { publishedComplexes } from "../../lib/complexes";
 
 export function getStaticPaths() {
-  return complexes.map((complex) => ({ params: { slug: complex.slug }, props: { complex } }));
+  return publishedComplexes.map((complex) => ({ params: { slug: complex.slug }, props: { complex } }));
 }
 
 const { complex } = Astro.props;
@@ -14,17 +14,18 @@ const description = `${complex.name}의 확인된 단지 정보와 공개 매물
 ---
 
 <BaseLayout {title} {description}>
-  <PageIntro eyebrow={`${complex.areaName} · ${complex.eyebrow}`} title={complex.name} description="공식 자료와 현장 확인을 마친 내용부터 공개합니다." />
+  <PageIntro eyebrow={`${complex.areaName} · ${complex.eyebrow}`} title={complex.name} description={complex.summary} />
   <section class="section">
-    <div class="shell two-column two-column--wide">
-      <article class="statement-card statement-card--number">
-        <span>{complex.mark}</span>
-        <p>{complex.areaName} · {complex.eyebrow}</p>
-      </article>
-      <div class="preparing-copy">
+    <div class="shell complex-story">
+      {complex.image && (
+        <figure class="complex-story__image">
+          <img src={complex.image.src} alt={complex.image.alt} width="1600" height="1600" />
+          <figcaption>{complex.name} 단지 전경</figcaption>
+        </figure>
+      )}
+      <div class="complex-story__copy">
         <p class="eyebrow">단지 이야기</p>
         <h2>{complex.introTitle}</h2>
-        <p>{complex.summary}</p>
         {complex.introduction.map((paragraph) => <p>{paragraph}</p>)}
         <a class="button button--secondary" href={`/properties/?area=${complex.areaSlug}`}>{complex.areaName} 매물 보기</a>
       </div>
@@ -32,12 +33,22 @@ const description = `${complex.name}의 확인된 단지 정보와 공개 매물
   </section>
   <section class="section section--soft">
     <div class="shell">
-      <div class="section-heading"><div><p class="eyebrow">공개 예정 정보</p><h2>확인 후 채워질 내용</h2></div><p>확인되지 않은 수치를 임시값으로 채우지 않습니다.</p></div>
+      <div class="section-heading"><div><p class="eyebrow">단지 기본정보</p><h2>계약 전에 먼저 확인할 숫자</h2></div><p>공개자료 확인일 {complex.confirmedAt}</p></div>
+      <dl class="complex-fact-grid">
+        {complex.facts.map((fact) => <div><dt>{fact.label}</dt><dd>{fact.value}</dd></div>)}
+      </dl>
+      <div class="section-heading complex-highlight-heading"><div><p class="eyebrow">생활권 안내</p><h2>{complex.name}에서 살펴볼 점</h2></div></div>
       <div class="three-column">
-        <article class="info-card"><h3>단지 기본</h3><p>세대수, 동수, 사용승인일, 면적형, 주차와 난방</p></article>
-        <article class="info-card"><h3>생활 환경</h3><p>교통, 학교, 생활편의, 커뮤니티와 현장 동선</p></article>
-        <article class="info-card"><h3>연결 정보</h3><p>공개 매물, 관련 블로그와 유튜브 원문 링크</p></article>
+        {complex.highlights.map((highlight, index) => (
+          <article class:list={["info-card", index === 0 && "info-card--featured"]}><span>{String(index + 1).padStart(2, "0")}</span><h3>{highlight.title}</h3><p>{highlight.description}</p></article>
+        ))}
       </div>
+    </div>
+  </section>
+  <section class="section complex-sources-section">
+    <div class="shell complex-sources">
+      <div><p class="eyebrow">자료 출처</p><h2>확인한 공개자료</h2><p>단지 수치와 생활환경은 아래 자료를 기준으로 정리했습니다. 실제 계약 전 최신 내용을 다시 확인합니다.</p></div>
+      <ul>{complex.sources.map((source) => <li><a href={source.url} target="_blank" rel="noopener noreferrer">{source.label} <span aria-hidden="true">↗</span></a></li>)}</ul>
     </div>
   </section>
   <ContactPanel title={`${complex.name} 조건을 직접 확인해 드립니다`} />

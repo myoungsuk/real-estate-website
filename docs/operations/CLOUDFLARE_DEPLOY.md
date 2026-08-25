@@ -4,23 +4,28 @@
 
 - 운영 도메인 `https://leaderscityhappy.com`은 Worker `leaders-city-happy-realty`의 Custom Domain이다.
 - 같은 Worker의 보조 확인 주소는 `https://leaders-city-happy-realty.k4858678.workers.dev`이다. 공개 안내와 검색 등록에는 운영 도메인만 사용한다.
-- 확인한 Worker 버전은 `aa1c2c2a-eecd-473c-8c7a-04076272bf85`이다.
+- 운영 쓰기 활성 상태로 확인한 Worker 버전은 `1e5f54e2-85cc-4123-b451-6e3f51e8465d`이다.
 - Access 애플리케이션 `리더스시티 행복한부동산 관리자`가 운영 도메인과 보조 Worker 주소의 `/admin*`, `/api/admin*`만 보호한다.
 - One-time PIN ID 공급자를 추가하고 애플리케이션 로그인 방법을 One-time PIN 하나로 제한했다. Allow 정책은 Include에 정확한 관리자 이메일 2개, Require에 Login method `One-time PIN`을 사용하며 Bypass 정책은 없다.
-- Worker Secret `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD`, `ADMIN_ALLOWED_EMAILS` 등록을 확인했다. Secret 값은 저장소와 문서에 기록하지 않는다.
+- Worker Secret `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD`, `ADMIN_ALLOWED_EMAILS`, `ADMIN_CSRF_SECRET`, `ADMIN_WRITE_ENABLED`, `GITHUB_CONTENTS_TOKEN`, `GITHUB_REPOSITORY`, `GITHUB_BRANCH` 등록을 확인했다. Secret 값은 저장소와 문서에 기록하지 않는다.
 - 운영 도메인의 비로그인 확인 결과 공개 홈은 `200`, `/admin/`과 `/api/admin/v1/health`는 Access 로그인으로 `302` 리디렉션된다. 로그인된 브라우저에서는 관리자 화면과 same-worker 관리 API 정상 상태를 확인했다.
-- 콘텐츠 편집 UI와 GitHub 쓰기 코드는 구현했지만 `ADMIN_WRITE_ENABLED`와 GitHub 쓰기 Secret은 아직 활성화하지 않아 실제 저장은 잠금 상태다.
-- Email 입력과 `Send login code` 화면 노출을 확인했고, 운영자가 허용 이메일 1개의 실제 OTP 수신과 관리자 진입 성공을 확인했다. 남은 수동 확인은 다른 허용 이메일의 로그인과 비허용 이메일 차단이다.
+- GitHub Fine-grained token은 `myoungsuk/real-estate-website` 저장소 한 개와 Contents Read/Write만 허용하고, 운영자 요청에 따라 만료 없음으로 발급했다. 최초 확인 과정의 토큰은 폐기하고 교체 토큰만 Worker Secret에 등록했다.
+- `GITHUB_BRANCH=admin-storage-test`에서 관리자 읽기·저장·복원 시험을 완료했다. 시험 커밋 `631cc22` 뒤 복원 커밋 `44afe18`을 만들었고, 복원 결과가 기준 커밋 `89e0f35`의 `home-content.json`과 동일함을 확인했다.
+- 검증된 브랜치를 `master`에 fast-forward 병합하고 자동 배포 트리거 커밋 `0f07589`를 추가했다. 현재 관리자 저장 대상은 `GITHUB_BRANCH=master`, 운영 쓰기는 `ADMIN_WRITE_ENABLED=true`다.
+- Email 입력과 `Send login code` 화면 노출을 확인했고, 운영자가 허용 이메일 1개의 실제 OTP 수신과 관리자 진입 성공을 확인했다. 다른 허용 이메일과 비허용 이메일의 실제 로그인 시험은 운영자 결정으로 추후 확인한다.
 - 기존 Pages 프로젝트 `real-estate-website`는 운영 도메인 연결만 해제했으며 `https://real-estate-website-dnv.pages.dev`는 롤백 확인용으로 유지한다.
 
 ## GitHub 자동 배포
 
-1. Cloudflare 대시보드에서 Workers & Pages의 새 애플리케이션을 만든다.
-2. GitHub 저장소 `myoungsuk/real-estate-website`를 연결한다.
-3. 빌드 명령은 `npm run build`, 배포 명령은 `npx wrangler deploy`로 설정한다.
-4. Production 브랜치는 실제 기본 브랜치와 일치시킨다.
-5. Production 환경에 `PUBLIC_SITE_URL`과 `PUBLIC_ALLOW_INDEXING=true`를 설정한다.
-6. Preview 환경은 `PUBLIC_ALLOW_INDEXING=false`를 유지한다.
+Worker는 GitHub `myoungsuk/real-estate-website`의 `master`에 연결되어 있다. 빌드 명령은 `npm run build`, 배포 명령은 `npx wrangler deploy`, 루트 디렉터리는 `/`다. Production에는 `PUBLIC_SITE_URL=https://leaderscityhappy.com`, `PUBLIC_ALLOW_INDEXING=true`를 등록했고 Production 이외 브랜치 빌드는 비활성화했다.
+
+최초 Git 빌드 `91d02fd6`과 Worker 버전 `5e3350e4-276a-46a6-a696-ff0dc9ad0927`의 100% 운영 배포를 확인했다. GitHub Actions `CI #3`도 성공했다.
+
+1. GitHub `master`에 운영 승인 커밋을 푸시한다.
+2. GitHub Actions와 Cloudflare 빌드가 모두 성공했는지 확인한다.
+3. Cloudflare 배포가 새 버전 100%로 전환됐는지 확인한다.
+4. 공개 홈, robots, sitemap, canonical과 Access 보호 경로를 회귀 확인한다.
+5. Production 이외 브랜치 빌드는 운영 승인 전까지 비활성화한다.
 
 `wrangler.jsonc`는 `./dist` 정적 자산과 `worker/index.mjs` 관리 API를 같은 Worker로 배포합니다. `leaderscityhappy.com`은 Worker Custom Domain으로 선언하며 `/api/admin`과 `/api/admin/*`만 Worker를 먼저 실행하므로 공개 경로는 정적 자산으로 제공합니다. Production 빌드는 `PUBLIC_SITE_URL=https://leaderscityhappy.com`과 `PUBLIC_ALLOW_INDEXING=true`를 반드시 함께 설정합니다.
 
@@ -41,9 +46,12 @@ Custom Domain 전환 롤백은 `wrangler.jsonc`의 Custom Domain 설정을 제�
    - `ADMIN_CSRF_SECRET`: 32자 이상의 무작위 Secret
    - `GITHUB_CONTENTS_TOKEN`: `myoungsuk/real-estate-website` 한 저장소의 Contents Read/Write만 가진 Fine-grained token
    - `GITHUB_REPOSITORY=myoungsuk/real-estate-website`
-   - `GITHUB_BRANCH=master`
+   - 시험 중에는 `GITHUB_BRANCH=admin-storage-test`
+   - 운영 전환 시 검증·병합을 마친 뒤 `GITHUB_BRANCH=master`
 7. 허용 관리자 로그인, GitHub 파일 조회와 테스트 저장을 확인한 뒤에만 `ADMIN_WRITE_ENABLED=true`로 변경한다.
 8. Preview에는 실제 Production 이메일과 쓰기 Secret을 복사하지 않는다.
+
+토큰은 만료 없음으로 발급했으므로 자동 만료에 기대지 않는다. 유출 의심, 담당자 변경, 저장 기능 폐기 시 GitHub Settings에서 즉시 폐기하고 새 토큰으로 교체한다. 사용하지 않는 동안에는 `ADMIN_WRITE_ENABLED=false`를 유지한다.
 
 Static Assets 내부 라우터에서는 `ctx.access`를 사용할 수 없으므로 Worker가 `Cf-Access-Jwt-Assertion`을 직접 검증한다. 설정 누락, JWT 오류, Audience 불일치 또는 허용 이메일 불일치 시 API는 차단된다.
 

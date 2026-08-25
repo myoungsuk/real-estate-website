@@ -64,7 +64,7 @@ export function validateOffice(office) {
     errors.push("office.email: 올바른 이메일 주소가 필요합니다.");
   }
 
-  for (const key of ["naverPlaceUrl", "naverBlogUrl", "youtubeUrl", "kakaoUrl"]) {
+  for (const key of ["naverPlaceUrl", "naverListingsUrl", "naverBlogUrl", "youtubeUrl", "kakaoUrl"]) {
     try {
       const url = new URL(office?.[key]);
       if (url.protocol !== "https:") errors.push(`office.${key}: HTTPS만 허용합니다.`);
@@ -175,6 +175,46 @@ export function validateListings(listings) {
   return errors;
 }
 
+export function validateNaverListings(data) {
+  const errors = [];
+  if (!isIsoDateOrNull(data?.checkedAt) || data.checkedAt === null) {
+    errors.push("naverListings.checkedAt: YYYY-MM-DD 확인일이 필요합니다.");
+  }
+  if (!Array.isArray(data?.items) || data.items.length === 0) {
+    return [...errors, "naverListings.items: 네이버 공개 매물이 하나 이상 필요합니다."];
+  }
+
+  const ids = new Set();
+  data.items.forEach((listing, index) => {
+    const path = `naverListings.items[${index}]`;
+    if (!/^\d+$/.test(listing.id ?? "")) errors.push(`${path}.id: 네이버 숫자 매물번호가 필요합니다.`);
+    if (ids.has(listing.id)) errors.push(`${path}.id: 중복 ID입니다.`);
+    ids.add(listing.id);
+    for (const key of ["title", "propertyType", "priceLabel", "summary", "source"]) {
+      if (!isNonEmptyString(listing[key])) errors.push(`${path}.${key}: 네이버 공개 정보가 필요합니다.`);
+    }
+    if (!allowedTradeTypes.has(listing.tradeType)) errors.push(`${path}.tradeType: 허용되지 않은 거래유형입니다.`);
+    for (const key of ["areaLabel", "floorLabel", "direction"]) {
+      if (listing[key] !== null && !isNonEmptyString(listing[key])) errors.push(`${path}.${key}: 문자열 또는 null이어야 합니다.`);
+    }
+    if (!isIsoDateOrNull(listing.confirmedAt) || listing.confirmedAt === null) {
+      errors.push(`${path}.confirmedAt: YYYY-MM-DD 확인일이 필요합니다.`);
+    } else if (isNonEmptyString(data.checkedAt) && listing.confirmedAt > data.checkedAt) {
+      errors.push(`${path}.confirmedAt: 데이터 확인일보다 늦을 수 없습니다.`);
+    }
+    if (listing.source !== "네이버페이 부동산") errors.push(`${path}.source: 네이버페이 부동산이어야 합니다.`);
+    try {
+      const url = new URL(listing.url);
+      if (url.protocol !== "https:" || url.hostname !== "fin.land.naver.com" || url.pathname !== `/articles/${listing.id}`) {
+        errors.push(`${path}.url: 해당 네이버 매물번호의 HTTPS 주소가 필요합니다.`);
+      }
+    } catch {
+      errors.push(`${path}.url: 올바른 네이버 매물 주소가 필요합니다.`);
+    }
+  });
+  return errors;
+}
+
 export function validateComplexes(complexes) {
   const errors = [];
   if (!Array.isArray(complexes) || complexes.length === 0) {
@@ -194,13 +234,35 @@ export function validateComplexes(complexes) {
     if (!Array.isArray(complex.introduction) || complex.introduction.length === 0 || complex.introduction.some((paragraph) => !isNonEmptyString(paragraph))) {
       errors.push(`${path}.introduction: 한 개 이상의 단지 소개 문단이 필요합니다.`);
     }
-    if (complex.status === "published") {
-      try {
-        const sourceUrl = new URL(complex.source);
-        if (sourceUrl.protocol !== "https:") errors.push(`${path}.source: HTTPS 출처가 필요합니다.`);
-      } catch {
-        errors.push(`${path}.source: 공개 단지는 올바른 출처 URL이 필요합니다.`);
+    errors.push(...validateImage(complex.image, `${path}.image`, { required: complex.status === "published" }));
+    for (const [field, labelKey, valueKey] of [
+      ["facts", "label", "value"],
+      ["highlights", "title", "description"],
+    ]) {
+      if (!Array.isArray(complex[field]) || (complex.status === "published" && complex[field].length === 0)) {
+        errors.push(`${path}.${field}: 공개 단지에는 한 개 이상의 항목이 필요합니다.`);
+      } else if (Array.isArray(complex[field])) {
+        complex[field].forEach((item, itemIndex) => {
+          if (!isNonEmptyString(item[labelKey]) || !isNonEmptyString(item[valueKey])) {
+            errors.push(`${path}.${field}[${itemIndex}]: 표시 문구와 설명이 필요합니다.`);
+          }
+        });
       }
+    }
+    if (!Array.isArray(complex.sources) || (complex.status === "published" && complex.sources.length === 0)) {
+      errors.push(`${path}.sources: 공개 단지에는 한 개 이상의 출처가 필요합니다.`);
+    } else if (Array.isArray(complex.sources)) {
+      complex.sources.forEach((source, sourceIndex) => {
+        if (!isNonEmptyString(source.label)) errors.push(`${path}.sources[${sourceIndex}].label: 출처 이름이 필요합니다.`);
+        try {
+          const sourceUrl = new URL(source.url);
+          if (sourceUrl.protocol !== "https:") errors.push(`${path}.sources[${sourceIndex}].url: HTTPS 출처가 필요합니다.`);
+        } catch {
+          errors.push(`${path}.sources[${sourceIndex}].url: 올바른 출처 URL이 필요합니다.`);
+        }
+      });
+    }
+    if (complex.status === "published") {
       if (!isIsoDateOrNull(complex.confirmedAt) || complex.confirmedAt === null) errors.push(`${path}.confirmedAt: 공개 단지는 확인일이 필요합니다.`);
     }
     if (slugs.has(complex.slug)) errors.push(`${path}.slug: 중복 slug입니다.`);
@@ -274,14 +336,15 @@ export function validateHomeContent(homeContent) {
   return errors;
 }
 
-export function validateContent({ office, listings, complexes, externalLinks, homeContent, faq, reviews }) {
+export function validateContent({ office, listings, naverListings, complexes, externalLinks, homeContent, faq, reviews }) {
   const errors = validateOffice(office);
   errors.push(...validateListings(listings));
+  errors.push(...validateNaverListings(naverListings));
   errors.push(...validateComplexes(complexes));
   errors.push(...validateExternalLinks(externalLinks));
   errors.push(...validateHomeContent(homeContent));
   if (!Array.isArray(faq) || !Array.isArray(reviews)) errors.push("FAQ·후기는 배열이어야 합니다.");
 
-  errors.push(...findBannedKeys({ office, listings, complexes, externalLinks, homeContent, faq, reviews }));
+  errors.push(...findBannedKeys({ office, listings, naverListings, complexes, externalLinks, homeContent, faq, reviews }));
   return errors;
 }

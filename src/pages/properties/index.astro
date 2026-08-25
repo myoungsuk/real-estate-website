@@ -2,17 +2,26 @@
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import PageIntro from "../../components/PageIntro.astro";
 import ContactPanel from "../../components/ContactPanel.astro";
-import ListingCard from "../../components/ListingCard.astro";
-import { listingAreas, publishedListings } from "../../lib/listings";
+import NaverListingCard from "../../components/NaverListingCard.astro";
+import { naverListings, naverListingsCheckedAt, naverPropertyTypes } from "../../lib/naver-listings";
+import { office } from "../../lib/site";
 
 const title = "대전 동구 매매·전세·월세 매물 | 행복한부동산";
 const description = "대전 동구에서 직접 확인한 매매·전세·월세 매물을 지역과 조건별로 비교합니다.";
 ---
 
 <BaseLayout {title} {description}>
-  <PageIntro eyebrow="PROPERTY" title="확인 매물" description="가격과 면적, 최근 확인일이 있는 공개 승인 매물만 보여드립니다." />
+  <PageIntro eyebrow="PROPERTY" title="네이버 등록 매물" description="네이버페이 부동산에 공개된 개별 매물을 우리 사이트에서도 한눈에 확인할 수 있습니다." />
   <section class="section properties-section">
     <div class="shell">
+      <aside class="external-listing-callout" aria-label="네이버 부동산 등록 매물 안내">
+        <div>
+          <p class="eyebrow">NAVER 부동산</p>
+          <h2>네이버에 공개된 개별 매물 {naverListings.length}건</h2>
+          <p>{naverListingsCheckedAt} 기준 정보입니다. 아래 카드를 누르면 해당 네이버 매물로 바로 이동합니다.</p>
+        </div>
+        <a class="button button--light" href={office.naverListingsUrl} target="_blank" rel="noopener noreferrer">네이버 매물 보기</a>
+      </aside>
       <form class="filter-panel" data-listing-filter>
         <div>
           <label for="trade">거래유형</label>
@@ -21,21 +30,21 @@ const description = "대전 동구에서 직접 확인한 매매·전세·월세
           </select>
         </div>
         <div>
-          <label for="area">지역</label>
-          <select id="area" name="area">
-            <option value="">대전 동구 전체</option>
-            {listingAreas.map((area) => <option value={area.slug}>{area.name}</option>)}
+          <label for="propertyType">매물유형</label>
+          <select id="propertyType" name="propertyType">
+            <option value="">전체</option>
+            {naverPropertyTypes.map((propertyType) => <option value={propertyType}>{propertyType}</option>)}
           </select>
         </div>
         <button class="button button--secondary" type="reset">필터 초기화</button>
       </form>
-      <p class="result-count" aria-live="polite" data-result-count>공개 매물 {publishedListings.length}건</p>
+      <p class="result-count" aria-live="polite" data-result-count>네이버 등록 매물 {naverListings.length}건</p>
       <div class="listing-grid" data-listing-grid>
-        {publishedListings.map((listing) => <ListingCard {listing} />)}
+        {naverListings.map((listing) => <NaverListingCard {listing} />)}
       </div>
-      <div class="empty-state" data-empty-state hidden={publishedListings.length > 0}>
+      <div class="empty-state" data-empty-state hidden>
         <span class="empty-state__number" aria-hidden="true">0</span>
-        <div><h2>현재 공개 준비 중입니다</h2><p>대전 동구에서 실제 확인과 공개 승인을 마친 매물만 올립니다. 원하시는 동네와 조건은 전화·문자·카카오톡으로 문의해 주세요.</p></div>
+        <div><h2>조건에 맞는 매물이 없습니다</h2><p>필터를 초기화하거나 원하시는 조건을 전화·문자·카카오톡으로 문의해 주세요.</p></div>
       </div>
     </div>
   </section>
@@ -44,30 +53,30 @@ const description = "대전 동구에서 직접 확인한 매매·전세·월세
 
 <script>
   const form = document.querySelector<HTMLFormElement>("[data-listing-filter]");
-  const cards = [...document.querySelectorAll<HTMLElement>("[data-listing-card]")];
+  const cards = [...document.querySelectorAll<HTMLElement>("[data-naver-listing-card]")];
   const count = document.querySelector<HTMLElement>("[data-result-count]");
   const empty = document.querySelector<HTMLElement>("[data-empty-state]");
 
   if (form && count && empty) {
     const trade = form.elements.namedItem("trade") as HTMLSelectElement;
-    const area = form.elements.namedItem("area") as HTMLSelectElement;
+    const propertyType = form.elements.namedItem("propertyType") as HTMLSelectElement;
     const params = new URLSearchParams(window.location.search);
     if (["sale", "jeonse", "monthly-rent"].includes(params.get("trade") ?? "")) trade.value = params.get("trade")!;
-    const allowedAreas = [...area.options].map((option) => option.value).filter(Boolean);
-    if (allowedAreas.includes(params.get("area") ?? "")) area.value = params.get("area")!;
+    const allowedPropertyTypes = [...propertyType.options].map((option) => option.value).filter(Boolean);
+    if (allowedPropertyTypes.includes(params.get("type") ?? "")) propertyType.value = params.get("type")!;
 
     const apply = () => {
       let visible = 0;
       cards.forEach((card) => {
-        const show = (!trade.value || card.dataset.trade === trade.value) && (!area.value || card.dataset.area === area.value);
+        const show = (!trade.value || card.dataset.trade === trade.value) && (!propertyType.value || card.dataset.propertyType === propertyType.value);
         card.hidden = !show;
         if (show) visible += 1;
       });
-      count.textContent = `공개 매물 ${visible}건`;
+      count.textContent = `네이버 등록 매물 ${visible}건`;
       empty.hidden = visible > 0;
       const next = new URLSearchParams();
       if (trade.value) next.set("trade", trade.value);
-      if (area.value) next.set("area", area.value);
+      if (propertyType.value) next.set("type", propertyType.value);
       history.replaceState(null, "", `${location.pathname}${next.size ? `?${next}` : ""}`);
     };
 
