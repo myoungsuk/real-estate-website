@@ -2,10 +2,11 @@
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import PageIntro from "../../components/PageIntro.astro";
 import ContactPanel from "../../components/ContactPanel.astro";
-import { complexNames, formatListingPrice, publishedListings, squareMetersToPyeong, tradeNames } from "../../lib/listings";
+import ListingCard from "../../components/ListingCard.astro";
+import { listingAreas, publishedListings } from "../../lib/listings";
 
-const title = "리더스시티 매매·전세·월세 매물 | 행복한부동산";
-const description = "천동 리더스시티 4블록과 5블록의 직접 확인한 매매·전세·월세 매물을 비교합니다.";
+const title = "대전 동구 매매·전세·월세 매물 | 행복한부동산";
+const description = "대전 동구에서 직접 확인한 매매·전세·월세 매물을 지역과 조건별로 비교합니다.";
 ---
 
 <BaseLayout {title} {description}>
@@ -20,30 +21,21 @@ const description = "천동 리더스시티 4블록과 5블록의 직접 확인�
           </select>
         </div>
         <div>
-          <label for="complex">블록</label>
-          <select id="complex" name="complex">
-            <option value="">전체</option><option value="leaders-city-4">4블록</option><option value="leaders-city-5">5블록</option>
+          <label for="area">지역</label>
+          <select id="area" name="area">
+            <option value="">대전 동구 전체</option>
+            {listingAreas.map((area) => <option value={area.slug}>{area.name}</option>)}
           </select>
         </div>
         <button class="button button--secondary" type="reset">필터 초기화</button>
       </form>
       <p class="result-count" aria-live="polite" data-result-count>공개 매물 {publishedListings.length}건</p>
       <div class="listing-grid" data-listing-grid>
-        {publishedListings.map((listing) => (
-          <article class="listing-card" data-listing-card data-trade={listing.tradeType} data-complex={listing.complex}>
-            <div class="listing-card__visual"><span>{listing.complex === "leaders-city-4" ? "4" : "5"}</span></div>
-            <div class="listing-card__body">
-              <p><span>{tradeNames[listing.tradeType]}</span>{complexNames[listing.complex]}</p>
-              <h2>{formatListingPrice(listing)}</h2>
-              <dl><div><dt>전용면적</dt><dd>{listing.exclusiveAreaM2}㎡ · {squareMetersToPyeong(listing.exclusiveAreaM2)}평</dd></div><div><dt>확인일</dt><dd>{listing.confirmedAt}</dd></div></dl>
-              <a class="button button--secondary" href={`/properties/${listing.slug}/`}>상세 보기</a>
-            </div>
-          </article>
-        ))}
+        {publishedListings.map((listing) => <ListingCard {listing} />)}
       </div>
       <div class="empty-state" data-empty-state hidden={publishedListings.length > 0}>
         <span class="empty-state__number" aria-hidden="true">0</span>
-        <div><h2>현재 공개 준비 중입니다</h2><p>실제 확인과 공개 승인을 마친 매물만 올립니다. 원하시는 조건은 전화나 문자로 문의해 주세요.</p></div>
+        <div><h2>현재 공개 준비 중입니다</h2><p>대전 동구에서 실제 확인과 공개 승인을 마친 매물만 올립니다. 원하시는 동네와 조건은 전화·문자·카카오톡으로 문의해 주세요.</p></div>
       </div>
     </div>
   </section>
@@ -58,15 +50,16 @@ const description = "천동 리더스시티 4블록과 5블록의 직접 확인�
 
   if (form && count && empty) {
     const trade = form.elements.namedItem("trade") as HTMLSelectElement;
-    const complex = form.elements.namedItem("complex") as HTMLSelectElement;
+    const area = form.elements.namedItem("area") as HTMLSelectElement;
     const params = new URLSearchParams(window.location.search);
     if (["sale", "jeonse", "monthly-rent"].includes(params.get("trade") ?? "")) trade.value = params.get("trade")!;
-    if (["leaders-city-4", "leaders-city-5"].includes(params.get("complex") ?? "")) complex.value = params.get("complex")!;
+    const allowedAreas = [...area.options].map((option) => option.value).filter(Boolean);
+    if (allowedAreas.includes(params.get("area") ?? "")) area.value = params.get("area")!;
 
     const apply = () => {
       let visible = 0;
       cards.forEach((card) => {
-        const show = (!trade.value || card.dataset.trade === trade.value) && (!complex.value || card.dataset.complex === complex.value);
+        const show = (!trade.value || card.dataset.trade === trade.value) && (!area.value || card.dataset.area === area.value);
         card.hidden = !show;
         if (show) visible += 1;
       });
@@ -74,7 +67,7 @@ const description = "천동 리더스시티 4블록과 5블록의 직접 확인�
       empty.hidden = visible > 0;
       const next = new URLSearchParams();
       if (trade.value) next.set("trade", trade.value);
-      if (complex.value) next.set("complex", complex.value);
+      if (area.value) next.set("area", area.value);
       history.replaceState(null, "", `${location.pathname}${next.size ? `?${next}` : ""}`);
     };
 

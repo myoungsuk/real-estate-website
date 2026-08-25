@@ -1,0 +1,95 @@
+---
+import AdminApiStatus from "../../components/admin/AdminApiStatus.astro";
+import AdminLayout from "../../layouts/AdminLayout.astro";
+import { listings } from "../../lib/listings";
+
+const counts = {
+  total: listings.length,
+  published: listings.filter((listing) => listing.status === "published").length,
+  draft: listings.filter((listing) => listing.status === "draft").length,
+  closed: listings.filter((listing) => ["contracted", "ended"].includes(listing.status)).length,
+};
+---
+
+<AdminLayout
+  title="관리자 대시보드 | 행복한부동산"
+  description="행복한부동산 콘텐츠와 배포 상태를 확인하는 관리자 대시보드입니다."
+>
+  <div class="admin-page-header">
+    <div>
+      <p class="admin-eyebrow">ADMIN CONSOLE</p>
+      <h1>운영 현황을 한눈에 확인하세요.</h1>
+      <p>매물, 첫 화면 문구, 블로그·유튜브, 지역·단지 설명을 한곳에서 관리합니다.</p>
+    </div>
+    <span class="admin-stage-badge">2단계 · 콘텐츠 관리</span>
+  </div>
+
+  <section class="admin-stat-grid" aria-label="매물 현황">
+    <article class="admin-stat-card">
+      <span>전체 매물</span>
+      <strong>{counts.total.toLocaleString("ko-KR")}</strong>
+      <small>저장소 등록 기준</small>
+    </article>
+    <article class="admin-stat-card admin-stat-card--published">
+      <span>공개 중</span>
+      <strong>{counts.published.toLocaleString("ko-KR")}</strong>
+      <small>홈페이지 노출 대상</small>
+    </article>
+    <article class="admin-stat-card">
+      <span>작성 중</span>
+      <strong>{counts.draft.toLocaleString("ko-KR")}</strong>
+      <small>초안 상태</small>
+    </article>
+    <article class="admin-stat-card">
+      <span>계약·종료</span>
+      <strong>{counts.closed.toLocaleString("ko-KR")}</strong>
+      <small>공개 목록 제외</small>
+    </article>
+  </section>
+
+  <div class="admin-dashboard-grid">
+    <section class="admin-panel admin-next-action" aria-labelledby="admin-next-action-title">
+      <div class="admin-panel__heading">
+        <div>
+          <p class="admin-eyebrow">바로가기</p>
+          <h2 id="admin-next-action-title">콘텐츠 관리 시작</h2>
+        </div>
+        <span class="admin-panel__number" aria-hidden="true">01</span>
+      </div>
+      <p>매물 등록부터 첫 화면 문구, 블로그·유튜브 카드, 지역 설명까지 관리 화면을 준비했습니다.</p>
+      <a class="admin-action-link" href="/admin/listings/">
+        매물 관리로 이동
+        <span aria-hidden="true">→</span>
+      </a>
+    </section>
+
+    <AdminApiStatus />
+  </div>
+
+  <section class="admin-panel admin-roadmap" aria-labelledby="admin-roadmap-title">
+    <div class="admin-panel__heading">
+      <div>
+        <p class="admin-eyebrow">개발 순서</p>
+        <h2 id="admin-roadmap-title">관리자 페이지 진행 단계</h2>
+      </div>
+    </div>
+    <ol>
+      <li>
+        <span>1</span>
+        <div><strong>읽기 전용 기반</strong><small>대시보드·매물 목록·Access 연결</small></div>
+      </li>
+      <li class="is-current">
+        <span>2</span>
+        <div><strong>콘텐츠 편집 화면</strong><small>매물·문구·링크·지역 설명</small></div>
+      </li>
+      <li>
+        <span>3</span>
+        <div><strong>저장 연결</strong><small>GitHub 토큰·충돌 방지·이미지</small></div>
+      </li>
+      <li>
+        <span>4</span>
+        <div><strong>배포·복구</strong><small>미리보기·상태 확인·롤백</small></div>
+      </li>
+    </ol>
+  </section>
+</AdminLayout>

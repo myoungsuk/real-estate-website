@@ -1,0 +1,110 @@
+<section class="admin-panel admin-api-status" aria-labelledby="admin-api-title" data-admin-api-status>
+  <div class="admin-panel__heading">
+    <div>
+      <p class="admin-eyebrow">보안 연결</p>
+      <h2 id="admin-api-title">관리 API 상태</h2>
+    </div>
+    <span class="admin-badge admin-badge--checking" data-api-badge>확인 중</span>
+  </div>
+
+  <p class="admin-api-status__message" data-api-message aria-live="polite">
+    Cloudflare Access 세션과 Worker 상태를 확인하고 있습니다.
+  </p>
+
+  <dl class="admin-api-status__facts">
+    <div>
+      <dt>관리자</dt>
+      <dd data-api-administrator>확인 중</dd>
+    </div>
+    <div>
+      <dt>인증 방식</dt>
+      <dd data-api-authentication>Cloudflare Access + Email OTP</dd>
+    </div>
+    <div>
+      <dt>쓰기 기능</dt>
+      <dd data-api-write>비활성화</dd>
+    </div>
+  </dl>
+
+  <button class="admin-text-button" type="button" data-api-retry hidden>다시 확인</button>
+</section>
+
+<script>
+  interface ApiEnvelope<T> {
+    ok: boolean;
+    data?: T;
+    error?: { code?: string; message?: string };
+    requestId?: string;
+  }
+
+  interface SessionData {
+    authenticated: boolean;
+    administrator: string;
+    authentication: string;
+    writeEnabled: boolean;
+  }
+
+  interface SystemData {
+    apiRuntime: string;
+    apiVersion: string;
+    writeEnabled: boolean;
+  }
+
+  const panels = document.querySelectorAll<HTMLElement>("[data-admin-api-status]");
+
+  panels.forEach((panel) => {
+    const badge = panel.querySelector<HTMLElement>("[data-api-badge]");
+    const message = panel.querySelector<HTMLElement>("[data-api-message]");
+    const administrator = panel.querySelector<HTMLElement>("[data-api-administrator]");
+    const authentication = panel.querySelector<HTMLElement>("[data-api-authentication]");
+    const write = panel.querySelector<HTMLElement>("[data-api-write]");
+    const retry = panel.querySelector<HTMLButtonElement>("[data-api-retry]");
+
+    if (!badge || !message || !administrator || !authentication || !write || !retry) return;
+
+    const setChecking = () => {
+      badge.className = "admin-badge admin-badge--checking";
+      badge.textContent = "확인 중";
+      message.textContent = "Cloudflare Access 세션과 Worker 상태를 확인하고 있습니다.";
+      administrator.textContent = "확인 중";
+      retry.hidden = true;
+    };
+
+    const checkStatus = async () => {
+      setChecking();
+      try {
+        const [sessionResponse, systemResponse] = await Promise.all([
+          fetch("/api/admin/v1/session", { headers: { Accept: "application/json" } }),
+          fetch("/api/admin/v1/system", { headers: { Accept: "application/json" } }),
+        ]);
+
+        const session = await sessionResponse.json() as ApiEnvelope<SessionData>;
+        const system = await systemResponse.json() as ApiEnvelope<SystemData>;
+
+        if (!sessionResponse.ok || !systemResponse.ok || !session.data || !system.data) {
+          const error = session.error ?? system.error;
+          throw new Error(error?.message ?? "관리 API 응답을 확인하지 못했습니다.");
+        }
+
+        badge.className = "admin-badge admin-badge--ready";
+        badge.textContent = "정상";
+        message.textContent = `${system.data.apiRuntime} · ${system.data.apiVersion} 연결이 확인되었습니다.`;
+        administrator.textContent = session.data.administrator;
+        authentication.textContent = "Cloudflare Access + Email OTP";
+        write.textContent = session.data.writeEnabled ? "활성화" : "비활성화";
+      } catch (error) {
+        badge.className = "admin-badge admin-badge--warning";
+        badge.textContent = "설정 필요";
+        message.textContent = error instanceof Error
+          ? error.message
+          : "관리 API 연결을 확인하지 못했습니다.";
+        administrator.textContent = "확인 불가";
+        write.textContent = "비활성화";
+        retry.hidden = false;
+      }
+    };
+
+    retry.addEventListener("click", checkStatus);
+    void checkStatus();
+  });
+</script>

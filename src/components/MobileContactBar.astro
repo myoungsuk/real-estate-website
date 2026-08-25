@@ -1,11 +1,20 @@
 ---
-import { office, phoneHref, smsHref } from "../lib/site";
+import { kakaoHref, office, phoneHref, smsHref } from "../lib/site";
 ---
 
 <aside class="contact-bar" aria-label="빠른 상담">
   <a class="contact-bar__item contact-bar__item--quiet" href={smsHref}>
     <span aria-hidden="true">문자</span>
     <strong>문자 문의</strong>
+  </a>
+  <a
+    class="contact-bar__item contact-bar__item--kakao"
+    href={kakaoHref}
+    target="_blank"
+    rel="noopener noreferrer"
+  >
+    <span aria-hidden="true">카톡</span>
+    <strong>카카오톡</strong>
   </a>
   <a class="contact-bar__item contact-bar__item--primary" href={phoneHref}>
     <span aria-hidden="true">전화</span>

@@ -2,8 +2,21 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "leaders-city-happy-realty",
   "compatibility_date": "2026-08-24",
+  "main": "./worker/index.mjs",
+  "workers_dev": true,
+  "routes": [
+    {
+      "pattern": "leaderscityhappy.com",
+      "custom_domain": true
+    }
+  ],
   "assets": {
     "directory": "./dist",
+    "binding": "ASSETS",
+    "run_worker_first": [
+      "/api/admin",
+      "/api/admin/*"
+    ],
     "not_found_handling": "404-page"
   }
 }

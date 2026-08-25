@@ -1,0 +1,205 @@
+---
+import AdminWriteGate from "../../../components/admin/AdminWriteGate.astro";
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import { externalContents } from "../../../lib/content";
+---
+
+<AdminLayout
+  title="블로그·유튜브 관리 | 행복한부동산 관리자"
+  description="네이버 블로그와 유튜브 카드의 링크, 제목, 설명과 썸네일을 관리합니다."
+>
+  <div class="admin-page-header admin-page-header--compact">
+    <div>
+      <nav class="admin-breadcrumbs" aria-label="현재 위치"><a href="/admin/">대시보드</a><span>/</span><span aria-current="page">블로그·유튜브</span></nav>
+      <p class="admin-eyebrow">BLOG & YOUTUBE</p>
+      <h1>블로그·유튜브 관리</h1>
+      <p>링크에서 제목과 썸네일을 불러오고, 불러오지 못한 사진은 직접 올릴 수 있습니다.</p>
+    </div>
+    <a class="admin-text-link" href="/contents/">공개 콘텐츠 보기 <span aria-hidden="true">↗</span></a>
+  </div>
+
+  <AdminWriteGate />
+
+  <div class="admin-editor-layout">
+    <section class="admin-panel" aria-labelledby="external-list-heading">
+      <div class="admin-panel__heading"><div><p class="admin-eyebrow">등록 목록</p><h2 id="external-list-heading">콘텐츠 <span data-external-count>{externalContents.length}</span>건</h2></div><button class="admin-secondary-button" type="button" data-external-new data-write-control disabled>새 콘텐츠</button></div>
+      <div class="admin-content-list" data-external-list>
+        {externalContents.map((item) => (
+          <article>
+            <div><span>{item.type === "blog" ? "블로그" : "유튜브"}</span><strong>{item.title}</strong><small>{item.status === "published" ? "공개" : "작성 중"}</small></div>
+            <button type="button" data-external-edit={item.id} data-write-control disabled>수정</button>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <form class="admin-panel admin-editor-form" data-external-form>
+      <div class="admin-panel__heading"><div><p class="admin-eyebrow">카드 편집</p><h2 data-external-form-title>새 콘텐츠</h2></div></div>
+      <input type="hidden" name="originalId" />
+      <div class="admin-form-grid admin-form-grid--single">
+        <div class="admin-field"><label for="external-type">종류</label><select id="external-type" name="type" data-write-control disabled><option value="blog">네이버 블로그</option><option value="youtube">유튜브</option></select></div>
+        <div class="admin-field"><label for="external-status">공개 상태</label><select id="external-status" name="status" data-write-control disabled><option value="draft">작성 중</option><option value="published">공개</option></select><small>공개 상태만 홈페이지에 표시됩니다.</small></div>
+        <div class="admin-field"><label for="external-url">원문 링크</label><div class="admin-input-action"><input id="external-url" name="url" type="url" placeholder="https://blog.naver.com/... 또는 유튜브 영상 주소" required data-write-control disabled /><button type="button" data-external-preview data-write-control disabled>정보 불러오기</button></div></div>
+        <div class="admin-field"><label for="external-id">콘텐츠 ID</label><input id="external-id" name="id" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" placeholder="예: blog-cheondong-2026-01" required data-write-control disabled /></div>
+        <div class="admin-field"><label for="external-title">제목</label><input id="external-title" name="title" required data-write-control disabled /></div>
+        <div class="admin-field"><label for="external-summary">짧은 설명</label><textarea id="external-summary" name="summary" rows="4" required data-write-control disabled></textarea></div>
+        <div class="admin-field"><label for="external-date">게시일</label><input id="external-date" name="publishedAt" type="date" data-write-control disabled /></div>
+        <div class="admin-field"><label for="external-thumbnail">썸네일 직접 업로드</label><input id="external-thumbnail" name="thumbnailFile" type="file" accept="image/jpeg,image/png,image/webp" data-write-control disabled /><small>링크에서 썸네일을 못 불러온 경우 선택합니다.</small></div>
+        <div class="admin-field"><label for="external-thumbnail-alt">썸네일 설명</label><input id="external-thumbnail-alt" name="thumbnailAlt" placeholder="예: 리더스시티 전세 안내 썸네일" data-write-control disabled /></div>
+        <figure class="admin-media-preview" data-external-thumbnail-preview hidden><img alt="등록할 썸네일 미리보기" /></figure>
+      </div>
+      <div class="admin-editor__actions admin-editor__actions--inside">
+        <p class="admin-form-status" data-external-status-message aria-live="polite">링크와 공개 문구를 입력해 주세요.</p>
+        <div><button class="admin-danger-button" type="button" data-external-delete hidden>이 항목 삭제</button><button class="admin-primary-button" type="submit" data-write-control disabled>저장</button></div>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    import {
+      convertDataUrlToWebp,
+      convertImageFileToWebp,
+      fetchExternalLinkPreview,
+      readAdminContent,
+      setAdminFormStatus,
+      uploadAdminImage,
+      writeAdminContent,
+      type AdminResource,
+    } from "../../../lib/admin-content-client";
+    import type { ExternalContent } from "../../../lib/content";
+
+    const form = document.querySelector<HTMLFormElement>("[data-external-form]");
+    const list = document.querySelector<HTMLElement>("[data-external-list]");
+    const count = document.querySelector<HTMLElement>("[data-external-count]");
+    const statusMessage = document.querySelector<HTMLElement>("[data-external-status-message]");
+    const formTitle = document.querySelector<HTMLElement>("[data-external-form-title]");
+    const deleteButton = document.querySelector<HTMLButtonElement>("[data-external-delete]");
+    const previewButton = document.querySelector<HTMLButtonElement>("[data-external-preview]");
+    const previewFigure = document.querySelector<HTMLElement>("[data-external-thumbnail-preview]");
+    const previewImage = previewFigure?.querySelector<HTMLImageElement>("img");
+    let resource: AdminResource<ExternalContent[]> | null = null;
+    let previewDataUrl: string | null = null;
+
+    const field = (name: string) => form?.elements.namedItem(name) as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | null;
+    const renderList = () => {
+      if (!list || !resource) return;
+      list.replaceChildren();
+      resource.data.forEach((item) => {
+        const article = document.createElement("article");
+        const info = document.createElement("div");
+        const type = document.createElement("span"); type.textContent = item.type === "blog" ? "블로그" : "유튜브";
+        const title = document.createElement("strong"); title.textContent = item.title;
+        const state = document.createElement("small"); state.textContent = item.status === "published" ? "공개" : "작성 중";
+        const button = document.createElement("button"); button.type = "button"; button.dataset.externalEdit = item.id; button.textContent = "수정";
+        info.append(type, title, state); article.append(info, button); list.append(article);
+      });
+      if (count) count.textContent = String(resource.data.length);
+    };
+
+    const showThumbnail = (src: string | null) => {
+      if (!previewFigure || !previewImage) return;
+      previewFigure.hidden = !src;
+      if (src) previewImage.src = src;
+      else previewImage.removeAttribute("src");
+    };
+
+    const resetForm = () => {
+      form?.reset();
+      if (field("originalId")) field("originalId")!.value = "";
+      if (field("status")) field("status")!.value = "draft";
+      if (formTitle) formTitle.textContent = "새 콘텐츠";
+      if (deleteButton) deleteButton.hidden = true;
+      previewDataUrl = null;
+      showThumbnail(null);
+      setAdminFormStatus(statusMessage, "링크와 공개 문구를 입력해 주세요.");
+    };
+
+    const editItem = (id: string) => {
+      const item = resource?.data.find((candidate) => candidate.id === id);
+      if (!item) return;
+      const values: Record<string, string> = { originalId: item.id, id: item.id, type: item.type, status: item.status, url: item.url, title: item.title, summary: item.summary, publishedAt: item.publishedAt ?? "", thumbnailAlt: item.thumbnail?.alt ?? "" };
+      Object.entries(values).forEach(([name, value]) => { if (field(name)) field(name)!.value = value; });
+      if (formTitle) formTitle.textContent = "콘텐츠 수정";
+      if (deleteButton) deleteButton.hidden = false;
+      previewDataUrl = null;
+      showThumbnail(item.thumbnail?.src ?? null);
+      setAdminFormStatus(statusMessage, "수정할 내용을 확인해 주세요.");
+    };
+
+    window.addEventListener("admin-write-ready", (event) => {
+      if (!(event as CustomEvent<{ writeEnabled: boolean }>).detail.writeEnabled) return;
+      void readAdminContent<ExternalContent[]>("external-links").then((current) => { resource = current; renderList(); setAdminFormStatus(statusMessage, "GitHub의 최신 콘텐츠를 불러왔습니다."); }).catch((error) => setAdminFormStatus(statusMessage, error instanceof Error ? error.message : "콘텐츠를 불러오지 못했습니다.", "error"));
+    });
+
+    list?.addEventListener("click", (event) => {
+      const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-external-edit]");
+      if (button?.dataset.externalEdit) editItem(button.dataset.externalEdit);
+    });
+    document.querySelector("[data-external-new]")?.addEventListener("click", resetForm);
+
+    previewButton?.addEventListener("click", async () => {
+      const type = field("type")?.value as "blog" | "youtube";
+      const url = field("url")?.value.trim() ?? "";
+      if (!url) return setAdminFormStatus(statusMessage, "먼저 원문 링크를 입력해 주세요.", "error");
+      previewButton.disabled = true;
+      setAdminFormStatus(statusMessage, "링크에서 제목과 썸네일을 불러오고 있습니다.", "saving");
+      try {
+        const preview = await fetchExternalLinkPreview(type, url);
+        if (preview.title && field("title")) field("title")!.value = preview.title;
+        if (preview.summary && field("summary")) field("summary")!.value = preview.summary.slice(0, 300);
+        previewDataUrl = preview.thumbnailDataUrl;
+        showThumbnail(previewDataUrl);
+        setAdminFormStatus(statusMessage, previewDataUrl ? "제목과 썸네일을 불러왔습니다. 공개 문구를 확인해 주세요." : "제목을 불러왔습니다. 썸네일은 직접 올려 주세요.", "success");
+      } catch (error) {
+        setAdminFormStatus(statusMessage, error instanceof Error ? error.message : "링크 정보를 불러오지 못했습니다.", "error");
+      } finally {
+        previewButton.disabled = false;
+      }
+    });
+
+    form?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!resource) return setAdminFormStatus(statusMessage, "최신 콘텐츠를 먼저 불러와 주세요.", "error");
+      const submit = form.querySelector<HTMLButtonElement>("button[type='submit']");
+      if (submit) submit.disabled = true;
+      setAdminFormStatus(statusMessage, "콘텐츠를 저장하고 있습니다.", "saving");
+      try {
+        const originalId = field("originalId")?.value ?? "";
+        const existing = resource.data.find((item) => item.id === originalId);
+        let thumbnail = existing?.thumbnail ?? null;
+        const file = (field("thumbnailFile") as HTMLInputElement)?.files?.[0];
+        if (file) thumbnail = { src: (await uploadAdminImage(field("type")!.value, await convertImageFileToWebp(file))).src, alt: field("thumbnailAlt")?.value.trim() ?? "" };
+        else if (previewDataUrl) thumbnail = { src: (await uploadAdminImage(field("type")!.value, await convertDataUrlToWebp(previewDataUrl))).src, alt: field("thumbnailAlt")?.value.trim() ?? "" };
+        else if (thumbnail && field("thumbnailAlt")?.value.trim()) thumbnail = { ...thumbnail, alt: field("thumbnailAlt")!.value.trim() };
+        const nextItem: ExternalContent = { id: field("id")!.value.trim(), type: field("type")!.value as ExternalContent["type"], status: field("status")!.value as ExternalContent["status"], title: field("title")!.value.trim(), summary: field("summary")!.value.trim(), url: field("url")!.value.trim(), publishedAt: field("publishedAt")!.value || null, thumbnail };
+        const next = originalId ? resource.data.map((item) => item.id === originalId ? nextItem : item) : [...resource.data, nextItem];
+        const result = await writeAdminContent("external-links", resource.sha, next);
+        resource = { resource: "external-links", sha: result.contentSha ?? resource.sha, data: next };
+        renderList(); resetForm();
+        setAdminFormStatus(statusMessage, "저장했습니다. 자동 배포 후 홈페이지 카드에 반영됩니다.", "success");
+      } catch (error) {
+        setAdminFormStatus(statusMessage, error instanceof Error ? error.message : "저장하지 못했습니다.", "error");
+      } finally {
+        if (submit) submit.disabled = false;
+      }
+    });
+
+    deleteButton?.addEventListener("click", async () => {
+      if (!resource) return;
+      const originalId = field("originalId")?.value ?? "";
+      if (!originalId || !window.confirm("이 콘텐츠 카드를 목록에서 삭제할까요? Git 기록으로는 복구할 수 있습니다.")) return;
+      deleteButton.disabled = true;
+      try {
+        const next = resource.data.filter((item) => item.id !== originalId);
+        const result = await writeAdminContent("external-links", resource.sha, next);
+        resource = { resource: "external-links", sha: result.contentSha ?? resource.sha, data: next };
+        renderList(); resetForm();
+        setAdminFormStatus(statusMessage, "콘텐츠 카드를 삭제했습니다.", "success");
+      } catch (error) {
+        setAdminFormStatus(statusMessage, error instanceof Error ? error.message : "삭제하지 못했습니다.", "error");
+      } finally {
+        deleteButton.disabled = false;
+      }
+    });
+  </script>
+</AdminLayout>

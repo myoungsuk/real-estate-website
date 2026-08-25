@@ -1,24 +1,34 @@
 ---
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import ContactPanel from "../../components/ContactPanel.astro";
-import { complexNames, formatListingPrice, publishedListings, squareMetersToPyeong, tradeNames, type Listing } from "../../lib/listings";
+import { formatListingPrice, getListingLocation, publishedListings, squareMetersToPyeong, tradeNames, type Listing } from "../../lib/listings";
 
 export function getStaticPaths() {
   return publishedListings.map((listing) => ({ params: { slug: listing.slug }, props: { listing } }));
 }
 
 const { listing } = Astro.props as { listing: Listing };
-const title = `${complexNames[listing.complex]} ${tradeNames[listing.tradeType]} ${listing.exclusiveAreaM2}㎡ | 행복한부동산`;
+const title = `${getListingLocation(listing)} ${tradeNames[listing.tradeType]} ${listing.exclusiveAreaM2}㎡ | 행복한부동산`;
 const description = `${listing.summary} 최근 확인일 ${listing.confirmedAt}.`;
+const listingImages = listing.images?.length
+  ? listing.images
+  : listing.thumbnail
+    ? [listing.thumbnail]
+    : [];
 ---
 
 <BaseLayout {title} {description}>
   <article class="section property-detail">
     <div class="shell">
       <nav class="breadcrumbs" aria-label="현재 위치"><a href="/">홈</a><span>/</span><a href="/properties/">매물</a><span>/</span><span aria-current="page">{listing.title}</span></nav>
-      <p class="eyebrow">{tradeNames[listing.tradeType]} · {complexNames[listing.complex]}</p>
+      <p class="eyebrow">{tradeNames[listing.tradeType]} · {getListingLocation(listing)}</p>
       <h1>{listing.title}</h1>
       <p class="property-detail__price">{formatListingPrice(listing)}</p>
+      {listingImages.length > 0 && (
+        <div class="property-gallery" aria-label="매물 사진">
+          {listingImages.map((image) => <img src={image.src} alt={image.alt} width="1200" height="800" loading="lazy" />)}
+        </div>
+      )}
       <div class="property-facts">
         <dl><div><dt>전용면적</dt><dd>{listing.exclusiveAreaM2}㎡ · {squareMetersToPyeong(listing.exclusiveAreaM2)}평</dd></div>{listing.floorLabel && <div><dt>층</dt><dd>{listing.floorLabel}</dd></div>}{listing.direction && <div><dt>방향</dt><dd>{listing.direction}</dd></div>}<div><dt>최근 확인일</dt><dd>{listing.confirmedAt}</dd></div><div><dt>정보 출처</dt><dd>{listing.source}</dd></div></dl>
         <div><h2>매물 안내</h2><p>{listing.summary}</p>{listing.features.length > 0 && <ul class="check-list">{listing.features.map((feature) => <li>{feature}</li>)}</ul>}</div>

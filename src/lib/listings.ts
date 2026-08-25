@@ -2,7 +2,11 @@ import listingData from "../data/listings.json";
 
 export type ListingStatus = "draft" | "published" | "contracted" | "ended";
 export type TradeType = "sale" | "jeonse" | "monthly-rent";
-export type ComplexId = "leaders-city-4" | "leaders-city-5";
+
+export interface ListingImage {
+  src: string;
+  alt: string;
+}
 
 export interface Listing {
   id: string;
@@ -11,7 +15,10 @@ export interface Listing {
   status: ListingStatus;
   propertyType: "apartment";
   tradeType: TradeType;
-  complex: ComplexId;
+  district: "대전 동구";
+  neighborhoodSlug: string;
+  neighborhoodName: string;
+  complexName: string | null;
   salePriceKrw: number | null;
   depositKrw: number | null;
   monthlyRentKrw: number | null;
@@ -21,6 +28,8 @@ export interface Listing {
   moveIn?: string | null;
   summary: string;
   features: string[];
+  thumbnail?: ListingImage | null;
+  images?: ListingImage[];
   source: string;
   confirmedAt: string;
   publishedAt: string | null;
@@ -31,16 +40,19 @@ export const publishedListings = listings
   .filter((listing) => listing.status === "published")
   .sort((a, b) => b.confirmedAt.localeCompare(a.confirmedAt));
 
+export const listingAreas = [...new Map(
+  publishedListings.map((listing) => [listing.neighborhoodSlug, listing.neighborhoodName]),
+).entries()].map(([slug, name]) => ({ slug, name }));
+
 export const tradeNames: Record<TradeType, string> = {
   sale: "매매",
   jeonse: "전세",
   "monthly-rent": "월세",
 };
 
-export const complexNames: Record<ComplexId, string> = {
-  "leaders-city-4": "리더스시티 4블록",
-  "leaders-city-5": "리더스시티 5블록",
-};
+export function getListingLocation(listing: Listing) {
+  return listing.complexName ?? `${listing.district} ${listing.neighborhoodName}`;
+}
 
 export function formatKoreanPrice(krw: number) {
   if (!Number.isSafeInteger(krw) || krw < 0) return "가격 확인 필요";

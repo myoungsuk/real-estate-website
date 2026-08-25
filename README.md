@@ -1,6 +1,6 @@
-# 천동 리더스시티 행복한부동산 홈페이지
+# 대전 동구 행복한부동산 홈페이지
 
-Astro가 정적 HTML을 만들고 GitHub 변경을 Cloudflare Workers Static Assets에 자동 배포하는 공개 홈페이지입니다. 데이터베이스·서버 API·관리자 로그인 없이 공개용 JSON과 사진 파일을 직접 수정해 운영합니다.
+Astro가 정적 HTML을 만들고 GitHub 변경을 Cloudflare Workers Static Assets에 자동 배포하는 공개 홈페이지입니다. 같은 Worker의 `/api/admin/*`에는 Cloudflare Access로 보호되는 관리 API 기반이 있으며, 현재는 인증·상태 조회만 제공하고 콘텐츠 쓰기는 차단합니다.
 
 ## 시작하기
 
@@ -27,9 +27,10 @@ npm run build
 
 | 파일 | 용도 |
 |---|---|
+| `src/data/home-content.json` | 홈 대표·사무소·리더스시티 설명 문구와 사진 |
 | `src/data/office.json` | 법적 상호·대표·연락처·주소·외부 채널 |
 | `src/data/listings.json` | 공개 승인 매물 |
-| `src/data/complexes.json` | 4블록·5블록 단지 정보 |
+| `src/data/complexes.json` | 대전 동구 주요 단지 정보 |
 | `src/data/external-links.json` | 공식 블로그·유튜브 링크 |
 | `src/data/faq.json` | 승인된 FAQ |
 | `src/data/reviews.json` | 실제 여부와 공개 동의가 확인된 후기 |
@@ -54,3 +55,19 @@ npm run deploy
 ```
 
 GitHub 자동 배포 연결과 Production 설정은 `docs/operations/CLOUDFLARE_DEPLOY.md`에 정리되어 있습니다.
+
+## 관리자 콘텐츠 관리
+
+- 공개 정적 페이지와 관리 API를 Worker 하나로 배포합니다.
+- `/api/admin`과 `/api/admin/*`만 Worker 코드를 먼저 실행합니다.
+- 인증은 Cloudflare Access, 정확한 허용 이메일 2개와 Email OTP를 사용합니다.
+- Worker가 `Cf-Access-Jwt-Assertion`의 서명, issuer, audience와 이메일을 다시 검증합니다.
+- `/admin/listings/editor/`에서 매물을 등록·수정하고 대표 이미지를 올릴 수 있습니다.
+- `/admin/content/`에서 첫 화면 대표·사무소·리더스시티 설명을 수정할 수 있습니다.
+- `/admin/external-links/`에서 블로그·유튜브 링크, 요약, 공개 상태와 썸네일을 관리합니다. 링크 썸네일을 못 불러오면 직접 사진을 올릴 수 있습니다.
+- `/admin/complexes/`에서 대전 동구 지역·단지 설명과 출처·확인일을 관리합니다.
+- 저장 기능은 `ADMIN_WRITE_ENABLED=true`, 32자 이상의 `ADMIN_CSRF_SECRET`, 저장소 한 개로 제한된 `GITHUB_CONTENTS_TOKEN`, `GITHUB_REPOSITORY`, `GITHUB_BRANCH`가 모두 있어야 활성화됩니다.
+- Worker는 Origin·JSON Content-Type·만료되는 CSRF 토큰·콘텐츠 스키마·최신 GitHub SHA를 검증합니다.
+- 이미지 파일은 브라우저에서 WebP·최대 1600px로 변환해 EXIF를 제거하고 `public/images/content/`의 허용 경로에만 저장합니다.
+
+로컬 Worker 변수 예시는 `.dev.vars.example`을 참고합니다. 실제 이메일, Audience와 Access 팀 정보는 `.dev.vars` 또는 Cloudflare Secret에만 입력하고 커밋하지 않습니다.

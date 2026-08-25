@@ -1,14 +1,45 @@
 ---
-import links from "../data/external-links.json";
+import {
+  formatContentDate,
+  publishedExternalContents,
+  type ExternalContent,
+} from "../lib/content";
+
+interface Props {
+  items?: ExternalContent[];
+  emptyLabel?: string;
+}
+
+const {
+  items = publishedExternalContents,
+  emptyLabel = "공개할 콘텐츠를 준비하고 있습니다.",
+} = Astro.props;
 ---
 
-<div class="content-card-grid">
-  {links.map((item) => (
-    <a class="content-card" href={item.url} target="_blank" rel="noopener noreferrer">
-      <span>{item.type === "blog" ? "NAVER BLOG" : "YOUTUBE"}</span>
-      <h3>{item.title}</h3>
-      <p>{item.summary}</p>
-      <b>원문에서 보기 <span aria-hidden="true">↗</span></b>
-    </a>
-  ))}
-</div>
+{items.length > 0 ? (
+  <div class="content-card-grid">
+    {items.map((item) => (
+      <article class:list={["content-card", `content-card--${item.type}`]}>
+        <a class="content-card__thumbnail" href={item.url} target="_blank" rel="noopener noreferrer" aria-label={`${item.title} 원문 보기`}>
+          {item.thumbnail ? (
+            <img src={item.thumbnail.src} alt={item.thumbnail.alt} width="720" height="450" loading="lazy" />
+          ) : (
+            <span aria-hidden="true">{item.type === "blog" ? "N" : "▶"}</span>
+          )}
+        </a>
+        <div class="content-card__body">
+          <p class="content-card__source">{item.type === "blog" ? "NAVER BLOG" : "YOUTUBE"}</p>
+          <h3><a href={item.url} target="_blank" rel="noopener noreferrer">{item.title}</a></h3>
+          {formatContentDate(item.publishedAt) && <time datetime={item.publishedAt!}>{formatContentDate(item.publishedAt)}</time>}
+          <p>{item.summary}</p>
+          <a class="content-card__link" href={item.url} target="_blank" rel="noopener noreferrer">원문에서 보기 <span aria-hidden="true">↗</span></a>
+        </div>
+      </article>
+    ))}
+  </div>
+) : (
+  <div class="empty-state empty-state--compact">
+    <span class="empty-state__number" aria-hidden="true">0</span>
+    <div><h3>{emptyLabel}</h3><p>승인된 링크와 썸네일이 등록되면 이곳에 카드로 표시됩니다.</p></div>
+  </div>
+)}

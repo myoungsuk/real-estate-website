@@ -1,16 +1,22 @@
 [
   {
+    "id": "naver-blog-channel",
     "type": "blog",
+    "status": "published",
     "title": "네이버 블로그에서 지역 소식 보기",
-    "summary": "천동·신흥동과 리더스시티 관련 현장 소식은 공식 블로그 원문에서 확인할 수 있습니다.",
+    "summary": "대전 동구와 천동·신흥동, 주요 단지의 현장 소식은 공식 블로그 원문에서 확인할 수 있습니다.",
     "url": "https://blog.naver.com/p5468300",
-    "publishedAt": null
+    "publishedAt": null,
+    "thumbnail": null
   },
   {
+    "id": "youtube-channel",
     "type": "youtube",
+    "status": "published",
     "title": "행복한부동산 TV에서 영상으로 보기",
     "summary": "지역과 매물을 영상으로 설명하는 공식 유튜브 채널로 이동합니다.",
     "url": "https://www.youtube.com/@%EB%A6%AC%EB%8D%94%EC%8A%A4%EC%8B%9C%ED%8B%B0%ED%96%89%EB%B3%B5%ED%95%9C-y8u",
-    "publishedAt": null
+    "publishedAt": null,
+    "thumbnail": null
   }
 ]

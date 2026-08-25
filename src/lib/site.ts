@@ -4,6 +4,13 @@ export const office = officeData;
 
 export const phoneHref = `tel:${office.mobile.replaceAll("-", "")}`;
 export const smsHref = `sms:${office.mobile.replaceAll("-", "")}`;
+export const emailHref = `mailto:${office.email}`;
+export const kakaoHref = office.kakaoUrl;
+
+export function formatOfficeHours(hour: (typeof office.hours)[number]) {
+  if (hour.opens && hour.closes) return `${hour.opens}~${hour.closes}`;
+  return hour.note ?? "휴무";
+}
 
 export const navigation = [
   { href: "/properties/", label: "매물" },

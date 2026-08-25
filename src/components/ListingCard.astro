@@ -1,0 +1,35 @@
+---
+import {
+  formatListingPrice,
+  getListingLocation,
+  squareMetersToPyeong,
+  tradeNames,
+  type Listing,
+} from "../lib/listings";
+
+interface Props {
+  listing: Listing;
+  compact?: boolean;
+}
+
+const { listing, compact = false } = Astro.props;
+const thumbnail = listing.thumbnail ?? listing.images?.[0] ?? null;
+---
+
+<article class:list={["listing-card", compact && "listing-card--compact"]} data-listing-card data-trade={listing.tradeType} data-area={listing.neighborhoodSlug}>
+  <a class="listing-card__visual" href={`/properties/${listing.slug}/`} aria-label={`${listing.title} 상세 보기`}>
+    {thumbnail ? (
+      <img src={thumbnail.src} alt={thumbnail.alt} width="720" height="480" loading="lazy" />
+    ) : (
+      <span aria-hidden="true">{listing.neighborhoodName.slice(0, 1)}</span>
+    )}
+    <b>{tradeNames[listing.tradeType]}</b>
+  </a>
+  <div class="listing-card__body">
+    <p><span>{getListingLocation(listing)}</span><time datetime={listing.confirmedAt}>{listing.confirmedAt} 확인</time></p>
+    <h3><a href={`/properties/${listing.slug}/`}>{formatListingPrice(listing)}</a></h3>
+    <p class="listing-card__meta">전용 {listing.exclusiveAreaM2}㎡ · {squareMetersToPyeong(listing.exclusiveAreaM2)}평{listing.floorLabel ? ` · ${listing.floorLabel}` : ""}</p>
+    <p class="listing-card__summary">{listing.summary}</p>
+    <a class="listing-card__link" href={`/properties/${listing.slug}/`}>상세 보기 <span aria-hidden="true">→</span></a>
+  </div>
+</article>

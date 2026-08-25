@@ -10,10 +10,14 @@ if (allowIndexing && !configuredSite) {
   );
 }
 
-const site = configuredSite ?? "https://leaders-city-happy-realty.workers.dev";
+const site = configuredSite ?? "https://leaderscityhappy.com";
 
 export default defineConfig({
   output: "static",
   site,
-  integrations: [sitemap()],
+  integrations: [
+    sitemap({
+      filter: (page) => !new URL(page).pathname.startsWith("/admin/"),
+    }),
+  ],
 });

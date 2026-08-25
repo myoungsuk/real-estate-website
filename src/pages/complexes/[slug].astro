@@ -9,24 +9,24 @@ export function getStaticPaths() {
 }
 
 const { complex } = Astro.props;
-const title = `${complex.name} 단지정보·매물 | 천동 행복한부동산`;
+const title = `${complex.name} 단지정보·매물 | 대전 동구 행복한부동산`;
 const description = `${complex.name}의 확인된 단지 정보와 공개 매물을 안내합니다.`;
 ---
 
 <BaseLayout {title} {description}>
-  <PageIntro eyebrow={`LEADERS CITY ${complex.block}`} title={complex.name} description="공식 자료와 현장 확인을 마친 내용부터 공개합니다." />
+  <PageIntro eyebrow={`${complex.areaName} · ${complex.eyebrow}`} title={complex.name} description="공식 자료와 현장 확인을 마친 내용부터 공개합니다." />
   <section class="section">
     <div class="shell two-column two-column--wide">
       <article class="statement-card statement-card--number">
-        <span>{complex.block}</span>
-        <p>리더스시티</p>
+        <span>{complex.mark}</span>
+        <p>{complex.areaName} · {complex.eyebrow}</p>
       </article>
       <div class="preparing-copy">
-        <p class="eyebrow">정보 확인 중</p>
-        <h2>정확한 단지 자료를 준비하고 있습니다.</h2>
+        <p class="eyebrow">단지 이야기</p>
+        <h2>{complex.introTitle}</h2>
         <p>{complex.summary}</p>
-        <p>세대수·면적형·주차·난방·학교·교통 등 숫자 정보는 출처와 기준일이 확인된 후 추가합니다. 현재 궁금한 내용은 전화나 문자로 직접 확인해 주세요.</p>
-        <a class="button button--secondary" href="/properties/">이 블록 매물 보기</a>
+        {complex.introduction.map((paragraph) => <p>{paragraph}</p>)}
+        <a class="button button--secondary" href={`/properties/?area=${complex.areaSlug}`}>{complex.areaName} 매물 보기</a>
       </div>
     </div>
   </section>

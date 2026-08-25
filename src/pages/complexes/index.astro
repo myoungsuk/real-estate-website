@@ -4,18 +4,18 @@ import PageIntro from "../../components/PageIntro.astro";
 import ContactPanel from "../../components/ContactPanel.astro";
 import complexes from "../../data/complexes.json";
 
-const title = "리더스시티 4·5블록 단지정보 | 행복한부동산";
-const description = "천동 리더스시티 4블록과 5블록의 단지·생활 정보를 분리해 안내합니다.";
+const title = "대전 동구 주요 단지정보 | 행복한부동산";
+const description = "대전 동구의 주요 아파트 단지와 생활 정보를 출처와 확인일을 기준으로 안내합니다.";
 ---
 
 <BaseLayout {title} {description}>
-  <PageIntro eyebrow="COMPLEX" title="리더스시티 단지정보" description="4블록과 5블록의 정보를 섞지 않고, 출처와 확인일이 있는 내용부터 차례로 공개합니다." />
+  <PageIntro eyebrow="COMPLEX" title="대전 동구 주요 단지" description="현재는 리더스시티 4·5블록부터 시작해, 확인된 동구 지역 단지 정보를 차례로 넓혀갑니다." />
   <section class="section">
     <div class="shell complex-index-grid">
       {complexes.map((complex, index) => (
-        <a class:list={["complex-index-card", index === 1 && "complex-index-card--rose"]} href={`/complexes/${complex.slug}/`}>
-          <span>LEADERS CITY</span>
-          <strong>{complex.block}</strong>
+        <a class:list={["complex-index-card", index % 2 === 1 && "complex-index-card--rose"]} href={`/complexes/${complex.slug}/`}>
+          <span>{complex.areaName} · {complex.eyebrow}</span>
+          <strong>{complex.mark}</strong>
           <div><h2>{complex.name}</h2><p>{complex.summary}</p><b>단지 페이지 보기 →</b></div>
         </a>
       ))}
@@ -26,11 +26,11 @@ const description = "천동 리더스시티 4블록과 5블록의 단지·생활
       <p class="eyebrow">정보 공개 원칙</p>
       <h2>숫자보다 출처와 기준일을 먼저 확인합니다.</h2>
       <div class="three-column">
-        <article class="info-card"><span>01</span><h3>블록 분리</h3><p>4블록과 5블록의 단지 정보를 별도 자료와 페이지로 관리합니다.</p></article>
+        <article class="info-card"><span>01</span><h3>단지별 분리</h3><p>동구의 각 단지 정보를 별도 자료와 페이지로 관리해 서로 섞이지 않게 합니다.</p></article>
         <article class="info-card"><span>02</span><h3>공식 자료 우선</h3><p>공식 자료를 우선하고 출처가 다른 수치는 확인 전 공개하지 않습니다.</p></article>
         <article class="info-card"><span>03</span><h3>최근 확인일</h3><p>생활 정보와 매물에는 가능한 범위에서 최근 확인일을 표시합니다.</p></article>
       </div>
     </div>
   </section>
-  <ContactPanel title="어느 블록이 맞을지 고민되시나요?" description="가족 구성과 생활 동선, 원하는 거래조건을 기준으로 함께 비교해 드립니다." />
+  <ContactPanel title="어느 동네와 단지가 맞을지 고민되시나요?" description="가족 구성과 생활 동선, 원하는 거래조건을 기준으로 대전 동구 매물을 함께 비교해 드립니다." />
 </BaseLayout>

@@ -1,16 +1,52 @@
 {
   "legalName": "리더스시티행복한공인중개사사무소",
   "brandName": "천동 리더스시티 행복한부동산",
+  "serviceArea": "대전광역시 동구",
   "representative": "백진옥",
   "mobile": "010-2790-8675",
   "address": "대전광역시 동구 안샘로14번길 7, 리더스시티5블록 근린생활시설 105호",
   "registrationNumber": "30110-2023-00028",
-  "businessNumber": null,
-  "email": null,
-  "hours": null,
-  "parking": null,
+  "businessNumber": "805-05-02602",
+  "email": "packjinok123@gmail.com",
+  "hours": [
+    {
+      "label": "평일",
+      "days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+      "opens": "09:00",
+      "closes": "20:00",
+      "note": null
+    },
+    {
+      "label": "토요일",
+      "days": ["Saturday"],
+      "opens": "09:00",
+      "closes": "18:00",
+      "note": null
+    },
+    {
+      "label": "일요일",
+      "days": ["Sunday"],
+      "opens": null,
+      "closes": null,
+      "note": "휴무 (예약 상담 가능)"
+    }
+  ],
+  "parking": "리더스시티5블록 단지 내 상가 주차장 이용 가능",
+  "introduction": [
+    "리더스시티5블록 단지 내 상가에 직접 입점해 입주민의 시세 변화와 단지 분위기, 매물 정보를 가까이에서 확인합니다. 단지 내 매매·전세·월세는 물론 대전 동구 전체 매물도 함께 상담합니다.",
+    "부동산은 단순히 매물을 보여주는 일이 아니라 고객님의 상황과 조건을 함께 고민하는 과정이라고 생각합니다.",
+    "급하게 결정하도록 압박하기보다 충분히 비교하고 납득하신 뒤 선택하실 수 있도록 편하게 안내합니다.",
+    "한 번의 계약보다 오래 신뢰할 수 있는 인연으로 기억될 수 있도록 항상 진심으로 돕겠습니다."
+  ],
+  "publicClaims": {
+    "basis": "운영자 확인 기준",
+    "items": [
+      { "label": "허위매물", "value": "0건" },
+      { "label": "중개사고", "value": "0건" }
+    ]
+  },
   "naverPlaceUrl": "https://map.naver.com/p/entry/place/1135476130",
   "naverBlogUrl": "https://blog.naver.com/p5468300",
   "youtubeUrl": "https://www.youtube.com/@%EB%A6%AC%EB%8D%94%EC%8A%A4%EC%8B%9C%ED%8B%B0%ED%96%89%EB%B3%B5%ED%95%9C-y8u",
-  "kakaoUrl": null
+  "kakaoUrl": "https://pf.kakao.com/_nxmabn/chat"
 }

@@ -2,25 +2,61 @@
 import BaseLayout from "../layouts/BaseLayout.astro";
 import PageIntro from "../components/PageIntro.astro";
 import ContactPanel from "../components/ContactPanel.astro";
-import { office } from "../lib/site";
+import { emailHref, formatOfficeHours, office } from "../lib/site";
 
-const title = "사무소 소개 | 천동 리더스시티 행복한부동산";
-const description = "백진옥 대표가 직접 확인한 정보와 판단 근거를 중심으로 상담하는 리더스시티행복한공인중개사사무소입니다.";
+const title = "사무소 소개 | 대전 동구 행복한부동산";
+const description = "대전 동구의 매물과 지역 정보를 직접 확인하고 판단 근거를 중심으로 상담하는 리더스시티행복한공인중개사사무소입니다.";
 ---
 
 <BaseLayout {title} {description}>
-  <PageIntro eyebrow="OFFICE" title="사무소 소개" description="지역을 오래 설명하는 것보다, 한 번 더 확인하고 분명하게 안내하는 일을 중요하게 생각합니다." />
+  <PageIntro eyebrow="OFFICE" title="사무소 소개" description="리더스시티5블록 단지 내 상가를 거점으로 백진옥 대표가 대전 동구 지역 상담을 직접 안내합니다." />
   <section class="section">
-    <div class="shell two-column">
-      <article class="statement-card">
-        <p class="eyebrow">상담 철학</p>
-        <h2>근거로 말하고,<br />판단할 수 있게 설명합니다.</h2>
-        <p>매물의 가격과 면적, 확인일과 출처를 구분해 안내합니다. 확인하지 않은 내용은 사실처럼 단정하지 않고 계약 전에는 조건과 현황을 다시 확인합니다.</p>
+    <div class="shell office-story">
+      <figure class="representative-card">
+        <img
+          src="/images/office/representative-baek-jinok.webp"
+          alt="리더스시티 행복한부동산 백진옥 대표"
+          width="900"
+          height="900"
+        />
+        <figcaption><strong>백진옥 대표</strong><span>공인중개사 · 직접 상담</span></figcaption>
+      </figure>
+      <article class="office-message">
+        <p class="eyebrow">대표 인사말</p>
+        <h2>충분히 비교하고<br />납득한 뒤 선택하세요.</h2>
+        <div class="claim-strip claim-strip--office" aria-label="운영 현황">
+          <p>{office.publicClaims.basis}</p>
+          <ul>
+            {office.publicClaims.items.map((claim) => <li><span>{claim.label}</span><strong>{claim.value}</strong></li>)}
+          </ul>
+        </div>
+        {office.introduction.map((paragraph) => <p>{paragraph}</p>)}
       </article>
-      <div class="detail-stack">
-        <article class="info-card"><span>01</span><h3>직접 확인</h3><p>공개 전 실제 정보와 상태를 확인하고, 오래된 매물은 그대로 두지 않습니다.</p></article>
-        <article class="info-card"><span>02</span><h3>쉬운 비교</h3><p>가격·면적·입주 조건의 차이를 고객이 비교하기 쉬운 순서로 설명합니다.</p></article>
-        <article class="info-card"><span>03</span><h3>개인정보 보호</h3><p>정확한 동·호수와 의뢰인 정보는 홈페이지와 공개 저장소에 올리지 않습니다.</p></article>
+    </div>
+  </section>
+  <section class="section section--soft">
+    <div class="shell">
+      <div class="section-heading">
+        <div><p class="eyebrow">상담 원칙</p><h2>편안하지만 꼼꼼하게</h2></div>
+        <p>최신 정보와 전문성을 꾸준히 익히고, 고객님의 상황에 맞는 선택지를 이해하기 쉽게 설명합니다.</p>
+      </div>
+      <div class="three-column">
+        <article class="info-card"><span>01</span><h3>동구 현장에 가까운 안내</h3><p>천동 사무소를 거점으로 대전 동구의 시세 변화와 동네 분위기, 매물 정보를 가까이에서 확인합니다.</p></article>
+        <article class="info-card"><span>02</span><h3>충분한 비교</h3><p>가격·면적·입주 조건을 비교하고, 급하게 결정하도록 재촉하지 않습니다.</p></article>
+        <article class="info-card"><span>03</span><h3>정보 보호</h3><p>정확한 동·호수와 의뢰인 정보는 홈페이지와 공개 저장소에 올리지 않습니다.</p></article>
+      </div>
+    </div>
+  </section>
+  <section class="section" aria-labelledby="office-gallery-heading">
+    <div class="shell">
+      <div class="section-heading">
+        <div><p class="eyebrow">OFFICE PHOTO</p><h2 id="office-gallery-heading">편하게 상담받는 공간</h2></div>
+        <p>단지 자료와 지역 지도를 함께 보며 조건을 차근차근 비교할 수 있습니다.</p>
+      </div>
+      <div class="office-gallery">
+        <figure><img src="/images/office/office-interior.webp" alt="리더스시티 행복한부동산 사무실 내부 전경" width="1200" height="900" loading="lazy" /><figcaption>사무실 내부 전경</figcaption></figure>
+        <figure><img src="/images/office/office-consultation.webp" alt="지역 지도와 단지 자료가 준비된 상담 공간" width="1200" height="900" loading="lazy" /><figcaption>지역·단지 자료 상담 공간</figcaption></figure>
+        <figure><img src="/images/office/office-meeting-room.webp" alt="햇빛이 드는 편안한 상담 테이블" width="1200" height="900" loading="lazy" /><figcaption>편안하게 비교하는 상담 테이블</figcaption></figure>
       </div>
     </div>
   </section>
@@ -31,8 +67,17 @@ const description = "백진옥 대표가 직접 확인한 정보와 판단 근�
         <div><dt>법적 상호</dt><dd>{office.legalName}</dd></div>
         <div><dt>대표자</dt><dd>{office.representative}</dd></div>
         <div><dt>등록번호</dt><dd>{office.registrationNumber}</dd></div>
+        <div><dt>사업자등록번호</dt><dd>{office.businessNumber}</dd></div>
         <div><dt>소재지</dt><dd>{office.address}</dd></div>
         <div><dt>연락처</dt><dd>{office.mobile}</dd></div>
+        <div><dt>이메일</dt><dd><a href={emailHref}>{office.email}</a></dd></div>
+        <div>
+          <dt>영업시간</dt>
+          <dd class="office-hours">
+            {office.hours.map((hour) => <span><b>{hour.label}</b> {formatOfficeHours(hour)}</span>)}
+          </dd>
+        </div>
+        <div><dt>주차</dt><dd>{office.parking}</dd></div>
       </dl>
     </div>
   </section>

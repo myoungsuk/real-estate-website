@@ -1,0 +1,96 @@
+---
+import AdminWriteGate from "../../../components/admin/AdminWriteGate.astro";
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import { complexes } from "../../../lib/complexes";
+---
+
+<AdminLayout title="지역·단지 설명 관리 | 행복한부동산 관리자" description="대전 동구 지역과 단지별 설명, 출처와 확인일을 관리합니다.">
+  <div class="admin-page-header admin-page-header--compact">
+    <div>
+      <nav class="admin-breadcrumbs" aria-label="현재 위치"><a href="/admin/">대시보드</a><span>/</span><span aria-current="page">지역·단지 설명</span></nav>
+      <p class="admin-eyebrow">AREA & COMPLEX</p>
+      <h1>지역·단지 설명 관리</h1>
+      <p>리더스시티뿐 아니라 대전 동구의 다른 동네와 단지도 같은 방식으로 추가할 수 있습니다.</p>
+    </div>
+    <a class="admin-text-link" href="/complexes/">공개 단지정보 보기 <span aria-hidden="true">↗</span></a>
+  </div>
+
+  <AdminWriteGate />
+
+  <div class="admin-editor-layout">
+    <section class="admin-panel" aria-labelledby="complex-admin-list-heading">
+      <div class="admin-panel__heading"><div><p class="admin-eyebrow">등록 목록</p><h2 id="complex-admin-list-heading">지역·단지 <span data-complex-count>{complexes.length}</span>건</h2></div><button class="admin-secondary-button" type="button" data-complex-new data-write-control disabled>새 단지</button></div>
+      <div class="admin-content-list" data-complex-list>
+        {complexes.map((complex) => <article><div><span>{complex.areaName}</span><strong>{complex.name}</strong><small>{complex.status === "published" ? "공개" : "준비 중"}</small></div><button type="button" data-complex-edit={complex.slug} data-write-control disabled>수정</button></article>)}
+      </div>
+    </section>
+
+    <form class="admin-panel admin-editor-form" data-complex-form>
+      <div class="admin-panel__heading"><div><p class="admin-eyebrow">설명 편집</p><h2 data-complex-form-title>새 지역·단지</h2></div></div>
+      <input type="hidden" name="originalSlug" />
+      <div class="admin-form-grid admin-form-grid--single">
+        <div class="admin-field"><label for="complex-name">단지명</label><input id="complex-name" name="name" required data-write-control disabled /></div>
+        <div class="admin-field"><label for="complex-slug">주소용 영문 ID</label><input id="complex-slug" name="slug" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" placeholder="leaders-city-5" required data-write-control disabled /></div>
+        <div class="admin-field"><label for="complex-area-name">동네 이름</label><input id="complex-area-name" name="areaName" placeholder="천동" required data-write-control disabled /></div>
+        <div class="admin-field"><label for="complex-area-slug">동네 영문 ID</label><input id="complex-area-slug" name="areaSlug" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" placeholder="cheon-dong" required data-write-control disabled /></div>
+        <div class="admin-field"><label for="complex-eyebrow">영역 표시</label><input id="complex-eyebrow" name="eyebrow" placeholder="LEADERS CITY" required data-write-control disabled /></div>
+        <div class="admin-field"><label for="complex-mark">카드 표시 글자</label><input id="complex-mark" name="mark" maxlength="4" placeholder="5" required data-write-control disabled /></div>
+        <div class="admin-field"><label for="complex-status">공개 상태</label><select id="complex-status" name="status" data-write-control disabled><option value="preparing">준비 중</option><option value="published">공개</option></select></div>
+        <div class="admin-field"><label for="complex-summary">목록 요약</label><textarea id="complex-summary" name="summary" rows="3" required data-write-control disabled></textarea></div>
+        <div class="admin-field"><label for="complex-intro-title">소개 제목</label><input id="complex-intro-title" name="introTitle" required data-write-control disabled /></div>
+        <div class="admin-field"><label for="complex-introduction">소개 문단</label><textarea id="complex-introduction" name="introduction" rows="6" required data-write-control disabled></textarea><small>문단 사이에 빈 줄을 하나 넣습니다.</small></div>
+        <div class="admin-field"><label for="complex-source">정보 출처 URL</label><input id="complex-source" name="source" type="url" placeholder="https://..." data-write-control disabled /><small>공개 상태에서는 HTTPS 출처가 필수입니다.</small></div>
+        <div class="admin-field"><label for="complex-confirmed">확인일</label><input id="complex-confirmed" name="confirmedAt" type="date" data-write-control disabled /></div>
+      </div>
+      <div class="admin-editor__actions admin-editor__actions--inside"><p class="admin-form-status" data-complex-status-message aria-live="polite">지역과 단지 설명을 입력해 주세요.</p><button class="admin-primary-button" type="submit" data-write-control disabled>저장</button></div>
+    </form>
+  </div>
+
+  <script>
+    import { readAdminContent, setAdminFormStatus, writeAdminContent, type AdminResource } from "../../../lib/admin-content-client";
+    import type { ComplexContent } from "../../../lib/complexes";
+
+    const form = document.querySelector<HTMLFormElement>("[data-complex-form]");
+    const list = document.querySelector<HTMLElement>("[data-complex-list]");
+    const count = document.querySelector<HTMLElement>("[data-complex-count]");
+    const statusMessage = document.querySelector<HTMLElement>("[data-complex-status-message]");
+    const formTitle = document.querySelector<HTMLElement>("[data-complex-form-title]");
+    let resource: AdminResource<ComplexContent[]> | null = null;
+    const field = (name: string) => form?.elements.namedItem(name) as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null;
+
+    const renderList = () => {
+      if (!list || !resource) return;
+      list.replaceChildren();
+      resource.data.forEach((complex) => {
+        const article = document.createElement("article"); const info = document.createElement("div");
+        const area = document.createElement("span"); area.textContent = complex.areaName;
+        const title = document.createElement("strong"); title.textContent = complex.name;
+        const state = document.createElement("small"); state.textContent = complex.status === "published" ? "공개" : "준비 중";
+        const button = document.createElement("button"); button.type = "button"; button.dataset.complexEdit = complex.slug; button.textContent = "수정";
+        info.append(area, title, state); article.append(info, button); list.append(article);
+      });
+      if (count) count.textContent = String(resource.data.length);
+    };
+    const resetForm = () => { form?.reset(); if (field("originalSlug")) field("originalSlug")!.value = ""; if (formTitle) formTitle.textContent = "새 지역·단지"; setAdminFormStatus(statusMessage, "지역과 단지 설명을 입력해 주세요."); };
+    const edit = (slug: string) => {
+      const complex = resource?.data.find((item) => item.slug === slug); if (!complex) return;
+      const values: Record<string, string> = { originalSlug: complex.slug, slug: complex.slug, areaSlug: complex.areaSlug, areaName: complex.areaName, eyebrow: complex.eyebrow, mark: complex.mark, name: complex.name, status: complex.status, summary: complex.summary, introTitle: complex.introTitle, introduction: complex.introduction.join("\n\n"), source: complex.source ?? "", confirmedAt: complex.confirmedAt ?? "" };
+      Object.entries(values).forEach(([name, value]) => { if (field(name)) field(name)!.value = value; });
+      if (formTitle) formTitle.textContent = "지역·단지 수정";
+    };
+    window.addEventListener("admin-write-ready", (event) => { if (!(event as CustomEvent<{ writeEnabled: boolean }>).detail.writeEnabled) return; void readAdminContent<ComplexContent[]>("complexes").then((current) => { resource = current; renderList(); setAdminFormStatus(statusMessage, "GitHub의 최신 내용을 불러왔습니다."); }).catch((error) => setAdminFormStatus(statusMessage, error instanceof Error ? error.message : "내용을 불러오지 못했습니다.", "error")); });
+    list?.addEventListener("click", (event) => { const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-complex-edit]"); if (button?.dataset.complexEdit) edit(button.dataset.complexEdit); });
+    document.querySelector("[data-complex-new]")?.addEventListener("click", resetForm);
+    form?.addEventListener("submit", async (event) => {
+      event.preventDefault(); if (!resource) return setAdminFormStatus(statusMessage, "최신 내용을 먼저 불러와 주세요.", "error");
+      const submit = form.querySelector<HTMLButtonElement>("button[type='submit']"); if (submit) submit.disabled = true;
+      try {
+        const value = (name: string) => field(name)?.value.trim() ?? ""; const originalSlug = value("originalSlug");
+        const item: ComplexContent = { slug: value("slug"), areaSlug: value("areaSlug"), areaName: value("areaName"), eyebrow: value("eyebrow"), mark: value("mark"), name: value("name"), status: value("status") as ComplexContent["status"], summary: value("summary"), introTitle: value("introTitle"), introduction: value("introduction").split(/\n\s*\n/u).map((paragraph) => paragraph.trim()).filter(Boolean), source: value("source") || null, confirmedAt: value("confirmedAt") || null };
+        const next = originalSlug ? resource.data.map((candidate) => candidate.slug === originalSlug ? item : candidate) : [...resource.data, item];
+        const result = await writeAdminContent("complexes", resource.sha, next); resource = { resource: "complexes", sha: result.contentSha ?? resource.sha, data: next }; renderList(); resetForm(); setAdminFormStatus(statusMessage, "저장했습니다. 자동 배포 후 단지정보 화면에 반영됩니다.", "success");
+      } catch (error) { setAdminFormStatus(statusMessage, error instanceof Error ? error.message : "저장하지 못했습니다.", "error"); }
+      finally { if (submit) submit.disabled = false; }
+    });
+  </script>
+</AdminLayout>

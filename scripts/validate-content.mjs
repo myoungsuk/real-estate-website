@@ -7,6 +7,7 @@ const content = {
   listings: await readJson("../src/data/listings.json"),
   complexes: await readJson("../src/data/complexes.json"),
   externalLinks: await readJson("../src/data/external-links.json"),
+  homeContent: await readJson("../src/data/home-content.json"),
   faq: await readJson("../src/data/faq.json"),
   reviews: await readJson("../src/data/reviews.json"),
 };

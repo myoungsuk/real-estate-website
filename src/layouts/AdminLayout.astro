@@ -1,0 +1,166 @@
+---
+import "../styles/global.css";
+import "../styles/admin.css";
+
+interface Props {
+  title: string;
+  description: string;
+}
+
+const { title, description } = Astro.props;
+const pathname = Astro.url.pathname;
+
+const navigation = [
+  { href: "/admin/", label: "대시보드", shortLabel: "홈" },
+  { href: "/admin/listings/", label: "매물 관리", shortLabel: "매물" },
+  { href: "/admin/content/", label: "첫 화면·사무소", shortLabel: "홈글" },
+  { href: "/admin/external-links/", label: "블로그·유튜브", shortLabel: "링크" },
+  { href: "/admin/complexes/", label: "지역·단지 설명", shortLabel: "지역" },
+];
+
+const isCurrentPath = (href: string) =>
+  href === "/admin/" ? pathname === href : pathname.startsWith(href);
+---
+
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#10283d" />
+    <meta name="description" content={description} />
+    <meta name="robots" content="noindex,nofollow,noarchive" />
+    <title>{title}</title>
+  </head>
+  <body class="admin-body">
+    <a class="skip-link" href="#admin-main">관리자 본문으로 바로가기</a>
+
+    <div class="admin-app" data-admin-app>
+      <aside class="admin-sidebar" id="admin-navigation" data-admin-navigation hidden>
+        <div class="admin-brand">
+          <a href="/admin/" aria-label="행복한부동산 관리자 홈">
+            <span class="admin-brand__mark" aria-hidden="true">행</span>
+            <span>
+              <strong>행복한부동산</strong>
+              <small>관리자 시스템</small>
+            </span>
+          </a>
+          <button class="admin-sidebar__close" type="button" data-admin-menu-close>
+            <span aria-hidden="true">×</span>
+            <span class="sr-only">관리 메뉴 닫기</span>
+          </button>
+        </div>
+
+        <nav class="admin-navigation" aria-label="관리자 메뉴">
+          <p>운영</p>
+          <ul>
+            {navigation.map((item) => (
+              <li>
+                <a href={item.href} aria-current={isCurrentPath(item.href) ? "page" : undefined}>
+                  <span aria-hidden="true">{item.shortLabel}</span>
+                  {item.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+
+          <p>추가 관리</p>
+          <ul class="admin-navigation__future" aria-label="준비 중인 메뉴">
+            <li><span>FAQ·후기 <small>준비 중</small></span></li>
+            <li><span>배포 상태 <small>준비 중</small></span></li>
+          </ul>
+        </nav>
+
+        <div class="admin-sidebar__notice">
+          <span class="admin-status-dot" aria-hidden="true"></span>
+          <div>
+            <strong>Access 보호</strong>
+            <small>저장은 별도 GitHub 연결이 필요합니다.</small>
+          </div>
+        </div>
+      </aside>
+
+      <button
+        class="admin-backdrop"
+        type="button"
+        aria-label="관리 메뉴 닫기"
+        data-admin-backdrop
+        hidden
+      ></button>
+
+      <div class="admin-page">
+        <header class="admin-topbar">
+          <button
+            class="admin-menu-button"
+            type="button"
+            aria-expanded="false"
+            aria-controls="admin-navigation"
+            data-admin-menu-open
+          >
+            <span aria-hidden="true">☰</span>
+            <span class="sr-only">관리 메뉴 열기</span>
+          </button>
+
+          <div class="admin-topbar__context">
+            <span class="admin-status-dot" aria-hidden="true"></span>
+            <span>Cloudflare Access 보호 영역</span>
+          </div>
+
+          <a class="admin-public-link" href="/">
+            공개 홈페이지
+            <span aria-hidden="true">↗</span>
+          </a>
+        </header>
+
+        <main class="admin-main" id="admin-main" tabindex="-1">
+          <slot />
+        </main>
+      </div>
+    </div>
+
+    <script>
+      const app = document.querySelector<HTMLElement>("[data-admin-app]");
+      const navigation = app?.querySelector<HTMLElement>("[data-admin-navigation]");
+      const openButton = app?.querySelector<HTMLButtonElement>("[data-admin-menu-open]");
+      const closeButton = app?.querySelector<HTMLButtonElement>("[data-admin-menu-close]");
+      const backdrop = app?.querySelector<HTMLButtonElement>("[data-admin-backdrop]");
+
+      if (navigation && openButton && closeButton && backdrop) {
+        const closeMenu = () => {
+          navigation.hidden = true;
+          backdrop.hidden = true;
+          openButton.setAttribute("aria-expanded", "false");
+          openButton.querySelector(".sr-only")!.textContent = "관리 메뉴 열기";
+        };
+
+        const openMenu = () => {
+          navigation.hidden = false;
+          backdrop.hidden = false;
+          openButton.setAttribute("aria-expanded", "true");
+          openButton.querySelector(".sr-only")!.textContent = "관리 메뉴 닫기";
+          closeButton.focus();
+        };
+
+        openButton.addEventListener("click", () => {
+          if (openButton.getAttribute("aria-expanded") === "true") closeMenu();
+          else openMenu();
+        });
+        closeButton.addEventListener("click", () => {
+          closeMenu();
+          openButton.focus();
+        });
+        backdrop.addEventListener("click", () => {
+          closeMenu();
+          openButton.focus();
+        });
+        navigation.querySelectorAll("a").forEach((link) => link.addEventListener("click", closeMenu));
+        window.addEventListener("keydown", (event) => {
+          if (event.key === "Escape" && !navigation.hidden) {
+            closeMenu();
+            openButton.focus();
+          }
+        });
+      }
+    </script>
+  </body>
+</html>

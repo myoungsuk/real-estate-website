@@ -1,0 +1,148 @@
+---
+import AdminWriteGate from "../../../components/admin/AdminWriteGate.astro";
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import { homeContent } from "../../../lib/content";
+---
+
+<AdminLayout
+  title="첫 화면·사무소 관리 | 행복한부동산 관리자"
+  description="대표 소개, 사무소 소개와 리더스시티 안내 문구를 관리합니다."
+>
+  <div class="admin-page-header admin-page-header--compact">
+    <div>
+      <nav class="admin-breadcrumbs" aria-label="현재 위치"><a href="/admin/">대시보드</a><span>/</span><span aria-current="page">첫 화면·사무소</span></nav>
+      <p class="admin-eyebrow">HOME CONTENT</p>
+      <h1>첫 화면·사무소 관리</h1>
+      <p>대표 소개, 사무소 사진 영역, 리더스시티 설명 문구를 수정합니다.</p>
+    </div>
+    <a class="admin-text-link" href="/#about">공개 첫 화면 보기 <span aria-hidden="true">↗</span></a>
+  </div>
+
+  <AdminWriteGate />
+
+  <form class="admin-editor" data-home-content-form>
+    <section class="admin-panel admin-editor__section" aria-labelledby="broker-editor-heading">
+      <div class="admin-panel__heading"><div><p class="admin-eyebrow">대표 소개</p><h2 id="broker-editor-heading">맨 위 대표 영역</h2></div><span class="admin-panel__number">01</span></div>
+      <div class="admin-form-grid">
+        <div class="admin-field"><label for="broker-eyebrow">작은 제목</label><input id="broker-eyebrow" name="brokerEyebrow" value={homeContent.broker.eyebrow} required data-write-control disabled /></div>
+        <div class="admin-field admin-field--wide"><label for="broker-headline">대표 문장</label><textarea id="broker-headline" name="brokerHeadline" rows="3" required data-write-control disabled>{homeContent.broker.headline}</textarea></div>
+        <div class="admin-field admin-field--wide"><label for="broker-lead">소개 설명</label><textarea id="broker-lead" name="brokerLead" rows="4" required data-write-control disabled>{homeContent.broker.lead}</textarea></div>
+        <div class="admin-field"><label for="broker-alt">대표 사진 설명</label><input id="broker-alt" name="brokerAlt" value={homeContent.broker.portrait.alt} required data-write-control disabled /></div>
+        <div class="admin-field"><label for="broker-image">대표 사진 교체</label><input id="broker-image" name="brokerImage" type="file" accept="image/jpeg,image/png,image/webp" data-write-control disabled /><small>자동으로 WebP·최대 1600px로 최적화합니다.</small></div>
+      </div>
+    </section>
+
+    <section class="admin-panel admin-editor__section" aria-labelledby="office-editor-heading">
+      <div class="admin-panel__heading"><div><p class="admin-eyebrow">사무소 소개</p><h2 id="office-editor-heading">사진 위 사무소 설명</h2></div><span class="admin-panel__number">02</span></div>
+      <div class="admin-form-grid">
+        <div class="admin-field"><label for="office-eyebrow">작은 제목</label><input id="office-eyebrow" name="officeEyebrow" value={homeContent.office.eyebrow} required data-write-control disabled /></div>
+        <div class="admin-field"><label for="office-title">큰 제목</label><input id="office-title" name="officeTitle" value={homeContent.office.title} required data-write-control disabled /></div>
+        <div class="admin-field admin-field--wide"><label for="office-description">사무소 설명</label><textarea id="office-description" name="officeDescription" rows="4" required data-write-control disabled>{homeContent.office.description}</textarea></div>
+        <div class="admin-field admin-field--wide"><label for="office-badges">특징 표시</label><textarea id="office-badges" name="officeBadges" rows="4" data-write-control disabled>{homeContent.office.badges.join("\n")}</textarea><small>한 줄에 한 개씩 입력합니다.</small></div>
+        <div class="admin-field"><label for="office-alt">사무소 사진 설명</label><input id="office-alt" name="officeAlt" value={homeContent.office.image.alt} required data-write-control disabled /></div>
+        <div class="admin-field"><label for="office-image">사무소 사진 교체</label><input id="office-image" name="officeImage" type="file" accept="image/jpeg,image/png,image/webp" data-write-control disabled /></div>
+      </div>
+    </section>
+
+    <section class="admin-panel admin-editor__section" aria-labelledby="area-editor-heading">
+      <div class="admin-panel__heading"><div><p class="admin-eyebrow">지역 설명</p><h2 id="area-editor-heading">리더스시티 알아보기</h2></div><span class="admin-panel__number">03</span></div>
+      <div class="admin-form-grid">
+        <div class="admin-field"><label for="area-eyebrow">작은 제목</label><input id="area-eyebrow" name="areaEyebrow" value={homeContent.areaGuide.eyebrow} required data-write-control disabled /></div>
+        <div class="admin-field"><label for="area-title">큰 제목</label><input id="area-title" name="areaTitle" value={homeContent.areaGuide.title} required data-write-control disabled /></div>
+        <div class="admin-field admin-field--wide"><label for="area-description">도입 설명</label><textarea id="area-description" name="areaDescription" rows="4" required data-write-control disabled>{homeContent.areaGuide.description}</textarea></div>
+        {homeContent.areaGuide.cards.map((card, index) => (
+          <fieldset class="admin-subform admin-field--wide">
+            <legend>설명 카드 {index + 1}</legend>
+            <div class="admin-field"><label for={`area-card-title-${index}`}>제목</label><input id={`area-card-title-${index}`} name={`areaCardTitle${index}`} value={card.title} required data-write-control disabled /></div>
+            <div class="admin-field"><label for={`area-card-description-${index}`}>설명</label><textarea id={`area-card-description-${index}`} name={`areaCardDescription${index}`} rows="3" required data-write-control disabled>{card.description}</textarea></div>
+          </fieldset>
+        ))}
+      </div>
+    </section>
+
+    <div class="admin-editor__actions">
+      <p class="admin-form-status" data-home-content-status aria-live="polite">변경 전 내용을 확인해 주세요.</p>
+      <button class="admin-primary-button" type="submit" data-write-control disabled>변경 내용 저장</button>
+    </div>
+  </form>
+
+  <script>
+    import {
+      convertImageFileToWebp,
+      readAdminContent,
+      setAdminFormStatus,
+      uploadAdminImage,
+      writeAdminContent,
+      type AdminResource,
+    } from "../../../lib/admin-content-client";
+    import type { HomeContent } from "../../../lib/content";
+
+    const form = document.querySelector<HTMLFormElement>("[data-home-content-form]");
+    const status = document.querySelector<HTMLElement>("[data-home-content-status]");
+    let resource: AdminResource<HomeContent> | null = null;
+
+    const field = (name: string) => form?.elements.namedItem(name) as HTMLInputElement | HTMLTextAreaElement | null;
+    const setValues = (data: HomeContent) => {
+      const values: Record<string, string> = {
+        brokerEyebrow: data.broker.eyebrow,
+        brokerHeadline: data.broker.headline,
+        brokerLead: data.broker.lead,
+        brokerAlt: data.broker.portrait.alt,
+        officeEyebrow: data.office.eyebrow,
+        officeTitle: data.office.title,
+        officeDescription: data.office.description,
+        officeBadges: data.office.badges.join("\n"),
+        officeAlt: data.office.image.alt,
+        areaEyebrow: data.areaGuide.eyebrow,
+        areaTitle: data.areaGuide.title,
+        areaDescription: data.areaGuide.description,
+      };
+      data.areaGuide.cards.forEach((card, index) => {
+        values[`areaCardTitle${index}`] = card.title;
+        values[`areaCardDescription${index}`] = card.description;
+      });
+      Object.entries(values).forEach(([name, value]) => { const input = field(name); if (input) input.value = value; });
+    };
+
+    window.addEventListener("admin-write-ready", (event) => {
+      const session = (event as CustomEvent<{ writeEnabled: boolean }>).detail;
+      if (!session.writeEnabled) return;
+      void readAdminContent<HomeContent>("home-content").then((current) => {
+        resource = current;
+        setValues(current.data);
+        setAdminFormStatus(status, "GitHub의 최신 내용을 불러왔습니다.");
+      }).catch((error) => setAdminFormStatus(status, error instanceof Error ? error.message : "최신 내용을 불러오지 못했습니다.", "error"));
+    });
+
+    form?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!resource) return setAdminFormStatus(status, "최신 내용을 먼저 불러와 주세요.", "error");
+      const submit = form.querySelector<HTMLButtonElement>("button[type='submit']");
+      if (submit) submit.disabled = true;
+      setAdminFormStatus(status, "사진과 문구를 저장하고 있습니다.", "saving");
+      try {
+        let portraitSrc = resource.data.broker.portrait.src;
+        let officeImageSrc = resource.data.office.image.src;
+        const portraitFile = (field("brokerImage") as HTMLInputElement)?.files?.[0];
+        const officeFile = (field("officeImage") as HTMLInputElement)?.files?.[0];
+        if (portraitFile) portraitSrc = (await uploadAdminImage("office", await convertImageFileToWebp(portraitFile))).src;
+        if (officeFile) officeImageSrc = (await uploadAdminImage("office", await convertImageFileToWebp(officeFile))).src;
+        const value = (name: string) => field(name)?.value.trim() ?? "";
+        const next: HomeContent = {
+          broker: { eyebrow: value("brokerEyebrow"), headline: value("brokerHeadline"), lead: value("brokerLead"), portrait: { src: portraitSrc, alt: value("brokerAlt") } },
+          office: { eyebrow: value("officeEyebrow"), title: value("officeTitle"), description: value("officeDescription"), image: { src: officeImageSrc, alt: value("officeAlt") }, badges: value("officeBadges").split("\n").map((item) => item.trim()).filter(Boolean) },
+          areaGuide: { eyebrow: value("areaEyebrow"), title: value("areaTitle"), description: value("areaDescription"), cards: resource.data.areaGuide.cards.map((_, index) => ({ title: value(`areaCardTitle${index}`), description: value(`areaCardDescription${index}`) })) },
+        };
+        const result = await writeAdminContent("home-content", resource.sha, next);
+        resource = { resource: "home-content", sha: result.contentSha ?? resource.sha, data: next };
+        form.reset();
+        setValues(next);
+        setAdminFormStatus(status, "저장했습니다. Cloudflare 자동 배포가 끝나면 공개 화면에 반영됩니다.", "success");
+      } catch (error) {
+        setAdminFormStatus(status, error instanceof Error ? error.message : "저장하지 못했습니다.", "error");
+      } finally {
+        if (submit) submit.disabled = false;
+      }
+    });
+  </script>
+</AdminLayout>
