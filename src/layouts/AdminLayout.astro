@@ -1,6 +1,7 @@
 ---
 import "../styles/global.css";
 import "../styles/admin.css";
+import { office } from "../lib/site";
 
 interface Props {
   title: string;
@@ -39,10 +40,12 @@ const isCurrentPath = (href: string) =>
       <aside class="admin-sidebar" id="admin-navigation" data-admin-navigation hidden>
         <div class="admin-brand">
           <a href="/admin/" aria-label="리더스시티행복한공인중개사사무소 관리자 홈">
-            <span class="admin-brand__mark" aria-hidden="true">행</span>
+            <span class="admin-brand__mark" aria-hidden="true">
+              <img src="/images/brand/leaders-city-happy-logo.webp" alt="" width="1000" height="800" />
+            </span>
             <span>
-              <strong>리더스시티행복한공인중개사사무소</strong>
-              <small>관리자 시스템</small>
+              <strong>{office.brandName}</strong>
+              <small>공인중개사사무소 · 관리자 시스템</small>
             </span>
           </a>
           <button class="admin-sidebar__close" type="button" data-admin-menu-close>

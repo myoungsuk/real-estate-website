@@ -19,6 +19,7 @@ const structuredData = {
   email: office.email,
   areaServed: office.serviceArea,
   image: Astro.site ? new URL(homeContent.broker.portrait.src, Astro.site).toString() : undefined,
+  logo: Astro.site ? new URL("/images/brand/leaders-city-happy-logo.png", Astro.site).toString() : undefined,
   hasMap: office.naverPlaceUrl,
   sameAs: [office.naverBlogUrl, office.youtubeUrl],
   identifier: [

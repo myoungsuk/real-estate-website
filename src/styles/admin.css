@@ -28,11 +28,12 @@
 .admin-backdrop[hidden] { display: none; }
 
 .admin-brand { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
-.admin-brand > a { display: inline-flex; align-items: center; gap: 12px; min-height: 48px; }
-.admin-brand > a > span:last-child { display: grid; line-height: 1.2; }
-.admin-brand strong { max-width: 158px; color: #fff; font-size: 0.86rem; line-height: 1.25; word-break: keep-all; }
-.admin-brand small { margin-top: 4px; color: #9fb2c0; font-size: 0.75rem; }
-.admin-brand__mark { display: grid; place-items: center; width: 42px; height: 42px; color: #10283d; background: #f0d9b9; border-radius: 13px 13px 5px 13px; font-family: Georgia, serif; font-size: 1.15rem; font-weight: 800; }
+.admin-brand > a { min-width: 0; display: inline-flex; flex: 1 1 auto; align-items: center; gap: 12px; min-height: 48px; }
+.admin-brand > a > span:last-child { min-width: 0; display: grid; line-height: 1.2; }
+.admin-brand strong { max-width: 164px; color: #fff; font-size: 0.86rem; line-height: 1.25; overflow-wrap: anywhere; word-break: keep-all; }
+.admin-brand small { max-width: 164px; margin-top: 4px; color: #9fb2c0; font-size: 0.72rem; line-height: 1.35; overflow-wrap: anywhere; word-break: keep-all; }
+.admin-brand__mark { position: relative; flex: 0 0 auto; width: 42px; height: 42px; overflow: hidden; border-radius: 12px; background: #fff; }
+.admin-brand__mark img { position: absolute; top: -11px; left: -39px; width: 118px; max-width: none; height: auto; }
 .admin-sidebar__close { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 1px solid rgba(255,255,255,0.2); border-radius: 50%; color: #fff; background: transparent; font-size: 1.8rem; cursor: pointer; }
 
 .admin-navigation { flex: 1; margin-top: 42px; }

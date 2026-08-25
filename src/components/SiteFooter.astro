@@ -5,6 +5,16 @@ import { emailHref, office, phoneHref } from "../lib/site";
 <footer class="site-footer">
   <div class="site-footer__inner shell">
     <div>
+      <a class="site-footer__logo" href="/" aria-label={`${office.legalName} 홈`}>
+        <img
+          src="/images/brand/leaders-city-happy-logo.webp"
+          alt="리더스시티 행복한부동산 공인중개사사무소 로고"
+          width="1000"
+          height="800"
+          loading="lazy"
+          decoding="async"
+        />
+      </a>
       <p class="site-footer__brand">{office.legalName}</p>
       <p>{office.address}</p>
     </div>
