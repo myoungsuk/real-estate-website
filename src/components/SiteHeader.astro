@@ -1,15 +1,15 @@
 ---
-import { isCurrentPath, navigation, phoneHref } from "../lib/site";
+import { isCurrentPath, navigation, office, phoneHref } from "../lib/site";
 
 const pathname = Astro.url.pathname;
 ---
 
 <header class="site-header" data-site-header>
   <div class="site-header__inner shell">
-    <a class="brand" href="/" aria-label="대전 동구 행복한부동산 홈">
+    <a class="brand" href="/" aria-label={`${office.legalName} 홈`}>
       <span class="brand__mark" aria-hidden="true">행</span>
       <span class="brand__text">
-        <strong>행복한부동산</strong>
+        <strong>{office.legalName}</strong>
         <small>대전 동구 지역 전문</small>
       </span>
     </a>

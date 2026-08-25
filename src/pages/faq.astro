@@ -1,19 +1,59 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
 import PageIntro from "../components/PageIntro.astro";
-import ContactPanel from "../components/ContactPanel.astro";
 import faq from "../data/faq.json";
+import { kakaoHref, office, phoneHref, smsHref } from "../lib/site";
 
-const title = "자주 묻는 질문 | 대전 동구 행복한부동산";
-const description = "매매·전세·월세 상담에서 자주 확인하는 질문을 안내합니다.";
+const title = "FAQ 및 상담 | 리더스시티행복한공인중개사사무소";
+const description = "매매·전세·월세의 자주 묻는 질문을 확인하고 문자로 비공개 상담을 요청할 수 있습니다.";
 ---
 
 <BaseLayout {title} {description}>
-  <PageIntro eyebrow="FAQ" title="자주 묻는 질문" description="실제 상담에서 반복되는 질문과 승인된 답변부터 차례로 정리합니다." />
-  <section class="section">
+  <PageIntro eyebrow="FAQ & CONSULTATION" title="FAQ 및 상담" description="자주 묻는 질문을 먼저 확인하고, 더 궁금한 내용은 사이트에 남기지 않고 문자로 바로 상담해 주세요." />
+  <section class="section" aria-labelledby="faq-heading">
     <div class="shell narrow-shell">
+      <div class="section-heading"><div><p class="eyebrow">자주 묻는 질문</p><h2 id="faq-heading">상담 전 확인해 보세요</h2></div></div>
       {faq.length > 0 ? <div class="faq-list">{faq.map((item: { question: string; answer: string }) => <details><summary>{item.question}</summary><div><p>{item.answer}</p></div></details>)}</div> : <div class="empty-state"><span class="empty-state__number" aria-hidden="true">?</span><div><h2>질문과 답변을 준비하고 있습니다</h2><p>확인되지 않은 일반 답변을 채우지 않고, 실제 상담 내용을 바탕으로 승인된 질문부터 공개합니다.</p></div></div>}
     </div>
   </section>
-  <ContactPanel title="지금 궁금한 내용을 직접 물어보세요" />
+  <section class="section section--soft" aria-labelledby="consultation-heading">
+    <div class="shell consultation-board">
+      <div class="consultation-board__intro">
+        <p class="eyebrow">비공개 상담</p>
+        <h2 id="consultation-heading">편하게 남겨주세요,<br />대표가 직접 확인합니다</h2>
+        <p>입력한 내용은 홈페이지나 공개 게시판에 저장되지 않습니다. 작성 후 문자 앱으로 이동하며, 전송 버튼을 눌러야 상담 내용이 전달됩니다.</p>
+        <div class="consultation-board__actions">
+          <a class="button button--secondary" href={phoneHref}>전화 상담 {office.mobile}</a>
+          <a class="text-link" href={kakaoHref} target="_blank" rel="noopener noreferrer">카카오톡으로 상담하기 ↗</a>
+        </div>
+      </div>
+      <form class="consultation-form" action={smsHref} data-consultation-form>
+        <div class="consultation-form__grid">
+          <div><label for="consultation-name">이름 <small>(닉네임 가능)</small></label><input id="consultation-name" name="name" autocomplete="name" maxlength="30" required /></div>
+          <div><label for="consultation-contact">회신 연락처 <small>(선택)</small></label><input id="consultation-contact" name="contact" type="tel" autocomplete="tel" maxlength="30" /></div>
+          <div class="consultation-form__wide"><label for="consultation-subject">문의 제목</label><input id="consultation-subject" name="subject" maxlength="80" placeholder="예: 리더스시티 84㎡ 매매 문의" required /></div>
+          <div class="consultation-form__wide"><label for="consultation-message">문의 내용</label><textarea id="consultation-message" name="message" rows="6" maxlength="1000" placeholder="원하는 단지, 거래유형, 예산, 면적 등을 적어주세요." required></textarea></div>
+        </div>
+        <p class="consultation-form__notice">사이트에 저장하지 않는 문자 상담입니다. 계약서·신분증·계좌번호 같은 민감정보는 적지 마세요.</p>
+        <button class="button button--primary" type="submit">문자로 상담 보내기</button>
+      </form>
+    </div>
+  </section>
 </BaseLayout>
+
+<script>
+  const form = document.querySelector<HTMLFormElement>("[data-consultation-form]");
+  form?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const data = new FormData(form);
+    const lines = [
+      "[홈페이지 상담]",
+      `이름: ${String(data.get("name") ?? "")}`,
+      `회신 연락처: ${String(data.get("contact") ?? "미입력") || "미입력"}`,
+      `제목: ${String(data.get("subject") ?? "")}`,
+      "",
+      String(data.get("message") ?? ""),
+    ];
+    window.location.href = `${form.action}?body=${encodeURIComponent(lines.join("\n"))}`;
+  });
+</script>

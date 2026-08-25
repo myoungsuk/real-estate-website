@@ -1,170 +1,54 @@
 ---
 import AdminLayout from "../../../layouts/AdminLayout.astro";
-import {
-  formatListingPrice,
-  getListingLocation,
-  listings,
-  tradeNames,
-  type ListingStatus,
-} from "../../../lib/listings";
+import { naverListings, naverPropertyTypes, naverTradeNames } from "../../../lib/naver-listings";
+import { office } from "../../../lib/site";
 
-const statusNames: Record<ListingStatus, string> = {
-  draft: "작성 중",
-  published: "공개 중",
-  contracted: "계약 완료",
-  ended: "종료",
-};
-
-const sortedListings = [...listings].sort((a, b) => b.confirmedAt.localeCompare(a.confirmedAt));
-const formatDate = (value: string) => new Intl.DateTimeFormat("ko-KR", {
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-}).format(new Date(`${value}T00:00:00+09:00`));
+const sortedListings = [...naverListings].sort((a, b) => b.confirmedAt.localeCompare(a.confirmedAt));
+const formatDate = (value: string) => new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(`${value}T00:00:00+09:00`));
 ---
 
-<AdminLayout
-  title="매물 관리 | 행복한부동산 관리자"
-  description="행복한부동산 매물 데이터의 공개 상태를 확인하고 등록·수정하는 관리자 화면입니다."
->
+<AdminLayout title="네이버 매물 관리 | 리더스시티행복한공인중개사사무소 관리자" description="네이버 부동산에 공개된 개별 매물을 확인하고 네이버 매물 관리 화면으로 이동합니다.">
   <div class="admin-page-header admin-page-header--compact">
     <div>
-      <nav class="admin-breadcrumbs" aria-label="현재 위치">
-        <a href="/admin/">대시보드</a>
-        <span aria-hidden="true">/</span>
-        <span aria-current="page">매물 관리</span>
-      </nav>
-      <p class="admin-eyebrow">LISTINGS</p>
-      <h1>매물 관리</h1>
-      <p>저장소에 등록된 매물의 공개 상태를 확인하고 등록·수정합니다.</p>
+      <nav class="admin-breadcrumbs" aria-label="현재 위치"><a href="/admin/">대시보드</a><span aria-hidden="true">/</span><span aria-current="page">네이버 매물</span></nav>
+      <p class="admin-eyebrow">NAVER LISTINGS</p><h1>네이버 매물 관리</h1>
+      <p>매물 등록·수정·종료는 네이버 부동산에서 처리하고, 이 화면에서는 현재 사이트에 반영된 매물을 확인합니다.</p>
     </div>
-    <a class="admin-primary-button" href="/admin/listings/editor/">새 매물 등록</a>
+    <a class="admin-primary-button" href={office.naverListingsUrl} target="_blank" rel="noopener noreferrer">네이버에서 매물 관리 ↗</a>
   </div>
 
-  <p class="admin-inline-notice" id="write-disabled-note">
-    <span aria-hidden="true">i</span>
-    공개 상태로 저장한 매물만 홈페이지에 표시됩니다. 정확한 동·호수와 고객 개인정보는 입력하지 마세요.
-  </p>
+  <p class="admin-inline-notice admin-inline-notice--ready"><span aria-hidden="true">i</span><span>홈페이지에는 네이버에 공개된 동·광고 층수·가격·면적·설명과 개별 매물 링크만 표시합니다. 네이버에서 변경한 내용은 매물 데이터 동기화 후 반영됩니다.</span></p>
 
   <section class="admin-panel" aria-labelledby="listing-table-title">
-    <div class="admin-panel__heading admin-panel__heading--list">
-      <div>
-        <p class="admin-eyebrow">저장소 기준</p>
-        <h2 id="listing-table-title">전체 매물 <span>{listings.length.toLocaleString("ko-KR")}건</span></h2>
-      </div>
-      <a class="admin-text-link" href="/properties/">공개 매물 화면 보기 <span aria-hidden="true">↗</span></a>
-    </div>
+    <div class="admin-panel__heading admin-panel__heading--list"><div><p class="admin-eyebrow">네이버 공개 기준</p><h2 id="listing-table-title">전체 매물 <span>{naverListings.length.toLocaleString("ko-KR")}건</span></h2></div><a class="admin-text-link" href="/properties/">공개 매물 화면 보기 <span aria-hidden="true">↗</span></a></div>
 
     <form class="admin-listing-filters" role="search" data-admin-listing-filters>
-      <div class="admin-field admin-field--search">
-        <label for="admin-listing-query">매물 검색</label>
-        <input
-          id="admin-listing-query"
-          type="search"
-          name="q"
-          placeholder="매물명, 위치, ID 검색"
-          autocomplete="off"
-          data-admin-listing-query
-        />
-      </div>
-      <div class="admin-field">
-        <label for="admin-listing-status">공개 상태</label>
-        <select id="admin-listing-status" name="status" data-admin-listing-status>
-          <option value="all">전체 상태</option>
-          <option value="draft">작성 중</option>
-          <option value="published">공개 중</option>
-          <option value="contracted">계약 완료</option>
-          <option value="ended">종료</option>
-        </select>
-      </div>
+      <div class="admin-field admin-field--search"><label for="admin-listing-query">매물 검색</label><input id="admin-listing-query" type="search" name="q" placeholder="매물명, 유형, ID 검색" autocomplete="off" data-admin-listing-query /></div>
+      <div class="admin-field"><label for="admin-listing-type">매물유형</label><select id="admin-listing-type" name="type" data-admin-listing-type><option value="all">전체 유형</option>{naverPropertyTypes.map((type) => <option value={type}>{type}</option>)}</select></div>
       <button class="admin-filter-reset" type="button" data-admin-listing-reset>필터 초기화</button>
     </form>
 
-    <p class="admin-listing-count" aria-live="polite" data-admin-listing-count>
-      전체 {listings.length.toLocaleString("ko-KR")}건
-    </p>
-
-    {sortedListings.length === 0 ? (
-      <div class="admin-empty-state" data-admin-listing-source-empty>
-        <span aria-hidden="true">0</span>
-        <div>
-          <h3>등록된 매물이 아직 없습니다.</h3>
-          <p>실제 공개 승인을 받은 매물이 준비되면 이 목록에서 상태와 최근 확인일을 검토할 수 있습니다.</p>
-        </div>
-      </div>
-    ) : (
-      <div class="admin-table-wrap" data-admin-listing-results>
-        <table class="admin-table">
-          <caption class="sr-only">저장소에 등록된 전체 매물 목록</caption>
-          <thead>
-            <tr>
-              <th scope="col">매물명</th>
-              <th scope="col">거래</th>
-              <th scope="col">가격</th>
-              <th scope="col">상태</th>
-              <th scope="col">최근 확인일</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sortedListings.map((listing) => (
-              <tr
-                data-admin-listing-row
-                data-admin-listing-status={listing.status}
-                data-admin-listing-search={[
-                  listing.title,
-                  listing.id,
-                  listing.slug,
-                  getListingLocation(listing),
-                  tradeNames[listing.tradeType],
-                  statusNames[listing.status],
-                  ...listing.features,
-                ].join(" ")}
-              >
-                <td data-label="매물명">
-                  {listing.status === "published" ? (
-                    <a class="admin-table__title" href={`/properties/${listing.slug}/`}>{listing.title}</a>
-                  ) : (
-                    <strong class="admin-table__title">{listing.title}</strong>
-                  )}
-                  <small>{getListingLocation(listing)} · {listing.id}</small>
-                  <a class="admin-row-action" href={`/admin/listings/editor/?id=${encodeURIComponent(listing.id)}`}>수정</a>
-                </td>
-                <td data-label="거래">{tradeNames[listing.tradeType]}</td>
-                <td data-label="가격">{formatListingPrice(listing)}</td>
-                <td data-label="상태">
-                  <span class={`admin-listing-status admin-listing-status--${listing.status}`}>
-                    {statusNames[listing.status]}
-                  </span>
-                </td>
-                <td data-label="최근 확인일">{formatDate(listing.confirmedAt)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    )}
-
-    <div class="admin-empty-state admin-empty-state--filtered" data-admin-listing-filter-empty hidden>
-      <span aria-hidden="true">0</span>
-      <div>
-        <h3>조건에 맞는 매물이 없습니다.</h3>
-        <p>검색어나 공개 상태를 바꾸거나 필터를 초기화해 주세요.</p>
-        <button class="admin-text-button" type="button" data-admin-listing-empty-reset>필터 초기화</button>
-      </div>
+    <p class="admin-listing-count" aria-live="polite" data-admin-listing-count>전체 {naverListings.length.toLocaleString("ko-KR")}건</p>
+    <div class="admin-table-wrap" data-admin-listing-results>
+      <table class="admin-table">
+        <caption class="sr-only">사이트에 반영된 네이버 공개 매물 목록</caption>
+        <thead><tr><th scope="col">매물명</th><th scope="col">유형</th><th scope="col">거래</th><th scope="col">가격</th><th scope="col">최근 확인일</th></tr></thead>
+        <tbody>{sortedListings.map((listing) => (
+          <tr data-admin-listing-row data-admin-listing-type={listing.propertyType} data-admin-listing-search={[listing.title, listing.id, listing.propertyType, naverTradeNames[listing.tradeType], listing.areaLabel, listing.floorLabel, listing.direction].filter(Boolean).join(" ")}>
+            <td data-label="매물명"><a class="admin-table__title" href={listing.url} target="_blank" rel="noopener noreferrer">{listing.title} ↗</a><small>네이버 매물번호 {listing.id}</small></td>
+            <td data-label="유형">{listing.propertyType}</td><td data-label="거래">{naverTradeNames[listing.tradeType]}</td><td data-label="가격">{listing.priceLabel}</td><td data-label="최근 확인일">{formatDate(listing.confirmedAt)}</td>
+          </tr>
+        ))}</tbody>
+      </table>
     </div>
+
+    <div class="admin-empty-state admin-empty-state--filtered" data-admin-listing-filter-empty hidden><span aria-hidden="true">0</span><div><h3>조건에 맞는 매물이 없습니다.</h3><p>검색어나 매물유형을 바꾸거나 필터를 초기화해 주세요.</p><button class="admin-text-button" type="button" data-admin-listing-empty-reset>필터 초기화</button></div></div>
   </section>
 
   <script>
-    import {
-      filterAdminListings,
-      normalizeAdminListingQuery,
-      normalizeAdminListingStatus,
-      readAdminListingFilters,
-    } from "../../../lib/admin-listing-filter.mjs";
-
     const form = document.querySelector<HTMLFormElement>("[data-admin-listing-filters]");
     const queryInput = form?.querySelector<HTMLInputElement>("[data-admin-listing-query]");
-    const statusSelect = form?.querySelector<HTMLSelectElement>("[data-admin-listing-status]");
+    const typeSelect = form?.querySelector<HTMLSelectElement>("[data-admin-listing-type]");
     const resetButton = form?.querySelector<HTMLButtonElement>("[data-admin-listing-reset]");
     const emptyResetButton = document.querySelector<HTMLButtonElement>("[data-admin-listing-empty-reset]");
     const count = document.querySelector<HTMLElement>("[data-admin-listing-count]");
@@ -172,61 +56,38 @@ const formatDate = (value: string) => new Intl.DateTimeFormat("ko-KR", {
     const filterEmpty = document.querySelector<HTMLElement>("[data-admin-listing-filter-empty]");
     const rows = Array.from(document.querySelectorAll<HTMLElement>("[data-admin-listing-row]"));
 
-    if (form && queryInput && statusSelect && resetButton && count && filterEmpty) {
-      const records = rows.map((element) => ({
-        element,
-        status: element.dataset.adminListingStatus ?? "",
-        searchText: element.dataset.adminListingSearch ?? "",
-      }));
-
-      const updateUrl = (query: string, status: string) => {
-        const url = new URL(window.location.href);
-        if (query) url.searchParams.set("q", query);
-        else url.searchParams.delete("q");
-        if (status !== "all") url.searchParams.set("status", status);
-        else url.searchParams.delete("status");
-        window.history.replaceState(null, "", `${url.pathname}${url.search}`);
-      };
+    if (form && queryInput && typeSelect && resetButton && count && results && filterEmpty) {
+      const normalize = (value: string) => value.normalize("NFKC").trim().replace(/\s+/g, " ").toLocaleLowerCase("ko-KR");
+      const params = new URLSearchParams(window.location.search);
+      queryInput.value = params.get("q") ?? "";
+      if ([...typeSelect.options].some((option) => option.value === params.get("type"))) typeSelect.value = params.get("type")!;
 
       const applyFilters = () => {
-        const query = normalizeAdminListingQuery(queryInput.value);
-        const status = normalizeAdminListingStatus(statusSelect.value);
-        const visibleRecords = filterAdminListings(records, { query, status });
-        const visibleElements = new Set(
-          visibleRecords.map((record: { element: HTMLElement }) => record.element),
-        );
-
-        rows.forEach((row) => { row.hidden = !visibleElements.has(row); });
-
-        const isFiltered = query !== "" || status !== "all";
-        count.textContent = isFiltered
-          ? `검색 결과 ${visibleRecords.length.toLocaleString("ko-KR")}건 / 전체 ${records.length.toLocaleString("ko-KR")}건`
-          : `전체 ${records.length.toLocaleString("ko-KR")}건`;
-
-        const hasFilteredEmptyState = records.length > 0 && visibleRecords.length === 0;
-        if (results) results.hidden = hasFilteredEmptyState;
-        filterEmpty.hidden = !hasFilteredEmptyState;
+        const query = normalize(queryInput.value);
+        const selectedType = typeSelect.value;
+        let visible = 0;
+        rows.forEach((row) => {
+          const matchesQuery = !query || normalize(row.dataset.adminListingSearch ?? "").includes(query);
+          const matchesType = selectedType === "all" || row.dataset.adminListingType === selectedType;
+          row.hidden = !(matchesQuery && matchesType);
+          if (!row.hidden) visible += 1;
+        });
+        const isFiltered = Boolean(query) || selectedType !== "all";
+        count.textContent = isFiltered ? `검색 결과 ${visible.toLocaleString("ko-KR")}건 / 전체 ${rows.length.toLocaleString("ko-KR")}건` : `전체 ${rows.length.toLocaleString("ko-KR")}건`;
+        const isEmpty = visible === 0;
+        results.hidden = isEmpty;
+        filterEmpty.hidden = !isEmpty;
         resetButton.disabled = !isFiltered;
-        updateUrl(query, status);
+        const next = new URLSearchParams();
+        if (query) next.set("q", queryInput.value.trim());
+        if (selectedType !== "all") next.set("type", selectedType);
+        history.replaceState(null, "", `${location.pathname}${next.size ? `?${next}` : ""}`);
       };
 
-      const resetFilters = () => {
-        queryInput.value = "";
-        statusSelect.value = "all";
-        applyFilters();
-        queryInput.focus();
-      };
-
-      const initialFilters = readAdminListingFilters(new URLSearchParams(window.location.search));
-      queryInput.value = initialFilters.query;
-      statusSelect.value = initialFilters.status;
-
-      form.addEventListener("submit", (event) => {
-        event.preventDefault();
-        applyFilters();
-      });
+      const resetFilters = () => { queryInput.value = ""; typeSelect.value = "all"; applyFilters(); queryInput.focus(); };
+      form.addEventListener("submit", (event) => { event.preventDefault(); applyFilters(); });
       queryInput.addEventListener("input", applyFilters);
-      statusSelect.addEventListener("change", applyFilters);
+      typeSelect.addEventListener("change", applyFilters);
       resetButton.addEventListener("click", resetFilters);
       emptyResetButton?.addEventListener("click", resetFilters);
       applyFilters();

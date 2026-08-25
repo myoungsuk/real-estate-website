@@ -1,0 +1,66 @@
+---
+import NaverListingCard from "./NaverListingCard.astro";
+import type { NaverListing } from "../lib/naver-listings";
+
+interface Props {
+  items: NaverListing[];
+  pageSize?: number;
+}
+
+const { items, pageSize = 6 } = Astro.props;
+const safePageSize = Math.max(1, pageSize);
+const pageCount = Math.ceil(items.length / safePageSize);
+const gridId = "home-naver-listing-grid";
+---
+
+<div class="listing-pager" data-listing-pager data-page-size={safePageSize}>
+  <div class="listing-grid listing-grid--home" id={gridId}>
+    {items.map((listing, index) => (
+      <NaverListingCard {listing} compact rank={index} hidden={index >= safePageSize} />
+    ))}
+  </div>
+  {pageCount > 1 && (
+    <nav class="content-pagination listing-pagination" aria-label="메인 매물 페이지" data-listing-pagination>
+      <button type="button" data-listing-prev aria-controls={gridId} aria-label="이전 페이지">‹</button>
+      <div class="content-pagination__pages">
+        {Array.from({ length: pageCount }, (_, index) => (
+          <button type="button" data-listing-page={index} aria-controls={gridId} aria-label={`${index + 1}페이지`} aria-current={index === 0 ? "page" : undefined}>{index + 1}</button>
+        ))}
+      </div>
+      <button type="button" data-listing-next aria-controls={gridId} aria-label="다음 페이지">›</button>
+    </nav>
+  )}
+</div>
+
+<script>
+  document.querySelectorAll<HTMLElement>("[data-listing-pager]").forEach((pager) => {
+    if (pager.dataset.paginationReady === "true") return;
+    const items = Array.from(pager.querySelectorAll<HTMLElement>("[data-naver-listing-card]"));
+    const pageButtons = Array.from(pager.querySelectorAll<HTMLButtonElement>("[data-listing-page]"));
+    const previousButton = pager.querySelector<HTMLButtonElement>("[data-listing-prev]");
+    const nextButton = pager.querySelector<HTMLButtonElement>("[data-listing-next]");
+    const pageSize = Number(pager.dataset.pageSize ?? 6);
+    const pageCount = Math.ceil(items.length / pageSize);
+    let currentPage = 0;
+
+    const showPage = (requestedPage: number, moveToGrid = false) => {
+      currentPage = Math.min(Math.max(requestedPage, 0), pageCount - 1);
+      items.forEach((item, index) => {
+        item.hidden = Math.floor(index / pageSize) !== currentPage;
+      });
+      pageButtons.forEach((button, index) => {
+        if (index === currentPage) button.setAttribute("aria-current", "page");
+        else button.removeAttribute("aria-current");
+      });
+      if (previousButton) previousButton.disabled = currentPage === 0;
+      if (nextButton) nextButton.disabled = currentPage === pageCount - 1;
+      if (moveToGrid) pager.querySelector(".listing-grid")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+
+    pageButtons.forEach((button, index) => button.addEventListener("click", () => showPage(index, true)));
+    previousButton?.addEventListener("click", () => showPage(currentPage - 1, true));
+    nextButton?.addEventListener("click", () => showPage(currentPage + 1, true));
+    pager.dataset.paginationReady = "true";
+    showPage(0);
+  });
+</script>
