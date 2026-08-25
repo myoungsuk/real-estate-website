@@ -36,11 +36,20 @@ const description = "대전 동구에서 직접 확인한 매매·전세·월세
             {naverPropertyTypes.map((propertyType) => <option value={propertyType}>{propertyType}</option>)}
           </select>
         </div>
+        <div>
+          <label for="sort">정렬기준</label>
+          <select id="sort" name="sort">
+            <option value="ranking">랭킹순</option>
+            <option value="price">가격순</option>
+            <option value="latest">최신순</option>
+            <option value="area">면적순</option>
+          </select>
+        </div>
         <button class="button button--secondary" type="reset">필터 초기화</button>
       </form>
       <p class="result-count" aria-live="polite" data-result-count>네이버 등록 매물 {naverListings.length}건</p>
       <div class="listing-grid" data-listing-grid>
-        {naverListings.map((listing) => <NaverListingCard {listing} />)}
+        {naverListings.map((listing, index) => <NaverListingCard {listing} rank={index} />)}
       </div>
       <div class="empty-state" data-empty-state hidden>
         <span class="empty-state__number" aria-hidden="true">0</span>
@@ -56,18 +65,28 @@ const description = "대전 동구에서 직접 확인한 매매·전세·월세
   const cards = [...document.querySelectorAll<HTMLElement>("[data-naver-listing-card]")];
   const count = document.querySelector<HTMLElement>("[data-result-count]");
   const empty = document.querySelector<HTMLElement>("[data-empty-state]");
+  const grid = document.querySelector<HTMLElement>("[data-listing-grid]");
 
-  if (form && count && empty) {
+  if (form && count && empty && grid) {
     const trade = form.elements.namedItem("trade") as HTMLSelectElement;
     const propertyType = form.elements.namedItem("propertyType") as HTMLSelectElement;
+    const sort = form.elements.namedItem("sort") as HTMLSelectElement;
     const params = new URLSearchParams(window.location.search);
     if (["sale", "jeonse", "monthly-rent"].includes(params.get("trade") ?? "")) trade.value = params.get("trade")!;
     const allowedPropertyTypes = [...propertyType.options].map((option) => option.value).filter(Boolean);
     if (allowedPropertyTypes.includes(params.get("type") ?? "")) propertyType.value = params.get("type")!;
+    if (["ranking", "price", "latest", "area"].includes(params.get("sort") ?? "")) sort.value = params.get("sort")!;
 
     const apply = () => {
+      const sortedCards = [...cards].sort((a, b) => {
+        if (sort.value === "price") return Number(a.dataset.price) - Number(b.dataset.price);
+        if (sort.value === "latest") return (b.dataset.confirmedAt ?? "").localeCompare(a.dataset.confirmedAt ?? "") || Number(a.dataset.rank) - Number(b.dataset.rank);
+        if (sort.value === "area") return Number(a.dataset.area) - Number(b.dataset.area) || Number(a.dataset.rank) - Number(b.dataset.rank);
+        return Number(a.dataset.rank) - Number(b.dataset.rank);
+      });
+      grid.append(...sortedCards);
       let visible = 0;
-      cards.forEach((card) => {
+      sortedCards.forEach((card) => {
         const show = (!trade.value || card.dataset.trade === trade.value) && (!propertyType.value || card.dataset.propertyType === propertyType.value);
         card.hidden = !show;
         if (show) visible += 1;
@@ -77,6 +96,7 @@ const description = "대전 동구에서 직접 확인한 매매·전세·월세
       const next = new URLSearchParams();
       if (trade.value) next.set("trade", trade.value);
       if (propertyType.value) next.set("type", propertyType.value);
+      if (sort.value !== "ranking") next.set("sort", sort.value);
       history.replaceState(null, "", `${location.pathname}${next.size ? `?${next}` : ""}`);
     };
 

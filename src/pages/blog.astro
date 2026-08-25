@@ -1,0 +1,22 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import PageIntro from "../components/PageIntro.astro";
+import ContactPanel from "../components/ContactPanel.astro";
+import ExternalContentList from "../components/ExternalContentList.astro";
+import { publishedBlogContents } from "../lib/content";
+import { office } from "../lib/site";
+
+const title = "대전 동구 블로그 | 리더스시티행복한공인중개사사무소";
+const description = "네이버 블로그에 공개한 대전 동구와 리더스시티 지역 소식을 모아 안내합니다.";
+---
+
+<BaseLayout {title} {description}>
+  <PageIntro eyebrow="NAVER BLOG" title="대전 동구 블로그" description="운영자가 직접 작성·선택한 대전 동구와 리더스시티 소식을 원문으로 연결합니다." />
+  <section class="section" aria-labelledby="blog-content-heading">
+    <div class="shell">
+      <div class="section-heading"><div><p class="eyebrow">네이버 블로그</p><h2 id="blog-content-heading">전체 글 {publishedBlogContents.length}건</h2></div><a class="text-link" href={office.naverBlogUrl} target="_blank" rel="noopener noreferrer">네이버 블로그 바로가기 ↗</a></div>
+      <ExternalContentList items={publishedBlogContents} emptyLabel="공개할 블로그 글을 준비하고 있습니다." pageSize={9} />
+    </div>
+  </section>
+  <ContactPanel />
+</BaseLayout>

@@ -9,7 +9,7 @@
 - Cloudflare Workers Static Assets와 관리 API를 같은 Worker로 배포한다.
 - `/api/admin/*`만 Worker 코드가 먼저 처리하고 나머지 공개 요청은 정적 자산으로 제공한다.
 - 관리 API는 Cloudflare Access, 허용 이메일 2개, Email OTP와 JWT 재검증으로 보호한다.
-- 초기 버전에는 DB, 자체 비밀번호, 자체 상담 폼을 두지 않는다.
+- 초기 버전에는 DB, 자체 비밀번호, 서버 저장형 상담 게시판을 두지 않는다. FAQ 상담 작성 화면은 입력값을 저장하지 않고 이용자의 문자 앱으로만 전달한다.
 - 운영자는 Access 보호 관리자 화면 또는 승인된 JSON·사진 파일에서 공개 콘텐츠를 수정하고 GitHub에 반영한다.
 - 전화·문자·공식 외부 채널로 상담을 연결한다.
 
@@ -111,19 +111,21 @@ npm run build
 - `src/data/home-content.json` → `src/lib/content.ts` → 홈 대표·사무소·리더스시티 설명과 사진
 - `src/data/office.json` → `src/lib/site.ts` → 헤더·푸터·사무소·오시는 길·네이버 등록 매물 링크·구조화 데이터
 - `src/data/listings.json` → `src/lib/listings.ts` → 매물 목록 필터와 공개 상세 정적 생성
-- `src/data/naver-listings.json` → `src/lib/naver-listings.ts` → 네이버에 공개된 개별 매물 카드·유형 필터·외부 상세 링크
+- `src/data/naver-listings.json` → `src/lib/naver-listings.ts` → 사진 없는 네이버 공개 매물 카드·홈 6건 단위 페이징·거래/유형 필터·랭킹/가격/최신/면적 정렬·외부 상세 링크
 - `src/data/complexes.json` → 대전 동구 주요 단지의 사진·기본 사실·생활 특징·복수 출처와 목록·상세 정적 생성
-- `src/data/external-links.json` → 2026년 공식 블로그 45건과 공식 유튜브 영상 40건의 원문 링크·자체 썸네일·최신순 카드
+- `src/data/external-links.json` → 2024~2026년 공식 블로그 128건과 공식 유튜브 영상 40건의 원문 링크·자체 썸네일·최신순 카드
 - `src/layouts/BaseLayout.astro` → 페이지별 title, description, canonical, robots, JSON-LD
 - `src/pages/robots.txt.ts`, `llms.txt.ts`, sitemap integration → 검색 로봇 안내
 - `/admin/` → 관리자 대시보드와 관리 API 연결 상태
-- `/admin/listings/`, `/admin/listings/editor/` → 매물 현황·검색·등록·수정·대표 이미지
+- `/admin/listings/`, `/admin/listings/editor/` → 네이버 공개 매물 현황·검색·유형 필터와 네이버 매물 관리 화면 연결. 자체 매물 등록·수정 폼은 제공하지 않는다.
+- `/blog/`, `/youtube/` → 지역 콘텐츠를 원문 종류별로 분리한 공개 목록과 페이지 탐색
+- `/faq/` → 승인된 FAQ와 서버에 저장하지 않는 문자 상담 작성 화면
 - `/admin/content/` → 홈 대표·사무소·리더스시티 설명과 대표 사진
-- `/admin/external-links/` → 네이버 블로그·유튜브 링크·미리보기·썸네일
+- `/admin/external-links/` → 네이버 블로그·유튜브를 분리한 관리 카테고리, 카테고리별 건수·검색·링크 미리보기·썸네일
 - `/admin/complexes/` → 대전 동구 지역·단지 소개·사진·사실·생활 특징·복수 출처·확인일
 - `/api/admin/*` → `worker/index.mjs` → Access JWT·허용 이메일·Origin·CSRF·콘텐츠·SHA 검증 → 허용 GitHub JSON·WebP 저장
 
-DB와 TR 흐름은 없다. 관리 API의 콘텐츠 쓰기는 `ADMIN_WRITE_ENABLED=true`와 CSRF·GitHub Secret이 모두 있을 때만 활성화되며, 기본 로컬·Preview 설정은 fail closed다. 브라우저 JavaScript는 공개 화면의 모바일 메뉴·매물 필터와 관리자 폼·WebP 변환에 사용한다.
+DB와 TR 흐름은 없다. 관리 API의 콘텐츠 쓰기는 `ADMIN_WRITE_ENABLED=true`와 CSRF·GitHub Secret이 모두 있을 때만 활성화되며, 기본 로컬·Preview 설정은 fail closed다. 브라우저 JavaScript는 공개 화면의 모바일 메뉴·매물 페이징·필터·정렬·문자 앱 연결과 관리자 폼·WebP 변환에 사용한다.
 
 ## 공개·비공개 데이터 경계
 

@@ -1,104 +1,17 @@
 ---
-import AdminWriteGate from "../../../components/admin/AdminWriteGate.astro";
 import AdminLayout from "../../../layouts/AdminLayout.astro";
+import { office } from "../../../lib/site";
 ---
 
-<AdminLayout title="매물 등록·수정 | 행복한부동산 관리자" description="대전 동구 매물의 가격, 조건, 공개 상태와 대표 이미지를 등록합니다.">
+<AdminLayout title="네이버 매물 등록 안내 | 리더스시티행복한공인중개사사무소 관리자" description="매물 등록과 수정은 네이버 부동산에서 진행합니다.">
   <div class="admin-page-header admin-page-header--compact">
-    <div><nav class="admin-breadcrumbs" aria-label="현재 위치"><a href="/admin/">대시보드</a><span>/</span><a href="/admin/listings/">매물 관리</a><span>/</span><span aria-current="page">등록·수정</span></nav><p class="admin-eyebrow">LISTING EDITOR</p><h1 data-listing-editor-title>새 매물 등록</h1><p>공개 가능한 정보만 입력하고 계약 전 가격과 상태를 다시 확인해 주세요.</p></div>
+    <div><nav class="admin-breadcrumbs" aria-label="현재 위치"><a href="/admin/">대시보드</a><span>/</span><a href="/admin/listings/">네이버 매물</a><span>/</span><span aria-current="page">등록 안내</span></nav><p class="admin-eyebrow">NAVER LISTING MANAGEMENT</p><h1>매물은 네이버에서 등록·수정합니다</h1><p>홈페이지에서 매물 정보를 중복 입력하지 않고 네이버에 공개한 정보를 링크로 연결합니다.</p></div>
     <a class="admin-text-link" href="/properties/">공개 매물 보기 <span aria-hidden="true">↗</span></a>
   </div>
-
-  <AdminWriteGate />
-
-  <form class="admin-editor" data-listing-editor>
-    <section class="admin-panel admin-editor__section">
-      <div class="admin-panel__heading"><div><p class="admin-eyebrow">기본 정보</p><h2>매물 이름과 공개 상태</h2></div><span class="admin-panel__number">01</span></div>
-      <input type="hidden" name="originalId" />
-      <div class="admin-form-grid">
-        <div class="admin-field"><label for="listing-id">매물 ID</label><input id="listing-id" name="id" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" placeholder="cheon-dong-sale-001" required data-write-control disabled /></div>
-        <div class="admin-field"><label for="listing-slug">페이지 주소</label><input id="listing-slug" name="slug" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" placeholder="cheon-dong-sale-001" required data-write-control disabled /></div>
-        <div class="admin-field admin-field--wide"><label for="listing-title">매물 제목</label><input id="listing-title" name="title" placeholder="리더스시티 전용 84㎡ 남향 매매" required data-write-control disabled /></div>
-        <div class="admin-field"><label for="listing-status">공개 상태</label><select id="listing-status" name="status" data-write-control disabled><option value="draft">작성 중</option><option value="published">공개</option><option value="contracted">계약 완료</option><option value="ended">종료</option></select></div>
-        <div class="admin-field"><label for="listing-trade">거래유형</label><select id="listing-trade" name="tradeType" data-write-control disabled><option value="sale">매매</option><option value="jeonse">전세</option><option value="monthly-rent">월세</option></select></div>
-      </div>
-    </section>
-
-    <section class="admin-panel admin-editor__section">
-      <div class="admin-panel__heading"><div><p class="admin-eyebrow">위치·가격</p><h2>공개 가능한 조건</h2></div><span class="admin-panel__number">02</span></div>
-      <div class="admin-form-grid">
-        <div class="admin-field"><label for="listing-neighborhood">동네 이름</label><input id="listing-neighborhood" name="neighborhoodName" placeholder="천동" required data-write-control disabled /></div>
-        <div class="admin-field"><label for="listing-neighborhood-slug">동네 영문 ID</label><input id="listing-neighborhood-slug" name="neighborhoodSlug" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" placeholder="cheon-dong" required data-write-control disabled /></div>
-        <div class="admin-field admin-field--wide"><label for="listing-complex">단지명</label><input id="listing-complex" name="complexName" placeholder="단지가 없으면 비워 둡니다" data-write-control disabled /></div>
-        <div class="admin-field" data-price-field="sale"><label for="listing-sale-price">매매가(원)</label><input id="listing-sale-price" name="salePriceKrw" type="number" min="1" step="10000" data-write-control disabled /></div>
-        <div class="admin-field" data-price-field="deposit"><label for="listing-deposit">보증금(원)</label><input id="listing-deposit" name="depositKrw" type="number" min="1" step="10000" data-write-control disabled /></div>
-        <div class="admin-field" data-price-field="monthly"><label for="listing-monthly">월 임대료(원)</label><input id="listing-monthly" name="monthlyRentKrw" type="number" min="1" step="10000" data-write-control disabled /></div>
-        <div class="admin-field"><label for="listing-area">전용면적(㎡)</label><input id="listing-area" name="exclusiveAreaM2" type="number" min="0.1" step="0.01" required data-write-control disabled /></div>
-        <div class="admin-field"><label for="listing-floor">공개 층 정보</label><input id="listing-floor" name="floorLabel" placeholder="예: 중층" data-write-control disabled /></div>
-        <div class="admin-field"><label for="listing-direction">방향</label><input id="listing-direction" name="direction" placeholder="예: 남향" data-write-control disabled /></div>
-        <div class="admin-field"><label for="listing-move-in">입주 가능일</label><input id="listing-move-in" name="moveIn" placeholder="예: 협의 가능" data-write-control disabled /></div>
-      </div>
-    </section>
-
-    <section class="admin-panel admin-editor__section">
-      <div class="admin-panel__heading"><div><p class="admin-eyebrow">설명·사진</p><h2>카드와 상세 페이지 내용</h2></div><span class="admin-panel__number">03</span></div>
-      <div class="admin-form-grid">
-        <div class="admin-field admin-field--wide"><label for="listing-summary">매물 설명</label><textarea id="listing-summary" name="summary" rows="5" required data-write-control disabled></textarea></div>
-        <div class="admin-field admin-field--wide"><label for="listing-features">특징</label><textarea id="listing-features" name="features" rows="5" data-write-control disabled></textarea><small>한 줄에 한 개씩 입력합니다.</small></div>
-        <div class="admin-field"><label for="listing-source">정보 출처</label><input id="listing-source" name="source" placeholder="예: 운영자 현장 확인" required data-write-control disabled /></div>
-        <div class="admin-field"><label for="listing-confirmed">최근 확인일</label><input id="listing-confirmed" name="confirmedAt" type="date" required data-write-control disabled /></div>
-        <div class="admin-field"><label for="listing-published">최초 공개일</label><input id="listing-published" name="publishedAt" type="date" data-write-control disabled /></div>
-        <div class="admin-field"><label for="listing-thumbnail">대표 사진</label><input id="listing-thumbnail" name="thumbnailFile" type="file" accept="image/jpeg,image/png,image/webp" data-write-control disabled /><small>WebP·최대 1600px로 자동 최적화합니다.</small></div>
-        <div class="admin-field"><label for="listing-thumbnail-alt">사진 설명</label><input id="listing-thumbnail-alt" name="thumbnailAlt" placeholder="거실에서 창 방향을 바라본 모습" data-write-control disabled /></div>
-        <figure class="admin-media-preview" data-listing-thumbnail-preview hidden><img alt="등록된 매물 대표 사진 미리보기" /></figure>
-      </div>
-    </section>
-
-    <div class="admin-editor__actions"><p class="admin-form-status" data-listing-editor-status aria-live="polite">매물 정보를 입력해 주세요.</p><button class="admin-primary-button" type="submit" data-write-control disabled>매물 저장</button></div>
-  </form>
-
-  <script>
-    import { convertImageFileToWebp, readAdminContent, setAdminFormStatus, uploadAdminImage, writeAdminContent, type AdminResource } from "../../../lib/admin-content-client";
-    import type { Listing } from "../../../lib/listings";
-
-    const form = document.querySelector<HTMLFormElement>("[data-listing-editor]");
-    const statusMessage = document.querySelector<HTMLElement>("[data-listing-editor-status]");
-    const pageTitle = document.querySelector<HTMLElement>("[data-listing-editor-title]");
-    const preview = document.querySelector<HTMLElement>("[data-listing-thumbnail-preview]");
-    const previewImage = preview?.querySelector<HTMLImageElement>("img");
-    let resource: AdminResource<Listing[]> | null = null;
-    let currentListing: Listing | null = null;
-    const field = (name: string) => form?.elements.namedItem(name) as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null;
-    const nullableNumber = (name: string) => { const value = field(name)?.value; return value ? Number(value) : null; };
-    const setPreview = (src: string | null) => { if (!preview || !previewImage) return; preview.hidden = !src; if (src) previewImage.src = src; else previewImage.removeAttribute("src"); };
-    const updatePriceFields = () => {
-      const trade = field("tradeType")?.value;
-      document.querySelectorAll<HTMLElement>("[data-price-field]").forEach((wrapper) => { const visible = wrapper.dataset.priceField === "sale" ? trade === "sale" : wrapper.dataset.priceField === "deposit" ? trade !== "sale" : trade === "monthly-rent"; wrapper.hidden = !visible; const input = wrapper.querySelector<HTMLInputElement>("input"); if (input) input.required = visible; });
-    };
-    const setValues = (listing: Listing) => {
-      const values: Record<string, string> = { originalId: listing.id, id: listing.id, slug: listing.slug, title: listing.title, status: listing.status, tradeType: listing.tradeType, neighborhoodName: listing.neighborhoodName, neighborhoodSlug: listing.neighborhoodSlug, complexName: listing.complexName ?? "", salePriceKrw: listing.salePriceKrw?.toString() ?? "", depositKrw: listing.depositKrw?.toString() ?? "", monthlyRentKrw: listing.monthlyRentKrw?.toString() ?? "", exclusiveAreaM2: listing.exclusiveAreaM2.toString(), floorLabel: listing.floorLabel ?? "", direction: listing.direction ?? "", moveIn: listing.moveIn ?? "", summary: listing.summary, features: listing.features.join("\n"), source: listing.source, confirmedAt: listing.confirmedAt, publishedAt: listing.publishedAt ?? "", thumbnailAlt: listing.thumbnail?.alt ?? "" };
-      Object.entries(values).forEach(([name, value]) => { if (field(name)) field(name)!.value = value; });
-      currentListing = listing; if (pageTitle) pageTitle.textContent = "매물 수정"; setPreview(listing.thumbnail?.src ?? listing.images?.[0]?.src ?? null); updatePriceFields();
-    };
-    field("tradeType")?.addEventListener("change", updatePriceFields); updatePriceFields();
-    window.addEventListener("admin-write-ready", (event) => {
-      if (!(event as CustomEvent<{ writeEnabled: boolean }>).detail.writeEnabled) return;
-      void readAdminContent<Listing[]>("listings").then((current) => { resource = current; const id = new URLSearchParams(location.search).get("id"); const listing = id ? current.data.find((item) => item.id === id) : null; if (listing) setValues(listing); else if (id) setAdminFormStatus(statusMessage, "수정할 매물을 찾지 못했습니다.", "error"); else setAdminFormStatus(statusMessage, "새 매물 정보를 입력해 주세요."); }).catch((error) => setAdminFormStatus(statusMessage, error instanceof Error ? error.message : "매물 데이터를 불러오지 못했습니다.", "error"));
-    });
-    form?.addEventListener("submit", async (event) => {
-      event.preventDefault(); if (!resource) return setAdminFormStatus(statusMessage, "최신 매물 데이터를 먼저 불러와 주세요.", "error");
-      const submit = form.querySelector<HTMLButtonElement>("button[type='submit']"); if (submit) submit.disabled = true;
-      setAdminFormStatus(statusMessage, "매물과 사진을 저장하고 있습니다.", "saving");
-      try {
-        let thumbnail = currentListing?.thumbnail ?? null; const file = (field("thumbnailFile") as HTMLInputElement)?.files?.[0];
-        if (file) thumbnail = { src: (await uploadAdminImage("listing", await convertImageFileToWebp(file))).src, alt: field("thumbnailAlt")?.value.trim() ?? "" };
-        else if (thumbnail && field("thumbnailAlt")?.value.trim()) thumbnail = { ...thumbnail, alt: field("thumbnailAlt")!.value.trim() };
-        const value = (name: string) => field(name)?.value.trim() ?? "";
-        const listing: Listing = { id: value("id"), slug: value("slug"), title: value("title"), status: value("status") as Listing["status"], propertyType: "apartment", tradeType: value("tradeType") as Listing["tradeType"], district: "대전 동구", neighborhoodSlug: value("neighborhoodSlug"), neighborhoodName: value("neighborhoodName"), complexName: value("complexName") || null, salePriceKrw: value("tradeType") === "sale" ? nullableNumber("salePriceKrw") : null, depositKrw: value("tradeType") !== "sale" ? nullableNumber("depositKrw") : null, monthlyRentKrw: value("tradeType") === "monthly-rent" ? nullableNumber("monthlyRentKrw") : null, exclusiveAreaM2: Number(value("exclusiveAreaM2")), floorLabel: value("floorLabel") || null, direction: value("direction") || null, moveIn: value("moveIn") || null, summary: value("summary"), features: value("features").split("\n").map((item) => item.trim()).filter(Boolean), thumbnail, images: currentListing?.images ?? [], source: value("source"), confirmedAt: value("confirmedAt"), publishedAt: value("publishedAt") || null };
-        const originalId = value("originalId"); const next = originalId ? resource.data.map((item) => item.id === originalId ? listing : item) : [...resource.data, listing];
-        const result = await writeAdminContent("listings", resource.sha, next); resource = { resource: "listings", sha: result.contentSha ?? resource.sha, data: next }; currentListing = listing; if (field("originalId")) field("originalId")!.value = listing.id; history.replaceState(null, "", `${location.pathname}?id=${encodeURIComponent(listing.id)}`); if (pageTitle) pageTitle.textContent = "매물 수정"; setAdminFormStatus(statusMessage, "저장했습니다. GitHub 커밋이 생성되었습니다. 자동 배포 연결 후 홈페이지에 표시됩니다.", "success");
-      } catch (error) { setAdminFormStatus(statusMessage, error instanceof Error ? error.message : "매물을 저장하지 못했습니다.", "error"); }
-      finally { if (submit) submit.disabled = false; }
-    });
-  </script>
+  <section class="admin-panel admin-next-action" aria-labelledby="naver-listing-guide-heading">
+    <div class="admin-panel__heading"><div><p class="admin-eyebrow">관리 절차</p><h2 id="naver-listing-guide-heading">네이버 매물 관리 화면을 이용해 주세요</h2></div><span class="admin-panel__number" aria-hidden="true">01</span></div>
+    <p>네이버 부동산에서 매물을 등록하거나 가격·설명·거래 상태를 수정한 뒤, 홈페이지의 네이버 매물 데이터가 동기화되면 공개 화면과 관리자 목록에 같은 내용이 표시됩니다.</p>
+    <a class="admin-action-link" href={office.naverListingsUrl} target="_blank" rel="noopener noreferrer">네이버에서 매물 관리 <span aria-hidden="true">↗</span></a>
+  </section>
+  <p class="admin-inline-notice"><span aria-hidden="true">i</span><span>이 화면에서는 사진·가격·동·층·설명을 직접 저장하지 않습니다. 네이버에 공개할 수 없는 고객 개인정보와 정확한 호수도 홈페이지에 별도로 입력하지 마세요.</span></p>
 </AdminLayout>

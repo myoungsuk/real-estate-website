@@ -16,8 +16,9 @@ export const navigation = [
   { href: "/properties/", label: "매물" },
   { href: "/complexes/", label: "단지정보" },
   { href: "/office/", label: "사무소 소개" },
-  { href: "/contents/", label: "지역 콘텐츠" },
-  { href: "/faq/", label: "자주 묻는 질문" },
+  { href: "/blog/", label: "블로그" },
+  { href: "/youtube/", label: "유튜브" },
+  { href: "/faq/", label: "FAQ·상담" },
   { href: "/location/", label: "오시는 길" },
 ];
 

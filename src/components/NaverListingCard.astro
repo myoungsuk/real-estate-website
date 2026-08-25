@@ -1,5 +1,7 @@
 ---
 import {
+  getNaverListingAreaValue,
+  getNaverListingPriceValue,
   naverTradeNames,
   type NaverListing,
 } from "../lib/naver-listings";
@@ -7,9 +9,11 @@ import {
 interface Props {
   listing: NaverListing;
   compact?: boolean;
+  rank?: number;
+  hidden?: boolean;
 }
 
-const { listing, compact = false } = Astro.props;
+const { listing, compact = false, rank = 0, hidden = false } = Astro.props;
 const details = [listing.areaLabel, listing.floorLabel, listing.direction].filter(Boolean).join(" · ");
 ---
 
@@ -18,18 +22,12 @@ const details = [listing.areaLabel, listing.floorLabel, listing.direction].filte
   data-naver-listing-card
   data-trade={listing.tradeType}
   data-property-type={listing.propertyType}
+  data-rank={rank}
+  data-price={getNaverListingPriceValue(listing.priceLabel)}
+  data-area={getNaverListingAreaValue(listing.areaLabel)}
+  data-confirmed-at={listing.confirmedAt}
+  hidden={hidden}
 >
-  <a
-    class="listing-card__visual listing-card__visual--naver"
-    href={listing.url}
-    target="_blank"
-    rel="noopener noreferrer"
-    aria-label={`${listing.title} 네이버 매물 보기`}
-  >
-    <span aria-hidden="true">{listing.title.slice(0, 1)}</span>
-    <b>{naverTradeNames[listing.tradeType]}</b>
-    <small>네이버 등록 매물</small>
-  </a>
   <div class="listing-card__body">
     <p><span>{listing.propertyType}</span><time datetime={listing.confirmedAt}>{listing.confirmedAt} 확인</time></p>
     <h3><a href={listing.url} target="_blank" rel="noopener noreferrer">{listing.title}</a></h3>

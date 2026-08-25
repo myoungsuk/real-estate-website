@@ -2,6 +2,9 @@
 import AdminWriteGate from "../../../components/admin/AdminWriteGate.astro";
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 import { externalContents } from "../../../lib/content";
+
+const blogContents = externalContents.filter((item) => item.type === "blog");
+const youtubeContents = externalContents.filter((item) => item.type === "youtube");
 ---
 
 <AdminLayout
@@ -15,26 +18,42 @@ import { externalContents } from "../../../lib/content";
       <h1>블로그·유튜브 관리</h1>
       <p>링크에서 제목과 썸네일을 불러오고, 불러오지 못한 사진은 직접 올릴 수 있습니다.</p>
     </div>
-    <a class="admin-text-link" href="/contents/">공개 콘텐츠 보기 <span aria-hidden="true">↗</span></a>
+    <a class="admin-text-link" href="/blog/">공개 블로그 보기 <span aria-hidden="true">↗</span></a>
   </div>
 
   <AdminWriteGate />
 
+  <nav class="admin-content-categories" aria-label="외부 콘텐츠 관리 카테고리">
+    <button type="button" aria-pressed="true" data-external-category="blog">
+      <span>네이버 블로그</span>
+      <strong><span data-external-category-count="blog">{blogContents.length}</span>건</strong>
+      <small>게시글 링크·설명·썸네일 관리</small>
+    </button>
+    <button type="button" aria-pressed="false" data-external-category="youtube">
+      <span>유튜브</span>
+      <strong><span data-external-category-count="youtube">{youtubeContents.length}</span>건</strong>
+      <small>영상 링크·설명·썸네일 관리</small>
+    </button>
+  </nav>
+
   <div class="admin-editor-layout">
     <section class="admin-panel" aria-labelledby="external-list-heading">
-      <div class="admin-panel__heading"><div><p class="admin-eyebrow">등록 목록</p><h2 id="external-list-heading">콘텐츠 <span data-external-count>{externalContents.length}</span>건</h2></div><button class="admin-secondary-button" type="button" data-external-new data-write-control disabled>새 콘텐츠</button></div>
+      <div class="admin-panel__heading"><div><p class="admin-eyebrow">등록 목록</p><h2 id="external-list-heading"><span data-external-list-label>블로그</span> <span data-external-count>{blogContents.length}</span>건</h2></div><button class="admin-secondary-button" type="button" data-external-new data-write-control disabled>새 블로그</button></div>
+      <label class="admin-external-search" for="external-search"><span>목록 검색</span><input id="external-search" type="search" placeholder="제목 또는 링크 검색" data-external-search /></label>
+      <p class="admin-listing-count" data-external-filter-count>블로그 {blogContents.length}건을 표시하고 있습니다.</p>
       <div class="admin-content-list" data-external-list>
         {externalContents.map((item) => (
-          <article>
+          <article data-external-item-type={item.type} data-external-search-value={`${item.title} ${item.url}`.toLocaleLowerCase("ko-KR")} hidden={item.type !== "blog"}>
             <div><span>{item.type === "blog" ? "블로그" : "유튜브"}</span><strong>{item.title}</strong><small>{item.status === "published" ? "공개" : "작성 중"}</small></div>
             <button type="button" data-external-edit={item.id} data-write-control disabled>수정</button>
           </article>
         ))}
       </div>
+      <p class="admin-external-empty" data-external-empty hidden>검색 조건에 맞는 콘텐츠가 없습니다.</p>
     </section>
 
     <form class="admin-panel admin-editor-form" data-external-form>
-      <div class="admin-panel__heading"><div><p class="admin-eyebrow">카드 편집</p><h2 data-external-form-title>새 콘텐츠</h2></div></div>
+      <div class="admin-panel__heading"><div><p class="admin-eyebrow">카드 편집</p><h2 data-external-form-title>새 블로그</h2></div></div>
       <input type="hidden" name="originalId" />
       <div class="admin-form-grid admin-form-grid--single">
         <div class="admin-field"><label for="external-type">종류</label><select id="external-type" name="type" data-write-control disabled><option value="blog">네이버 블로그</option><option value="youtube">유튜브</option></select></div>
@@ -71,6 +90,13 @@ import { externalContents } from "../../../lib/content";
     const form = document.querySelector<HTMLFormElement>("[data-external-form]");
     const list = document.querySelector<HTMLElement>("[data-external-list]");
     const count = document.querySelector<HTMLElement>("[data-external-count]");
+    const listLabel = document.querySelector<HTMLElement>("[data-external-list-label]");
+    const newButton = document.querySelector<HTMLButtonElement>("[data-external-new]");
+    const searchInput = document.querySelector<HTMLInputElement>("[data-external-search]");
+    const filterCount = document.querySelector<HTMLElement>("[data-external-filter-count]");
+    const emptyMessage = document.querySelector<HTMLElement>("[data-external-empty]");
+    const categoryButtons = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-external-category]"));
+    const categoryCountElements = Array.from(document.querySelectorAll<HTMLElement>("[data-external-category-count]"));
     const statusMessage = document.querySelector<HTMLElement>("[data-external-status-message]");
     const formTitle = document.querySelector<HTMLElement>("[data-external-form-title]");
     const deleteButton = document.querySelector<HTMLButtonElement>("[data-external-delete]");
@@ -79,13 +105,39 @@ import { externalContents } from "../../../lib/content";
     const previewImage = previewFigure?.querySelector<HTMLImageElement>("img");
     let resource: AdminResource<ExternalContent[]> | null = null;
     let previewDataUrl: string | null = null;
+    let activeType: ExternalContent["type"] = new URLSearchParams(window.location.search).get("category") === "youtube" ? "youtube" : "blog";
 
     const field = (name: string) => form?.elements.namedItem(name) as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | null;
+    const categoryName = (type: ExternalContent["type"]) => type === "blog" ? "블로그" : "유튜브";
+    const updateCategoryCounts = () => {
+      if (!resource) return;
+      categoryCountElements.forEach((element) => {
+        const type = element.dataset.externalCategoryCount as ExternalContent["type"];
+        element.textContent = String(resource?.data.filter((item) => item.type === type).length ?? 0);
+      });
+    };
+    const applyListFilter = () => {
+      if (!list) return;
+      const query = searchInput?.value.trim().toLocaleLowerCase("ko-KR") ?? "";
+      let visibleCount = 0;
+      list.querySelectorAll<HTMLElement>("[data-external-item-type]").forEach((article) => {
+        const matchesType = article.dataset.externalItemType === activeType;
+        const matchesSearch = !query || (article.dataset.externalSearchValue ?? "").includes(query);
+        article.hidden = !(matchesType && matchesSearch);
+        if (!article.hidden) visibleCount += 1;
+      });
+      const label = categoryName(activeType);
+      if (count) count.textContent = String(visibleCount);
+      if (filterCount) filterCount.textContent = `${label} ${visibleCount}건을 표시하고 있습니다.`;
+      if (emptyMessage) emptyMessage.hidden = visibleCount > 0;
+    };
     const renderList = () => {
       if (!list || !resource) return;
       list.replaceChildren();
       resource.data.forEach((item) => {
         const article = document.createElement("article");
+        article.dataset.externalItemType = item.type;
+        article.dataset.externalSearchValue = `${item.title} ${item.url}`.toLocaleLowerCase("ko-KR");
         const info = document.createElement("div");
         const type = document.createElement("span"); type.textContent = item.type === "blog" ? "블로그" : "유튜브";
         const title = document.createElement("strong"); title.textContent = item.title;
@@ -93,7 +145,8 @@ import { externalContents } from "../../../lib/content";
         const button = document.createElement("button"); button.type = "button"; button.dataset.externalEdit = item.id; button.textContent = "수정";
         info.append(type, title, state); article.append(info, button); list.append(article);
       });
-      if (count) count.textContent = String(resource.data.length);
+      updateCategoryCounts();
+      applyListFilter();
     };
 
     const showThumbnail = (src: string | null) => {
@@ -106,12 +159,27 @@ import { externalContents } from "../../../lib/content";
     const resetForm = () => {
       form?.reset();
       if (field("originalId")) field("originalId")!.value = "";
+      if (field("type")) field("type")!.value = activeType;
       if (field("status")) field("status")!.value = "draft";
-      if (formTitle) formTitle.textContent = "새 콘텐츠";
+      if (formTitle) formTitle.textContent = `새 ${categoryName(activeType)}`;
       if (deleteButton) deleteButton.hidden = true;
       previewDataUrl = null;
       showThumbnail(null);
       setAdminFormStatus(statusMessage, "링크와 공개 문구를 입력해 주세요.");
+    };
+
+    const setActiveCategory = (type: ExternalContent["type"], resetEditor = true) => {
+      activeType = type;
+      const label = categoryName(activeType);
+      categoryButtons.forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.externalCategory === activeType)));
+      if (listLabel) listLabel.textContent = label;
+      if (newButton) newButton.textContent = `새 ${label}`;
+      if (searchInput) searchInput.value = "";
+      const url = new URL(window.location.href);
+      url.searchParams.set("category", activeType);
+      window.history.replaceState(null, "", `${url.pathname}${url.search}`);
+      applyListFilter();
+      if (resetEditor) resetForm();
     };
 
     const editItem = (id: string) => {
@@ -119,7 +187,7 @@ import { externalContents } from "../../../lib/content";
       if (!item) return;
       const values: Record<string, string> = { originalId: item.id, id: item.id, type: item.type, status: item.status, url: item.url, title: item.title, summary: item.summary, publishedAt: item.publishedAt ?? "", thumbnailAlt: item.thumbnail?.alt ?? "" };
       Object.entries(values).forEach(([name, value]) => { if (field(name)) field(name)!.value = value; });
-      if (formTitle) formTitle.textContent = "콘텐츠 수정";
+      if (formTitle) formTitle.textContent = `${categoryName(item.type)} 수정`;
       if (deleteButton) deleteButton.hidden = false;
       previewDataUrl = null;
       showThumbnail(item.thumbnail?.src ?? null);
@@ -135,7 +203,11 @@ import { externalContents } from "../../../lib/content";
       const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-external-edit]");
       if (button?.dataset.externalEdit) editItem(button.dataset.externalEdit);
     });
-    document.querySelector("[data-external-new]")?.addEventListener("click", resetForm);
+    categoryButtons.forEach((button) => button.addEventListener("click", () => setActiveCategory(button.dataset.externalCategory as ExternalContent["type"])))
+    searchInput?.addEventListener("input", applyListFilter);
+    newButton?.addEventListener("click", resetForm);
+    setActiveCategory(activeType, false);
+    resetForm();
 
     previewButton?.addEventListener("click", async () => {
       const type = field("type")?.value as "blog" | "youtube";
