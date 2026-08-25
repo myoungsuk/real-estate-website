@@ -1,0 +1,14 @@
+---
+import { office, phoneHref, smsHref } from "../lib/site";
+---
+
+<aside class="contact-bar" aria-label="빠른 상담">
+  <a class="contact-bar__item contact-bar__item--quiet" href={smsHref}>
+    <span aria-hidden="true">문자</span>
+    <strong>문자 문의</strong>
+  </a>
+  <a class="contact-bar__item contact-bar__item--primary" href={phoneHref}>
+    <span aria-hidden="true">전화</span>
+    <strong>{office.mobile}</strong>
+  </a>
+</aside>

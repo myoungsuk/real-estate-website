@@ -1,0 +1,46 @@
+---
+import SiteHeader from "../components/SiteHeader.astro";
+import SiteFooter from "../components/SiteFooter.astro";
+import MobileContactBar from "../components/MobileContactBar.astro";
+import "../styles/global.css";
+
+interface Props {
+  title: string;
+  description: string;
+  structuredData?: Record<string, unknown> | Record<string, unknown>[];
+}
+
+const { title, description, structuredData } = Astro.props;
+const canonical = Astro.site ? new URL(Astro.url.pathname, Astro.site) : undefined;
+const allowIndexing = import.meta.env.PUBLIC_ALLOW_INDEXING === "true";
+---
+
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#17344f" />
+    <meta name="description" content={description} />
+    <meta name="robots" content={allowIndexing ? "index,follow" : "noindex,nofollow"} />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="ko_KR" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    {canonical && <meta property="og:url" content={canonical.toString()} />}
+    {canonical && <link rel="canonical" href={canonical.toString()} />}
+    <title>{title}</title>
+    {structuredData && (
+      <script is:inline type="application/ld+json" set:html={JSON.stringify(structuredData)} />
+    )}
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">본문으로 바로가기</a>
+    <SiteHeader />
+    <main id="main-content" tabindex="-1">
+      <slot />
+    </main>
+    <SiteFooter />
+    <MobileContactBar />
+  </body>
+</html>

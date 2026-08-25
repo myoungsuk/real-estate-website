@@ -1,0 +1,23 @@
+---
+import { office, phoneHref, smsHref } from "../lib/site";
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+const {
+  title = "궁금한 조건은 직접 확인해 드립니다",
+  description = "찾는 블록과 거래유형, 면적을 말씀해 주시면 현재 확인 가능한 정보를 안내합니다.",
+} = Astro.props;
+---
+
+<section class="section section--soft">
+  <div class="shell contact-panel">
+    <div><p class="eyebrow">상담 안내</p><h2>{title}</h2><p>{description}</p></div>
+    <div class="contact-panel__actions">
+      <a class="button button--primary" href={phoneHref}>{office.mobile}</a>
+      <a class="button button--secondary" href={smsHref}>문자로 문의하기</a>
+    </div>
+  </div>
+</section>

@@ -1,0 +1,24 @@
+---
+import { office, phoneHref } from "../lib/site";
+---
+
+<footer class="site-footer">
+  <div class="site-footer__inner shell">
+    <div>
+      <p class="site-footer__brand">{office.legalName}</p>
+      <p>{office.address}</p>
+    </div>
+    <dl class="site-footer__facts">
+      <div><dt>대표</dt><dd>{office.representative}</dd></div>
+      <div><dt>등록번호</dt><dd>{office.registrationNumber}</dd></div>
+      <div><dt>연락처</dt><dd><a href={phoneHref}>{office.mobile}</a></dd></div>
+    </dl>
+    <nav class="site-footer__links" aria-label="정책 메뉴">
+      <a href="/privacy/">개인정보처리방침</a>
+      <a href="/terms/">이용 안내</a>
+    </nav>
+    <p class="site-footer__notice">
+      홈페이지의 매물·지역 정보는 게시일 또는 확인일 기준이며, 실제 조건은 상담 시 다시 확인해 주세요.
+    </p>
+  </div>
+</footer>

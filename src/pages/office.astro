@@ -1,0 +1,40 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import PageIntro from "../components/PageIntro.astro";
+import ContactPanel from "../components/ContactPanel.astro";
+import { office } from "../lib/site";
+
+const title = "사무소 소개 | 천동 리더스시티 행복한부동산";
+const description = "백진옥 대표가 직접 확인한 정보와 판단 근거를 중심으로 상담하는 리더스시티행복한공인중개사사무소입니다.";
+---
+
+<BaseLayout {title} {description}>
+  <PageIntro eyebrow="OFFICE" title="사무소 소개" description="지역을 오래 설명하는 것보다, 한 번 더 확인하고 분명하게 안내하는 일을 중요하게 생각합니다." />
+  <section class="section">
+    <div class="shell two-column">
+      <article class="statement-card">
+        <p class="eyebrow">상담 철학</p>
+        <h2>근거로 말하고,<br />판단할 수 있게 설명합니다.</h2>
+        <p>매물의 가격과 면적, 확인일과 출처를 구분해 안내합니다. 확인하지 않은 내용은 사실처럼 단정하지 않고 계약 전에는 조건과 현황을 다시 확인합니다.</p>
+      </article>
+      <div class="detail-stack">
+        <article class="info-card"><span>01</span><h3>직접 확인</h3><p>공개 전 실제 정보와 상태를 확인하고, 오래된 매물은 그대로 두지 않습니다.</p></article>
+        <article class="info-card"><span>02</span><h3>쉬운 비교</h3><p>가격·면적·입주 조건의 차이를 고객이 비교하기 쉬운 순서로 설명합니다.</p></article>
+        <article class="info-card"><span>03</span><h3>개인정보 보호</h3><p>정확한 동·호수와 의뢰인 정보는 홈페이지와 공개 저장소에 올리지 않습니다.</p></article>
+      </div>
+    </div>
+  </section>
+  <section class="section section--navy">
+    <div class="shell office-facts">
+      <div><p class="eyebrow">등록 정보</p><h2>확인 가능한 사무소 정보</h2></div>
+      <dl>
+        <div><dt>법적 상호</dt><dd>{office.legalName}</dd></div>
+        <div><dt>대표자</dt><dd>{office.representative}</dd></div>
+        <div><dt>등록번호</dt><dd>{office.registrationNumber}</dd></div>
+        <div><dt>소재지</dt><dd>{office.address}</dd></div>
+        <div><dt>연락처</dt><dd>{office.mobile}</dd></div>
+      </dl>
+    </div>
+  </section>
+  <ContactPanel />
+</BaseLayout>

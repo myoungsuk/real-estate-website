@@ -1,0 +1,24 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import PageIntro from "../components/PageIntro.astro";
+import ContactPanel from "../components/ContactPanel.astro";
+import { office, phoneHref } from "../lib/site";
+
+const title = "오시는 길 | 리더스시티행복한공인중개사사무소";
+const description = `${office.address}에 위치한 리더스시티행복한공인중개사사무소의 주소와 연락처입니다.`;
+---
+
+<BaseLayout {title} {description}>
+  <PageIntro eyebrow="LOCATION" title="오시는 길" description="방문 전 전화로 상담 가능 여부를 확인해 주세요. 영업시간과 주차 안내는 확인 후 공개합니다." />
+  <section class="section">
+    <div class="shell location-grid">
+      <div class="location-map" aria-hidden="true"><span>5</span><p>리더스시티5블록<br />근린생활시설 105호</p></div>
+      <div class="location-copy">
+        <p class="eyebrow">행복한부동산</p><h2>{office.legalName}</h2>
+        <dl class="contact-details"><div><dt>주소</dt><dd>{office.address}</dd></div><div><dt>대표</dt><dd>{office.representative}</dd></div><div><dt>전화</dt><dd><a href={phoneHref}>{office.mobile}</a></dd></div><div><dt>등록번호</dt><dd>{office.registrationNumber}</dd></div></dl>
+        <div class="hero__actions"><a class="button button--primary" href={office.naverPlaceUrl} target="_blank" rel="noopener noreferrer">네이버지도에서 보기</a><a class="button button--secondary" href={phoneHref}>전화하기</a></div>
+      </div>
+    </div>
+  </section>
+  <ContactPanel title="방문 전에 전화로 확인해 주세요" description="상담 중 자리를 비울 수 있어 방문 전 연락을 권합니다." />
+</BaseLayout>

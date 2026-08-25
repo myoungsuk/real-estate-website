@@ -1,0 +1,73 @@
+---
+import { isCurrentPath, navigation, phoneHref } from "../lib/site";
+
+const pathname = Astro.url.pathname;
+---
+
+<header class="site-header" data-site-header>
+  <div class="site-header__inner shell">
+    <a class="brand" href="/" aria-label="천동 리더스시티 행복한부동산 홈">
+      <span class="brand__mark" aria-hidden="true">행</span>
+      <span class="brand__text">
+        <strong>행복한부동산</strong>
+        <small>천동 · 리더스시티 4·5블록</small>
+      </span>
+    </a>
+
+    <button
+      class="menu-button"
+      type="button"
+      aria-expanded="false"
+      aria-controls="primary-navigation"
+      data-menu-button
+    >
+      <span aria-hidden="true">메뉴</span>
+      <span class="sr-only">주 메뉴 열기</span>
+    </button>
+
+    <nav class="site-nav" id="primary-navigation" aria-label="주 메뉴" data-menu hidden>
+      <ul>
+        {navigation.map((item) => (
+          <li>
+            <a href={item.href} aria-current={isCurrentPath(pathname, item.href) ? "page" : undefined}>
+              {item.label}
+            </a>
+          </li>
+        ))}
+      </ul>
+      <a class="button button--primary site-nav__call" href={phoneHref}>전화 상담</a>
+    </nav>
+  </div>
+</header>
+
+<script>
+  const header = document.querySelector<HTMLElement>("[data-site-header]");
+  const button = header?.querySelector<HTMLButtonElement>("[data-menu-button]");
+  const menu = header?.querySelector<HTMLElement>("[data-menu]");
+
+  if (button && menu) {
+    const closeMenu = () => {
+      button.setAttribute("aria-expanded", "false");
+      button.querySelector("[aria-hidden]")!.textContent = "메뉴";
+      button.querySelector(".sr-only")!.textContent = "주 메뉴 열기";
+      menu.hidden = true;
+    };
+
+    button.addEventListener("click", () => {
+      const willOpen = button.getAttribute("aria-expanded") !== "true";
+      button.setAttribute("aria-expanded", String(willOpen));
+      button.querySelector("[aria-hidden]")!.textContent = willOpen ? "닫기" : "메뉴";
+      button.querySelector(".sr-only")!.textContent = willOpen ? "주 메뉴 닫기" : "주 메뉴 열기";
+      menu.hidden = !willOpen;
+      if (willOpen) menu.querySelector<HTMLAnchorElement>("a")?.focus();
+    });
+
+    menu.querySelectorAll("a").forEach((link) => link.addEventListener("click", closeMenu));
+    window.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !menu.hidden) {
+        closeMenu();
+        button.focus();
+      }
+    });
+  }
+</script>

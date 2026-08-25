@@ -1,0 +1,20 @@
+[
+  {
+    "slug": "leaders-city-4",
+    "block": "4",
+    "name": "리더스시티 4블록",
+    "status": "preparing",
+    "summary": "단지 수치와 생활 정보는 공식 자료와 현장 확인을 마친 뒤 공개합니다.",
+    "source": null,
+    "confirmedAt": null
+  },
+  {
+    "slug": "leaders-city-5",
+    "block": "5",
+    "name": "리더스시티 5블록",
+    "status": "preparing",
+    "summary": "단지 수치와 생활 정보는 공식 자료와 현장 확인을 마친 뒤 공개합니다.",
+    "source": null,
+    "confirmedAt": null
+  }
+]
