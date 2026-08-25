@@ -13,7 +13,7 @@
     gates.forEach((gate) => {
       const message = gate.querySelector<HTMLElement>("[data-admin-write-message]");
       if (message) message.textContent = session.writeEnabled
-        ? "저장 연결이 활성화되었습니다. 저장하면 GitHub 커밋 후 Cloudflare가 자동 배포합니다."
+        ? "저장 연결이 활성화되었습니다. 저장하면 GitHub 커밋을 생성합니다. Cloudflare 자동 배포는 Git 연결 후 동작합니다."
         : "화면과 입력 폼은 준비되었습니다. 실제 저장은 Cloudflare에 GitHub 쓰기 Secret을 연결한 뒤 활성화됩니다.";
       gate.classList.toggle("admin-inline-notice--ready", session.writeEnabled);
     });

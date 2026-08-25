@@ -2,18 +2,19 @@
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import PageIntro from "../../components/PageIntro.astro";
 import ContactPanel from "../../components/ContactPanel.astro";
-import complexes from "../../data/complexes.json";
+import { publishedComplexes } from "../../lib/complexes";
 
 const title = "대전 동구 주요 단지정보 | 행복한부동산";
 const description = "대전 동구의 주요 아파트 단지와 생활 정보를 출처와 확인일을 기준으로 안내합니다.";
 ---
 
 <BaseLayout {title} {description}>
-  <PageIntro eyebrow="COMPLEX" title="대전 동구 주요 단지" description="현재는 리더스시티 4·5블록부터 시작해, 확인된 동구 지역 단지 정보를 차례로 넓혀갑니다." />
+  <PageIntro eyebrow="COMPLEX" title="대전 동구 주요 단지" description="리더스시티 4·5블록의 규모와 입주, 생활환경부터 확인하고 동구 지역 단지 정보를 차례로 넓혀갑니다." />
   <section class="section">
     <div class="shell complex-index-grid">
-      {complexes.map((complex, index) => (
-        <a class:list={["complex-index-card", index % 2 === 1 && "complex-index-card--rose"]} href={`/complexes/${complex.slug}/`}>
+      {publishedComplexes.map((complex) => (
+        <a class="complex-index-card" href={`/complexes/${complex.slug}/`}>
+          {complex.image && <img src={complex.image.src} alt={complex.image.alt} width="1200" height="1200" loading="lazy" />}
           <span>{complex.areaName} · {complex.eyebrow}</span>
           <strong>{complex.mark}</strong>
           <div><h2>{complex.name}</h2><p>{complex.summary}</p><b>단지 페이지 보기 →</b></div>

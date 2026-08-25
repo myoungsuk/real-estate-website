@@ -25,7 +25,6 @@ const description = "대전 동구의 매물과 지역 정보를 직접 확인�
         <p class="eyebrow">대표 인사말</p>
         <h2>충분히 비교하고<br />납득한 뒤 선택하세요.</h2>
         <div class="claim-strip claim-strip--office" aria-label="운영 현황">
-          <p>{office.publicClaims.basis}</p>
           <ul>
             {office.publicClaims.items.map((claim) => <li><span>{claim.label}</span><strong>{claim.value}</strong></li>)}
           </ul>

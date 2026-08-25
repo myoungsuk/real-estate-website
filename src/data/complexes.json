@@ -6,15 +6,33 @@
     "eyebrow": "LEADERS CITY",
     "mark": "4",
     "name": "리더스시티 4블록",
-    "status": "preparing",
-    "summary": "단지 수치와 생활 정보는 공식 자료와 현장 확인을 마친 뒤 공개합니다.",
-    "introTitle": "리더스시티 4블록 정보를 준비하고 있습니다.",
+    "status": "published",
+    "summary": "2024년 7월 입주를 시작한 10개동 총 1,328세대 규모의 천동 신축 단지입니다.",
+    "introTitle": "리더스시티 4블록, 1,328세대 신축 주거단지",
     "introduction": [
-      "매물과 생활 정보를 실제 상담에 도움이 되는 기준으로 정리하고 있습니다.",
-      "확인되지 않은 수치를 임의로 채우지 않고 출처와 확인일이 준비된 내용부터 공개합니다."
+      "대전광역시 동구 안샘로 11에 위치하며 전용 59·74·84㎡ 주택형으로 구성되어 있습니다.",
+      "2024년 7월 사용검사를 마친 단지로, 신흥역·대전역·판암IC를 함께 이용하는 대전 동구 생활권과 학교·병원·공원 접근 조건을 비교해 볼 수 있습니다."
     ],
-    "source": null,
-    "confirmedAt": null
+    "image": {
+      "src": "/images/area/leaders-city-4-landscape.webp",
+      "alt": "대전 천동 리더스시티4블록 아파트 전경"
+    },
+    "facts": [
+      { "label": "주소", "value": "대전광역시 동구 안샘로 11" },
+      { "label": "규모", "value": "10개동 · 1,328세대" },
+      { "label": "입주", "value": "2024년 7월" },
+      { "label": "전용면적", "value": "59·74·84㎡" }
+    ],
+    "highlights": [
+      { "title": "신축 생활권", "description": "2024년 7월 사용검사를 마친 천동3지구의 신축 대단지입니다." },
+      { "title": "교통 연결", "description": "신흥역과 KTX 대전역, 판암IC를 함께 이용하는 대전 동구 생활권입니다." },
+      { "title": "생활 환경", "description": "천동초·가오권 학교와 병원, 대동천·대전천과 인근 공원을 함께 확인할 수 있습니다." }
+    ],
+    "sources": [
+      { "label": "LH 청약플러스 4블록 사용검사 확인", "url": "https://apply.lh.or.kr/lhapply/apply/noti/an/view.do?bbsSn=9102429931&ccrCnntSysDsCd=02&mi=1079" },
+      { "label": "리더스시티 4블록 입주 안내 자료", "url": "https://elif.krcon.co.kr/upload/complex/981794fceda049e8990beba105ebd159.pdf" }
+    ],
+    "confirmedAt": "2026-08-25"
   },
   {
     "slug": "leaders-city-5",
@@ -23,14 +41,32 @@
     "eyebrow": "LEADERS CITY",
     "mark": "5",
     "name": "리더스시티 5블록",
-    "status": "preparing",
-    "summary": "단지 수치와 생활 정보는 공식 자료와 현장 확인을 마친 뒤 공개합니다.",
-    "introTitle": "단지 내 사무소에서 가까이 확인합니다.",
+    "status": "published",
+    "summary": "총 2,135세대 규모로 2024년 12월 입주를 시작한 리더스시티5블록입니다.",
+    "introTitle": "리더스시티 5블록, 단지 안에서 바로 상담합니다",
     "introduction": [
       "리더스시티 행복한부동산은 리더스시티5블록 단지 내 상가에 직접 입점해 있습니다.",
-      "매물과 생활 정보는 현장 확인과 공개 승인을 거친 뒤 출처와 확인일을 함께 안내합니다."
+      "전용 39.98~84.96㎡, 총 2,135세대 규모로 2024년 12월 입주를 시작했으며, 단지 안에서 4·5블록의 매물과 생활 여건을 가까이 확인해 안내합니다."
     ],
-    "source": null,
-    "confirmedAt": null
+    "image": {
+      "src": "/images/area/leaders-city-5-landscape.webp",
+      "alt": "대전 천동 리더스시티5블록 정문과 아파트 전경"
+    },
+    "facts": [
+      { "label": "주소", "value": "대전광역시 동구 안샘로14번길 7" },
+      { "label": "규모", "value": "총 2,135세대" },
+      { "label": "입주", "value": "2024년 12월" },
+      { "label": "전용면적", "value": "39.98~84.96㎡" }
+    ],
+    "highlights": [
+      { "title": "단지 내 상담", "description": "리더스시티5블록 근린생활시설 105호에 사무소가 있어 도보로 상담할 수 있습니다." },
+      { "title": "교통 연결", "description": "대전 도시철도 1호선 신흥역과 KTX 대전역, 판암IC를 함께 이용할 수 있습니다." },
+      { "title": "교육·생활", "description": "천동초와 가오권 학교, 충남대학교병원, 대동천·대전천과 인근 공원 생활권입니다." }
+    ],
+    "sources": [
+      { "label": "LH 청약플러스 5블록 공급정보", "url": "https://apply.lh.or.kr/lhapply/apply/wt/wrtanc/selectWrtancInfo.do?aisTpCd=08&ccrCnntSysDsCd=02&mi=1026&panId=0000060351&uppAisTpCd=06" },
+      { "label": "LH 하나로 내집 5블록 생활환경", "url": "https://hanaro.lh.or.kr/siteDetail/view?menuKey=60O0Um5kwF&sPageCnt=&schArea=&schHsClsfCd=&schPoint=&schRegion=&schSplyHH=&schStatus=&schText=&siteDetailId=79" }
+    ],
+    "confirmedAt": "2026-08-25"
   }
 ]

@@ -5,6 +5,7 @@ const readJson = async (path) => JSON.parse(await readFile(new URL(path, import.
 const content = {
   office: await readJson("../src/data/office.json"),
   listings: await readJson("../src/data/listings.json"),
+  naverListings: await readJson("../src/data/naver-listings.json"),
   complexes: await readJson("../src/data/complexes.json"),
   externalLinks: await readJson("../src/data/external-links.json"),
   homeContent: await readJson("../src/data/home-content.json"),

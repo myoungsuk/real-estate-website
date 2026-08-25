@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { findBannedKeys, validateComplexes, validateExternalLinks, validateHomeContent, validateListing, validateOffice } from "../scripts/content-validation.mjs";
+import { findBannedKeys, validateComplexes, validateExternalLinks, validateHomeContent, validateListing, validateNaverListings, validateOffice } from "../scripts/content-validation.mjs";
 
 const base = {
   id: "leaders-city-5-sale-001",
@@ -46,6 +46,49 @@ test("대전 동구 밖의 매물은 거부한다", () => {
   assert.match(validateListing({ ...base, district: "대전 중구" }).join("\n"), /대전 동구/);
 });
 
+test("네이버에 공개된 동 번호와 광고 층수를 허용한다", () => {
+  const data = {
+    checkedAt: "2026-08-25",
+    items: [{
+      id: "2645736151",
+      title: "휴먼시아2단지 202동",
+      propertyType: "아파트",
+      tradeType: "sale",
+      priceLabel: "2억 6,000",
+      areaLabel: "111B㎡ · 전용 84.77B㎡",
+      floorLabel: "2/22층",
+      direction: "남향",
+      summary: "네이버 공개 설명",
+      confirmedAt: "2026-08-25",
+      source: "네이버페이 부동산",
+      url: "https://fin.land.naver.com/articles/2645736151",
+    }],
+  };
+
+  assert.deepEqual(validateNaverListings(data), []);
+});
+
+test("네이버 매물번호와 연결되지 않는 주소와 중복 ID를 거부한다", () => {
+  const item = {
+    id: "2645736151",
+    title: "휴먼시아2단지 202동",
+    propertyType: "아파트",
+    tradeType: "sale",
+    priceLabel: "2억 6,000",
+    areaLabel: "111B㎡",
+    floorLabel: "2/22층",
+    direction: "남향",
+    summary: "네이버 공개 설명",
+    confirmedAt: "2026-08-25",
+    source: "네이버페이 부동산",
+    url: "https://example.com/articles/2645736151",
+  };
+  const errors = validateNaverListings({ checkedAt: "2026-08-25", items: [item, item] }).join("\n");
+
+  assert.match(errors, /네이버 매물번호/);
+  assert.match(errors, /중복 ID/);
+});
+
 test("확정된 사무소 정보와 영업시간을 허용한다", () => {
   const office = {
     legalName: "테스트공인중개사사무소",
@@ -62,6 +105,7 @@ test("확정된 사무소 정보와 영업시간을 허용한다", () => {
     introduction: ["공개 승인된 소개 문안"],
     publicClaims: { basis: "운영자 확인 기준", items: [{ label: "허위매물", value: "0건" }] },
     naverPlaceUrl: "https://map.naver.com/",
+    naverListingsUrl: "https://fin.land.naver.com/map",
     naverBlogUrl: "https://blog.naver.com/",
     youtubeUrl: "https://www.youtube.com/",
     kakaoUrl: "https://pf.kakao.com/_test/chat",
@@ -86,6 +130,7 @@ test("사무소 외부 링크의 HTTP 주소를 거부한다", () => {
     introduction: ["공개 승인된 소개 문안"],
     publicClaims: { basis: "운영자 확인 기준", items: [{ label: "허위매물", value: "0건" }] },
     naverPlaceUrl: "https://map.naver.com/",
+    naverListingsUrl: "https://fin.land.naver.com/map",
     naverBlogUrl: "https://blog.naver.com/",
     youtubeUrl: "https://www.youtube.com/",
     kakaoUrl: "http://pf.kakao.com/_test/chat",
@@ -106,7 +151,10 @@ test("주요 단지는 두 개보다 많아도 허용한다", () => {
     summary: "공개 준비 중",
     introTitle: `${name} 소개`,
     introduction: ["확인된 내용을 준비하고 있습니다."],
-    source: null,
+    image: null,
+    facts: [],
+    highlights: [],
+    sources: [],
     confirmedAt: null,
   });
   const complexes = [
@@ -115,6 +163,32 @@ test("주요 단지는 두 개보다 많아도 허용한다", () => {
     makeComplex("cheon-dong-example", "천동 주요 단지", "천"),
   ];
   assert.deepEqual(validateComplexes(complexes), []);
+});
+
+test("공개 단지는 사진·사실·특징·출처·확인일을 모두 요구한다", () => {
+  const errors = validateComplexes([{
+    slug: "leaders-city-5",
+    areaSlug: "cheon-dong",
+    areaName: "천동",
+    eyebrow: "LEADERS CITY",
+    mark: "5",
+    name: "리더스시티 5블록",
+    status: "published",
+    summary: "공개 단지",
+    introTitle: "리더스시티 5블록 소개",
+    introduction: ["공개 소개 문단"],
+    image: null,
+    facts: [],
+    highlights: [],
+    sources: [],
+    confirmedAt: null,
+  }]).join("\n");
+
+  assert.match(errors, /image/);
+  assert.match(errors, /facts/);
+  assert.match(errors, /highlights/);
+  assert.match(errors, /sources/);
+  assert.match(errors, /confirmedAt/);
 });
 
 test("블로그와 유튜브 콘텐츠는 공개 상태와 자체 이미지 경로를 검증한다", () => {

@@ -56,11 +56,12 @@
 | 영업시간 | 평일 09:00~20:00, 토요일 09:00~18:00, 일요일 휴무(예약 상담 가능) |
 | 주차 | 리더스시티5블록 단지 내 상가 주차장 이용 가능 |
 | 카카오톡 상담 | https://pf.kakao.com/_nxmabn/chat |
+| 네이버 등록 매물 | `src/data/naver-listings.json`의 개별 공개 매물 카드와 `src/data/office.json`의 중개사 매물 지도 링크 |
 | 실제 도메인 | https://leaderscityhappy.com |
 | 전문 지역 | 대전광역시 동구 전역(천동·신흥동과 리더스시티 포함) |
-| 운영 현황 | 운영자 확인 기준 허위매물 0건·중개사고 0건 |
+| 운영 현황 | 허위매물 0건·중개사고 0건(공개 화면에는 내부 확인 기준 문구를 표시하지 않음) |
 
-대표 소개 문안과 문서에 포함된 대표·사무소 사진, 이메일은 2026-08-25 운영자 제공 자료를 기준으로 공개한다. 상세 경력·약력, 공식 로고, 단지 수치, 매물과 후기는 운영자 승인 전 확정하지 않는다.
+대표 소개 문안, 대표 사진, 이메일과 `etc/`에 제공된 4·5블록 단지 사진은 2026-08-25 운영자 제공 자료를 기준으로 공개한다. 리더스시티 단지 수치는 LH·사업주체 공개자료와 확인일을 함께 기록한다. 상세 경력·약력, 공식 로고, 매물과 후기는 운영자 승인 전 확정하지 않는다.
 
 ## 주요 디렉터리 구조
 
@@ -108,17 +109,18 @@ npm run build
 ## 핵심 모듈과 화면 흐름
 
 - `src/data/home-content.json` → `src/lib/content.ts` → 홈 대표·사무소·리더스시티 설명과 사진
-- `src/data/office.json` → `src/lib/site.ts` → 헤더·푸터·사무소·오시는 길·구조화 데이터
+- `src/data/office.json` → `src/lib/site.ts` → 헤더·푸터·사무소·오시는 길·네이버 등록 매물 링크·구조화 데이터
 - `src/data/listings.json` → `src/lib/listings.ts` → 매물 목록 필터와 공개 상세 정적 생성
-- `src/data/complexes.json` → 대전 동구 주요 단지 목록과 상세 정적 생성
-- `src/data/external-links.json` → 공개 상태·자체 썸네일이 있는 공식 블로그·유튜브 카드
+- `src/data/naver-listings.json` → `src/lib/naver-listings.ts` → 네이버에 공개된 개별 매물 카드·유형 필터·외부 상세 링크
+- `src/data/complexes.json` → 대전 동구 주요 단지의 사진·기본 사실·생활 특징·복수 출처와 목록·상세 정적 생성
+- `src/data/external-links.json` → 2026년 공식 블로그 45건과 공식 유튜브 영상 40건의 원문 링크·자체 썸네일·최신순 카드
 - `src/layouts/BaseLayout.astro` → 페이지별 title, description, canonical, robots, JSON-LD
 - `src/pages/robots.txt.ts`, `llms.txt.ts`, sitemap integration → 검색 로봇 안내
 - `/admin/` → 관리자 대시보드와 관리 API 연결 상태
 - `/admin/listings/`, `/admin/listings/editor/` → 매물 현황·검색·등록·수정·대표 이미지
 - `/admin/content/` → 홈 대표·사무소·리더스시티 설명과 대표 사진
 - `/admin/external-links/` → 네이버 블로그·유튜브 링크·미리보기·썸네일
-- `/admin/complexes/` → 대전 동구 지역·단지 소개·출처·확인일
+- `/admin/complexes/` → 대전 동구 지역·단지 소개·사진·사실·생활 특징·복수 출처·확인일
 - `/api/admin/*` → `worker/index.mjs` → Access JWT·허용 이메일·Origin·CSRF·콘텐츠·SHA 검증 → 허용 GitHub JSON·WebP 저장
 
 DB와 TR 흐름은 없다. 관리 API의 콘텐츠 쓰기는 `ADMIN_WRITE_ENABLED=true`와 CSRF·GitHub Secret이 모두 있을 때만 활성화되며, 기본 로컬·Preview 설정은 fail closed다. 브라우저 JavaScript는 공개 화면의 모바일 메뉴·매물 필터와 관리자 폼·WebP 변환에 사용한다.
@@ -128,7 +130,7 @@ DB와 TR 흐름은 없다. 관리 API의 콘텐츠 쓰기는 `ADMIN_WRITE_ENABLE
 저장소에는 공개가 승인된 정보만 둔다. 다음 정보는 소스, JSON, HTML, URL, 로그, 사이트맵에 넣지 않는다.
 
 - 고객 연락처와 상담 내용
-- 정확한 동·호수
+- 네이버 등 공개 광고 화면에 표시되지 않은 정확한 호수와 비공개 동·층 정보
 - 소유자·임대인·임차인 정보
 - 중개의뢰 내부 근거와 내부 메모
 - 비밀번호, 토큰, API 키, 인증서, 운영 `.env`
@@ -140,6 +142,8 @@ DB와 TR 흐름은 없다. 관리 API의 콘텐츠 쓰기는 `ADMIN_WRITE_ENABLE
 
 - `published` 매물만 공개 목록·상세·사이트맵에 생성한다.
 - 공개 매물에는 고유 ID·slug, 동구 내 동네, 거래유형, 가격, 전용면적, 출처, 확인일을 입력한다.
+- 네이버 외부 매물 카드는 네이버에 공개된 매물번호·동 번호·광고 층수·가격·면적·방향·확인일만 `naver-listings.json`에 기록하고, 각 카드가 같은 매물번호의 `fin.land.naver.com/articles/` 주소로 연결되어야 한다.
+- 네이버 공개 카드에 없는 정확한 호수나 고객·소유자 정보는 추가하지 않는다. 공개 동 번호와 광고 층수는 그대로 표시할 수 있다.
 - 매물 대표 이미지는 `thumbnail`, 상세 이미지는 `images`에 자체 `/images/` 경로와 대체 텍스트로 저장한다.
 - 매매는 매매가만, 전세는 보증금만, 월세는 보증금과 월 임대료만 입력한다.
 - 금액은 원 단위 정수, 면적은 ㎡로 저장한다.
@@ -147,6 +151,7 @@ DB와 TR 흐름은 없다. 관리 API의 콘텐츠 쓰기는 `ADMIN_WRITE_ENABLE
 - 승인 콘텐츠가 없으면 가짜 샘플을 만들지 않고 빈 상태 또는 준비 중으로 표시한다.
 - 외부 글·영상의 원문이나 권한 없는 이미지를 복제하지 않고 짧은 설명과 원문 링크를 쓴다.
 - 외부 콘텐츠는 고유 ID·`draft|published`·게시일·자체 저장 썸네일을 사용하고, 네이버 블로그·유튜브 허용 도메인만 등록한다.
+- 홈과 지역 콘텐츠는 최신순으로 정렬하고 블로그는 페이지당 9개, 유튜브는 페이지당 6개를 데스크톱 3열·태블릿 2열·모바일 1열로 표시한다.
 - 홈의 대표·사무소·리더스시티 설명은 `home-content.json`에서 관리한다.
 
 ## 디자인·모바일·접근성

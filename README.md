@@ -1,6 +1,6 @@
 # 대전 동구 행복한부동산 홈페이지
 
-Astro가 정적 HTML을 만들고 GitHub 변경을 Cloudflare Workers Static Assets에 자동 배포하는 공개 홈페이지입니다. 같은 Worker의 `/api/admin/*`에는 Cloudflare Access로 보호되는 관리 API 기반이 있으며, 현재는 인증·상태 조회만 제공하고 콘텐츠 쓰기는 차단합니다.
+Astro가 정적 HTML을 만들고 Cloudflare Workers Static Assets로 제공하는 공개 홈페이지입니다. 같은 Worker의 `/api/admin/*`에는 Cloudflare Access로 보호되는 관리 API 기반이 있으며, GitHub 저장 연결은 구현되어 있지만 평상시 콘텐츠 쓰기는 차단합니다. GitHub 변경의 자동 배포는 Cloudflare Git 연결을 완료한 뒤 동작합니다.
 
 ## 시작하기
 
@@ -27,15 +27,16 @@ npm run build
 
 | 파일 | 용도 |
 |---|---|
-| `src/data/home-content.json` | 홈 대표·사무소·리더스시티 설명 문구와 사진 |
-| `src/data/office.json` | 법적 상호·대표·연락처·주소·외부 채널 |
+| `src/data/home-content.json` | 홈 대표·리더스시티 현장 사진·지역 설명 문구 |
+| `src/data/office.json` | 법적 상호·대표·연락처·주소·네이버 등록 매물 등 외부 채널 |
 | `src/data/listings.json` | 공개 승인 매물 |
-| `src/data/complexes.json` | 대전 동구 주요 단지 정보 |
-| `src/data/external-links.json` | 공식 블로그·유튜브 링크 |
+| `src/data/naver-listings.json` | 네이버에 공개된 개별 매물번호·동·광고 층수·가격·면적과 상세 링크 |
+| `src/data/complexes.json` | 대전 동구 주요 단지 사진·기본 사실·생활 특징·출처 |
+| `src/data/external-links.json` | 공식 블로그·유튜브 전체 링크와 자체 저장 썸네일(최신순·블로그 9개·유튜브 6개 단위 페이지) |
 | `src/data/faq.json` | 승인된 FAQ |
 | `src/data/reviews.json` | 실제 여부와 공개 동의가 확인된 후기 |
 
-고객 연락처·상담 내용·정확한 동·호수·내부 메모·비밀키는 저장하지 않습니다. 사진은 공개 권한과 개인정보를 확인하고 EXIF·GPS를 제거한 최적화본만 `public/images/`에 둡니다.
+고객 연락처·상담 내용·네이버 등 공개 광고에 없는 정확한 호수·내부 메모·비밀키는 저장하지 않습니다. 네이버 공개 카드의 동 번호와 광고 층수는 같은 매물번호의 외부 링크와 함께 표시합니다. 사진은 공개 권한과 개인정보를 확인하고 EXIF·GPS를 제거한 최적화본만 `public/images/`에 둡니다.
 
 ## 검색 노출 설정
 

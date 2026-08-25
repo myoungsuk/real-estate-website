@@ -176,7 +176,7 @@ import { externalContents } from "../../../lib/content";
         const result = await writeAdminContent("external-links", resource.sha, next);
         resource = { resource: "external-links", sha: result.contentSha ?? resource.sha, data: next };
         renderList(); resetForm();
-        setAdminFormStatus(statusMessage, "저장했습니다. 자동 배포 후 홈페이지 카드에 반영됩니다.", "success");
+        setAdminFormStatus(statusMessage, "저장했습니다. GitHub 커밋이 생성되었습니다. 자동 배포 연결 후 홈페이지 카드에 반영됩니다.", "success");
       } catch (error) {
         setAdminFormStatus(statusMessage, error instanceof Error ? error.message : "저장하지 못했습니다.", "error");
       } finally {

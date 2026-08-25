@@ -8,34 +8,52 @@ import {
 interface Props {
   items?: ExternalContent[];
   emptyLabel?: string;
+  pageSize?: number;
 }
 
 const {
   items = publishedExternalContents,
   emptyLabel = "공개할 콘텐츠를 준비하고 있습니다.",
+  pageSize = 6,
 } = Astro.props;
+const safePageSize = Math.max(1, pageSize);
+const pageCount = Math.ceil(items.length / safePageSize);
+const gridId = `content-grid-${items[0]?.type ?? "all"}-${items[0]?.id ?? "empty"}`;
 ---
 
 {items.length > 0 ? (
-  <div class="content-card-grid">
-    {items.map((item) => (
-      <article class:list={["content-card", `content-card--${item.type}`]}>
-        <a class="content-card__thumbnail" href={item.url} target="_blank" rel="noopener noreferrer" aria-label={`${item.title} 원문 보기`}>
-          {item.thumbnail ? (
-            <img src={item.thumbnail.src} alt={item.thumbnail.alt} width="720" height="450" loading="lazy" />
-          ) : (
-            <span aria-hidden="true">{item.type === "blog" ? "N" : "▶"}</span>
-          )}
-        </a>
-        <div class="content-card__body">
-          <p class="content-card__source">{item.type === "blog" ? "NAVER BLOG" : "YOUTUBE"}</p>
-          <h3><a href={item.url} target="_blank" rel="noopener noreferrer">{item.title}</a></h3>
-          {formatContentDate(item.publishedAt) && <time datetime={item.publishedAt!}>{formatContentDate(item.publishedAt)}</time>}
-          <p>{item.summary}</p>
-          <a class="content-card__link" href={item.url} target="_blank" rel="noopener noreferrer">원문에서 보기 <span aria-hidden="true">↗</span></a>
+  <div class="content-pager" data-content-pager data-page-size={safePageSize}>
+    <div class="content-card-grid" id={gridId}>
+      {items.map((item) => (
+        <article class:list={["content-card", `content-card--${item.type}`]} data-content-item>
+          <a class="content-card__thumbnail" href={item.url} target="_blank" rel="noopener noreferrer" aria-label={`${item.title} 원문 보기`}>
+            {item.thumbnail ? (
+              <img src={item.thumbnail.src} alt={item.thumbnail.alt} width="960" height="540" loading="lazy" />
+            ) : (
+              <span aria-hidden="true">{item.type === "blog" ? "N" : "▶"}</span>
+            )}
+          </a>
+          <div class="content-card__body">
+            <p class="content-card__source">{item.type === "blog" ? "NAVER BLOG" : "YOUTUBE"}</p>
+            <h3><a href={item.url} target="_blank" rel="noopener noreferrer">{item.title}</a></h3>
+            {formatContentDate(item.publishedAt) && <time datetime={item.publishedAt!}>{formatContentDate(item.publishedAt)}</time>}
+            <p>{item.summary}</p>
+            <a class="content-card__link" href={item.url} target="_blank" rel="noopener noreferrer">원문에서 보기 <span aria-hidden="true">↗</span></a>
+          </div>
+        </article>
+      ))}
+    </div>
+    {pageCount > 1 && (
+      <nav class="content-pagination" aria-label={`${items[0].type === "blog" ? "블로그" : "유튜브"} 페이지`} data-content-pagination>
+        <button type="button" data-content-prev aria-controls={gridId} aria-label="이전 페이지">‹</button>
+        <div class="content-pagination__pages">
+          {Array.from({ length: pageCount }, (_, index) => (
+            <button type="button" data-content-page={index} aria-controls={gridId} aria-label={`${index + 1}페이지`} aria-current={index === 0 ? "page" : undefined}>{index + 1}</button>
+          ))}
         </div>
-      </article>
-    ))}
+        <button type="button" data-content-next aria-controls={gridId} aria-label="다음 페이지">›</button>
+      </nav>
+    )}
   </div>
 ) : (
   <div class="empty-state empty-state--compact">
@@ -43,3 +61,36 @@ const {
     <div><h3>{emptyLabel}</h3><p>승인된 링크와 썸네일이 등록되면 이곳에 카드로 표시됩니다.</p></div>
   </div>
 )}
+
+<script>
+  document.querySelectorAll<HTMLElement>("[data-content-pager]").forEach((pager) => {
+    if (pager.dataset.paginationReady === "true") return;
+    const items = Array.from(pager.querySelectorAll<HTMLElement>("[data-content-item]"));
+    const pageButtons = Array.from(pager.querySelectorAll<HTMLButtonElement>("[data-content-page]"));
+    const previousButton = pager.querySelector<HTMLButtonElement>("[data-content-prev]");
+    const nextButton = pager.querySelector<HTMLButtonElement>("[data-content-next]");
+    const pageSize = Number(pager.dataset.pageSize ?? 6);
+    const pageCount = Math.ceil(items.length / pageSize);
+    let currentPage = 0;
+
+    const showPage = (requestedPage: number, moveToGrid = false) => {
+      currentPage = Math.min(Math.max(requestedPage, 0), pageCount - 1);
+      items.forEach((item, index) => {
+        item.hidden = Math.floor(index / pageSize) !== currentPage;
+      });
+      pageButtons.forEach((button, index) => {
+        if (index === currentPage) button.setAttribute("aria-current", "page");
+        else button.removeAttribute("aria-current");
+      });
+      if (previousButton) previousButton.disabled = currentPage === 0;
+      if (nextButton) nextButton.disabled = currentPage === pageCount - 1;
+      if (moveToGrid) pager.querySelector(".content-card-grid")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+
+    pageButtons.forEach((button, index) => button.addEventListener("click", () => showPage(index, true)));
+    previousButton?.addEventListener("click", () => showPage(currentPage - 1, true));
+    nextButton?.addEventListener("click", () => showPage(currentPage + 1, true));
+    pager.dataset.paginationReady = "true";
+    showPage(0);
+  });
+</script>
