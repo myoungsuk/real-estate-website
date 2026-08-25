@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import test from "node:test";
 
 const readSource = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
@@ -21,6 +21,26 @@ test("공개 robots와 sitemap에서 관리자 경로를 제외한다", async ()
   assert.match(robots, /Disallow: \/admin\//);
   assert.match(robots, /Disallow: \/api\/admin\//);
   assert.match(config, /startsWith\("\/admin\/"\)/);
+});
+
+test("공개 사이트는 승인된 공식 로고를 헤더·푸터·공유 이미지에 사용한다", async () => {
+  const [header, footer, layout, home, adminLayout] = await Promise.all([
+    readSource("src/components/SiteHeader.astro"),
+    readSource("src/components/SiteFooter.astro"),
+    readSource("src/layouts/BaseLayout.astro"),
+    readSource("src/pages/index.astro"),
+    readSource("src/layouts/AdminLayout.astro"),
+    access(new URL("../public/images/brand/leaders-city-happy-logo.png", import.meta.url)),
+    access(new URL("../public/images/brand/leaders-city-happy-logo.webp", import.meta.url)),
+  ]);
+  assert.match(header, /leaders-city-happy-logo\.webp/);
+  assert.match(footer, /leaders-city-happy-logo\.webp/);
+  assert.match(layout, /property="og:image"/);
+  assert.match(layout, /leaders-city-happy-logo\.png/);
+  assert.match(home, /logo:[^]*leaders-city-happy-logo\.png/);
+  assert.match(adminLayout, /leaders-city-happy-logo\.webp/);
+  assert.match(adminLayout, /office\.brandName/);
+  assert.match(adminLayout, /공인중개사사무소 · 관리자 시스템/);
 });
 
 test("관리자 화면은 네이버 매물 관리와 GitHub 콘텐츠 저장 범위를 구분한다", async () => {
@@ -115,8 +135,12 @@ test("공개 매물 화면은 네이버 개별 매물 50건을 사진 없이 페
   assert.ok(data.items.every((item) => item.url === `https://fin.land.naver.com/articles/${item.id}`));
   assert.match(home, /NaverListingPager items=\{naverListings\} pageSize=\{6\}/);
   assert.match(pager, /data-listing-page/);
+  assert.match(pager, /data-listing-sort="price"/);
+  assert.match(pager, /data-listing-sort="latest"/);
+  assert.match(pager, /data-listing-sort="area"/);
+  assert.doesNotMatch(pager, /랭킹순/);
   assert.match(properties, /naverListings\.map/);
-  assert.match(properties, /랭킹순/);
+  assert.doesNotMatch(properties, /랭킹순/);
   assert.match(properties, /가격순/);
   assert.match(properties, /최신순/);
   assert.match(properties, /면적순/);
@@ -139,4 +163,21 @@ test("공개 헤더와 상담 화면은 전체 상호·분리된 콘텐츠·비�
   assert.match(faq, /data-consultation-form/);
   assert.match(faq, /홈페이지나 공개 게시판에 저장되지 않습니다/);
   assert.match(faq, /window\.location\.href/);
+});
+
+test("사무소·블로그·유튜브 안내 문구는 공개 범위와 자연스러운 표현을 사용한다", async () => {
+  const [office, blog, youtube, contents, styles] = await Promise.all([
+    readSource("src/pages/office.astro"),
+    readSource("src/pages/blog.astro"),
+    readSource("src/pages/youtube.astro"),
+    readSource("src/pages/contents.astro"),
+    readSource("src/styles/global.css"),
+  ]);
+  assert.match(office, /네이버에 공개된 동·호수와 매물 조건은 그대로 안내/);
+  assert.doesNotMatch(office, /정확한 동·호수와 의뢰인 정보는/);
+  assert.match(blog, /새로운 소식과 생활 정보를 편하게 둘러보세요/);
+  assert.match(youtube, /현장 모습을 영상으로 편하게 확인해 보세요/);
+  assert.doesNotMatch(`${youtube}\n${contents}`, /자동재생 없이/);
+  assert.match(styles, /\.office-facts h2 \{[^}]*word-break: keep-all/);
+  assert.match(styles, /\.section-heading h2 \{[^}]*word-break: keep-all/);
 });

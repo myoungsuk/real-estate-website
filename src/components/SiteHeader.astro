@@ -7,10 +7,12 @@ const pathname = Astro.url.pathname;
 <header class="site-header" data-site-header>
   <div class="site-header__inner shell">
     <a class="brand" href="/" aria-label={`${office.legalName} 홈`}>
-      <span class="brand__mark" aria-hidden="true">행</span>
+      <span class="brand__mark" aria-hidden="true">
+        <img src="/images/brand/leaders-city-happy-logo.webp" alt="" width="1000" height="800" />
+      </span>
       <span class="brand__text">
-        <strong>{office.legalName}</strong>
-        <small>대전 동구 지역 전문</small>
+        <strong>{office.brandName}</strong>
+        <small>공인중개사사무소 · 대전 동구 지역 전문</small>
       </span>
     </a>
 

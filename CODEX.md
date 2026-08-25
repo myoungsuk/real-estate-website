@@ -46,7 +46,7 @@
 | 항목 | 값 |
 |---|---|
 | 법적 상호 | 리더스시티행복한공인중개사사무소 |
-| 브랜드명 | 천동 리더스시티 행복한부동산 |
+| 브랜드명 | 리더스시티 행복한부동산 |
 | 대표 | 백진옥 |
 | 연락처 | 010-2790-8675 |
 | 이메일 | packjinok123@gmail.com |
@@ -61,7 +61,7 @@
 | 전문 지역 | 대전광역시 동구 전역(천동·신흥동과 리더스시티 포함) |
 | 운영 현황 | 허위매물 0건·중개사고 0건(공개 화면에는 내부 확인 기준 문구를 표시하지 않음) |
 
-대표 소개 문안, 대표 사진, 이메일과 `etc/`에 제공된 4·5블록 단지 사진은 2026-08-25 운영자 제공 자료를 기준으로 공개한다. 리더스시티 단지 수치는 LH·사업주체 공개자료와 확인일을 함께 기록한다. 상세 경력·약력, 공식 로고, 매물과 후기는 운영자 승인 전 확정하지 않는다.
+대표 소개 문안, 대표 사진, 공식 로고, 이메일과 `etc/`에 제공된 4·5블록 단지 사진은 2026-08-25 운영자 제공 자료를 기준으로 공개한다. 공식 로고 원본은 `public/images/brand/leaders-city-happy-logo.png`, 화면용 최적화본은 같은 폴더의 WebP를 사용한다. 리더스시티 단지 수치는 LH·사업주체 공개자료와 확인일을 함께 기록한다. 상세 경력·약력, 매물과 후기는 운영자 승인 전 확정하지 않는다.
 
 ## 주요 디렉터리 구조
 
@@ -111,7 +111,7 @@ npm run build
 - `src/data/home-content.json` → `src/lib/content.ts` → 홈 대표·사무소·리더스시티 설명과 사진
 - `src/data/office.json` → `src/lib/site.ts` → 헤더·푸터·사무소·오시는 길·네이버 등록 매물 링크·구조화 데이터
 - `src/data/listings.json` → `src/lib/listings.ts` → 매물 목록 필터와 공개 상세 정적 생성
-- `src/data/naver-listings.json` → `src/lib/naver-listings.ts` → 사진 없는 네이버 공개 매물 카드·홈 6건 단위 페이징·거래/유형 필터·랭킹/가격/최신/면적 정렬·외부 상세 링크
+- `src/data/naver-listings.json` → `src/lib/naver-listings.ts` → 사진 없는 네이버 공개 매물 카드·홈 6건 단위 페이징·거래/유형 필터·가격/최신/면적 정렬·외부 상세 링크
 - `src/data/complexes.json` → 대전 동구 주요 단지의 사진·기본 사실·생활 특징·복수 출처와 목록·상세 정적 생성
 - `src/data/external-links.json` → 2024~2026년 공식 블로그 128건과 공식 유튜브 영상 40건의 원문 링크·자체 썸네일·최신순 카드
 - `src/layouts/BaseLayout.astro` → 페이지별 title, description, canonical, robots, JSON-LD
@@ -197,6 +197,7 @@ DB와 TR 흐름은 없다. 관리 API의 콘텐츠 쓰기는 `ADMIN_WRITE_ENABLE
 - GitHub 토큰은 Fine-grained token으로 저장소 한 개의 Contents Read/Write만 허용하고 Cloudflare Secret에만 둔다.
 - 소스와 콘텐츠는 UTF-8, LF, 2칸 들여쓰기를 따른다.
 - 공개 사진은 권한과 개인정보를 확인하고 EXIF·GPS를 제거한 WebP/AVIF 최적화본을 우선한다.
+- 공식 로고는 승인된 PNG 원본을 보존하고 화면에는 최적화 WebP를 사용하며, 헤더·푸터·Open Graph에서 같은 브랜드를 유지한다.
 - 원본 파일명에 동·호수나 고객 이름을 넣지 않는다.
 
 ## 최소 수정과 검증

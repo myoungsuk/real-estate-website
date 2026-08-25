@@ -14,6 +14,12 @@ const gridId = "home-naver-listing-grid";
 ---
 
 <div class="listing-pager" data-listing-pager data-page-size={safePageSize}>
+  <nav class="listing-sort" aria-label="메인 매물 정렬">
+    <span>정렬</span>
+    <button type="button" data-listing-sort="price" aria-pressed="false">가격순</button>
+    <button type="button" data-listing-sort="latest" aria-pressed="false">최신순</button>
+    <button type="button" data-listing-sort="area" aria-pressed="false">면적순</button>
+  </nav>
   <div class="listing-grid listing-grid--home" id={gridId}>
     {items.map((listing, index) => (
       <NaverListingCard {listing} compact rank={index} hidden={index >= safePageSize} />
@@ -37,15 +43,18 @@ const gridId = "home-naver-listing-grid";
     if (pager.dataset.paginationReady === "true") return;
     const items = Array.from(pager.querySelectorAll<HTMLElement>("[data-naver-listing-card]"));
     const pageButtons = Array.from(pager.querySelectorAll<HTMLButtonElement>("[data-listing-page]"));
+    const sortButtons = Array.from(pager.querySelectorAll<HTMLButtonElement>("[data-listing-sort]"));
     const previousButton = pager.querySelector<HTMLButtonElement>("[data-listing-prev]");
     const nextButton = pager.querySelector<HTMLButtonElement>("[data-listing-next]");
+    const grid = pager.querySelector<HTMLElement>(".listing-grid");
     const pageSize = Number(pager.dataset.pageSize ?? 6);
     const pageCount = Math.ceil(items.length / pageSize);
+    let orderedItems = [...items];
     let currentPage = 0;
 
     const showPage = (requestedPage: number, moveToGrid = false) => {
       currentPage = Math.min(Math.max(requestedPage, 0), pageCount - 1);
-      items.forEach((item, index) => {
+      orderedItems.forEach((item, index) => {
         item.hidden = Math.floor(index / pageSize) !== currentPage;
       });
       pageButtons.forEach((button, index) => {
@@ -54,10 +63,23 @@ const gridId = "home-naver-listing-grid";
       });
       if (previousButton) previousButton.disabled = currentPage === 0;
       if (nextButton) nextButton.disabled = currentPage === pageCount - 1;
-      if (moveToGrid) pager.querySelector(".listing-grid")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (moveToGrid) grid?.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+
+    const applySort = (sortKey: string) => {
+      orderedItems = [...items].sort((a, b) => {
+        if (sortKey === "price") return Number(a.dataset.price) - Number(b.dataset.price) || Number(a.dataset.rank) - Number(b.dataset.rank);
+        if (sortKey === "latest") return (b.dataset.confirmedAt ?? "").localeCompare(a.dataset.confirmedAt ?? "") || Number(a.dataset.rank) - Number(b.dataset.rank);
+        if (sortKey === "area") return Number(a.dataset.area) - Number(b.dataset.area) || Number(a.dataset.rank) - Number(b.dataset.rank);
+        return Number(a.dataset.rank) - Number(b.dataset.rank);
+      });
+      grid?.append(...orderedItems);
+      sortButtons.forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.listingSort === sortKey)));
+      showPage(0);
     };
 
     pageButtons.forEach((button, index) => button.addEventListener("click", () => showPage(index, true)));
+    sortButtons.forEach((button) => button.addEventListener("click", () => applySort(button.dataset.listingSort ?? "")));
     previousButton?.addEventListener("click", () => showPage(currentPage - 1, true));
     nextButton?.addEventListener("click", () => showPage(currentPage + 1, true));
     pager.dataset.paginationReady = "true";

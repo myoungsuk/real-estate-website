@@ -36,6 +36,8 @@ npm run build
 | `src/data/faq.json` | 승인된 FAQ |
 | `src/data/reviews.json` | 실제 여부와 공개 동의가 확인된 후기 |
 
+공식 로고 원본은 `public/images/brand/leaders-city-happy-logo.png`, 화면용 최적화본은 `public/images/brand/leaders-city-happy-logo.webp`에 있습니다. 원본을 교체한 뒤 `node scripts/optimize-brand-logo.mjs`를 실행하면 화면용 WebP를 다시 만들 수 있습니다.
+
 고객 연락처·상담 내용·네이버 등 공개 광고에 없는 정확한 호수·내부 메모·비밀키는 저장하지 않습니다. 네이버 공개 카드의 동 번호와 광고 층수는 같은 매물번호의 외부 링크와 함께 표시합니다. 사진은 공개 권한과 개인정보를 확인하고 EXIF·GPS를 제거한 최적화본만 `public/images/`에 둡니다.
 
 ## 검색 노출 설정
