@@ -4,11 +4,13 @@ import {
   validateExternalLinks,
   validateHomeContent,
   validateListings,
+  validateNaverListings,
   validateOffice,
 } from "../scripts/content-validation.mjs";
 
 export const ADMIN_RESOURCE_PATHS = Object.freeze({
   listings: "src/data/listings.json",
+  "naver-listings": "src/data/naver-listings.json",
   office: "src/data/office.json",
   complexes: "src/data/complexes.json",
   "complexes-overview": "src/data/complexes-overview.json",
@@ -25,6 +27,7 @@ export function getAdminResourcePath(resource) {
 export function validateAdminResource(resource, data) {
   switch (resource) {
     case "listings": return validateListings(data);
+    case "naver-listings": return validateNaverListings(data);
     case "office": return validateOffice(data);
     case "complexes": return validateComplexes(data);
     case "complexes-overview": return validateComplexOverview(data);

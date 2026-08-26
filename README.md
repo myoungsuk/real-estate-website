@@ -79,7 +79,7 @@ GitHub 자동 배포 연결과 Production 설정은 `docs/operations/CLOUDFLARE_
 - `/api/admin`과 `/api/admin/*`만 Worker 코드를 먼저 실행합니다.
 - 인증은 Cloudflare Access, 정확한 허용 이메일 2개와 Email OTP를 사용합니다.
 - Worker가 `Cf-Access-Jwt-Assertion`의 서명, issuer, audience와 이메일을 다시 검증합니다.
-- `/admin/listings/editor/`에서 매물을 등록·수정하고 대표 이미지를 올릴 수 있습니다.
+- `/admin/listings/editor/`에서 부동산뱅크 `.xls`를 브라우저 안에서 분석해 공개 매물을 일괄 반영하고, 그 밖의 네이버 매물을 직접 등록·수정·등록 종료할 수 있습니다. 원본 엑셀은 서버로 전송하지 않습니다.
 - `/admin/content/`에서 첫 화면 대표·사무소·리더스시티 설명을 수정할 수 있습니다.
 - `/admin/external-links/`에서 블로그·유튜브 링크, 요약, 공개 상태와 썸네일을 관리합니다. 링크 썸네일을 못 불러오면 직접 사진을 올릴 수 있습니다.
 - `/admin/complexes/`에서 대전 동구 지역·단지 설명과 출처·확인일을 관리합니다.

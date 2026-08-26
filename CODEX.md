@@ -121,7 +121,7 @@ npm run sync:external:dry-run
 - `src/layouts/BaseLayout.astro` → 페이지별 title, description, canonical, robots, JSON-LD
 - `src/pages/robots.txt.ts`, `llms.txt.ts`, sitemap integration → 검색 로봇 안내
 - `/admin/` → 관리자 대시보드와 관리 API 연결 상태
-- `/admin/listings/`, `/admin/listings/editor/` → 네이버 공개 매물 현황·검색·유형 필터와 네이버 매물 관리 화면 연결. 자체 매물 등록·수정 폼은 제공하지 않는다.
+- `/admin/listings/`, `/admin/listings/editor/` → 네이버 공개 매물 현황·검색·유형 필터, 부동산뱅크 EUC-KR HTML-table `.xls` 브라우저 가져오기, 그 밖의 네이버 매물 직접 등록·수정·등록 종료. 원본 XLS는 서버로 보내지 않고 정제된 `naver-listings.json`만 기존 관리자 API로 저장한다.
 - `/blog/`, `/youtube/` → 지역 콘텐츠를 원문 종류별로 분리하고, 유튜브는 `전체·일반 영상·Shorts` 필터를 한 목록에서 전환하며 독립 페이지에서 6개 단위로 탐색
 - `/faq/` → 승인된 FAQ와 서버에 저장하지 않는 문자 상담 작성 화면
 - `/admin/content/` → 홈 대표·사무소·리더스시티 설명과 대표 사진

@@ -1,3 +1,8 @@
+import {
+  getNaverListingPublicTextErrors,
+  getUnexpectedNaverListingKeys,
+} from "../src/lib/naver-listing-public-validation.mjs";
+
 const allowedStatuses = new Set(["draft", "published", "contracted", "ended"]);
 const allowedTradeTypes = new Set(["sale", "jeonse", "monthly-rent"]);
 const allowedComplexStatuses = new Set(["preparing", "published"]);
@@ -254,6 +259,8 @@ export function validateNaverListings(data) {
   const ids = new Set();
   data.items.forEach((listing, index) => {
     const path = `naverListings.items[${index}]`;
+    const unexpectedKeys = getUnexpectedNaverListingKeys(listing);
+    if (unexpectedKeys.length > 0) errors.push(`${path}: 허용되지 않은 필드가 있습니다.`);
     if (!/^\d+$/.test(listing.id ?? "")) errors.push(`${path}.id: 네이버 숫자 매물번호가 필요합니다.`);
     if (ids.has(listing.id)) errors.push(`${path}.id: 중복 ID입니다.`);
     ids.add(listing.id);
@@ -278,6 +285,7 @@ export function validateNaverListings(data) {
     } catch {
       errors.push(`${path}.url: 올바른 네이버 매물 주소가 필요합니다.`);
     }
+    errors.push(...getNaverListingPublicTextErrors(listing, path));
   });
   return errors;
 }

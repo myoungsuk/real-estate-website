@@ -19,8 +19,9 @@ const authEnv = {
 
 const authenticated = async () => ({ email: "owner@example.com", subject: "subject-1" });
 
-test("단지 전체 안내 JSON은 관리자 허용 경로로만 연결한다", () => {
+test("단지와 네이버 매물 JSON은 관리자 허용 경로로만 연결한다", () => {
   assert.equal(getAdminResourcePath("complexes-overview"), "src/data/complexes-overview.json");
+  assert.equal(getAdminResourcePath("naver-listings"), "src/data/naver-listings.json");
   assert.equal(getAdminResourcePath("../complexes-overview"), null);
 });
 

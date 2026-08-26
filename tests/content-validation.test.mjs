@@ -90,6 +90,28 @@ test("네이버 매물번호와 연결되지 않는 주소와 중복 ID를 거�
   assert.match(errors, /중복 ID/);
 });
 
+test("네이버 공개 매물의 개인정보와 허용되지 않은 필드를 거부한다", () => {
+  const item = {
+    id: "2645736151",
+    title: "휴먼시아2단지 202동",
+    propertyType: "아파트",
+    tradeType: "sale",
+    priceLabel: "2억 6,000",
+    areaLabel: "111B㎡",
+    floorLabel: "2/22층",
+    direction: "남향",
+    summary: "문의 010-1111-2222, 1203호",
+    confirmedAt: "2026-08-25",
+    source: "네이버페이 부동산",
+    url: "https://fin.land.naver.com/articles/2645736151",
+    bankListingId: "143000000",
+  };
+  const errors = validateNaverListings({ checkedAt: "2026-08-25", items: [item] }).join("\n");
+  assert.match(errors, /허용되지 않은 필드/);
+  assert.match(errors, /전화번호/);
+  assert.match(errors, /정확한 호수/);
+});
+
 test("확정된 사무소 정보와 영업시간을 허용한다", () => {
   const office = {
     legalName: "테스트공인중개사사무소",

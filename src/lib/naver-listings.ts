@@ -17,7 +17,7 @@ export interface NaverListing {
   url: string;
 }
 
-interface NaverListingData {
+export interface NaverListingData {
   checkedAt: string;
   items: NaverListing[];
 }

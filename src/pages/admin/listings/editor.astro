@@ -1,17 +1,517 @@
 ---
+import AdminWriteGate from "../../../components/admin/AdminWriteGate.astro";
 import AdminLayout from "../../../layouts/AdminLayout.astro";
+import { naverPropertyTypes } from "../../../lib/naver-listings";
 import { office } from "../../../lib/site";
 ---
 
-<AdminLayout title="네이버 매물 등록 안내 | 리더스시티행복한공인중개사사무소 관리자" description="매물 등록과 수정은 네이버 부동산에서 진행합니다.">
+<AdminLayout
+  title="네이버 매물 등록·동기화 | 리더스시티행복한공인중개사사무소 관리자"
+  description="부동산뱅크 엑셀을 안전하게 가져오고 그 밖의 네이버 매물을 직접 등록·수정·종료합니다."
+>
   <div class="admin-page-header admin-page-header--compact">
-    <div><nav class="admin-breadcrumbs" aria-label="현재 위치"><a href="/admin/">대시보드</a><span>/</span><a href="/admin/listings/">네이버 매물</a><span>/</span><span aria-current="page">등록 안내</span></nav><p class="admin-eyebrow">NAVER LISTING MANAGEMENT</p><h1>매물은 네이버에서 등록·수정합니다</h1><p>홈페이지에서 매물 정보를 중복 입력하지 않고 네이버에 공개한 정보를 링크로 연결합니다.</p></div>
-    <a class="admin-text-link" href="/properties/">공개 매물 보기 <span aria-hidden="true">↗</span></a>
+    <div>
+      <nav class="admin-breadcrumbs" aria-label="현재 위치"><a href="/admin/">대시보드</a><span>/</span><a href="/admin/listings/">네이버 매물</a><span>/</span><span aria-current="page">등록·동기화</span></nav>
+      <p class="admin-eyebrow">NAVER LISTING EDITOR</p>
+      <h1>부동산뱅크 가져오기와 직접 등록</h1>
+      <p>부동산뱅크 매물은 엑셀로 한 번에 반영하고, 그 밖의 네이버 매물은 현재 공개 카드 형식에 맞춰 직접 관리합니다.</p>
+    </div>
+    <a class="admin-text-link" href={office.naverListingsUrl} target="_blank" rel="noopener noreferrer">네이버 공개 매물 확인 <span aria-hidden="true">↗</span></a>
   </div>
-  <section class="admin-panel admin-next-action" aria-labelledby="naver-listing-guide-heading">
-    <div class="admin-panel__heading"><div><p class="admin-eyebrow">관리 절차</p><h2 id="naver-listing-guide-heading">네이버 매물 관리 화면을 이용해 주세요</h2></div><span class="admin-panel__number" aria-hidden="true">01</span></div>
-    <p>네이버 부동산에서 매물을 등록하거나 가격·설명·거래 상태를 수정한 뒤, 홈페이지의 네이버 매물 데이터가 동기화되면 공개 화면과 관리자 목록에 같은 내용이 표시됩니다.</p>
-    <a class="admin-action-link" href={office.naverListingsUrl} target="_blank" rel="noopener noreferrer">네이버에서 매물 관리 <span aria-hidden="true">↗</span></a>
+
+  <AdminWriteGate />
+
+  <section class="admin-panel admin-bank-import" aria-labelledby="bank-import-heading">
+    <div class="admin-panel__heading">
+      <div><p class="admin-eyebrow">부동산뱅크 전용</p><h2 id="bank-import-heading">엑셀 매물 가져오기</h2></div>
+      <span class="admin-panel__number" aria-hidden="true">A</span>
+    </div>
+    <p class="admin-panel-description">부동산뱅크 매물관리에서 엑셀출력한 <strong>.xls</strong> 파일만 지원합니다. 원본 파일은 브라우저에서만 읽고 서버에는 공개 가능한 JSON만 전송합니다.</p>
+
+    <form class="admin-import-file" data-bank-import-form>
+      <div class="admin-field">
+        <label for="bank-listing-file">부동산뱅크 엑셀 파일</label>
+        <input id="bank-listing-file" name="bankListingFile" type="file" accept=".xls,application/vnd.ms-excel" required data-bank-file />
+        <small>5MB 이하의 부동산뱅크 EUC-KR HTML-table .xls만 선택할 수 있습니다.</small>
+      </div>
+      <button class="admin-secondary-button" type="submit" data-bank-analyze>파일 분석</button>
+    </form>
+    <p class="admin-form-status" data-bank-status aria-live="polite">파일을 선택하면 개인정보를 제외하고 현재 매물과 비교합니다.</p>
+
+    <div class="admin-import-summary" data-bank-summary hidden>
+      <div class="admin-import-stats" aria-label="부동산뱅크 분석 결과">
+        <div><span>전체</span><strong data-bank-stat="total">0</strong><small>엑셀 매물</small></div>
+        <div><span>신규</span><strong data-bank-stat="new">0</strong><small>사이트에 추가</small></div>
+        <div><span>변경</span><strong data-bank-stat="changed">0</strong><small>확인 후 갱신</small></div>
+        <div><span>동일</span><strong data-bank-stat="same">0</strong><small>변경 없음</small></div>
+        <div><span>사이트만</span><strong data-bank-stat="site-only">0</strong><small>자동 삭제 안 함</small></div>
+        <div><span>확인 필요</span><strong data-bank-stat="errors">0</strong><small>있으면 저장 차단</small></div>
+      </div>
+
+      <ul class="admin-security-checklist" aria-label="원본 파일 보안 처리">
+        <li>소유자·매도자·전화번호·내부 메모를 저장하지 않습니다.</li>
+        <li>매물설명의 정확한 호수는 버리고 공개 동 번호만 사용합니다.</li>
+        <li>기존 공개 층 정보와 엑셀에 없는 수동 매물은 그대로 유지합니다.</li>
+        <li>원본 XLS는 Worker·GitHub·브라우저 저장소로 보내지 않습니다.</li>
+      </ul>
+
+      <div class="admin-import-errors" data-bank-errors hidden>
+        <h3>확인 필요한 항목</h3>
+        <ul data-bank-error-list></ul>
+      </div>
+
+      <div class="admin-import-preview">
+        <h3>변경 미리보기</h3>
+        <div class="admin-import-preview-list" data-bank-preview></div>
+      </div>
+
+      <div class="admin-import-actions">
+        <p>사이트에만 있는 매물은 부동산뱅크 파일에 없어도 삭제하지 않습니다.</p>
+        <button class="admin-primary-button" type="button" data-bank-apply data-write-control disabled>변경사항 반영</button>
+      </div>
+    </div>
   </section>
-  <p class="admin-inline-notice"><span aria-hidden="true">i</span><span>이 화면에서는 사진·가격·동·층·설명을 직접 저장하지 않습니다. 네이버에 공개할 수 없는 고객 개인정보와 정확한 호수도 홈페이지에 별도로 입력하지 마세요.</span></p>
+
+  <div class="admin-editor-layout admin-listing-editor-layout">
+    <section class="admin-panel" aria-labelledby="managed-listing-heading">
+      <div class="admin-panel__heading">
+        <div><p class="admin-eyebrow">현재 등록 목록</p><h2 id="managed-listing-heading"><span data-managed-count>0</span>건</h2></div>
+        <button class="admin-secondary-button" type="button" data-manual-new data-write-control disabled>새 매물</button>
+      </div>
+      <label class="admin-external-search" for="managed-listing-search"><span>목록 검색</span><input id="managed-listing-search" type="search" placeholder="제목, 네이버 번호, 유형 검색" data-managed-search /></label>
+      <p class="admin-listing-count" data-managed-filter-count>현재 매물을 불러오고 있습니다.</p>
+      <div class="admin-content-list admin-managed-list" data-managed-list></div>
+      <p class="admin-external-empty" data-managed-empty hidden>검색 조건에 맞는 매물이 없습니다.</p>
+    </section>
+
+    <form class="admin-panel admin-editor-form" data-manual-form>
+      <div class="admin-panel__heading">
+        <div><p class="admin-eyebrow">직접 등록·수정</p><h2 data-manual-form-title>새 네이버 매물</h2></div>
+        <span class="admin-panel__number" aria-hidden="true">B</span>
+      </div>
+      <input type="hidden" name="originalId" />
+      <div class="admin-form-grid">
+        <div class="admin-field">
+          <label for="manual-listing-id">네이버 매물번호</label>
+          <input id="manual-listing-id" name="id" inputmode="numeric" pattern="[0-9]+" autocomplete="off" placeholder="예: 2645402920" required data-write-control disabled />
+          <small>숫자 매물번호로 네이버 개별 주소를 자동 생성합니다.</small>
+        </div>
+        <div class="admin-field">
+          <label for="manual-listing-property">매물 종류</label>
+          <input id="manual-listing-property" name="propertyType" list="manual-property-types" placeholder="예: 아파트" required data-write-control disabled />
+          <datalist id="manual-property-types">{naverPropertyTypes.map((type) => <option value={type}></option>)}</datalist>
+        </div>
+        <div class="admin-field admin-field--wide">
+          <label for="manual-listing-title">매물 제목</label>
+          <input id="manual-listing-title" name="title" maxlength="100" placeholder="예: 리더스시티 5블록 507동" required data-write-control disabled />
+          <small>네이버에 공개되지 않은 정확한 호수는 입력하지 않습니다.</small>
+        </div>
+        <div class="admin-field">
+          <label for="manual-listing-trade">거래 유형</label>
+          <select id="manual-listing-trade" name="tradeType" data-write-control disabled>
+            <option value="sale">매매</option>
+            <option value="jeonse">전세</option>
+            <option value="monthly-rent">월세</option>
+          </select>
+        </div>
+        <div class="admin-field">
+          <label for="manual-listing-price">가격 표시</label>
+          <input id="manual-listing-price" name="priceLabel" maxlength="60" placeholder="예: 5억 2,000" required data-write-control disabled />
+          <small>월세는 네이버에 공개된 보증금/월세 표시를 그대로 입력합니다.</small>
+        </div>
+        <div class="admin-field">
+          <label for="manual-listing-area">면적 표시</label>
+          <input id="manual-listing-area" name="areaLabel" maxlength="100" placeholder="예: 81B㎡ · 전용 59.64B㎡" data-write-control disabled />
+        </div>
+        <div class="admin-field">
+          <label for="manual-listing-floor">층 표시</label>
+          <input id="manual-listing-floor" name="floorLabel" maxlength="40" placeholder="예: 고/29층" data-write-control disabled />
+          <small>네이버 개별 매물에 공개된 값만 입력합니다.</small>
+        </div>
+        <div class="admin-field">
+          <label for="manual-listing-direction">방향</label>
+          <input id="manual-listing-direction" name="direction" maxlength="40" placeholder="예: 남서향" data-write-control disabled />
+        </div>
+        <div class="admin-field">
+          <label for="manual-listing-confirmed">확인일</label>
+          <input id="manual-listing-confirmed" name="confirmedAt" type="date" required data-write-control disabled />
+        </div>
+        <div class="admin-field admin-field--wide">
+          <label for="manual-listing-summary">한줄 설명</label>
+          <textarea id="manual-listing-summary" name="summary" rows="4" maxlength="300" placeholder="네이버에 공개된 설명만 입력해 주세요." required data-write-control disabled></textarea>
+          <small>전화번호·소유자·매도자·임대인 정보와 정확한 호수는 저장할 수 없습니다.</small>
+        </div>
+        <div class="admin-field">
+          <label for="manual-listing-source">출처</label>
+          <input id="manual-listing-source" value="네이버페이 부동산" readonly />
+        </div>
+        <div class="admin-field">
+          <label>자동 생성 주소</label>
+          <output class="admin-readonly-output" data-manual-url>네이버 매물번호를 입력해 주세요.</output>
+        </div>
+      </div>
+
+      <article class="admin-listing-preview" data-manual-preview aria-label="등록될 공개 카드 미리보기">
+        <p><span data-preview-property>매물 종류</span><time data-preview-date>확인일</time></p>
+        <h3 data-preview-title>매물 제목</h3>
+        <strong data-preview-price>거래 가격</strong>
+        <p data-preview-details>면적 · 층 · 방향</p>
+        <p data-preview-summary>한줄 설명이 표시됩니다.</p>
+      </article>
+
+      <div class="admin-editor__actions admin-editor__actions--inside">
+        <p class="admin-form-status" data-manual-status aria-live="polite">공개 정보를 입력하고 카드 미리보기를 확인해 주세요.</p>
+        <div>
+          <button class="admin-danger-button" type="button" data-manual-delete hidden>등록 종료</button>
+          <button class="admin-primary-button" type="submit" data-write-control disabled>저장</button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    import naverListingData from "../../../data/naver-listings.json";
+    import {
+      createBankListingImport,
+      createManualNaverListing,
+      readBankListingFile,
+    } from "../../../lib/admin/bank-listing-import.mjs";
+    import {
+      readAdminContent,
+      setAdminFormStatus,
+      writeAdminContent,
+      type AdminResource,
+    } from "../../../lib/admin-content-client";
+    import {
+      naverTradeNames,
+      type NaverListing,
+      type NaverListingData,
+    } from "../../../lib/naver-listings";
+
+    const staticData = structuredClone(naverListingData) as NaverListingData;
+    let resource: AdminResource<NaverListingData> = { resource: "naver-listings", sha: "", data: staticData };
+    let writeEnabled = false;
+    let currentAnalysis: ReturnType<typeof createBankListingImport> | null = null;
+
+    const todayInKorea = () => {
+      const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+      const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+      return values.year + "-" + values.month + "-" + values.day;
+    };
+    const latestCheckedAt = () => [resource.data.checkedAt, todayInKorea()].sort().at(-1) ?? todayInKorea();
+
+    const managedList = document.querySelector<HTMLElement>("[data-managed-list]");
+    const managedCount = document.querySelector<HTMLElement>("[data-managed-count]");
+    const managedFilterCount = document.querySelector<HTMLElement>("[data-managed-filter-count]");
+    const managedSearch = document.querySelector<HTMLInputElement>("[data-managed-search]");
+    const managedEmpty = document.querySelector<HTMLElement>("[data-managed-empty]");
+    const manualNewButton = document.querySelector<HTMLButtonElement>("[data-manual-new]");
+    const manualForm = document.querySelector<HTMLFormElement>("[data-manual-form]");
+    const manualFormTitle = document.querySelector<HTMLElement>("[data-manual-form-title]");
+    const manualStatus = document.querySelector<HTMLElement>("[data-manual-status]");
+    const manualDeleteButton = document.querySelector<HTMLButtonElement>("[data-manual-delete]");
+    const manualUrl = document.querySelector<HTMLOutputElement>("[data-manual-url]");
+    const requestedEditId = new URLSearchParams(window.location.search).get("id");
+
+    const field = (name: string) => manualForm?.elements.namedItem(name) as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | null;
+    const tradeName = (value: string) => naverTradeNames[value as keyof typeof naverTradeNames] ?? "거래";
+    const currentFormInput = () => ({
+      id: field("id")?.value,
+      title: field("title")?.value,
+      propertyType: field("propertyType")?.value,
+      tradeType: field("tradeType")?.value,
+      priceLabel: field("priceLabel")?.value,
+      areaLabel: field("areaLabel")?.value,
+      floorLabel: field("floorLabel")?.value,
+      direction: field("direction")?.value,
+      summary: field("summary")?.value,
+      confirmedAt: field("confirmedAt")?.value,
+    });
+
+    const applyManagedFilter = () => {
+      if (!managedList) return;
+      const query = (managedSearch?.value ?? "").normalize("NFKC").trim().toLocaleLowerCase("ko-KR");
+      let visible = 0;
+      managedList.querySelectorAll<HTMLElement>("[data-managed-item]").forEach((item) => {
+        item.hidden = Boolean(query) && !(item.dataset.managedSearch ?? "").includes(query);
+        if (!item.hidden) visible += 1;
+      });
+      if (managedFilterCount) managedFilterCount.textContent = query
+        ? "검색 결과 " + visible.toLocaleString("ko-KR") + "건 / 전체 " + resource.data.items.length.toLocaleString("ko-KR") + "건"
+        : "전체 " + resource.data.items.length.toLocaleString("ko-KR") + "건";
+      if (managedEmpty) managedEmpty.hidden = visible > 0;
+    };
+
+    const renderManagedList = () => {
+      if (!managedList) return;
+      managedList.replaceChildren();
+      const sorted = [...resource.data.items].sort((first, second) => second.confirmedAt.localeCompare(first.confirmedAt));
+      sorted.forEach((listing) => {
+        const article = document.createElement("article");
+        article.dataset.managedItem = listing.id;
+        article.dataset.managedSearch = [listing.title, listing.id, listing.propertyType, tradeName(listing.tradeType), listing.priceLabel].join(" ").toLocaleLowerCase("ko-KR");
+        const info = document.createElement("div");
+        const type = document.createElement("span");
+        type.textContent = listing.propertyType + " · " + tradeName(listing.tradeType);
+        const title = document.createElement("strong");
+        title.textContent = listing.title;
+        const detail = document.createElement("small");
+        detail.textContent = listing.priceLabel + " · " + listing.id;
+        const actions = document.createElement("div");
+        actions.className = "admin-managed-actions";
+        const link = document.createElement("a");
+        link.href = listing.url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = "네이버 ↗";
+        const edit = document.createElement("button");
+        edit.type = "button";
+        edit.dataset.manualEdit = listing.id;
+        edit.textContent = "수정";
+        edit.disabled = !writeEnabled;
+        info.append(type, title, detail);
+        actions.append(link, edit);
+        article.append(info, actions);
+        managedList.append(article);
+      });
+      if (managedCount) managedCount.textContent = resource.data.items.length.toLocaleString("ko-KR");
+      applyManagedFilter();
+    };
+
+    const updateManualPreview = () => {
+      const { listing } = createManualNaverListing(currentFormInput());
+      const details = [listing.areaLabel, listing.floorLabel, listing.direction].filter(Boolean).join(" · ");
+      const previewProperty = document.querySelector<HTMLElement>("[data-preview-property]");
+      const previewDate = document.querySelector<HTMLElement>("[data-preview-date]");
+      const previewTitle = document.querySelector<HTMLElement>("[data-preview-title]");
+      const previewPrice = document.querySelector<HTMLElement>("[data-preview-price]");
+      const previewDetails = document.querySelector<HTMLElement>("[data-preview-details]");
+      const previewSummary = document.querySelector<HTMLElement>("[data-preview-summary]");
+      if (previewProperty) previewProperty.textContent = listing.propertyType || "매물 종류";
+      if (previewDate) previewDate.textContent = listing.confirmedAt || "확인일";
+      if (previewTitle) previewTitle.textContent = listing.title || "매물 제목";
+      if (previewPrice) previewPrice.textContent = tradeName(listing.tradeType) + " " + (listing.priceLabel || "가격");
+      if (previewDetails) previewDetails.textContent = details || "면적 · 층 · 방향";
+      if (previewSummary) previewSummary.textContent = listing.summary || "한줄 설명이 표시됩니다.";
+      if (manualUrl) manualUrl.textContent = /^\d+$/u.test(listing.id) ? listing.url : "네이버 매물번호를 입력해 주세요.";
+    };
+
+    const resetManualForm = () => {
+      manualForm?.reset();
+      if (field("originalId")) field("originalId")!.value = "";
+      if (field("tradeType")) field("tradeType")!.value = "sale";
+      if (field("confirmedAt")) field("confirmedAt")!.value = todayInKorea();
+      const idField = field("id") as HTMLInputElement | null;
+      if (idField) idField.readOnly = false;
+      if (manualFormTitle) manualFormTitle.textContent = "새 네이버 매물";
+      if (manualDeleteButton) manualDeleteButton.hidden = true;
+      setAdminFormStatus(manualStatus, "공개 정보를 입력하고 카드 미리보기를 확인해 주세요.");
+      updateManualPreview();
+    };
+
+    const editManualListing = (id: string) => {
+      const listing = resource.data.items.find((item) => item.id === id);
+      if (!listing) return;
+      const values: Record<string, string> = {
+        originalId: listing.id,
+        id: listing.id,
+        title: listing.title,
+        propertyType: listing.propertyType,
+        tradeType: listing.tradeType,
+        priceLabel: listing.priceLabel,
+        areaLabel: listing.areaLabel ?? "",
+        floorLabel: listing.floorLabel ?? "",
+        direction: listing.direction ?? "",
+        summary: listing.summary,
+        confirmedAt: listing.confirmedAt,
+      };
+      Object.entries(values).forEach(([name, value]) => { if (field(name)) field(name)!.value = value; });
+      const idField = field("id") as HTMLInputElement | null;
+      if (idField) idField.readOnly = true;
+      if (manualFormTitle) manualFormTitle.textContent = "네이버 매물 수정";
+      if (manualDeleteButton) manualDeleteButton.hidden = false;
+      setAdminFormStatus(manualStatus, "공개 정보와 카드 미리보기를 확인한 뒤 저장해 주세요.");
+      updateManualPreview();
+      manualForm?.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+
+    managedList?.addEventListener("click", (event) => {
+      const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-manual-edit]");
+      if (button?.dataset.manualEdit) editManualListing(button.dataset.manualEdit);
+    });
+    managedSearch?.addEventListener("input", applyManagedFilter);
+    manualNewButton?.addEventListener("click", resetManualForm);
+    manualForm?.addEventListener("input", updateManualPreview);
+    renderManagedList();
+    resetManualForm();
+
+    window.addEventListener("admin-write-ready", (event) => {
+      writeEnabled = (event as CustomEvent<{ writeEnabled: boolean }>).detail.writeEnabled;
+      renderManagedList();
+      if (currentAnalysis) renderBankAnalysis();
+      if (!writeEnabled) return;
+      void readAdminContent<NaverListingData>("naver-listings").then((current) => {
+        resource = current;
+        renderManagedList();
+        if (requestedEditId) editManualListing(requestedEditId);
+        setAdminFormStatus(manualStatus, "GitHub의 최신 네이버 매물을 불러왔습니다.");
+      }).catch((error) => {
+        setAdminFormStatus(manualStatus, error instanceof Error ? error.message : "네이버 매물을 불러오지 못했습니다.", "error");
+      });
+    });
+
+    const bankForm = document.querySelector<HTMLFormElement>("[data-bank-import-form]");
+    const bankFile = document.querySelector<HTMLInputElement>("[data-bank-file]");
+    const bankAnalyzeButton = document.querySelector<HTMLButtonElement>("[data-bank-analyze]");
+    const bankStatus = document.querySelector<HTMLElement>("[data-bank-status]");
+    const bankSummary = document.querySelector<HTMLElement>("[data-bank-summary]");
+    const bankErrors = document.querySelector<HTMLElement>("[data-bank-errors]");
+    const bankErrorList = document.querySelector<HTMLElement>("[data-bank-error-list]");
+    const bankPreview = document.querySelector<HTMLElement>("[data-bank-preview]");
+    const bankApplyButton = document.querySelector<HTMLButtonElement>("[data-bank-apply]");
+    const changeFieldNames: Record<string, string> = {
+      title: "제목", propertyType: "매물 종류", tradeType: "거래 유형", priceLabel: "가격",
+      areaLabel: "면적", floorLabel: "층", direction: "방향", summary: "설명",
+      confirmedAt: "확인일", source: "출처", url: "네이버 주소",
+    };
+
+    const setBankStat = (name: string, value: number) => {
+      const element = document.querySelector<HTMLElement>('[data-bank-stat="' + name + '"]');
+      if (element) element.textContent = value.toLocaleString("ko-KR");
+    };
+    const createImportPreviewItem = (label: string, title: string, detail: string, state: string) => {
+      const article = document.createElement("article");
+      article.className = "admin-import-preview-item admin-import-preview-item--" + state;
+      const badge = document.createElement("span");
+      badge.textContent = label;
+      const heading = document.createElement("strong");
+      heading.textContent = title;
+      const small = document.createElement("small");
+      small.textContent = detail;
+      article.append(badge, heading, small);
+      return article;
+    };
+
+    const renderBankAnalysis = () => {
+      if (!currentAnalysis || !bankSummary || !bankPreview || !bankErrorList || !bankErrors || !bankApplyButton) return;
+      setBankStat("total", currentAnalysis.rowCount);
+      setBankStat("new", currentAnalysis.newItems.length);
+      setBankStat("changed", currentAnalysis.changedItems.length);
+      setBankStat("same", currentAnalysis.sameItems.length);
+      setBankStat("site-only", currentAnalysis.siteOnlyItems.length);
+      setBankStat("errors", currentAnalysis.errors.length);
+      bankErrorList.replaceChildren();
+      currentAnalysis.errors.forEach((error) => {
+        const item = document.createElement("li");
+        item.textContent = error.rowNumber + "행 · " + error.message;
+        bankErrorList.append(item);
+      });
+      bankErrors.hidden = currentAnalysis.errors.length === 0;
+      bankPreview.replaceChildren();
+      currentAnalysis.newItems.forEach((item) => bankPreview.append(createImportPreviewItem("신규", item.title, "네이버 매물번호 " + item.id, "new")));
+      currentAnalysis.changedItems.forEach((item) => bankPreview.append(createImportPreviewItem("변경", item.title, item.changes.map((fieldName) => changeFieldNames[fieldName] ?? fieldName).join(", "), "changed")));
+      currentAnalysis.siteOnlyItems.forEach((item: { id: string; title: string }) => bankPreview.append(createImportPreviewItem("유지", item.title, "이번 엑셀에 없음 · 자동 삭제하지 않음", "kept")));
+      if (bankPreview.childElementCount === 0) bankPreview.append(createImportPreviewItem("동일", "변경할 매물이 없습니다.", "확인일만 갱신할 수 있습니다.", "same"));
+      bankSummary.hidden = false;
+      bankApplyButton.disabled = !writeEnabled || !currentAnalysis.nextData || currentAnalysis.errors.length > 0;
+    };
+
+    bankForm?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const file = bankFile?.files?.[0];
+      if (!file) return setAdminFormStatus(bankStatus, "부동산뱅크 엑셀 파일을 선택해 주세요.", "error");
+      if (bankAnalyzeButton) bankAnalyzeButton.disabled = true;
+      setAdminFormStatus(bankStatus, "브라우저에서 원본 파일을 읽고 개인정보를 제외하고 있습니다.", "saving");
+      try {
+        const table = await readBankListingFile(file);
+        currentAnalysis = createBankListingImport(table.headers, table.rows, resource.data, todayInKorea());
+        renderBankAnalysis();
+        const message = currentAnalysis.errors.length > 0
+          ? "확인 필요한 항목이 있어 아무 매물도 저장하지 않았습니다."
+          : file.name + " 분석을 마쳤습니다. 변경 미리보기를 확인해 주세요.";
+        setAdminFormStatus(bankStatus, message, currentAnalysis.errors.length > 0 ? "error" : "success");
+      } catch (error) {
+        currentAnalysis = null;
+        if (bankSummary) bankSummary.hidden = true;
+        setAdminFormStatus(bankStatus, error instanceof Error ? error.message : "부동산뱅크 파일을 분석하지 못했습니다.", "error");
+      } finally {
+        if (bankFile) bankFile.value = "";
+        if (bankAnalyzeButton) bankAnalyzeButton.disabled = false;
+      }
+    });
+
+    bankApplyButton?.addEventListener("click", async () => {
+      if (!currentAnalysis?.nextData || !writeEnabled) return;
+      bankApplyButton.disabled = true;
+      setAdminFormStatus(bankStatus, "정제된 공개 매물만 GitHub에 저장하고 있습니다.", "saving");
+      try {
+        const nextData = currentAnalysis.nextData as NaverListingData;
+        const result = await writeAdminContent("naver-listings", resource.sha, nextData);
+        resource = { resource: "naver-listings", sha: result.contentSha ?? resource.sha, data: nextData };
+        currentAnalysis = null;
+        if (bankSummary) bankSummary.hidden = true;
+        renderManagedList();
+        resetManualForm();
+        setAdminFormStatus(bankStatus, "부동산뱅크 매물을 반영했습니다. GitHub 커밋과 자동 배포 후 공개 화면에 표시됩니다.", "success");
+      } catch (error) {
+        setAdminFormStatus(bankStatus, error instanceof Error ? error.message : "부동산뱅크 매물을 저장하지 못했습니다.", "error");
+      } finally {
+        bankApplyButton.disabled = !currentAnalysis?.nextData;
+      }
+    });
+
+    manualForm?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!writeEnabled || !resource.sha) return setAdminFormStatus(manualStatus, "최신 GitHub 매물을 불러온 뒤 저장해 주세요.", "error");
+      const { listing, errors } = createManualNaverListing(currentFormInput()) as { listing: NaverListing; errors: string[] };
+      if (listing.confirmedAt > todayInKorea()) errors.push("확인일은 오늘보다 늦을 수 없습니다.");
+      const originalId = field("originalId")?.value ?? "";
+      if (!originalId && resource.data.items.some((item) => item.id === listing.id)) errors.push("이미 등록된 네이버 매물번호입니다. 목록에서 수정해 주세요.");
+      if (errors.length > 0) return setAdminFormStatus(manualStatus, [...new Set(errors)].join("\n"), "error");
+      const submit = manualForm.querySelector<HTMLButtonElement>('button[type="submit"]');
+      if (submit) submit.disabled = true;
+      setAdminFormStatus(manualStatus, "네이버 매물을 저장하고 있습니다.", "saving");
+      try {
+        const nextItems = originalId
+          ? resource.data.items.map((item) => item.id === originalId ? listing : item)
+          : [...resource.data.items, listing];
+        const nextData: NaverListingData = { checkedAt: latestCheckedAt(), items: nextItems };
+        const result = await writeAdminContent("naver-listings", resource.sha, nextData);
+        resource = { resource: "naver-listings", sha: result.contentSha ?? resource.sha, data: nextData };
+        currentAnalysis = null;
+        if (bankSummary) bankSummary.hidden = true;
+        renderManagedList();
+        resetManualForm();
+        setAdminFormStatus(manualStatus, "저장했습니다. GitHub 커밋과 자동 배포 후 현재 카드 형식으로 표시됩니다.", "success");
+      } catch (error) {
+        setAdminFormStatus(manualStatus, error instanceof Error ? error.message : "네이버 매물을 저장하지 못했습니다.", "error");
+      } finally {
+        if (submit) submit.disabled = false;
+      }
+    });
+
+    manualDeleteButton?.addEventListener("click", async () => {
+      if (!writeEnabled || !resource.sha) return;
+      const originalId = field("originalId")?.value ?? "";
+      const existing = resource.data.items.find((item) => item.id === originalId);
+      if (!existing) return;
+      if (!window.confirm(existing.title + " (" + existing.id + ")을 홈페이지 목록에서 등록 종료할까요? Git 기록으로는 복구할 수 있습니다.")) return;
+      manualDeleteButton.disabled = true;
+      setAdminFormStatus(manualStatus, "선택한 매물을 목록에서 제거하고 있습니다.", "saving");
+      try {
+        const nextData: NaverListingData = { checkedAt: latestCheckedAt(), items: resource.data.items.filter((item) => item.id !== originalId) };
+        const result = await writeAdminContent("naver-listings", resource.sha, nextData);
+        resource = { resource: "naver-listings", sha: result.contentSha ?? resource.sha, data: nextData };
+        currentAnalysis = null;
+        if (bankSummary) bankSummary.hidden = true;
+        renderManagedList();
+        resetManualForm();
+        setAdminFormStatus(manualStatus, "선택한 매물의 등록을 종료했습니다.", "success");
+      } catch (error) {
+        setAdminFormStatus(manualStatus, error instanceof Error ? error.message : "등록 종료를 처리하지 못했습니다.", "error");
+      } finally {
+        manualDeleteButton.disabled = false;
+      }
+    });
+  </script>
 </AdminLayout>

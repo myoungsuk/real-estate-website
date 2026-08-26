@@ -96,21 +96,21 @@ test("단지 목록 카드는 전체 링크와 hover·focus 피드백을 제공�
   assert.match(styles, /\.complex-index-card:active \{[^}]*scale\(0\.99\)/);
 });
 
-test("관리자 화면은 네이버 매물 관리와 GitHub 콘텐츠 저장 범위를 구분한다", async () => {
+test("관리자 화면은 네이버 매물 목록과 등록·동기화 화면을 연결한다", async () => {
   const [dashboard, listings, writeGate] = await Promise.all([
     readSource("src/pages/admin/index.astro"),
     readSource("src/pages/admin/listings/index.astro"),
     readSource("src/components/admin/AdminWriteGate.astro"),
   ]);
   assert.match(dashboard, /2단계 · 콘텐츠 관리/);
-  assert.match(listings, /office\.naverListingsUrl/);
-  assert.match(listings, /네이버에서 매물 관리/);
-  assert.doesNotMatch(listings, /새 매물 등록/);
+  assert.match(listings, /\/admin\/listings\/editor\//);
+  assert.match(listings, /매물 등록·동기화/);
+  assert.match(listings, /수정·종료/);
   assert.match(writeGate, /data-admin-write-gate/);
   assert.match(writeGate, /session\.writeEnabled/);
 });
 
-test("관리자 편집 화면은 네이버 매물 안내와 자체 콘텐츠 편집을 구분한다", async () => {
+test("관리자 편집 화면은 부동산뱅크 가져오기와 네이버 매물 직접 등록을 제공한다", async () => {
   const [listingEditor, homeEditor, externalEditor, complexEditor] = await Promise.all([
     readSource("src/pages/admin/listings/editor.astro"),
     readSource("src/pages/admin/content/index.astro"),
@@ -118,8 +118,12 @@ test("관리자 편집 화면은 네이버 매물 안내와 자체 콘텐츠 편
     readSource("src/pages/admin/complexes/index.astro"),
   ]);
   assert.match(listingEditor, /office\.naverListingsUrl/);
-  assert.match(listingEditor, /매물은 네이버에서 등록·수정합니다/);
-  assert.doesNotMatch(listingEditor, /writeAdminContent\("listings"/);
+  assert.match(listingEditor, /readBankListingFile/);
+  assert.match(listingEditor, /createBankListingImport/);
+  assert.match(listingEditor, /createManualNaverListing/);
+  assert.match(listingEditor, /writeAdminContent\("naver-listings"/);
+  assert.match(listingEditor, /data-manual-delete/);
+  assert.match(listingEditor, /data-bank-apply/);
   assert.doesNotMatch(listingEditor, /thumbnailFile/);
   assert.match(homeEditor, /writeAdminContent\("home-content"/);
   assert.match(externalEditor, /fetchExternalLinkPreview/);
