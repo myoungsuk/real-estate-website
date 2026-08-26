@@ -135,6 +135,7 @@ test("공개 매물 화면은 네이버 개별 매물 50건을 사진 없이 페
   assert.ok(data.items.every((item) => item.url === `https://fin.land.naver.com/articles/${item.id}`));
   assert.match(home, /NaverListingPager items=\{naverListings\} pageSize=\{6\}/);
   assert.match(pager, /data-listing-page/);
+  assert.match(pager, /data-listing-sort="default" aria-pressed="true">기본순/);
   assert.match(pager, /data-listing-sort="price"/);
   assert.match(pager, /data-listing-sort="latest"/);
   assert.match(pager, /data-listing-sort="area"/);
