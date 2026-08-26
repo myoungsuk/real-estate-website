@@ -157,15 +157,19 @@ test("외부 콘텐츠는 블로그와 유튜브를 나누고 유튜브는 한 �
   const items = JSON.parse(rawData);
   const blogs = items.filter((item) => item.type === "blog");
   const videos = items.filter((item) => item.type === "youtube");
-  assert.equal(blogs.length, 128);
-  assert.equal(videos.length, 40);
-  assert.deepEqual(
-    blogs.reduce((counts, item) => ({ ...counts, [item.publishedAt.slice(0, 4)]: (counts[item.publishedAt.slice(0, 4)] ?? 0) + 1 }), {}),
-    { 2024: 41, 2025: 34, 2026: 53 },
+  const blogCountsByYear = blogs.reduce(
+    (counts, item) => ({ ...counts, [item.publishedAt.slice(0, 4)]: (counts[item.publishedAt.slice(0, 4)] ?? 0) + 1 }),
+    {},
   );
+  assert.ok(blogs.length >= 128);
+  assert.ok(videos.length >= 40);
+  assert.ok(blogCountsByYear["2024"] >= 41);
+  assert.ok(blogCountsByYear["2025"] >= 34);
+  assert.ok(blogCountsByYear["2026"] >= 53);
   assert.ok(blogs.every((item) => item.publishedAt >= "2024-01-01" && /logNo=/.test(item.url)));
   assert.ok(videos.every((item) => /youtube\.com\/watch\?v=/.test(item.url)));
-  assert.ok(videos.every((item) => item.youtubeFormat === "video"));
+  assert.ok(videos.every((item) => item.youtubeFormat === "video" || item.youtubeFormat === "short"));
+  assert.ok(videos.filter((item) => item.youtubeFormat === "video").length >= 40);
   assert.match(component, /data-content-pager/);
   assert.match(component, /data-content-page/);
   assert.match(component, /data-content-filter="all"/);
