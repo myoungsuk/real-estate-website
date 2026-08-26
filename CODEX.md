@@ -111,8 +111,9 @@ npm run build
 - `src/data/home-content.json` → `src/lib/content.ts` → 홈 대표·사무소·리더스시티 설명과 사진
 - `src/data/office.json` → `src/lib/site.ts` → 헤더·푸터·사무소·오시는 길·네이버 등록 매물 링크·구조화 데이터
 - `src/data/listings.json` → `src/lib/listings.ts` → 매물 목록 필터와 공개 상세 정적 생성
-- `src/data/naver-listings.json` → `src/lib/naver-listings.ts` → 사진 없는 네이버 공개 매물 카드·홈 6건 단위 페이징·거래/유형 필터·가격/최신/면적 정렬·외부 상세 링크
-- `src/data/complexes.json` → 대전 동구 주요 단지의 사진·기본 사실·생활 특징·복수 출처와 목록·상세 정적 생성
+- `src/data/naver-listings.json` → `src/lib/naver-listings.ts` → 사진 없는 네이버 공개 매물 카드·홈 6건 단위 페이징·거래/유형 필터·기본/가격/최신/면적 정렬·외부 상세 링크
+- `src/data/complexes-overview.json` → 리더스시티 4·5블록 전체 소개·숫자 카드·비교표·공통 현장 확인사항·관련 콘텐츠와 출처
+- `src/data/complexes.json` → 대전 동구 주요 단지의 사진·기본 사실·면적별 세대 구성·공급 구성·생활환경·시설 확인 상태·FAQ·관련 콘텐츠·복수 출처와 목록·상세 정적 생성
 - `src/data/external-links.json` → 2024~2026년 공식 블로그 128건과 공식 유튜브 영상 40건의 원문 링크·자체 썸네일·최신순 카드
 - `src/layouts/BaseLayout.astro` → 페이지별 title, description, canonical, robots, JSON-LD
 - `src/pages/robots.txt.ts`, `llms.txt.ts`, sitemap integration → 검색 로봇 안내
@@ -122,7 +123,7 @@ npm run build
 - `/faq/` → 승인된 FAQ와 서버에 저장하지 않는 문자 상담 작성 화면
 - `/admin/content/` → 홈 대표·사무소·리더스시티 설명과 대표 사진
 - `/admin/external-links/` → 네이버 블로그·유튜브를 분리한 관리 카테고리, 카테고리별 건수·검색·링크 미리보기·썸네일
-- `/admin/complexes/` → 대전 동구 지역·단지 소개·사진·사실·생활 특징·복수 출처·확인일
+- `/admin/complexes/` → 리더스시티 전체 비교 콘텐츠와 대전 동구 지역·단지 소개·사진·면적·공급·생활환경·시설 상태·FAQ·관련 콘텐츠·복수 출처·확인일
 - `/api/admin/*` → `worker/index.mjs` → Access JWT·허용 이메일·Origin·CSRF·콘텐츠·SHA 검증 → 허용 GitHub JSON·WebP 저장
 
 DB와 TR 흐름은 없다. 관리 API의 콘텐츠 쓰기는 `ADMIN_WRITE_ENABLED=true`와 CSRF·GitHub Secret이 모두 있을 때만 활성화되며, 기본 로컬·Preview 설정은 fail closed다. 브라우저 JavaScript는 공개 화면의 모바일 메뉴·매물 페이징·필터·정렬·문자 앱 연결과 관리자 폼·WebP 변환에 사용한다.
@@ -138,7 +139,7 @@ DB와 TR 흐름은 없다. 관리 API의 콘텐츠 쓰기는 `ADMIN_WRITE_ENABLE
 - 비밀번호, 토큰, API 키, 인증서, 운영 `.env`
 - 신분증·등록증 원본과 사진 원본 메타데이터
 
-`scripts/content-validation.mjs`의 금지 필드 검사를 약화하지 않는다. 비공개 데이터가 필요해지면 JSON 필드를 추가하지 말고 DB·권한·암호화·보유기간을 별도로 설계하고 승인받는다.
+`scripts/content-validation.mjs`의 금지 필드 검사를 약화하지 않는다. 단지 콘텐츠는 리더스시티 4·5블록 세대수 합계와 `external-links.json`의 공개 콘텐츠 연결도 빌드 전에 검증한다. 비공개 데이터가 필요해지면 JSON 필드를 추가하지 말고 DB·권한·암호화·보유기간을 별도로 설계하고 승인받는다.
 
 ## 콘텐츠 규칙
 
