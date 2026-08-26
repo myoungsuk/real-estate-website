@@ -80,7 +80,7 @@
 ├─ worker/             동일 Worker의 Access 검증·관리 API
 ├─ docs/operations/    콘텐츠·배포·검색 등록 절차
 ├─ docs/adr/           승인된 아키텍처 결정
-├─ .github/workflows/  GitHub CI·수동 외부 콘텐츠 동기화
+├─ .github/workflows/  GitHub CI·예약/수동 외부 콘텐츠 동기화
 ├─ astro.config.mjs
 └─ wrangler.jsonc
 ```
@@ -190,7 +190,7 @@ DB와 TR 흐름은 없다. 관리 API의 콘텐츠 쓰기는 `ADMIN_WRITE_ENABLE
 - Access 정책은 정확한 허용 이메일 2개와 Email OTP를 사용한다.
 - `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD`, `ADMIN_ALLOWED_EMAILS`는 Production 환경에 등록하고 실제 값을 저장소에 넣지 않는다.
 - GitHub Actions CI는 `npm ci`, `npm test`, `npm run build`로 검증만 수행하며 Cloudflare 배포는 실행하지 않는다.
-- `.github/workflows/sync-external-content.yml`은 별도 `workflow_dispatch` 전용 워크플로이며 이 파일만 `contents: write`를 사용한다. 수동 실행과 Production 반영 검증 전에는 schedule을 추가하지 않는다.
+- `.github/workflows/sync-external-content.yml`은 매시간 17분 `schedule`과 `workflow_dispatch`를 지원하는 별도 워크플로이며 이 파일만 `contents: write`를 사용한다.
 - 동기화 워크플로는 허용된 콘텐츠·썸네일 경로 또는 45일 keepalive 상태 파일만 분리 커밋하고, 같은 실행에서 테스트·콘텐츠 검사·빌드를 다시 수행한다.
 - Cloudflare Workers Builds는 GitHub `myoungsuk/real-estate-website`의 `master`에 연결되어 있으며, `master` 푸시 시 Production을 자동 빌드·배포한다.
 - Production 빌드는 `PUBLIC_SITE_URL=https://leaderscityhappy.com`, `PUBLIC_ALLOW_INDEXING=true`를 사용한다.

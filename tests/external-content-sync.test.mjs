@@ -450,12 +450,12 @@ test("git status porcelain 경로를 안전하게 해석하고 rename은 거부�
   assert.throws(() => parseGitStatusPorcelain("R  old-path\0new-path\0"), /rename/u);
 });
 
-test("thumbnail:null UI fallback과 테스트 선행 워크플로 순서를 고정한다", () => {
+test("thumbnail:null UI fallback과 테스트 선행·예약 워크플로를 고정한다", () => {
   assert.match(externalContentComponent, /item\.thumbnail \?/u);
   assert.match(externalContentComponent, /item\.type === "blog" \? "N" : "▶"/u);
   const testStep = syncWorkflow.indexOf("- run: npm test");
   const validateStep = syncWorkflow.indexOf("- name: Validate changed paths");
   const commitStep = syncWorkflow.indexOf("- name: Commit changed content");
   assert.ok(testStep > 0 && testStep < validateStep && validateStep < commitStep);
-  assert.doesNotMatch(syncWorkflow, /schedule:/u);
+  assert.match(syncWorkflow, /schedule:\s*\n\s*- cron: "17 \* \* \* \*"/u);
 });

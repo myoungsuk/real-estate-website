@@ -23,7 +23,7 @@ npm run build
 
 빌드 결과는 `dist/`에 생성됩니다. `npm run check`는 Astro·TypeScript 검사와 공개 콘텐츠 검증을 함께 실행합니다.
 
-공식 네이버 블로그 RSS와 YouTube Atom의 신규 항목은 별도 수동 워크플로로 동기화합니다. YouTube는 Atom alternate URL을 기준으로 일반 영상과 Shorts를 구분하며, 로컬 dry-run은 공개 YouTube channelId를 설정한 뒤 실행하고 파일을 바꾸지 않습니다.
+공식 네이버 블로그 RSS와 YouTube Atom의 신규 항목은 매시간 17분 예약 실행과 필요 시 수동 실행이 가능한 별도 워크플로로 동기화합니다. YouTube는 Atom alternate URL을 기준으로 일반 영상과 Shorts를 구분하며, 로컬 dry-run은 공개 YouTube channelId를 설정한 뒤 실행하고 파일을 바꾸지 않습니다.
 
 한 출처의 네트워크·429·5xx 같은 일시 장애는 최대 3회 재시도 후 경고와 함께 건너뛰고 정상 출처만 동기화합니다. 현재 공식 YouTube Atom 주소의 404도 같은 방식으로 처리하지만, 승인 channelId 불일치·XML 파싱·ID 충돌·재시도 대상이 아닌 HTTP 오류는 전체 실행을 실패시킵니다. 두 출처를 모두 조회하지 못한 경우에도 실패합니다.
 
@@ -32,7 +32,7 @@ $env:YOUTUBE_CHANNEL_ID = "UCuOZDnM5vxOZELDgu-y-hNg"
 npm run sync:external:dry-run
 ```
 
-GitHub Actions의 `Sync external content`는 1차 운영 검증 단계에서 `workflow_dispatch`만 지원합니다. Repository Variable `YOUTUBE_CHANNEL_ID`를 등록한 뒤 `master`에서 수동 실행하며, 실제 신규 콘텐츠 커밋과 Cloudflare Production 반영이 확인되기 전에는 예약 실행을 추가하지 않습니다. 자세한 절차는 `docs/operations/CONTENT_GUIDE.md`를 확인합니다.
+GitHub Actions의 `Sync external content`는 Repository Variable `YOUTUBE_CHANNEL_ID`를 사용해 매시간 17분에 실행되며, `master`에서 `workflow_dispatch` 수동 실행도 지원합니다. 자세한 운영·장애 확인 절차는 `docs/operations/CONTENT_GUIDE.md`를 확인합니다.
 
 ## 운영자가 수정하는 파일
 

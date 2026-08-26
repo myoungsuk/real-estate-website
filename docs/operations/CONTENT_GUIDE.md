@@ -87,11 +87,11 @@
 - 원문 전체를 복제하거나 권한 없는 이미지를 사용하지 않습니다.
 - 공개 카드는 게시일 최신순으로 정렬됩니다. 블로그는 9개 단위로 페이지가 나뉩니다. 유튜브는 전체·일반 영상·Shorts 필터를 한 목록에서 전환하며 홈은 선택 형식의 최신 6개만, `/youtube/`는 선택 형식을 6개 단위로 나눕니다. 필터를 바꾸면 1페이지로 돌아갑니다.
 - 유튜브 카드는 hover 가능한 마우스·트랙패드가 카드 전체에 0.3초 머물 때 `youtube-nocookie.com`의 음소거 미리보기 한 개만 지연 로드합니다. 모바일과 움직임 최소화 환경에서는 자동 미리보기를 실행하지 않으며, 클릭하면 원문으로 이동합니다.
-- 현재 초기 데이터는 공식 네이버 블로그의 2024~2026년 공개 게시글 128건(2024년 41건, 2025년 34건, 2026년 53건)과 `youtubeFormat: video`로 분류한 공식 유튜브 영상 40건입니다. 새 글·영상은 관리자 화면에서 직접 추가하거나 아래 수동 동기화 워크플로로 추가할 수 있습니다.
+- 자동 동기화 전 기준 데이터는 공식 네이버 블로그의 2024~2026년 공개 게시글 128건(2024년 41건, 2025년 34건, 2026년 53건)과 `youtubeFormat: video`로 분류한 공식 유튜브 영상 40건입니다. 새 글·영상은 관리자 화면에서 직접 추가하거나 아래 자동·수동 동기화 워크플로로 추가할 수 있습니다.
 
-### 공식 RSS 수동 동기화
+### 공식 RSS 자동·수동 동기화
 
-1차 운영 단계에서는 예약 실행 없이 GitHub Actions에서 사람이 시작합니다.
+GitHub Actions가 매시간 17분에 자동 실행되며, 운영자가 즉시 확인해야 할 때는 같은 워크플로를 수동 실행할 수 있습니다.
 
 1. GitHub 저장소의 `Settings` → `Secrets and variables` → `Actions` → `Variables`에서 Repository Variable을 추가합니다.
    - Name: `YOUTUBE_CHANNEL_ID`
@@ -114,7 +114,7 @@ $env:YOUTUBE_CHANNEL_ID = "UCuOZDnM5vxOZELDgu-y-hNg"
 npm run sync:external:dry-run
 ```
 
-첫 수동 실행의 실제 신규 항목 커밋과 Cloudflare Production 반영, branch protection/ruleset 호환이 확인되기 전에는 schedule을 추가하지 않습니다.
+첫 수동 실행의 실제 신규 항목 커밋, Cloudflare Production 반영, branch protection/ruleset 호환은 2026-08-26에 확인했습니다. 월 1회 Actions 실행 이력에서 예약 실행과 Warning 누적 여부를 확인합니다.
 
 ## 첫 화면과 지역·단지 설명
 
