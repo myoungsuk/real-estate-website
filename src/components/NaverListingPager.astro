@@ -16,10 +16,9 @@ const gridId = "home-naver-listing-grid";
 <div class="listing-pager" data-listing-pager data-page-size={safePageSize}>
   <nav class="listing-sort" aria-label="메인 매물 정렬">
     <span>정렬</span>
-    <button type="button" data-listing-sort="default" aria-pressed="true">기본순</button>
+    <button type="button" data-listing-sort="latest" aria-pressed="true">최근 등록순</button>
     <button type="button" data-listing-sort="price" aria-pressed="false">가격 낮은순</button>
     <button type="button" data-listing-sort="price-desc" aria-pressed="false">가격 높은순</button>
-    <button type="button" data-listing-sort="latest" aria-pressed="false">최근 확인순</button>
     <button type="button" data-listing-sort="area" aria-pressed="false">면적 작은순</button>
     <button type="button" data-listing-sort="area-desc" aria-pressed="false">면적 큰순</button>
   </nav>
@@ -83,6 +82,6 @@ const gridId = "home-naver-listing-grid";
     previousButton?.addEventListener("click", () => showPage(currentPage - 1, true));
     nextButton?.addEventListener("click", () => showPage(currentPage + 1, true));
     pager.dataset.paginationReady = "true";
-    showPage(0);
+    applySort("latest");
   });
 </script>

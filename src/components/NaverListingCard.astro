@@ -15,6 +15,7 @@ interface Props {
 
 const { listing, compact = false, rank = 0, hidden = false } = Astro.props;
 const details = [listing.areaLabel, listing.floorLabel, listing.direction].filter(Boolean).join(" · ");
+const registeredAtLabel = listing.confirmedAt.replaceAll("-", ".");
 ---
 
 <article
@@ -29,7 +30,7 @@ const details = [listing.areaLabel, listing.floorLabel, listing.direction].filte
   hidden={hidden}
 >
   <div class="listing-card__body">
-    <p><span>{listing.propertyType}</span><time datetime={listing.confirmedAt}>{listing.confirmedAt} 확인</time></p>
+    <p><span>{listing.propertyType}</span><time datetime={listing.confirmedAt}>등록 {registeredAtLabel}</time></p>
     <h3><a href={listing.url} target="_blank" rel="noopener noreferrer">{listing.title}</a></h3>
     <p class="listing-card__price">{naverTradeNames[listing.tradeType]} {listing.priceLabel}</p>
     {details && <p class="listing-card__meta">{details}</p>}
