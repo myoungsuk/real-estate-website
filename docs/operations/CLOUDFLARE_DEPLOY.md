@@ -27,6 +27,8 @@ Worker는 GitHub `myoungsuk/real-estate-website`의 `master`에 연결되어 있
 4. 공개 홈, robots, sitemap, canonical과 Access 보호 경로를 회귀 확인한다.
 5. Production 이외 브랜치 빌드는 운영 승인 전까지 비활성화한다.
 
+공식 RSS 동기화의 1차 운영 검증은 GitHub Actions `Sync external content`를 `master`에서 수동 실행한 뒤 진행한다. 먼저 Repository Variable `YOUTUBE_CHANNEL_ID=UCuOZDnM5vxOZELDgu-y-hNg`를 등록하고, 워크플로가 만든 콘텐츠 커밋 SHA와 Cloudflare가 빌드한 Git SHA가 같은지 확인한다. `/blog/` 또는 `/youtube/`의 신규 카드와 원문 링크가 정상일 때까지 schedule은 추가하지 않는다. `GITHUB_TOKEN` push는 GitHub의 기존 push 기반 CI를 다시 실행하지 않으므로 동기화 워크플로 자체의 테스트·검사·빌드 성공 로그를 함께 확인한다.
+
 `wrangler.jsonc`는 `./dist` 정적 자산과 `worker/index.mjs` 관리 API를 같은 Worker로 배포합니다. `leaderscityhappy.com`은 Worker Custom Domain으로 선언하며 `/api/admin`과 `/api/admin/*`만 Worker를 먼저 실행하므로 공개 경로는 정적 자산으로 제공합니다. Production 빌드는 `PUBLIC_SITE_URL=https://leaderscityhappy.com`과 `PUBLIC_ALLOW_INDEXING=true`를 반드시 함께 설정합니다.
 
 Custom Domain 전환 롤백은 `wrangler.jsonc`의 Custom Domain 설정을 제거하고 기존 Pages 프로젝트에 `leaderscityhappy.com`을 다시 연결하는 순서로 수행한다. Pages 프로젝트나 `pages.dev` 주소는 전환 확인 전 삭제하지 않는다.

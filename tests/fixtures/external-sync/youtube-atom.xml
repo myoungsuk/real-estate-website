@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns:yt="http://www.youtube.com/xml/schemas/2015" xmlns:media="http://search.yahoo.com/mrss/" xmlns="http://www.w3.org/2005/Atom">
+  <link rel="alternate" href="https://www.youtube.com/channel/UCuOZDnM5vxOZELDgu-y-hNg" />
+  <title>천동리더스시티 행복한부동산TV</title>
+  <entry>
+    <id>yt:video:I05mw0iCFnM</id>
+    <yt:videoId>I05mw0iCFnM</yt:videoId>
+    <yt:channelId>UCuOZDnM5vxOZELDgu-y-hNg</yt:channelId>
+    <title>새 영상 &amp; Shorts</title>
+    <link rel="alternate" href="https://www.youtube.com/shorts/I05mw0iCFnM" />
+    <published>2026-08-24T09:20:46+00:00</published>
+    <updated>2026-08-25T09:21:14+00:00</updated>
+    <media:group>
+      <media:title>새 영상 &amp; Shorts</media:title>
+      <media:thumbnail url="https://i2.ytimg.com/vi/I05mw0iCFnM/hqdefault.jpg" width="480" height="360" />
+    </media:group>
+  </entry>
+</feed>

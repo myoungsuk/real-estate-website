@@ -5,6 +5,7 @@ const allowedComplexSourceKinds = new Set(["official", "public-data", "operator"
 const allowedComplexAmenityVerifications = new Set(["official", "operator-confirmed", "historical-plan", "check-required"]);
 const allowedComplexLivingCategories = new Set(["transport", "education", "daily-life", "nature"]);
 const allowedExternalContentTypes = new Set(["blog", "youtube"]);
+const allowedYoutubeContentFormats = new Set(["video", "short"]);
 const allowedExternalContentStatuses = new Set(["draft", "published"]);
 const allowedWeekDays = new Set(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]);
 const bannedKeys = new Set([
@@ -421,6 +422,12 @@ export function validateExternalLinks(externalLinks) {
     if (ids.has(link.id)) errors.push(`${path}.id: 중복 ID입니다.`);
     ids.add(link.id);
     if (!allowedExternalContentTypes.has(link.type)) errors.push(`${path}.type: blog 또는 youtube만 허용합니다.`);
+    if (link.type === "youtube" && !allowedYoutubeContentFormats.has(link.youtubeFormat)) {
+      errors.push(`${path}.youtubeFormat: video 또는 short만 허용합니다.`);
+    }
+    if (link.type === "blog" && link.youtubeFormat !== undefined) {
+      errors.push(`${path}.youtubeFormat: 블로그 콘텐츠에는 사용할 수 없습니다.`);
+    }
     if (!allowedExternalContentStatuses.has(link.status)) errors.push(`${path}.status: draft 또는 published만 허용합니다.`);
     for (const key of ["title", "summary"]) {
       if (!isNonEmptyString(link[key])) errors.push(`${path}.${key}: 공개 문구가 필요합니다.`);

@@ -1,0 +1,63 @@
+name: Sync external content
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: external-content-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Require master branch
+        run: test "$GITHUB_REF" = "refs/heads/master"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Sync external content
+        env:
+          YOUTUBE_CHANNEL_ID: ${{ vars.YOUTUBE_CHANNEL_ID }}
+        run: npm run sync:external
+
+      - run: npm test
+      - run: npm run check
+      - run: npm run build
+
+      - name: Validate changed paths
+        id: changes
+        run: node scripts/check-sync-worktree.mjs
+
+      - name: Commit changed content
+        if: steps.changes.outputs.mode == 'content'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- src/data/external-links.json public/images/blog/ public/images/youtube/
+          git diff --cached --quiet && exit 0
+          git commit -m "chore(content): sync external content"
+          git push origin HEAD:master
+      - name: Commit scheduler keepalive
+        if: steps.changes.outputs.mode == 'keepalive'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- .github/automation-health.json
+          git diff --cached --quiet && exit 0
+          git commit -m "chore(automation): refresh scheduler activity"
+          git push origin HEAD:master

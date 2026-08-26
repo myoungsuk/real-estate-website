@@ -9,6 +9,7 @@ import { formatOfficeHours, kakaoHref, office, phoneHref, smsHref } from "../lib
 
 const title = "대전 동구 지역 전문 행복한부동산 | 매매·전세·월세";
 const description = "백진옥 대표가 대전 동구의 매매·전세·월세와 리더스시티 정보를 직접 확인해 안내하는 행복한부동산입니다.";
+const quickComplexes = publishedComplexes.filter(({ slug }) => slug === "leaders-city-4" || slug === "leaders-city-5");
 const structuredData = {
   "@context": "https://schema.org",
   "@type": ["RealEstateAgent", "LocalBusiness"],
@@ -43,7 +44,15 @@ const structuredData = {
 };
 ---
 
-<BaseLayout {title} {description} {structuredData}>
+<BaseLayout
+  {title}
+  {description}
+  {structuredData}
+  shareImage="/images/brand/og-home.png"
+  shareImageAlt="리더스시티 행복한부동산 대전 동구 매매·전세·월세 안내"
+  shareImageWidth={1200}
+  shareImageHeight={630}
+>
   <section class="broker-hero section" id="about" aria-labelledby="broker-heading">
     <div class="shell broker-hero__grid">
       <div class="broker-hero__copy">
@@ -51,7 +60,8 @@ const structuredData = {
         <h1 id="broker-heading">{homeContent.broker.headline}</h1>
         <p class="broker-hero__lead">{homeContent.broker.lead}</p>
         <div class="hero__actions">
-          <a class="button button--primary" href={phoneHref}>전화 상담 {office.mobile}</a>
+          <a class="button button--primary" href="/properties/">현재 매물 {naverListings.length}건 보기</a>
+          <a class="button button--secondary" href={phoneHref}>전화 상담 {office.mobile}</a>
           <a class="button button--secondary" href={smsHref}>문자로 문의하기</a>
         </div>
         <dl class="broker-hero__facts" aria-label="대표와 사무소 정보">
@@ -70,6 +80,31 @@ const structuredData = {
     </div>
   </section>
 
+  <section class="home-quick-nav" aria-labelledby="home-quick-nav-heading">
+    <div class="shell home-quick-nav__inner">
+      <div class="home-quick-nav__heading">
+        <p class="eyebrow">빠른 탐색</p>
+        <h2 id="home-quick-nav-heading">찾는 조건으로 바로 보기</h2>
+      </div>
+      <nav class="home-quick-nav__groups" aria-label="매물과 단지 빠른 탐색">
+        <div class="home-quick-nav__group">
+          <span>거래유형</span>
+          <div class="home-quick-nav__links home-quick-nav__links--trade">
+            <a href="/properties/?trade=sale">매매</a>
+            <a href="/properties/?trade=jeonse">전세</a>
+            <a href="/properties/?trade=monthly-rent">월세</a>
+          </div>
+        </div>
+        <div class="home-quick-nav__group">
+          <span>리더스시티</span>
+          <div class="home-quick-nav__links home-quick-nav__links--complex">
+            {quickComplexes.map((complex) => <a href={`/complexes/${complex.slug}/`}>{complex.name.replace("리더스시티", "")} 바로 보기</a>)}
+          </div>
+        </div>
+      </nav>
+    </div>
+  </section>
+
   <section class="section area-photo-feature" aria-labelledby="office-photo-heading">
     <div class="shell area-photo-feature__grid">
       <figure>
@@ -77,29 +112,18 @@ const structuredData = {
         <figcaption>{homeContent.office.eyebrow}</figcaption>
       </figure>
       <div class="area-photo-feature__copy">
-        <p class="eyebrow">대전 동구 현장 이야기</p>
-        <h2 id="office-photo-heading">{homeContent.office.title}</h2>
-        <p>{homeContent.office.description}</p>
-        <a class="button button--light" href="/complexes/">리더스시티 단지정보 보기</a>
-      </div>
-    </div>
-  </section>
-
-  <section class="section" aria-labelledby="office-specialist-heading">
-    <div class="shell office-specialist">
-      <div>
-        <p class="office-location-pill">{office.address}</p>
         <p class="eyebrow">대전 동구 지역 전문</p>
-        <h2 id="office-specialist-heading">리더스시티 행복한부동산</h2>
-        <p>{office.introduction[0]}</p>
-        <div class="hero__actions">
-          <a class="button button--primary" href="/properties/">확인 매물 보기</a>
-          <a class="text-link" href="/office/">사무소 자세히 보기 →</a>
+        <h2 id="office-photo-heading">{homeContent.office.title}</h2>
+        <p class="area-photo-feature__description">{homeContent.office.description}</p>
+        <address class="area-photo-feature__address">{office.address}</address>
+        <ul class="office-badges" aria-label="상담 특징">
+          {homeContent.office.badges.map((badge) => <li>{badge}</li>)}
+        </ul>
+        <div class="area-photo-feature__actions">
+          <a class="button button--primary" href="/office/">사무소 자세히 보기</a>
+          <a class="button button--secondary" href="/location/">오시는 길</a>
         </div>
       </div>
-      <ul class="office-badges" aria-label="상담 특징">
-        {homeContent.office.badges.map((badge) => <li>{badge}</li>)}
-      </ul>
     </div>
   </section>
 
@@ -111,28 +135,6 @@ const structuredData = {
       </div>
       <p class="section-note">{naverListingsCheckedAt} 기준 네이버에 공개된 동 번호·광고 층수·가격·면적을 함께 보여드립니다.</p>
       <NaverListingPager items={naverListings} pageSize={6} />
-    </div>
-  </section>
-
-  <section class="section" id="blog" aria-labelledby="blog-heading">
-    <div class="shell">
-      <div class="content-section-heading">
-        <p>리더스시티행복한부동산</p>
-        <h2 id="blog-heading">THE BLOG</h2>
-        <a class="button button--secondary" href="/blog/">블로그 전체 보기</a>
-      </div>
-      <ExternalContentList items={publishedBlogContents} emptyLabel="공개할 블로그 글을 준비하고 있습니다." pageSize={9} />
-    </div>
-  </section>
-
-  <section class="section section--navy" id="youtube" aria-labelledby="youtube-heading">
-    <div class="shell">
-      <div class="content-section-heading content-section-heading--light">
-        <p>대전동구유튜브---천동리더스시티행복한부동산tv</p>
-        <h2 id="youtube-heading">YOUTUBE</h2>
-        <a class="button button--light" href="/youtube/">유튜브 전체 보기</a>
-      </div>
-      <ExternalContentList items={publishedYoutubeContents} emptyLabel="공개할 유튜브 영상을 준비하고 있습니다." pageSize={6} />
     </div>
   </section>
 
@@ -176,6 +178,28 @@ const structuredData = {
         </table>
       </div>
       <p class="complex-comparison__note">단지 정보는 공개자료 기준이며, 실제 계약 전에는 최신 공부·관리사무소·현장 내용을 다시 확인합니다.</p>
+    </div>
+  </section>
+
+  <section class="section" id="blog" aria-labelledby="blog-heading">
+    <div class="shell">
+      <div class="content-section-heading">
+        <p>리더스시티행복한부동산</p>
+        <h2 id="blog-heading">THE BLOG</h2>
+        <a class="button button--secondary" href="/blog/">블로그 전체 보기</a>
+      </div>
+      <ExternalContentList items={publishedBlogContents} emptyLabel="공개할 블로그 글을 준비하고 있습니다." pageSize={9} />
+    </div>
+  </section>
+
+  <section class="section section--navy" id="youtube" aria-labelledby="youtube-heading">
+    <div class="shell">
+      <div class="content-section-heading content-section-heading--light">
+        <p>대전동구유튜브---천동리더스시티행복한부동산tv</p>
+        <h2 id="youtube-heading">YOUTUBE</h2>
+        <a class="button button--light" href="/youtube/">유튜브 전체 보기</a>
+      </div>
+      <ExternalContentList items={publishedYoutubeContents} emptyLabel="공개할 유튜브 콘텐츠를 준비하고 있습니다." pageSize={6} categoryLabel="유튜브 콘텐츠" youtubeFilters paginate={false} hoverPreview />
     </div>
   </section>
 

@@ -9,32 +9,85 @@ interface Props {
   items?: ExternalContent[];
   emptyLabel?: string;
   pageSize?: number;
+  categoryLabel?: string;
+  youtubeFilters?: boolean;
+  paginate?: boolean;
+  hoverPreview?: boolean;
 }
 
 const {
   items = publishedExternalContents,
   emptyLabel = "공개할 콘텐츠를 준비하고 있습니다.",
   pageSize = 6,
+  categoryLabel,
+  youtubeFilters = false,
+  paginate = true,
+  hoverPreview = false,
 } = Astro.props;
 const safePageSize = Math.max(1, pageSize);
 const pageCount = Math.ceil(items.length / safePageSize);
 const gridId = `content-grid-${items[0]?.type ?? "all"}-${items[0]?.id ?? "empty"}`;
+const showYoutubeFilters = youtubeFilters && items.some((item) => item.type === "youtube");
+const youtubeVideoCount = items.filter((item) => item.type === "youtube" && item.youtubeFormat === "video").length;
+const youtubeShortsCount = items.filter((item) => item.type === "youtube" && item.youtubeFormat === "short").length;
+
+function getYoutubeVideoId(item: ExternalContent) {
+  if (item.type !== "youtube") return null;
+  try {
+    const url = new URL(item.url);
+    if (url.hostname === "youtu.be") return url.pathname.split("/").filter(Boolean)[0] ?? null;
+    if (url.pathname === "/watch") return url.searchParams.get("v");
+    const segments = url.pathname.split("/").filter(Boolean);
+    return ["shorts", "live"].includes(segments[0]) ? segments[1] ?? null : null;
+  } catch {
+    return null;
+  }
+}
 ---
 
 {items.length > 0 ? (
-  <div class="content-pager" data-content-pager data-page-size={safePageSize}>
+  <div
+    class="content-pager"
+    data-content-pager
+    data-page-size={safePageSize}
+    data-content-pagination-enabled={paginate ? "true" : "false"}
+    data-youtube-hover-preview={hoverPreview && showYoutubeFilters ? "true" : undefined}
+  >
+    {showYoutubeFilters && (
+      <div class="content-filter-bar">
+        <nav class="content-filter" aria-label="유튜브 콘텐츠 유형">
+          <button type="button" aria-pressed="true" aria-controls={gridId} data-content-filter="all">전체 <span>{items.length}</span></button>
+          <button type="button" aria-pressed="false" aria-controls={gridId} data-content-filter="video">일반 영상 <span>{youtubeVideoCount}</span></button>
+          <button type="button" aria-pressed="false" aria-controls={gridId} data-content-filter="short">Shorts <span>{youtubeShortsCount}</span></button>
+        </nav>
+        {hoverPreview && <p class="content-filter__preview-hint">PC에서는 카드에 잠시 머물면 소리 없이 미리 재생됩니다.</p>}
+      </div>
+    )}
     <div class="content-card-grid" id={gridId}>
       {items.map((item) => (
-        <article class:list={["content-card", `content-card--${item.type}`]} data-content-item>
-          <a class="content-card__thumbnail" href={item.url} target="_blank" rel="noopener noreferrer" aria-label={`${item.title} 원문 보기`}>
-            {item.thumbnail ? (
-              <img src={item.thumbnail.src} alt={item.thumbnail.alt} width="960" height="540" loading="lazy" />
-            ) : (
-              <span aria-hidden="true">{item.type === "blog" ? "N" : "▶"}</span>
+        <article class:list={["content-card", `content-card--${item.type}`]} data-content-item data-content-format={item.type === "youtube" ? item.youtubeFormat : undefined}>
+          <div
+            class="content-card__media"
+            data-youtube-preview-media={hoverPreview && item.type === "youtube" && getYoutubeVideoId(item) ? "true" : undefined}
+            data-youtube-video-id={hoverPreview ? getYoutubeVideoId(item) : undefined}
+            data-youtube-preview-title={hoverPreview && item.type === "youtube" ? item.title : undefined}
+          >
+            <a class="content-card__thumbnail" href={item.url} target="_blank" rel="noopener noreferrer" aria-label={`${item.title} 원문 보기`}>
+              {item.thumbnail ? (
+                <img src={item.thumbnail.src} alt={item.thumbnail.alt} width="960" height="540" loading="lazy" />
+              ) : (
+                <span aria-hidden="true">{item.type === "blog" ? "N" : "▶"}</span>
+              )}
+            </a>
+            {hoverPreview && item.type === "youtube" && getYoutubeVideoId(item) && (
+              <>
+                <div class="content-card__preview" data-youtube-preview-frame aria-hidden="true" hidden></div>
+                <span class="content-card__preview-label" aria-hidden="true">음소거 미리보기</span>
+              </>
             )}
-          </a>
+          </div>
           <div class="content-card__body">
-            <p class="content-card__source">{item.type === "blog" ? "NAVER BLOG" : "YOUTUBE"}</p>
+            <p class="content-card__source">{item.type === "blog" ? "NAVER BLOG" : item.youtubeFormat === "short" ? "YOUTUBE SHORTS" : "YOUTUBE VIDEO"}</p>
             <h3><a href={item.url} target="_blank" rel="noopener noreferrer">{item.title}</a></h3>
             {formatContentDate(item.publishedAt) && <time datetime={item.publishedAt!}>{formatContentDate(item.publishedAt)}</time>}
             <p>{item.summary}</p>
@@ -43,8 +96,13 @@ const gridId = `content-grid-${items[0]?.type ?? "all"}-${items[0]?.id ?? "empty
         </article>
       ))}
     </div>
-    {pageCount > 1 && (
-      <nav class="content-pagination" aria-label={`${items[0].type === "blog" ? "블로그" : "유튜브"} 페이지`} data-content-pagination>
+    <div class="empty-state empty-state--compact" data-content-filter-empty hidden>
+      <span class="empty-state__number" aria-hidden="true">0</span>
+      <div><h3 data-content-filter-empty-heading>선택한 콘텐츠를 준비하고 있습니다.</h3><p>승인된 링크와 썸네일이 등록되면 이곳에 카드로 표시됩니다.</p></div>
+    </div>
+    <p class="sr-only" aria-live="polite" data-content-filter-status></p>
+    {paginate && pageCount > 1 && (
+      <nav class="content-pagination" aria-label={`${categoryLabel ?? (items[0].type === "blog" ? "블로그" : "유튜브")} 페이지`} data-content-pagination>
         <button type="button" data-content-prev aria-controls={gridId} aria-label="이전 페이지">‹</button>
         <div class="content-pagination__pages">
           {Array.from({ length: pageCount }, (_, index) => (
@@ -66,31 +124,109 @@ const gridId = `content-grid-${items[0]?.type ?? "all"}-${items[0]?.id ?? "empty
   document.querySelectorAll<HTMLElement>("[data-content-pager]").forEach((pager) => {
     if (pager.dataset.paginationReady === "true") return;
     const items = Array.from(pager.querySelectorAll<HTMLElement>("[data-content-item]"));
+    const filterButtons = Array.from(pager.querySelectorAll<HTMLButtonElement>("[data-content-filter]"));
+    const filterEmpty = pager.querySelector<HTMLElement>("[data-content-filter-empty]");
+    const filterEmptyHeading = pager.querySelector<HTMLElement>("[data-content-filter-empty-heading]");
+    const filterStatus = pager.querySelector<HTMLElement>("[data-content-filter-status]");
     const pageButtons = Array.from(pager.querySelectorAll<HTMLButtonElement>("[data-content-page]"));
+    const pagination = pager.querySelector<HTMLElement>("[data-content-pagination]");
     const previousButton = pager.querySelector<HTMLButtonElement>("[data-content-prev]");
     const nextButton = pager.querySelector<HTMLButtonElement>("[data-content-next]");
     const pageSize = Number(pager.dataset.pageSize ?? 6);
-    const pageCount = Math.ceil(items.length / pageSize);
+    const paginationEnabled = pager.dataset.contentPaginationEnabled !== "false";
+    let activeFilter = "all";
     let currentPage = 0;
 
     const showPage = (requestedPage: number, moveToGrid = false) => {
-      currentPage = Math.min(Math.max(requestedPage, 0), pageCount - 1);
-      items.forEach((item, index) => {
-        item.hidden = Math.floor(index / pageSize) !== currentPage;
+      pager.dispatchEvent(new CustomEvent("content-page-change"));
+      const filteredItems = items.filter((item) => activeFilter === "all" || item.dataset.contentFormat === activeFilter);
+      const pageCount = Math.ceil(filteredItems.length / pageSize);
+      currentPage = pageCount > 0 ? Math.min(Math.max(requestedPage, 0), pageCount - 1) : 0;
+      items.forEach((item) => { item.hidden = true; });
+      filteredItems.forEach((item, index) => {
+        item.hidden = paginationEnabled ? Math.floor(index / pageSize) !== currentPage : index >= pageSize;
       });
       pageButtons.forEach((button, index) => {
+        button.hidden = !paginationEnabled || index >= pageCount;
         if (index === currentPage) button.setAttribute("aria-current", "page");
         else button.removeAttribute("aria-current");
       });
-      if (previousButton) previousButton.disabled = currentPage === 0;
-      if (nextButton) nextButton.disabled = currentPage === pageCount - 1;
+      if (pagination) pagination.hidden = !paginationEnabled || pageCount <= 1;
+      if (previousButton) previousButton.disabled = pageCount === 0 || currentPage === 0;
+      if (nextButton) nextButton.disabled = pageCount === 0 || currentPage === pageCount - 1;
+      if (filterEmpty) filterEmpty.hidden = filteredItems.length > 0;
+      if (filterEmptyHeading) filterEmptyHeading.textContent = activeFilter === "short" ? "공개할 Shorts를 준비하고 있습니다." : activeFilter === "video" ? "공개할 일반 영상을 준비하고 있습니다." : "공개할 유튜브 콘텐츠를 준비하고 있습니다.";
+      if (filterStatus) {
+        const label = activeFilter === "short" ? "Shorts" : activeFilter === "video" ? "일반 영상" : "전체";
+        filterStatus.textContent = `${label} ${filteredItems.length}건 중 ${Math.min(filteredItems.length, pageSize)}건을 표시합니다.`;
+      }
       if (moveToGrid) pager.querySelector(".content-card-grid")?.scrollIntoView({ behavior: "smooth", block: "start" });
     };
 
+    filterButtons.forEach((button) => button.addEventListener("click", () => {
+      activeFilter = button.dataset.contentFilter ?? "all";
+      filterButtons.forEach((candidate) => candidate.setAttribute("aria-pressed", String(candidate === button)));
+      showPage(0);
+    }));
     pageButtons.forEach((button, index) => button.addEventListener("click", () => showPage(index, true)));
     previousButton?.addEventListener("click", () => showPage(currentPage - 1, true));
     nextButton?.addEventListener("click", () => showPage(currentPage + 1, true));
     pager.dataset.paginationReady = "true";
     showPage(0);
   });
+
+  const canHoverPreview = window.matchMedia("(hover: hover) and (pointer: fine)").matches
+    && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  if (canHoverPreview) {
+    let stopActivePreview: (() => void) | null = null;
+    document.querySelectorAll<HTMLElement>("[data-content-pager][data-youtube-hover-preview='true']").forEach((pager) => {
+      if (pager.dataset.youtubePreviewReady === "true") return;
+      pager.querySelectorAll<HTMLElement>("[data-youtube-preview-media='true']").forEach((media) => {
+        const previewTrigger = media.closest<HTMLElement>("[data-content-item]");
+        const previewFrame = media.querySelector<HTMLElement>("[data-youtube-preview-frame]");
+        const videoId = media.dataset.youtubeVideoId;
+        const title = media.dataset.youtubePreviewTitle ?? "YouTube 영상";
+        let previewTimer: number | null = null;
+
+        const stopPreview = () => {
+          if (previewTimer !== null) window.clearTimeout(previewTimer);
+          previewTimer = null;
+          previewFrame?.replaceChildren();
+          if (previewFrame) previewFrame.hidden = true;
+          media.classList.remove("is-previewing");
+          if (stopActivePreview === stopPreview) stopActivePreview = null;
+        };
+
+        previewTrigger?.addEventListener("mouseenter", () => {
+          if (!previewFrame || !videoId) return;
+          previewTimer = window.setTimeout(() => {
+            stopActivePreview?.();
+            const embedUrl = new URL(`https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}`);
+            embedUrl.searchParams.set("autoplay", "1");
+            embedUrl.searchParams.set("mute", "1");
+            embedUrl.searchParams.set("playsinline", "1");
+            embedUrl.searchParams.set("controls", "0");
+            embedUrl.searchParams.set("rel", "0");
+            embedUrl.searchParams.set("origin", window.location.origin);
+            const iframe = document.createElement("iframe");
+            iframe.src = embedUrl.toString();
+            iframe.title = `${title} 음소거 미리보기`;
+            iframe.allow = "autoplay; encrypted-media; picture-in-picture";
+            iframe.referrerPolicy = "strict-origin-when-cross-origin";
+            iframe.tabIndex = -1;
+            previewFrame.replaceChildren(iframe);
+            previewFrame.hidden = false;
+            media.classList.add("is-previewing");
+            stopActivePreview = stopPreview;
+          }, 300);
+        });
+        previewTrigger?.addEventListener("mouseleave", stopPreview);
+        pager.addEventListener("content-page-change", stopPreview);
+      });
+      pager.dataset.youtubePreviewReady = "true";
+    });
+    window.addEventListener("blur", () => stopActivePreview?.());
+    document.addEventListener("visibilitychange", () => { if (document.hidden) stopActivePreview?.(); });
+  }
 </script>

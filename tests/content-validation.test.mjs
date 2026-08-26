@@ -228,8 +228,20 @@ test("블로그와 유튜브 콘텐츠는 공개 상태와 자체 이미지 경�
     url: "https://blog.naver.com/p5468300/123",
     publishedAt: "2026-08-25",
     thumbnail: { src: "/images/content/blog-post-1.webp", alt: "블로그 글 썸네일" },
+  }, {
+    id: "youtube-short-1",
+    type: "youtube",
+    youtubeFormat: "short",
+    status: "published",
+    title: "대전 동구 Shorts",
+    summary: "공개 승인 요약",
+    url: "https://www.youtube.com/watch?v=I05mw0iCFnM",
+    publishedAt: "2026-08-25",
+    thumbnail: null,
   }];
   assert.deepEqual(validateExternalLinks(links), []);
+  assert.match(validateExternalLinks([{ ...links[1], youtubeFormat: "clip" }]).join("\n"), /video 또는 short/);
+  assert.match(validateExternalLinks([{ ...links[0], youtubeFormat: "video" }]).join("\n"), /블로그 콘텐츠/);
 });
 
 test("홈 대표·사무소·지역 소개 문구와 이미지를 검증한다", () => {

@@ -75,15 +75,41 @@
 
 ## 블로그·유튜브 카드
 
-`src/data/external-links.json`의 각 항목은 `id`, `type`, `status`, `title`, `summary`, `url`, `publishedAt`, `thumbnail`을 사용합니다.
+`src/data/external-links.json`의 각 항목은 `id`, `type`, `status`, `title`, `summary`, `url`, `publishedAt`, `thumbnail`을 사용합니다. YouTube 항목은 `youtubeFormat`에 일반 영상은 `video`, Shorts는 `short`를 반드시 입력합니다. 블로그 항목에는 이 필드를 넣지 않습니다.
 
 - `status`가 `published`인 카드만 공개합니다.
 - 블로그는 `blog.naver.com`, 유튜브는 `youtube.com` 또는 `youtu.be`의 HTTPS 주소만 허용합니다.
 - 관리자 화면의 `정보 불러오기`는 제목과 썸네일을 보조로 가져옵니다. 결과를 사람이 확인한 뒤 저장해야 합니다.
 - 썸네일을 불러오지 못하면 직접 올리고 의미 있는 사진 설명을 입력합니다.
 - 원문 전체를 복제하거나 권한 없는 이미지를 사용하지 않습니다.
-- 공개 카드는 게시일 최신순으로 정렬되며 블로그는 9개, 유튜브는 6개 단위로 페이지가 나뉩니다.
-- 현재 초기 데이터는 공식 네이버 블로그의 2024~2026년 공개 게시글 128건(2024년 41건, 2025년 34건, 2026년 53건)과 공식 유튜브 채널의 실제 영상 40건입니다. 새 글·영상은 관리자 화면의 분리된 카테고리에서 추가하면 게시일 기준 위치에 표시됩니다.
+- 공개 카드는 게시일 최신순으로 정렬됩니다. 블로그는 9개 단위로 페이지가 나뉩니다. 유튜브는 전체·일반 영상·Shorts 필터를 한 목록에서 전환하며 홈은 선택 형식의 최신 6개만, `/youtube/`는 선택 형식을 6개 단위로 나눕니다. 필터를 바꾸면 1페이지로 돌아갑니다.
+- 유튜브 카드는 hover 가능한 마우스·트랙패드가 카드 전체에 0.3초 머물 때 `youtube-nocookie.com`의 음소거 미리보기 한 개만 지연 로드합니다. 모바일과 움직임 최소화 환경에서는 자동 미리보기를 실행하지 않으며, 클릭하면 원문으로 이동합니다.
+- 현재 초기 데이터는 공식 네이버 블로그의 2024~2026년 공개 게시글 128건(2024년 41건, 2025년 34건, 2026년 53건)과 `youtubeFormat: video`로 분류한 공식 유튜브 영상 40건입니다. 새 글·영상은 관리자 화면에서 직접 추가하거나 아래 수동 동기화 워크플로로 추가할 수 있습니다.
+
+### 공식 RSS 수동 동기화
+
+1차 운영 단계에서는 예약 실행 없이 GitHub Actions에서 사람이 시작합니다.
+
+1. GitHub 저장소의 `Settings` → `Secrets and variables` → `Actions` → `Variables`에서 Repository Variable을 추가합니다.
+   - Name: `YOUTUBE_CHANNEL_ID`
+   - Value: `UCuOZDnM5vxOZELDgu-y-hNg`
+   - 이 값은 공개 channelId이므로 Secret이나 `YOUTUBE_API_KEY`를 만들지 않습니다.
+2. `Actions` → `Sync external content` → `Run workflow`에서 `master` 브랜치를 선택해 실행합니다.
+3. 실행 로그의 신규 블로그·YouTube 건수, 생성 썸네일 수, 테스트·검사·빌드 결과와 커밋 SHA를 확인합니다.
+4. 콘텐츠 커밋 뒤 Cloudflare의 새 Production 배포와 `https://leaderscityhappy.com/blog/`, `https://leaderscityhappy.com/youtube/` 반영을 확인합니다.
+
+동기화는 공식 네이버 블로그 ID `p5468300`의 RSS와 위 YouTube 채널의 공식 Atom에서 보이는 신규 항목만 `published`로 추가합니다. YouTube alternate URL이 `/shorts/`이면 `youtubeFormat: short`, 나머지 허용 영상 URL은 `video`로 저장하고 공개 화면에서 두 목록을 분리합니다. 기존 항목의 요약·상태·썸네일을 덮어쓰거나 피드에서 사라진 항목을 삭제하지 않으며, 저장 URL은 공식 watch URL로 정규화합니다. RSS는 최근 항목 감지용이므로 전체 과거 글·영상 복원을 보장하지 않습니다.
+
+썸네일만 받지 못하면 해당 항목을 `thumbnail: null`로 추가하고 기존 화면의 대체 표시를 사용합니다. 출처·채널·원본 ID·XML·최종 콘텐츠 검증이 실패하면 JSON과 이미지를 커밋하지 않습니다. 콘텐츠 변경이 없으면 정상 종료하고, 45일 이상 자동화 활동이 없을 때만 `.github/automation-health.json`을 별도 커밋으로 갱신합니다.
+
+로컬에서는 다음처럼 작업트리를 바꾸지 않는 실제 피드 검사를 할 수 있습니다.
+
+```powershell
+$env:YOUTUBE_CHANNEL_ID = "UCuOZDnM5vxOZELDgu-y-hNg"
+npm run sync:external:dry-run
+```
+
+첫 수동 실행의 실제 신규 항목 커밋과 Cloudflare Production 반영, branch protection/ruleset 호환이 확인되기 전에는 schedule을 추가하지 않습니다.
 
 ## 첫 화면과 지역·단지 설명
 

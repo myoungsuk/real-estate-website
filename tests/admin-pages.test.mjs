@@ -23,7 +23,7 @@ test("공개 robots와 sitemap에서 관리자 경로를 제외한다", async ()
   assert.match(config, /startsWith\("\/admin\/"\)/);
 });
 
-test("공개 사이트는 승인된 공식 로고를 헤더·푸터·공유 이미지에 사용한다", async () => {
+test("공개 사이트는 승인된 공식 로고와 메인 전용 공유 이미지를 사용한다", async () => {
   const [header, footer, layout, home, adminLayout] = await Promise.all([
     readSource("src/components/SiteHeader.astro"),
     readSource("src/components/SiteFooter.astro"),
@@ -32,15 +32,68 @@ test("공개 사이트는 승인된 공식 로고를 헤더·푸터·공유 이�
     readSource("src/layouts/AdminLayout.astro"),
     access(new URL("../public/images/brand/leaders-city-happy-logo.png", import.meta.url)),
     access(new URL("../public/images/brand/leaders-city-happy-logo.webp", import.meta.url)),
+    access(new URL("../public/images/brand/og-home.png", import.meta.url)),
   ]);
   assert.match(header, /leaders-city-happy-logo\.webp/);
   assert.match(footer, /leaders-city-happy-logo\.webp/);
   assert.match(layout, /property="og:image"/);
   assert.match(layout, /leaders-city-happy-logo\.png/);
+  assert.match(layout, /shareImageWidth = 1402/);
+  assert.match(layout, /shareImageHeight = 1122/);
+  assert.match(home, /shareImage="\/images\/brand\/og-home\.png"/);
+  assert.match(home, /shareImageWidth=\{1200\}/);
+  assert.match(home, /shareImageHeight=\{630\}/);
   assert.match(home, /logo:[^]*leaders-city-happy-logo\.png/);
   assert.match(adminLayout, /leaders-city-happy-logo\.webp/);
   assert.match(adminLayout, /office\.brandName/);
   assert.match(adminLayout, /공인중개사사무소 · 관리자 시스템/);
+});
+
+test("메인페이지 선택 개선은 기존 데이터와 URL을 재사용한다", async () => {
+  const [home, rawHomeContent, ogImage] = await Promise.all([
+    readSource("src/pages/index.astro"),
+    readSource("src/data/home-content.json"),
+    readFile(new URL("../public/images/brand/og-home.png", import.meta.url)),
+  ]);
+  const homeContent = JSON.parse(rawHomeContent);
+
+  assert.equal(homeContent.broker.headline, "대전 동구 매물, 직접 확인하고 비교해서 안내합니다.");
+  assert.match(homeContent.broker.lead, /리더스시티 4·5블록[^]*매매·전세·월세/);
+  assert.match(home, /href="\/properties\/">현재 매물 \{naverListings\.length\}건 보기/);
+  assert.match(home, /\/properties\/\?trade=sale/);
+  assert.match(home, /\/properties\/\?trade=jeonse/);
+  assert.match(home, /\/properties\/\?trade=monthly-rent/);
+  assert.match(home, /slug === "leaders-city-4"/);
+  assert.match(home, /slug === "leaders-city-5"/);
+  assert.doesNotMatch(home, /office-specialist/);
+  assert.match(home, /href="\/office\/">사무소 자세히 보기/);
+  assert.match(home, /href="\/location\/">오시는 길/);
+
+  const listingsIndex = home.indexOf('id="listings"');
+  const leadersCityIndex = home.indexOf('id="leaders-city"');
+  const blogIndex = home.indexOf('id="blog"');
+  const youtubeIndex = home.indexOf('id="youtube"');
+  assert.ok(listingsIndex < leadersCityIndex);
+  assert.ok(leadersCityIndex < blogIndex);
+  assert.ok(blogIndex < youtubeIndex);
+
+  assert.equal(ogImage.toString("ascii", 1, 4), "PNG");
+  assert.equal(ogImage.readUInt32BE(16), 1200);
+  assert.equal(ogImage.readUInt32BE(20), 630);
+});
+
+test("단지 목록 카드는 전체 링크와 hover·focus 피드백을 제공한다", async () => {
+  const [complexes, styles] = await Promise.all([
+    readSource("src/pages/complexes/index.astro"),
+    readSource("src/styles/global.css"),
+  ]);
+
+  assert.match(complexes, /<a class="complex-index-card" href=\{`\/complexes\/\$\{complex\.slug\}\/`\}>/);
+  assert.match(styles, /\.complex-index-card \{[^}]*width: 100%[^}]*min-width: 0/);
+  assert.match(styles, /\.complex-index-card:hover \{[^}]*translateY\(-8px\)[^}]*box-shadow/);
+  assert.match(styles, /\.complex-index-card:hover > img \{[^}]*scale\(1\.045\)/);
+  assert.match(styles, /\.complex-index-card:focus-visible \{[^}]*outline-offset: 6px[^}]*translateY\(-6px\)/);
+  assert.match(styles, /\.complex-index-card:active \{[^}]*scale\(0\.99\)/);
 });
 
 test("관리자 화면은 네이버 매물 관리와 GitHub 콘텐츠 저장 범위를 구분한다", async () => {
@@ -73,6 +126,7 @@ test("관리자 편집 화면은 네이버 매물 안내와 자체 콘텐츠 편
   assert.match(externalEditor, /thumbnailFile/);
   assert.match(externalEditor, /data-external-category="blog"/);
   assert.match(externalEditor, /data-external-category="youtube"/);
+  assert.match(externalEditor, /name="youtubeFormat"/);
   assert.match(externalEditor, /data-external-search/);
   assert.match(complexEditor, /writeAdminContent\("complexes"/);
   assert.match(complexEditor, /uploadAdminImage\("area"/);
@@ -86,12 +140,14 @@ test("관리자 편집 화면은 네이버 매물 안내와 자체 콘텐츠 편
   assert.match(complexEditor, /name="sources"/);
 });
 
-test("외부 콘텐츠는 블로그와 유튜브를 별도 페이지에서 각각 나눈다", async () => {
-  const [component, home, blog, youtube, rawData] = await Promise.all([
+test("외부 콘텐츠는 블로그와 유튜브를 나누고 유튜브는 한 목록에서 형식을 전환한다", async () => {
+  const [component, home, blog, youtube, privacy, headers, rawData] = await Promise.all([
     readSource("src/components/ExternalContentList.astro"),
     readSource("src/pages/index.astro"),
     readSource("src/pages/blog.astro"),
     readSource("src/pages/youtube.astro"),
+    readSource("src/pages/privacy.astro"),
+    readSource("public/_headers"),
     readSource("src/data/external-links.json"),
   ]);
   const items = JSON.parse(rawData);
@@ -105,12 +161,25 @@ test("외부 콘텐츠는 블로그와 유튜브를 별도 페이지에서 각�
   );
   assert.ok(blogs.every((item) => item.publishedAt >= "2024-01-01" && /logNo=/.test(item.url)));
   assert.ok(videos.every((item) => /youtube\.com\/watch\?v=/.test(item.url)));
+  assert.ok(videos.every((item) => item.youtubeFormat === "video"));
   assert.match(component, /data-content-pager/);
   assert.match(component, /data-content-page/);
+  assert.match(component, /data-content-filter="all"/);
+  assert.match(component, /data-content-filter="video"/);
+  assert.match(component, /data-content-filter="short"/);
+  assert.match(component, /showPage\(0\)/);
+  assert.match(component, /\(hover: hover\) and \(pointer: fine\)/);
+  assert.match(component, /prefers-reduced-motion: reduce/);
+  assert.match(component, /media\.closest<HTMLElement>\("\[data-content-item\]"\)/);
+  assert.match(component, /youtube-nocookie\.com\/embed/);
+  assert.match(component, /}, 300\)/);
   assert.match(home, /publishedBlogContents[^]*pageSize=\{9\}/);
-  assert.match(home, /publishedYoutubeContents[^]*pageSize=\{6\}/);
+  assert.match(home, /publishedYoutubeContents[^]*pageSize=\{6\}[^]*youtubeFilters[^]*paginate=\{false\}[^]*hoverPreview/);
   assert.match(blog, /publishedBlogContents[^]*pageSize=\{9\}/);
-  assert.match(youtube, /publishedYoutubeContents[^]*pageSize=\{6\}/);
+  assert.match(youtube, /publishedYoutubeContents[^]*pageSize=\{6\}[^]*youtubeFilters[^]*hoverPreview/);
+  assert.doesNotMatch(`${home}\n${youtube}`, /youtube-format-group/);
+  assert.match(headers, /frame-src https:\/\/www\.youtube-nocookie\.com/);
+  assert.match(privacy, /youtube-nocookie\.com/);
   assert.doesNotMatch(home, /\.slice\(0, 6\)/);
 });
 
