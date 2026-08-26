@@ -75,12 +75,12 @@
 │  ├─ pages/           Astro 정적 페이지와 robots/llms 엔드포인트
 │  └─ styles/          전역 반응형 스타일
 ├─ public/             공개 정적 파일과 Cloudflare 헤더
-├─ scripts/            빌드 전 콘텐츠 검증
+├─ scripts/            빌드 전 콘텐츠 검증·외부 RSS 동기화
 ├─ tests/              Node 단위 테스트
 ├─ worker/             동일 Worker의 Access 검증·관리 API
 ├─ docs/operations/    콘텐츠·배포·검색 등록 절차
 ├─ docs/adr/           승인된 아키텍처 결정
-├─ .github/workflows/  GitHub CI
+├─ .github/workflows/  GitHub CI·수동 외부 콘텐츠 동기화
 ├─ astro.config.mjs
 └─ wrangler.jsonc
 ```
@@ -97,11 +97,13 @@ npm run dev
 npm test
 npm run check
 npm run build
+npm run sync:external:dry-run
 ```
 
 - `npm run check`: 공개 콘텐츠 검증 후 Astro·TypeScript 검사
 - `npm run build`: 검사 후 `dist/` 정적 산출물 생성
 - `npm run deploy`: 검사·빌드 후 Wrangler로 Cloudflare 배포
+- `npm run sync:external:dry-run`: `YOUTUBE_CHANNEL_ID`로 공식 Naver RSS·YouTube Atom을 조회하고 예상 변경을 파일 수정 없이 검증
 - 실제 검색 공개 빌드: `PUBLIC_SITE_URL`과 `PUBLIC_ALLOW_INDEXING=true`를 함께 설정
 
 `PUBLIC_ALLOW_INDEXING=true`인데 `PUBLIC_SITE_URL`이 없으면 빌드를 실패시킨다. Preview와 로컬 기본값은 `noindex`다.
@@ -114,15 +116,16 @@ npm run build
 - `src/data/naver-listings.json` → `src/lib/naver-listings.ts` → 사진 없는 네이버 공개 매물 카드·홈 6건 단위 페이징·거래/유형 필터·기본/가격 낮은·높은/최근 확인/면적 작은·큰 정렬·외부 상세 링크
 - `src/data/complexes-overview.json` → 리더스시티 4·5블록 전체 소개·숫자 카드·비교표·공통 현장 확인사항·관련 콘텐츠와 출처
 - `src/data/complexes.json` → 대전 동구 주요 단지의 사진·기본 사실·면적별 세대 구성·공급 구성·생활환경·시설 확인 상태·FAQ·관련 콘텐츠·복수 출처와 목록·상세 정적 생성
-- `src/data/external-links.json` → 2024~2026년 공식 블로그 128건과 공식 유튜브 영상 40건의 원문 링크·자체 썸네일·최신순 카드
+- 공식 Naver RSS·YouTube Atom → `scripts/sync-external-content.mjs` → `src/data/external-links.json` 신규 `published` 항목과 자체 WebP 썸네일. YouTube alternate URL의 `/shorts/`는 `youtubeFormat: short`, 그 밖의 개별 영상은 `video`로 분류하며 기존 항목은 append-only로 보존
+- `src/data/external-links.json` → 2024~2026년 공식 블로그 128건과 `youtubeFormat: video`인 기존 공식 유튜브 영상 40건을 기준으로 누적되는 원문 링크·자체 썸네일·최신순 카드
 - `src/layouts/BaseLayout.astro` → 페이지별 title, description, canonical, robots, JSON-LD
 - `src/pages/robots.txt.ts`, `llms.txt.ts`, sitemap integration → 검색 로봇 안내
 - `/admin/` → 관리자 대시보드와 관리 API 연결 상태
 - `/admin/listings/`, `/admin/listings/editor/` → 네이버 공개 매물 현황·검색·유형 필터와 네이버 매물 관리 화면 연결. 자체 매물 등록·수정 폼은 제공하지 않는다.
-- `/blog/`, `/youtube/` → 지역 콘텐츠를 원문 종류별로 분리한 공개 목록과 페이지 탐색
+- `/blog/`, `/youtube/` → 지역 콘텐츠를 원문 종류별로 분리하고, 유튜브는 `전체·일반 영상·Shorts` 필터를 한 목록에서 전환하며 독립 페이지에서 6개 단위로 탐색
 - `/faq/` → 승인된 FAQ와 서버에 저장하지 않는 문자 상담 작성 화면
 - `/admin/content/` → 홈 대표·사무소·리더스시티 설명과 대표 사진
-- `/admin/external-links/` → 네이버 블로그·유튜브를 분리한 관리 카테고리, 카테고리별 건수·검색·링크 미리보기·썸네일
+- `/admin/external-links/` → 네이버 블로그·유튜브를 분리한 관리 카테고리, 유튜브 일반 영상·Shorts 형식 선택, 카테고리별 건수·검색·링크 미리보기·썸네일
 - `/admin/complexes/` → 리더스시티 전체 비교 콘텐츠와 대전 동구 지역·단지 소개·사진·면적·공급·생활환경·시설 상태·FAQ·관련 콘텐츠·복수 출처·확인일
 - `/api/admin/*` → `worker/index.mjs` → Access JWT·허용 이메일·Origin·CSRF·콘텐츠·SHA 검증 → 허용 GitHub JSON·WebP 저장
 
@@ -153,8 +156,9 @@ DB와 TR 흐름은 없다. 관리 API의 콘텐츠 쓰기는 `ADMIN_WRITE_ENABLE
 - 사진·후기·대표 약력·단지 수치는 출처와 공개 승인을 확인한다.
 - 승인 콘텐츠가 없으면 가짜 샘플을 만들지 않고 빈 상태 또는 준비 중으로 표시한다.
 - 외부 글·영상의 원문이나 권한 없는 이미지를 복제하지 않고 짧은 설명과 원문 링크를 쓴다.
-- 외부 콘텐츠는 고유 ID·`draft|published`·게시일·자체 저장 썸네일을 사용하고, 네이버 블로그·유튜브 허용 도메인만 등록한다.
-- 홈과 지역 콘텐츠는 최신순으로 정렬하고 블로그는 페이지당 9개, 유튜브는 페이지당 6개를 데스크톱 3열·태블릿 2열·모바일 1열로 표시한다.
+- 외부 콘텐츠는 고유 ID·`draft|published`·게시일·자체 저장 썸네일을 사용하고, 네이버 블로그·유튜브 허용 도메인만 등록한다. YouTube 항목은 `youtubeFormat: video|short`를 반드시 기록한다.
+- 공식 RSS 동기화는 네이버 블로그 ID `p5468300`과 Repository Variable `YOUTUBE_CHANNEL_ID`의 고정 채널만 허용하고 신규 항목만 `published`로 추가한다. 기존 수동 수정값과 피드에 없는 항목은 덮어쓰거나 삭제하지 않는다.
+- 홈과 지역 콘텐츠는 최신순으로 정렬하고 블로그는 페이지당 9개를 표시한다. 유튜브는 `전체·일반 영상·Shorts` 필터를 한 목록에서 제공하고 홈은 선택 형식의 최신 6개만, `/youtube/`는 선택 형식을 페이지당 6개씩 데스크톱 3열·태블릿 2열·모바일 1열로 표시한다. 필터를 바꾸면 1페이지로 돌아간다.
 - 홈의 대표·사무소·리더스시티 설명은 `home-content.json`에서 관리한다.
 
 ## 디자인·모바일·접근성
@@ -164,7 +168,7 @@ DB와 TR 흐름은 없다. 관리 API의 콘텐츠 쓰기는 `ADMIN_WRITE_ENABLE
 - 모바일 하단 전화·문자 CTA가 콘텐츠와 safe-area를 가리지 않게 한다.
 - 카카오톡 URL이 승인되기 전에는 버튼을 렌더링하지 않는다.
 - 키보드 탐색, 포커스 표시, 건너뛰기 링크, 의미 있는 대체 텍스트를 보존한다.
-- 색상만으로 상태를 전달하지 않고 자동재생과 과도한 애니메이션을 사용하지 않는다.
+- 색상만으로 상태를 전달하지 않고 페이지 진입 직후 자동재생과 과도한 애니메이션을 사용하지 않는다. 유튜브 카드 미리보기는 hover 가능한 정밀 포인터가 카드 전체에 0.3초 머물 때만 음소거로 한 개를 지연 로드하며, 포인터가 카드에서 벗어나면 제거한다. 모바일과 `prefers-reduced-motion` 환경에서는 실행하지 않는다.
 - UI 변경 후 360·390·430·768·1280px과 실제 Android Chrome·iPhone Safari를 구분해 검증 결과를 보고한다.
 
 ## SEO·검색 노출
@@ -186,6 +190,8 @@ DB와 TR 흐름은 없다. 관리 API의 콘텐츠 쓰기는 `ADMIN_WRITE_ENABLE
 - Access 정책은 정확한 허용 이메일 2개와 Email OTP를 사용한다.
 - `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD`, `ADMIN_ALLOWED_EMAILS`는 Production 환경에 등록하고 실제 값을 저장소에 넣지 않는다.
 - GitHub Actions CI는 `npm ci`, `npm test`, `npm run build`로 검증만 수행하며 Cloudflare 배포는 실행하지 않는다.
+- `.github/workflows/sync-external-content.yml`은 별도 `workflow_dispatch` 전용 워크플로이며 이 파일만 `contents: write`를 사용한다. 수동 실행과 Production 반영 검증 전에는 schedule을 추가하지 않는다.
+- 동기화 워크플로는 허용된 콘텐츠·썸네일 경로 또는 45일 keepalive 상태 파일만 분리 커밋하고, 같은 실행에서 테스트·콘텐츠 검사·빌드를 다시 수행한다.
 - Cloudflare Workers Builds는 GitHub `myoungsuk/real-estate-website`의 `master`에 연결되어 있으며, `master` 푸시 시 Production을 자동 빌드·배포한다.
 - Production 빌드는 `PUBLIC_SITE_URL=https://leaderscityhappy.com`, `PUBLIC_ALLOW_INDEXING=true`를 사용한다.
 - `master` 푸시 후에는 Cloudflare 새 배포 버전과 운영 URL 반영을 먼저 확인한다. 자동 배포가 진행 중인 동안 중복 수동 배포를 실행하지 않는다.
@@ -197,6 +203,7 @@ DB와 TR 흐름은 없다. 관리 API의 콘텐츠 쓰기는 `ADMIN_WRITE_ENABLE
 
 - C/C++식 조건부 컴파일 매크로는 없다.
 - 공개 빌드 환경 분기는 `PUBLIC_SITE_URL`, `PUBLIC_ALLOW_INDEXING`을 사용한다.
+- 외부 콘텐츠 동기화는 공개 설정 `YOUTUBE_CHANNEL_ID`를 GitHub Actions Repository Variable로 사용한다. API Key나 Secret으로 취급하지 않는다.
 - 관리 API 환경은 `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD`, `ADMIN_ALLOWED_EMAILS`, `ADMIN_WRITE_ENABLED`, `ADMIN_CSRF_SECRET`, `GITHUB_CONTENTS_TOKEN`, `GITHUB_REPOSITORY`, `GITHUB_BRANCH`를 사용한다.
 - GitHub 토큰은 Fine-grained token으로 저장소 한 개의 Contents Read/Write만 허용하고 Cloudflare Secret에만 둔다.
 - 소스와 콘텐츠는 UTF-8, LF, 2칸 들여쓰기를 따른다.

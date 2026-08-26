@@ -23,6 +23,15 @@ npm run build
 
 빌드 결과는 `dist/`에 생성됩니다. `npm run check`는 Astro·TypeScript 검사와 공개 콘텐츠 검증을 함께 실행합니다.
 
+공식 네이버 블로그 RSS와 YouTube Atom의 신규 항목은 별도 수동 워크플로로 동기화합니다. YouTube는 Atom alternate URL을 기준으로 일반 영상과 Shorts를 구분하며, 로컬 dry-run은 공개 YouTube channelId를 설정한 뒤 실행하고 파일을 바꾸지 않습니다.
+
+```powershell
+$env:YOUTUBE_CHANNEL_ID = "UCuOZDnM5vxOZELDgu-y-hNg"
+npm run sync:external:dry-run
+```
+
+GitHub Actions의 `Sync external content`는 1차 운영 검증 단계에서 `workflow_dispatch`만 지원합니다. Repository Variable `YOUTUBE_CHANNEL_ID`를 등록한 뒤 `master`에서 수동 실행하며, 실제 신규 콘텐츠 커밋과 Cloudflare Production 반영이 확인되기 전에는 예약 실행을 추가하지 않습니다. 자세한 절차는 `docs/operations/CONTENT_GUIDE.md`를 확인합니다.
+
 ## 운영자가 수정하는 파일
 
 | 파일 | 용도 |
@@ -33,7 +42,7 @@ npm run build
 | `src/data/naver-listings.json` | 네이버에 공개된 개별 매물번호·동·광고 층수·가격·면적과 상세 링크 |
 | `src/data/complexes-overview.json` | 리더스시티 4·5블록 전체 소개·숫자 카드·비교표·공통 확인사항·관련 콘텐츠 |
 | `src/data/complexes.json` | 대전 동구 주요 단지 사진·기본 사실·생활 특징·출처 |
-| `src/data/external-links.json` | 공식 블로그·유튜브 전체 링크와 자체 저장 썸네일(최신순·블로그 9개·유튜브 6개 단위 페이지) |
+| `src/data/external-links.json` | 공식 블로그·유튜브 전체 링크와 RSS에서 검증된 신규 항목, 자체 저장 썸네일(최신순·블로그 9개·유튜브 6개 단위 페이지) |
 | `src/data/faq.json` | 승인된 FAQ |
 | `src/data/reviews.json` | 실제 여부와 공개 동의가 확인된 후기 |
 

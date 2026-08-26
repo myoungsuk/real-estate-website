@@ -8,11 +8,23 @@ interface Props {
   title: string;
   description: string;
   structuredData?: Record<string, unknown> | Record<string, unknown>[];
+  shareImage?: string;
+  shareImageAlt?: string;
+  shareImageWidth?: number;
+  shareImageHeight?: number;
 }
 
-const { title, description, structuredData } = Astro.props;
+const {
+  title,
+  description,
+  structuredData,
+  shareImage: shareImagePath = "/images/brand/leaders-city-happy-logo.png",
+  shareImageAlt = "리더스시티 행복한부동산 공인중개사사무소 로고",
+  shareImageWidth = 1402,
+  shareImageHeight = 1122,
+} = Astro.props;
 const canonical = Astro.site ? new URL(Astro.url.pathname, Astro.site) : undefined;
-const shareImage = Astro.site ? new URL("/images/brand/leaders-city-happy-logo.png", Astro.site) : undefined;
+const shareImage = Astro.site ? new URL(shareImagePath, Astro.site) : undefined;
 const allowIndexing = import.meta.env.PUBLIC_ALLOW_INDEXING === "true";
 ---
 
@@ -30,11 +42,12 @@ const allowIndexing = import.meta.env.PUBLIC_ALLOW_INDEXING === "true";
     <meta property="og:description" content={description} />
     {canonical && <meta property="og:url" content={canonical.toString()} />}
     {shareImage && <meta property="og:image" content={shareImage.toString()} />}
-    {shareImage && <meta property="og:image:width" content="1402" />}
-    {shareImage && <meta property="og:image:height" content="1122" />}
-    {shareImage && <meta property="og:image:alt" content="리더스시티 행복한부동산 공인중개사사무소 로고" />}
+    {shareImage && <meta property="og:image:width" content={String(shareImageWidth)} />}
+    {shareImage && <meta property="og:image:height" content={String(shareImageHeight)} />}
+    {shareImage && <meta property="og:image:alt" content={shareImageAlt} />}
     <meta name="twitter:card" content="summary_large_image" />
     {shareImage && <meta name="twitter:image" content={shareImage.toString()} />}
+    {shareImage && <meta name="twitter:image:alt" content={shareImageAlt} />}
     {canonical && <link rel="canonical" href={canonical.toString()} />}
     <title>{title}</title>
     {structuredData && (
