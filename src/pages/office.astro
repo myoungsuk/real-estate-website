@@ -1,84 +1,161 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
-import PageIntro from "../components/PageIntro.astro";
 import ContactPanel from "../components/ContactPanel.astro";
-import { emailHref, formatOfficeHours, office } from "../lib/site";
+import { emailHref, formatOfficeHours, office, phoneHref, smsHref } from "../lib/site";
 
-const title = "사무소 소개 | 대전 동구 행복한부동산";
-const description = "대전 동구의 매물과 지역 정보를 직접 확인하고 판단 근거를 중심으로 상담하는 리더스시티행복한공인중개사사무소입니다.";
+const title = "리더스시티 행복한부동산 사무소 소개 | 대전 동구";
+const description = "리더스시티5블록 단지 내에 위치한 리더스시티행복한공인중개사사무소입니다. 백진옥 대표가 천동·신흥동을 포함한 대전 동구의 매매·전세·월세 정보를 확인하고 직접 상담합니다.";
 ---
 
 <BaseLayout {title} {description}>
-  <PageIntro eyebrow="OFFICE" title="사무소 소개" description="리더스시티5블록 단지 내 상가를 거점으로 백진옥 대표가 대전 동구 지역 상담을 직접 안내합니다." />
-  <section class="section">
-    <div class="shell office-story">
-      <figure class="representative-card">
+  <section class="office-hero" aria-labelledby="office-hero-heading">
+    <div class="shell office-hero__grid">
+      <div class="office-hero__copy">
+        <nav class="breadcrumbs" aria-label="현재 위치"><a href="/">홈</a><span aria-hidden="true">/</span><span aria-current="page">사무소 소개</span></nav>
+        <p class="eyebrow">LEADERS CITY · DAEJEON DONG-GU</p>
+        <h1 id="office-hero-heading">리더스시티 안에서<br />직접 보고 안내합니다.</h1>
+        <p>리더스시티5블록 단지 내 사무소에서 백진옥 대표 공인중개사가 천동·신흥동을 포함한 대전 동구의 매매·전세·월세 상담을 직접 안내합니다.</p>
+      </div>
+      <figure class="office-hero__portrait">
         <img
           src="/images/office/representative-baek-jinok.webp"
           alt="리더스시티 행복한부동산 백진옥 대표"
           width="900"
           height="900"
+          fetchpriority="high"
         />
         <figcaption><strong>백진옥 대표</strong><span>공인중개사 · 직접 상담</span></figcaption>
       </figure>
+      <dl class="office-hero__facts">
+        <div><dt>대표</dt><dd>{office.representative} 공인중개사</dd></div>
+        <div><dt>위치</dt><dd>리더스시티5블록 단지 내</dd></div>
+        <div><dt>상담</dt><dd>매매 · 전세 · 월세</dd></div>
+      </dl>
+      <div class="office-hero__actions">
+        <a class="button button--primary" href={phoneHref}>전화 상담</a>
+        <a class="button button--secondary" href={smsHref}>문자 문의</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section--soft office-trust" aria-labelledby="office-trust-heading">
+    <div class="shell">
+      <div class="office-section-heading">
+        <p class="eyebrow">WHY HAPPY REALTY</p>
+        <h2 id="office-trust-heading">가까이에서 보고,<br />확인한 정보로 안내합니다.</h2>
+      </div>
+      <div class="office-trust__grid">
+        <article>
+          <span>01</span>
+          <h3>리더스시티5블록 단지 내</h3>
+          <p>{office.address}에 위치해 단지와 주변 생활환경을 가까이에서 살펴보며 상담합니다.</p>
+        </article>
+        <article>
+          <span>02</span>
+          <h3>대표 공인중개사 직접 상담</h3>
+          <p>문의부터 매물 비교와 계약 전 확인까지 백진옥 대표가 직접 상담합니다.</p>
+        </article>
+        <article>
+          <span>03</span>
+          <h3>확인 시점을 함께 안내</h3>
+          <p>공개 매물과 지역 정보는 게시일 또는 확인일을 기준으로 안내하고, 실제 조건은 상담 과정에서 다시 확인합니다.</p>
+        </article>
+      </div>
+      <p class="office-trust__note">네이버에 공개된 동·호수와 매물 조건은 그대로 안내하고, 의뢰인 연락처 등 개인정보는 공개하지 않습니다.</p>
+    </div>
+  </section>
+
+  <section class="section office-profile" aria-labelledby="office-profile-heading">
+    <div class="shell office-profile__grid">
+      <div class="office-profile__lead">
+        <p class="eyebrow">REPRESENTATIVE</p>
+        <h2 id="office-profile-heading">충분히 비교하고<br />납득한 뒤 선택하세요.</h2>
+        <p>고객님의 조건과 선택을 먼저 생각하는 상담 원칙입니다.</p>
+      </div>
       <article class="office-message">
-        <p class="eyebrow">대표 인사말</p>
-        <h2>충분히 비교하고<br />납득한 뒤 선택하세요.</h2>
-        <div class="claim-strip claim-strip--office" aria-label="운영 현황">
-          <ul>
-            {office.publicClaims.items.map((claim) => <li><span>{claim.label}</span><strong>{claim.value}</strong></li>)}
-          </ul>
-        </div>
         {office.introduction.map((paragraph) => <p>{paragraph}</p>)}
+        <p class="office-message__signature"><strong>{office.representative} 대표</strong><span>{office.legalName}</span></p>
       </article>
     </div>
   </section>
-  <section class="section section--soft">
+
+  <section class="section section--navy office-process" aria-labelledby="office-process-heading">
     <div class="shell">
-      <div class="section-heading">
-        <div><p class="eyebrow">상담 원칙</p><h2>편안하지만 꼼꼼하게</h2></div>
-        <p>최신 정보와 전문성을 꾸준히 익히고, 고객님의 상황에 맞는 선택지를 이해하기 쉽게 설명합니다.</p>
+      <div class="office-section-heading office-section-heading--light">
+        <p class="eyebrow">CONSULTATION PROCESS</p>
+        <h2 id="office-process-heading">처음 문의부터 계약 전 확인까지<br />차근차근 비교합니다.</h2>
       </div>
-      <div class="three-column">
-        <article class="info-card"><span>01</span><h3>동구 현장에 가까운 안내</h3><p>천동 사무소를 거점으로 대전 동구의 시세 변화와 동네 분위기, 매물 정보를 가까이에서 확인합니다.</p></article>
-        <article class="info-card"><span>02</span><h3>충분한 비교</h3><p>가격·면적·입주 조건을 비교하고, 급하게 결정하도록 재촉하지 않습니다.</p></article>
-        <article class="info-card"><span>03</span><h3>공개 정보 안내</h3><p>네이버에 공개된 동·호수와 매물 조건은 그대로 안내하고, 의뢰인 연락처 등 개인정보는 공개하지 않습니다.</p></article>
-      </div>
+      <ol class="office-process__list">
+        <li><span>01</span><h3>원하는 조건 확인</h3><p>찾는 지역, 거래유형, 예산, 면적, 입주시기 등 우선순위를 먼저 확인합니다.</p></li>
+        <li><span>02</span><h3>선택지 비교</h3><p>가격과 면적, 입주 조건 등 공개된 정보를 기준으로 비교할 수 있는 선택지를 함께 살펴봅니다.</p></li>
+        <li><span>03</span><h3>현장과 조건 확인</h3><p>관심 있는 매물과 단지에서 실제 확인이 필요한 부분을 구분하고 상담 시점의 조건을 다시 확인합니다.</p></li>
+        <li><span>04</span><h3>계약 전 재확인</h3><p>최종 선택 전에 가격과 일정 등 중요한 조건을 한 번 더 확인합니다.</p></li>
+        <li><span>05</span><h3>필요한 내용 안내</h3><p>계약 과정에서 고객이 확인해야 할 사항을 이해하기 쉽게 안내합니다.</p></li>
+      </ol>
     </div>
   </section>
-  <section class="section" aria-labelledby="office-gallery-heading">
+
+  <section class="section section--soft office-activity" aria-labelledby="office-activity-heading">
     <div class="shell">
-      <div class="section-heading">
-        <div><p class="eyebrow">OFFICE PHOTO</p><h2 id="office-gallery-heading">편하게 상담받는 공간</h2></div>
-        <p>단지 자료와 지역 지도를 함께 보며 조건을 차근차근 비교할 수 있습니다.</p>
+      <div class="office-section-heading">
+        <p class="eyebrow">RECENT ACTIVITY</p>
+        <h2 id="office-activity-heading">최근 확인한 매물과<br />지역 이야기를 살펴보세요.</h2>
+        <p>별도 홍보 문구 대신 현재 공개된 매물과 지역 자료를 직접 확인할 수 있습니다.</p>
       </div>
-      <div class="office-gallery">
+      <nav class="office-activity__grid" aria-label="최근 매물과 지역 정보">
+        <a href="/properties/"><span>PROPERTY</span><strong>최근 매물 보기</strong><p>현재 공개 중인 매매·전세·월세 조건을 비교합니다.</p><b aria-hidden="true">→</b></a>
+        <a href="/complexes/"><span>COMPLEX</span><strong>리더스시티 단지정보</strong><p>4·5블록과 대전 동구 주요 단지 자료를 확인합니다.</p><b aria-hidden="true">→</b></a>
+        <a href="/blog/"><span>LOCAL CONTENT</span><strong>지역 콘텐츠 보기</strong><p>천동·신흥동과 리더스시티의 최근 이야기를 살펴봅니다.</p><b aria-hidden="true">→</b></a>
+      </nav>
+    </div>
+  </section>
+
+  <section class="section office-gallery-section" aria-labelledby="office-gallery-heading">
+    <div class="shell">
+      <div class="office-section-heading">
+        <p class="eyebrow">OFFICE</p>
+        <h2 id="office-gallery-heading">리더스시티5블록 안에서<br />편하게 상담받으세요.</h2>
+        <p>지역 지도와 단지 자료를 함께 보며 조건을 하나씩 비교할 수 있는 상담 공간입니다.</p>
+      </div>
+      <div class="office-gallery office-gallery--featured">
         <figure><img src="/images/office/office-interior.webp" alt="리더스시티 행복한부동산 사무실 내부 전경" width="1200" height="900" loading="lazy" /><figcaption>사무실 내부 전경</figcaption></figure>
         <figure><img src="/images/office/office-consultation.webp" alt="지역 지도와 단지 자료가 준비된 상담 공간" width="1200" height="900" loading="lazy" /><figcaption>지역·단지 자료 상담 공간</figcaption></figure>
         <figure><img src="/images/office/office-meeting-room.webp" alt="햇빛이 드는 편안한 상담 테이블" width="1200" height="900" loading="lazy" /><figcaption>편안하게 비교하는 상담 테이블</figcaption></figure>
       </div>
     </div>
   </section>
-  <section class="section section--navy">
+
+  <section class="section section--navy office-facts-section" aria-labelledby="office-facts-heading">
     <div class="shell office-facts">
-      <div><p class="eyebrow">등록 정보</p><h2>확인 가능한 사무소 정보</h2></div>
-      <dl>
-        <div><dt>법적 상호</dt><dd>{office.legalName}</dd></div>
-        <div><dt>대표자</dt><dd>{office.representative}</dd></div>
-        <div><dt>등록번호</dt><dd>{office.registrationNumber}</dd></div>
-        <div><dt>사업자등록번호</dt><dd>{office.businessNumber}</dd></div>
-        <div><dt>소재지</dt><dd>{office.address}</dd></div>
-        <div><dt>연락처</dt><dd>{office.mobile}</dd></div>
-        <div><dt>이메일</dt><dd><a href={emailHref}>{office.email}</a></dd></div>
-        <div>
-          <dt>영업시간</dt>
-          <dd class="office-hours">
-            {office.hours.map((hour) => <span><b>{hour.label}</b> {formatOfficeHours(hour)}</span>)}
-          </dd>
-        </div>
-        <div><dt>주차</dt><dd>{office.parking}</dd></div>
-      </dl>
+      <div class="office-facts__intro">
+        <p class="eyebrow">OFFICIAL INFORMATION</p>
+        <h2 id="office-facts-heading">확인 가능한<br />사무소 정보</h2>
+        <p>공식 등록 내용과 현재 공개가 승인된 연락·운영 정보를 확인할 수 있습니다.</p>
+      </div>
+      <div class="office-facts__content">
+        <dl class="office-facts__primary">
+          <div><dt>대표자</dt><dd>{office.representative}</dd></div>
+          <div><dt>중개사무소 등록번호</dt><dd>{office.registrationNumber}</dd></div>
+          <div><dt>법적 상호</dt><dd>{office.legalName}</dd></div>
+          <div><dt>소재지</dt><dd>{office.address}</dd></div>
+        </dl>
+        <dl class="office-facts__secondary">
+          <div><dt>연락처</dt><dd><a href={phoneHref}>{office.mobile}</a></dd></div>
+          <div><dt>이메일</dt><dd><a href={emailHref}>{office.email}</a></dd></div>
+          <div><dt>영업시간</dt><dd class="office-hours">{office.hours.map((hour) => <span><b>{hour.label}</b> {formatOfficeHours(hour)}</span>)}</dd></div>
+          <div><dt>주차</dt><dd>{office.parking}</dd></div>
+          <div><dt>사업자등록번호</dt><dd>{office.businessNumber}</dd></div>
+        </dl>
+        <aside class="office-claims" aria-label="운영 현황">
+          <span>운영 현황</span>
+          <ul>{office.publicClaims.items.map((claim) => <li><span>{claim.label}</span><strong>{claim.value}</strong></li>)}</ul>
+        </aside>
+      </div>
     </div>
   </section>
-  <ContactPanel />
+
+  <ContactPanel
+    title="찾는 조건을 말씀해 주세요. 현재 확인 가능한 정보부터 안내하겠습니다."
+    description="지역, 거래유형, 예산, 면적, 입주시기를 알려주시면 현재 확인할 수 있는 매물과 비교할 내용을 안내합니다."
+  />
 </BaseLayout>

@@ -39,10 +39,12 @@ const description = "대전 동구에서 직접 확인한 매매·전세·월세
         <div>
           <label for="sort">정렬기준</label>
           <select id="sort" name="sort">
-            <option value="">정렬 선택</option>
-            <option value="price">가격순</option>
-            <option value="latest">최신순</option>
-            <option value="area">면적순</option>
+            <option value="">기본순</option>
+            <option value="price">가격 낮은순</option>
+            <option value="price-desc">가격 높은순</option>
+            <option value="latest">최근 확인순</option>
+            <option value="area">면적 작은순</option>
+            <option value="area-desc">면적 큰순</option>
           </select>
         </div>
         <button class="button button--secondary" type="reset">필터 초기화</button>
@@ -61,6 +63,8 @@ const description = "대전 동구에서 직접 확인한 매매·전세·월세
 </BaseLayout>
 
 <script>
+  import { compareNaverListingSortData, isNaverListingSortKey } from "../../lib/naver-listing-sort.mjs";
+
   const form = document.querySelector<HTMLFormElement>("[data-listing-filter]");
   const cards = [...document.querySelectorAll<HTMLElement>("[data-naver-listing-card]")];
   const count = document.querySelector<HTMLElement>("[data-result-count]");
@@ -75,15 +79,10 @@ const description = "대전 동구에서 직접 확인한 매매·전세·월세
     if (["sale", "jeonse", "monthly-rent"].includes(params.get("trade") ?? "")) trade.value = params.get("trade")!;
     const allowedPropertyTypes = [...propertyType.options].map((option) => option.value).filter(Boolean);
     if (allowedPropertyTypes.includes(params.get("type") ?? "")) propertyType.value = params.get("type")!;
-    if (["price", "latest", "area"].includes(params.get("sort") ?? "")) sort.value = params.get("sort")!;
+    if (isNaverListingSortKey(params.get("sort") ?? "")) sort.value = params.get("sort")!;
 
     const apply = () => {
-      const sortedCards = [...cards].sort((a, b) => {
-        if (sort.value === "price") return Number(a.dataset.price) - Number(b.dataset.price);
-        if (sort.value === "latest") return (b.dataset.confirmedAt ?? "").localeCompare(a.dataset.confirmedAt ?? "") || Number(a.dataset.rank) - Number(b.dataset.rank);
-        if (sort.value === "area") return Number(a.dataset.area) - Number(b.dataset.area) || Number(a.dataset.rank) - Number(b.dataset.rank);
-        return Number(a.dataset.rank) - Number(b.dataset.rank);
-      });
+      const sortedCards = [...cards].sort((a, b) => compareNaverListingSortData(a.dataset, b.dataset, sort.value));
       grid.append(...sortedCards);
       let visible = 0;
       sortedCards.forEach((card) => {

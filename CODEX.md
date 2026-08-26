@@ -111,7 +111,7 @@ npm run build
 - `src/data/home-content.json` → `src/lib/content.ts` → 홈 대표·사무소·리더스시티 설명과 사진
 - `src/data/office.json` → `src/lib/site.ts` → 헤더·푸터·사무소·오시는 길·네이버 등록 매물 링크·구조화 데이터
 - `src/data/listings.json` → `src/lib/listings.ts` → 매물 목록 필터와 공개 상세 정적 생성
-- `src/data/naver-listings.json` → `src/lib/naver-listings.ts` → 사진 없는 네이버 공개 매물 카드·홈 6건 단위 페이징·거래/유형 필터·기본/가격/최신/면적 정렬·외부 상세 링크
+- `src/data/naver-listings.json` → `src/lib/naver-listings.ts` → 사진 없는 네이버 공개 매물 카드·홈 6건 단위 페이징·거래/유형 필터·기본/가격 낮은·높은/최근 확인/면적 작은·큰 정렬·외부 상세 링크
 - `src/data/complexes-overview.json` → 리더스시티 4·5블록 전체 소개·숫자 카드·비교표·공통 현장 확인사항·관련 콘텐츠와 출처
 - `src/data/complexes.json` → 대전 동구 주요 단지의 사진·기본 사실·면적별 세대 구성·공급 구성·생활환경·시설 확인 상태·FAQ·관련 콘텐츠·복수 출처와 목록·상세 정적 생성
 - `src/data/external-links.json` → 2024~2026년 공식 블로그 128건과 공식 유튜브 영상 40건의 원문 링크·자체 썸네일·최신순 카드
@@ -185,9 +185,12 @@ DB와 TR 흐름은 없다. 관리 API의 콘텐츠 쓰기는 `ADMIN_WRITE_ENABLE
 - Static Assets 라우터는 `ctx.access`를 전달하지 않으므로 관리 API가 `Cf-Access-Jwt-Assertion`을 `jose`로 다시 검증한다.
 - Access 정책은 정확한 허용 이메일 2개와 Email OTP를 사용한다.
 - `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD`, `ADMIN_ALLOWED_EMAILS`는 Production 환경에 등록하고 실제 값을 저장소에 넣지 않는다.
-- GitHub CI는 `npm ci`, `npm test`, `npm run build`를 실행한다.
-- GitHub와 Cloudflare 계정 연결, Production/Preview 환경변수, 사용자 도메인 DNS는 외부 운영 작업이다.
-- 실제 배포 전 `npx wrangler deploy --dry-run`과 Production 환경변수 빌드를 확인한다.
+- GitHub Actions CI는 `npm ci`, `npm test`, `npm run build`로 검증만 수행하며 Cloudflare 배포는 실행하지 않는다.
+- Cloudflare Workers Builds는 GitHub `myoungsuk/real-estate-website`의 `master`에 연결되어 있으며, `master` 푸시 시 Production을 자동 빌드·배포한다.
+- Production 빌드는 `PUBLIC_SITE_URL=https://leaderscityhappy.com`, `PUBLIC_ALLOW_INDEXING=true`를 사용한다.
+- `master` 푸시 후에는 Cloudflare 새 배포 버전과 운영 URL 반영을 먼저 확인한다. 자동 배포가 진행 중인 동안 중복 수동 배포를 실행하지 않는다.
+- 자동 배포가 실패하거나 시작되지 않은 사실을 확인한 경우에만 Production 환경변수 빌드와 `npx wrangler deploy --dry-run`을 다시 검증한 뒤 `npx wrangler deploy`로 수동 배포한다.
+- GitHub·Cloudflare 계정 연결 변경, Production/Preview 환경변수 변경, 사용자 도메인 DNS 변경은 외부 운영 작업이다.
 - 잘못된 배포는 직전 정상 Cloudflare 배포로 롤백하거나 Git revert 후 재배포한다.
 
 ## 조건부 컴파일·인코딩·리소스
