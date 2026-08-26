@@ -31,6 +31,7 @@ npm run build
 | `src/data/office.json` | 법적 상호·대표·연락처·주소·네이버 등록 매물 등 외부 채널 |
 | `src/data/listings.json` | 공개 승인 매물 |
 | `src/data/naver-listings.json` | 네이버에 공개된 개별 매물번호·동·광고 층수·가격·면적과 상세 링크 |
+| `src/data/complexes-overview.json` | 리더스시티 4·5블록 전체 소개·숫자 카드·비교표·공통 확인사항·관련 콘텐츠 |
 | `src/data/complexes.json` | 대전 동구 주요 단지 사진·기본 사실·생활 특징·출처 |
 | `src/data/external-links.json` | 공식 블로그·유튜브 전체 링크와 자체 저장 썸네일(최신순·블로그 9개·유튜브 6개 단위 페이지) |
 | `src/data/faq.json` | 승인된 FAQ |
@@ -39,6 +40,8 @@ npm run build
 공식 로고 원본은 `public/images/brand/leaders-city-happy-logo.png`, 화면용 최적화본은 `public/images/brand/leaders-city-happy-logo.webp`에 있습니다. 원본을 교체한 뒤 `node scripts/optimize-brand-logo.mjs`를 실행하면 화면용 WebP를 다시 만들 수 있습니다.
 
 고객 연락처·상담 내용·네이버 등 공개 광고에 없는 정확한 호수·내부 메모·비밀키는 저장하지 않습니다. 네이버 공개 카드의 동 번호와 광고 층수는 같은 매물번호의 외부 링크와 함께 표시합니다. 사진은 공개 권한과 개인정보를 확인하고 EXIF·GPS를 제거한 최적화본만 `public/images/`에 둡니다.
+
+단지 전체 안내와 블록별 면적·공급·생활환경·시설 상태·FAQ는 분리해 관리합니다. `npm run check`는 4블록 1,328세대, 5블록 분양 1,423세대·공공임대 712세대와 전체 3,463세대 합계, 출처 메타데이터, 연결된 공개 콘텐츠 ID를 검증합니다. 주차대수·정확한 사용승인일·현재 시설 운영처럼 확인이 남은 값은 확정값으로 입력하지 않습니다.
 
 ## 검색 노출 설정
 
