@@ -2,36 +2,165 @@
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import PageIntro from "../../components/PageIntro.astro";
 import ContactPanel from "../../components/ContactPanel.astro";
-import { publishedComplexes } from "../../lib/complexes";
+import ExternalContentList from "../../components/ExternalContentList.astro";
+import { getPublishedExternalContentsByIds } from "../../lib/content";
+import { complexOverview, publishedComplexes } from "../../lib/complexes";
 
-const title = "대전 동구 주요 단지정보 | 행복한부동산";
-const description = "대전 동구의 주요 아파트 단지와 생활 정보를 출처와 확인일을 기준으로 안내합니다.";
+const title = "천동 리더스시티 4·5블록 단지정보·비교 | 행복한부동산";
+const description = "천동 리더스시티 4·5블록의 3,463세대 규모, 공급 구성, 전용면적, 생활환경과 계약 전 확인사항을 출처 기준으로 비교합니다.";
+const relatedContents = getPublishedExternalContentsByIds(complexOverview.relatedContentIds);
 ---
 
 <BaseLayout {title} {description}>
-  <PageIntro eyebrow="COMPLEX" title="대전 동구 주요 단지" description="리더스시티 4·5블록의 규모와 입주, 생활환경부터 확인하고 동구 지역 단지 정보를 차례로 넓혀갑니다." />
-  <section class="section">
-    <div class="shell complex-index-grid">
-      {publishedComplexes.map((complex) => (
-        <a class="complex-index-card" href={`/complexes/${complex.slug}/`}>
-          {complex.image && <img src={complex.image.src} alt={complex.image.alt} width="1200" height="1200" loading="lazy" />}
-          <span>{complex.areaName} · {complex.eyebrow}</span>
-          <strong>{complex.mark}</strong>
-          <div><h2>{complex.name}</h2><p>{complex.summary}</p><b>단지 페이지 보기 →</b></div>
-        </a>
-      ))}
+  <PageIntro eyebrow={complexOverview.eyebrow} title={complexOverview.title} description={complexOverview.description} />
+
+  <section class="section complex-overview" aria-labelledby="complex-stats-heading">
+    <div class="shell">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">숫자로 보는 리더스시티</p>
+          <h2 id="complex-stats-heading">4·5블록을 한눈에 봅니다</h2>
+        </div>
+        <p>공개자료 확인일 {complexOverview.confirmedAt}</p>
+      </div>
+      <div class="complex-stat-grid">
+        {complexOverview.stats.map((stat) => (
+          <article class="complex-stat-card">
+            <span>{stat.label}</span>
+            <strong>{stat.value}</strong>
+            <p>{stat.description}</p>
+          </article>
+        ))}
+      </div>
+      <p class="complex-overview__note">{complexOverview.note}</p>
     </div>
   </section>
-  <section class="section section--soft">
-    <div class="shell source-notice">
-      <p class="eyebrow">정보 공개 원칙</p>
-      <h2>숫자보다 출처와 기준일을 먼저 확인합니다.</h2>
-      <div class="three-column">
-        <article class="info-card"><span>01</span><h3>단지별 분리</h3><p>동구의 각 단지 정보를 별도 자료와 페이지로 관리해 서로 섞이지 않게 합니다.</p></article>
-        <article class="info-card"><span>02</span><h3>공식 자료 우선</h3><p>공식 자료를 우선하고 출처가 다른 수치는 확인 전 공개하지 않습니다.</p></article>
-        <article class="info-card"><span>03</span><h3>최근 확인일</h3><p>생활 정보와 매물에는 가능한 범위에서 최근 확인일을 표시합니다.</p></article>
+
+  <section class="section section--soft" aria-labelledby="complex-comparison-heading">
+    <div class="shell">
+      <div class="section-heading complex-comparison__heading">
+        <div>
+          <p class="eyebrow">4블록 vs 5블록</p>
+          <h2 id="complex-comparison-heading">순위가 아닌 생활 기준으로 비교하세요</h2>
+        </div>
+        <p>가족 구성, 예산, 소유·임대 형태와 원하는 면적에 따라 선택이 달라집니다.</p>
+      </div>
+      <div class="complex-comparison-table-wrap">
+        <table class="complex-comparison-table">
+          <thead>
+            <tr>
+              <th scope="col">비교 항목</th>
+              {publishedComplexes.map((complex) => <th scope="col">{complex.name}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {complexOverview.comparisonRows.map((row) => (
+              <tr>
+                <th scope="row">{row.label}</th>
+                {publishedComplexes.map((complex) => (
+                  <td data-complex-name={complex.name}>{row.values[complex.slug] ?? "확인 중"}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p class="complex-comparison__note">같은 전용면적이라도 타입, 동, 방향, 층, 옵션과 조망에 따라 실제 체감은 달라집니다. 계약 판단은 개별 매물의 등기·권리관계·상태와 현장 확인을 기준으로 해야 합니다.</p>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="complex-reasons-heading">
+    <div class="shell">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">생활권 안내</p>
+          <h2 id="complex-reasons-heading">왜 리더스시티를 살펴보는가</h2>
+        </div>
+        <p>고정된 이동시간이나 배정학교를 단정하지 않고 최신 자료와 현장을 함께 봅니다.</p>
+      </div>
+      <div class="three-column complex-reason-grid">
+        {complexOverview.reasons.map((reason, index) => (
+          <article class:list={["info-card", index === 0 && "info-card--featured"]}>
+            <span>{String(index + 1).padStart(2, "0")}</span>
+            <h3>{reason.title}</h3>
+            <p>{reason.description}</p>
+          </article>
+        ))}
       </div>
     </div>
   </section>
-  <ContactPanel title="어느 동네와 단지가 맞을지 고민되시나요?" description="가족 구성과 생활 동선, 원하는 거래조건을 기준으로 대전 동구 매물을 함께 비교해 드립니다." />
+
+  <section class="section section--navy" aria-labelledby="complex-block-heading">
+    <div class="shell">
+      <div class="content-section-heading content-section-heading--light">
+        <p>블록별 상세 안내</p>
+        <h2 id="complex-block-heading">LEADERS CITY</h2>
+      </div>
+      <div class="complex-index-grid">
+        {publishedComplexes.map((complex) => (
+          <a class="complex-index-card" href={`/complexes/${complex.slug}/`}>
+            {complex.image && <img src={complex.image.src} alt={complex.image.alt} width="1200" height="1200" loading="lazy" />}
+            <span>{complex.areaName} · {complex.eyebrow}</span>
+            <strong>{complex.mark}</strong>
+            <div><h2>{complex.name}</h2><p>{complex.summary}</p><b>단지 페이지 보기 →</b></div>
+          </a>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="section section--soft" aria-labelledby="complex-check-heading">
+    <div class="shell">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">계약 전 현장 확인</p>
+          <h2 id="complex-check-heading">장점만 나열하지 않고 판단에 필요한 것을 봅니다</h2>
+        </div>
+      </div>
+      <div class="three-column complex-check-grid">
+        {complexOverview.sharedCheckpoints.map((checkpoint, index) => (
+          <article class="complex-check-card">
+            <span>{String(index + 1).padStart(2, "0")}</span>
+            <h3>{checkpoint.title}</h3>
+            <p>{checkpoint.description}</p>
+          </article>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="complex-content-heading">
+    <div class="shell">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">공식 채널 콘텐츠</p>
+          <h2 id="complex-content-heading">현장과 생활을 더 자세히 확인하세요</h2>
+        </div>
+        <p>가격이 언급된 콘텐츠는 게시일 당시 자료이며 현재 시세와 다를 수 있습니다.</p>
+      </div>
+      <ExternalContentList items={relatedContents} emptyLabel="연결할 공개 콘텐츠를 준비하고 있습니다." pageSize={3} />
+    </div>
+  </section>
+
+  <section class="section complex-sources-section">
+    <div class="shell complex-sources">
+      <div>
+        <p class="eyebrow">자료 출처</p>
+        <h2>확인한 공식·공공자료</h2>
+        <p>단지 수치와 공급 구성은 아래 자료를 기준으로 정리했습니다. 실제 계약 전 최신 내용을 다시 확인합니다.</p>
+      </div>
+      <ul>
+        {complexOverview.sources.map((source) => (
+          <li>
+            <a href={source.url} target="_blank" rel="noopener noreferrer">
+              <span><small>{source.publisher} · {source.checkedAt}</small>{source.label}</span>
+              <span aria-hidden="true">↗</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </section>
+
+  <ContactPanel title="어느 블록과 조건이 맞을지 고민되시나요?" description="가족 구성, 생활 동선, 공급 형태와 원하는 거래조건을 기준으로 4·5블록을 함께 비교해 드립니다." />
 </BaseLayout>
