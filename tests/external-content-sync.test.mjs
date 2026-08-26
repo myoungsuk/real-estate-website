@@ -5,8 +5,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runExternalContentSync } from "../scripts/sync-external-content.mjs";
 import { classifySyncChanges, parseGitStatusPorcelain } from "../scripts/check-sync-worktree.mjs";
-import { prepareWebpThumbnail } from "../scripts/sync/http.mjs";
+import { ExternalSyncSourceUnavailableError } from "../scripts/sync/errors.mjs";
+import { fetchXml, prepareWebpThumbnail } from "../scripts/sync/http.mjs";
 import {
+  assertYouTubeChannelId,
   buildExternalContentItem,
   mergeExternalContentsPreservingOrder,
   normalizeYouTubeInternalId,
@@ -28,13 +30,15 @@ const [externalContentComponent, syncWorkflow] = await Promise.all([
   readFile(new URL("../.github/workflows/sync-external-content.yml", import.meta.url), "utf8"),
 ]);
 
-function fixtureFetcher({ imageFailure = false, youtubeXml = youtubeAtom } = {}) {
+function fixtureFetcher({ imageFailure = false, naverStatus = 200, youtubeStatus = 200, youtubeXml = youtubeAtom } = {}) {
   return async (value) => {
     const url = String(value);
     if (url === "https://rss.blog.naver.com/p5468300.xml") {
+      if (naverStatus !== 200) return new Response("naver unavailable", { status: naverStatus });
       return new Response(naverRss, { headers: { "Content-Type": "application/rss+xml; charset=utf-8" } });
     }
     if (url === `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`) {
+      if (youtubeStatus !== 200) return new Response("youtube unavailable", { status: youtubeStatus });
       return new Response(youtubeXml, { headers: { "Content-Type": "application/atom+xml; charset=utf-8" } });
     }
     if (url.startsWith("https://blogthumb.pstatic.net/") || url.startsWith("https://i2.ytimg.com/")) {
@@ -82,6 +86,7 @@ test("YouTube Atom Shorts 링크를 검증하고 기존 watch URL로 정규화�
 });
 
 test("YouTube Atom의 승인 채널·필수 필드·videoId 링크 일치를 검증한다", () => {
+  assert.throws(() => assertYouTubeChannelId("UC0000000000000000000000"), /승인된 YouTube channelId/u);
   const wrongChannel = youtubeAtom.replaceAll(channelId, "UC0000000000000000000000");
   assert.throws(() => parseYouTubeFeed(wrongChannel, { channelId }), /channelId/u);
   assert.throws(() => parseYouTubeFeed(youtubeAtom.replace(/<updated>[^<]+<\/updated>/u, ""), { channelId }), /updated/u);
@@ -162,6 +167,124 @@ test("dry-run은 신규 항목과 썸네일을 검증해도 파일을 변경하�
   });
   assert.deepEqual({ blog: result.blogNew, youtube: result.youtubeNew, assets: result.assetCount }, { blog: 1, youtube: 1, assets: 2 });
   assert.equal(await readFile(contentPath, "utf8"), before);
+  await assert.rejects(() => readdir(join(root, "public")), /ENOENT/u);
+});
+
+test("YouTube Atom 404는 세 번 재시도한 뒤 일시 장애로 분류한다", async () => {
+  let requestCount = 0;
+  const waits = [];
+  await assert.rejects(() => fetchXml(`https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`, {
+    allowedHosts: new Set(["www.youtube.com"]),
+    fetcher: async () => {
+      requestCount += 1;
+      return new Response("not found", { status: 404 });
+    },
+    attempts: 3,
+    additionalRetryableStatuses: new Set([404]),
+    label: "YouTube Atom RSS",
+    sleep: async (milliseconds) => waits.push(milliseconds),
+  }), (error) => {
+    assert.ok(error instanceof ExternalSyncSourceUnavailableError);
+    assert.equal(error.status, 404);
+    assert.equal(error.attempts, 3);
+    return true;
+  });
+  assert.equal(requestCount, 3);
+  assert.deepEqual(waits, [250, 500]);
+});
+
+test("YouTube가 일시 장애이면 네이버만 반영하고 복구 실행에서 누락 영상을 추가한다", async (t) => {
+  const root = await makeSyncRoot(t);
+  const first = await runExternalContentSync({
+    rootDir: root,
+    fetcher: fixtureFetcher({ youtubeStatus: 404 }),
+    fetchAttempts: 1,
+    youtubeChannelId: channelId,
+    logger: { log() {}, warn() {} },
+  });
+  assert.deepEqual(first.sourceStatus, { blog: "available", youtube: "skipped" });
+  assert.deepEqual({ blog: first.blogNew, youtube: first.youtubeNew }, { blog: 1, youtube: 0 });
+  assert.match(first.warnings.join("\n"), /YouTube Atom RSS.*건너뜁니다/u);
+  assert.deepEqual(JSON.parse(await readFile(join(root, "src", "data", "external-links.json"))).map(({ type }) => type), ["blog"]);
+
+  const recovered = await runExternalContentSync({
+    rootDir: root,
+    fetcher: fixtureFetcher(),
+    fetchAttempts: 1,
+    youtubeChannelId: channelId,
+    logger: { log() {}, warn() {} },
+  });
+  assert.deepEqual(recovered.sourceStatus, { blog: "available", youtube: "available" });
+  assert.deepEqual({ blog: recovered.blogNew, youtube: recovered.youtubeNew }, { blog: 0, youtube: 1 });
+  assert.deepEqual(
+    JSON.parse(await readFile(join(root, "src", "data", "external-links.json"))).map(({ type }) => type).sort(),
+    ["blog", "youtube"],
+  );
+});
+
+test("네이버가 일시 장애이면 YouTube만 반영한다", async (t) => {
+  const root = await makeSyncRoot(t);
+  const result = await runExternalContentSync({
+    rootDir: root,
+    fetcher: fixtureFetcher({ naverStatus: 503 }),
+    fetchAttempts: 1,
+    youtubeChannelId: channelId,
+    logger: { log() {}, warn() {} },
+  });
+  assert.deepEqual(result.sourceStatus, { blog: "skipped", youtube: "available" });
+  assert.deepEqual({ blog: result.blogNew, youtube: result.youtubeNew }, { blog: 0, youtube: 1 });
+  assert.deepEqual(JSON.parse(await readFile(join(root, "src", "data", "external-links.json"))).map(({ type }) => type), ["youtube"]);
+});
+
+test("두 출처가 모두 일시 장애이면 실패하고 기존 파일을 보존한다", async (t) => {
+  const root = await makeSyncRoot(t);
+  const contentPath = join(root, "src", "data", "external-links.json");
+  const before = await readFile(contentPath, "utf8");
+  await assert.rejects(() => runExternalContentSync({
+    rootDir: root,
+    fetcher: fixtureFetcher({ naverStatus: 503, youtubeStatus: 404 }),
+    fetchAttempts: 1,
+    youtubeChannelId: channelId,
+    logger: { log() {}, warn() {} },
+  }), /모두 조회하지 못했습니다/u);
+  assert.equal(await readFile(contentPath, "utf8"), before);
+  await assert.rejects(() => readdir(join(root, "public")), /ENOENT/u);
+});
+
+test("재시도 대상이 아닌 HTTP 오류는 다른 출처가 정상이어도 전체 실패한다", async (t) => {
+  const root = await makeSyncRoot(t);
+  await assert.rejects(() => runExternalContentSync({
+    rootDir: root,
+    fetcher: fixtureFetcher({ youtubeStatus: 403 }),
+    fetchAttempts: 3,
+    youtubeChannelId: channelId,
+    logger: { log() {}, warn() {} },
+  }), /YouTube Atom RSS: HTTP 403/u);
+  assert.equal(await readFile(join(root, "src", "data", "external-links.json"), "utf8"), "[]\n");
+  await assert.rejects(() => readdir(join(root, "public")), /ENOENT/u);
+});
+
+test("비정상적으로 큰 피드 응답은 일시 장애로 건너뛰지 않고 전체 실패한다", async (t) => {
+  const root = await makeSyncRoot(t);
+  const baseFetcher = fixtureFetcher();
+  await assert.rejects(() => runExternalContentSync({
+    rootDir: root,
+    fetcher: async (value, options) => {
+      if (String(value).startsWith("https://www.youtube.com/feeds/videos.xml")) {
+        return new Response("", {
+          headers: {
+            "Content-Length": String(2 * 1024 * 1024 + 1),
+            "Content-Type": "application/atom+xml",
+          },
+        });
+      }
+      return baseFetcher(value, options);
+    },
+    fetchAttempts: 3,
+    youtubeChannelId: channelId,
+    logger: { log() {}, warn() {} },
+  }), /응답 크기/u);
+  assert.equal(await readFile(join(root, "src", "data", "external-links.json"), "utf8"), "[]\n");
   await assert.rejects(() => readdir(join(root, "public")), /ENOENT/u);
 });
 

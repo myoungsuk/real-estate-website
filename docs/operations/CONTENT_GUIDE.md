@@ -98,9 +98,11 @@
 3. 실행 로그의 신규 블로그·YouTube 건수, 생성 썸네일 수, 테스트·검사·빌드 결과와 커밋 SHA를 확인합니다.
 4. 콘텐츠 커밋 뒤 Cloudflare의 새 Production 배포와 `https://leaderscityhappy.com/blog/`, `https://leaderscityhappy.com/youtube/` 반영을 확인합니다.
 
-동기화는 공식 네이버 블로그 ID `p5468300`의 RSS와 위 YouTube 채널의 공식 Atom에서 보이는 신규 항목만 `published`로 추가합니다. YouTube alternate URL이 `/shorts/`이면 `youtubeFormat: short`, 나머지 허용 영상 URL은 `video`로 저장하고 공개 화면에서 두 목록을 분리합니다. 기존 항목의 요약·상태·썸네일을 덮어쓰거나 피드에서 사라진 항목을 삭제하지 않으며, 저장 URL은 공식 watch URL로 정규화합니다. RSS는 최근 항목 감지용이므로 전체 과거 글·영상 복원을 보장하지 않습니다.
+동기화는 공식 네이버 블로그 ID `p5468300`의 RSS와 위 YouTube 채널의 공식 Atom에서 보이는 신규 항목만 `published`로 추가합니다. YouTube alternate URL이 `/shorts/`이면 `youtubeFormat: short`, 나머지 허용 영상 URL은 `video`로 저장하고 공개 화면에서 두 목록을 분리합니다. 기존 항목의 요약·상태·썸네일을 덮어쓰거나 피드에서 사라진 항목을 삭제하지 않으며, 저장 URL은 공식 watch URL로 정규화합니다. RSS는 최근 항목 감지용이므로 전체 과거 글·영상 복원을 보장하지 않습니다. 장애가 복구되면 다음 피드 응답에 아직 포함된 누락 항목을 기존 ID와 비교해 추가합니다.
 
-썸네일만 받지 못하면 해당 항목을 `thumbnail: null`로 추가하고 기존 화면의 대체 표시를 사용합니다. 출처·채널·원본 ID·XML·최종 콘텐츠 검증이 실패하면 JSON과 이미지를 커밋하지 않습니다. 콘텐츠 변경이 없으면 정상 종료하고, 45일 이상 자동화 활동이 없을 때만 `.github/automation-health.json`을 별도 커밋으로 갱신합니다.
+네트워크·408·425·429·5xx 같은 일시 장애는 최대 3회 재시도합니다. 공식 YouTube Atom 주소가 404를 반환하는 경우도 3회 재시도하고, 계속 실패하면 YouTube만 `skipped`로 표시해 Warning을 남긴 뒤 네이버의 정상 결과를 처리합니다. 반대로 네이버의 일시 장애 때는 YouTube만 처리합니다. 두 출처를 모두 조회하지 못하면 Action을 실패시킵니다. 재시도 대상이 아닌 HTTP 오류와 출처·채널·원본 ID·Content-Type·UTF-8·XML·최종 콘텐츠 검증 실패도 전체 실패하며 JSON과 이미지를 커밋하지 않습니다.
+
+썸네일만 받지 못하면 해당 항목을 `thumbnail: null`로 추가하고 기존 화면의 대체 표시를 사용합니다. 콘텐츠 변경이 없으면 정상 종료하고, 45일 이상 자동화 활동이 없을 때만 `.github/automation-health.json`을 별도 커밋으로 갱신합니다. Actions summary의 `Blog source`, `YouTube source`, Warning에서 부분 성공 여부를 확인합니다.
 
 로컬에서는 다음처럼 작업트리를 바꾸지 않는 실제 피드 검사를 할 수 있습니다.
 

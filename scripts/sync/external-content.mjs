@@ -4,6 +4,7 @@ import { validateExternalLinks } from "../content-validation.mjs";
 import { ExternalSyncTrustError } from "./errors.mjs";
 
 export const NAVER_BLOG_ID = "p5468300";
+export const YOUTUBE_CHANNEL_ID = "UCuOZDnM5vxOZELDgu-y-hNg";
 export const BLOG_THUMBNAIL_HOSTS = new Set([
   "blogfiles.pstatic.net",
   "blogthumb.pstatic.net",
@@ -193,8 +194,9 @@ export function assertNaverBlogId(blogId) {
   if (!/^[A-Za-z0-9_-]{2,50}$/u.test(blogId ?? "")) throw trustError("네이버 블로그 ID 형식이 올바르지 않습니다.");
 }
 
-export function assertYouTubeChannelId(channelId) {
+export function assertYouTubeChannelId(channelId, expectedChannelId = YOUTUBE_CHANNEL_ID) {
   if (!YOUTUBE_CHANNEL_ID_PATTERN.test(channelId ?? "")) throw trustError("YOUTUBE_CHANNEL_ID 형식이 올바르지 않습니다.");
+  if (channelId !== expectedChannelId) throw trustError("YOUTUBE_CHANNEL_ID가 승인된 YouTube channelId와 일치하지 않습니다.");
 }
 
 export function youtubeVideoIdFromUrl(value, { feedLink = false } = {}) {

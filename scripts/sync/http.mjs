@@ -1,9 +1,15 @@
 import sharp from "sharp";
-import { ExternalSyncTrustError } from "./errors.mjs";
+import { ExternalSyncSourceUnavailableError, ExternalSyncTrustError } from "./errors.mjs";
 
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 const RETRYABLE_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 const ALLOWED_IMAGE_TYPES = new Set(["image/avif", "image/gif", "image/jpeg", "image/png", "image/webp"]);
+
+function responseValidationError(message) {
+  const error = new Error(message);
+  error.retryable = false;
+  return error;
+}
 
 function allowedUrl(value, allowedHosts, label) {
   let url;
@@ -26,8 +32,8 @@ function allowedUrl(value, allowedHosts, label) {
 
 async function readLimitedBuffer(response, maxBytes, label) {
   const contentLength = Number(response.headers.get("content-length"));
-  if (Number.isFinite(contentLength) && contentLength > maxBytes) throw new Error(`${label}: 응답 크기가 제한을 초과했습니다.`);
-  if (!response.body) throw new Error(`${label}: 응답 본문이 없습니다.`);
+  if (Number.isFinite(contentLength) && contentLength > maxBytes) throw responseValidationError(`${label}: 응답 크기가 제한을 초과했습니다.`);
+  if (!response.body) throw responseValidationError(`${label}: 응답 본문이 없습니다.`);
 
   const chunks = [];
   let total = 0;
@@ -37,7 +43,7 @@ async function readLimitedBuffer(response, maxBytes, label) {
       const { done, value } = await reader.read();
       if (done) break;
       total += value.byteLength;
-      if (total > maxBytes) throw new Error(`${label}: 응답 크기가 제한을 초과했습니다.`);
+      if (total > maxBytes) throw responseValidationError(`${label}: 응답 크기가 제한을 초과했습니다.`);
       chunks.push(Buffer.from(value));
     }
   } finally {
@@ -72,6 +78,7 @@ export async function fetchAllowedBuffer(value, {
   maxBytes,
   maxRedirects = 3,
   attempts = 3,
+  additionalRetryableStatuses = new Set(),
   label,
   sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
 } = {}) {
@@ -81,7 +88,8 @@ export async function fetchAllowedBuffer(value, {
       const response = await requestWithRedirects(value, { allowedHosts, fetcher, timeoutMs, maxRedirects, label });
       if (!response.ok) {
         const error = new Error(`${label}: HTTP ${response.status}`);
-        error.retryable = RETRYABLE_STATUSES.has(response.status);
+        error.status = response.status;
+        error.retryable = RETRYABLE_STATUSES.has(response.status) || additionalRetryableStatuses.has(response.status);
         throw error;
       }
       return { response, buffer: await readLimitedBuffer(response, maxBytes, label) };
@@ -92,7 +100,13 @@ export async function fetchAllowedBuffer(value, {
       await sleep(250 * attempt);
     }
   }
-  throw lastError ?? new Error(`${label}: 요청에 실패했습니다.`);
+  if (lastError?.retryable === false) throw lastError;
+  const message = lastError?.message ?? `${label}: 요청에 실패했습니다.`;
+  throw new ExternalSyncSourceUnavailableError(`${message} (${attempts}회 시도 후)`, {
+    status: lastError?.status ?? null,
+    attempts,
+    cause: lastError,
+  });
 }
 
 export async function fetchXml(value, options) {

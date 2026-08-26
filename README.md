@@ -25,6 +25,8 @@ npm run build
 
 공식 네이버 블로그 RSS와 YouTube Atom의 신규 항목은 별도 수동 워크플로로 동기화합니다. YouTube는 Atom alternate URL을 기준으로 일반 영상과 Shorts를 구분하며, 로컬 dry-run은 공개 YouTube channelId를 설정한 뒤 실행하고 파일을 바꾸지 않습니다.
 
+한 출처의 네트워크·429·5xx 같은 일시 장애는 최대 3회 재시도 후 경고와 함께 건너뛰고 정상 출처만 동기화합니다. 현재 공식 YouTube Atom 주소의 404도 같은 방식으로 처리하지만, 승인 channelId 불일치·XML 파싱·ID 충돌·재시도 대상이 아닌 HTTP 오류는 전체 실행을 실패시킵니다. 두 출처를 모두 조회하지 못한 경우에도 실패합니다.
+
 ```powershell
 $env:YOUTUBE_CHANNEL_ID = "UCuOZDnM5vxOZELDgu-y-hNg"
 npm run sync:external:dry-run
