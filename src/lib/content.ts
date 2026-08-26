@@ -50,6 +50,11 @@ export const publishedExternalContents = externalContents
 export const publishedBlogContents = publishedExternalContents.filter((item) => item.type === "blog");
 export const publishedYoutubeContents = publishedExternalContents.filter((item) => item.type === "youtube");
 
+export function getPublishedExternalContentsByIds(ids: string[]) {
+  const byId = new Map(publishedExternalContents.map((item) => [item.id, item]));
+  return ids.map((id) => byId.get(id)).filter((item): item is ExternalContent => Boolean(item));
+}
+
 export function formatContentDate(value: string | null) {
   if (!value) return null;
   return new Intl.DateTimeFormat("ko-KR", {
