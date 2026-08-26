@@ -24,7 +24,7 @@ const details = [listing.areaLabel, listing.floorLabel, listing.direction].filte
   data-property-type={listing.propertyType}
   data-rank={rank}
   data-price={getNaverListingPriceValue(listing.priceLabel)}
-  data-area={getNaverListingAreaValue(listing.areaLabel)}
+  data-area={listing.areaLabel ? getNaverListingAreaValue(listing.areaLabel) : undefined}
   data-confirmed-at={listing.confirmedAt}
   hidden={hidden}
 >

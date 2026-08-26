@@ -30,7 +30,7 @@
     "highlights": [
       { "title": "신축 생활권", "description": "2024년 7월 입주를 시작한 천동3지구의 신축 대단지입니다." },
       { "title": "교통 연결", "description": "신흥역과 KTX 대전역, 판암IC를 함께 이용하는 대전 동구 생활권입니다." },
-      { "title": "생활 환경", "description": "천동초·가오권 학교와 병원, 대동천·대전천과 인근 공원을 함께 확인할 수 있습니다." }
+      { "title": "생활 환경", "description": "천동초와 2027년 3월 개교 예정인 천동중학교, 병원, 대동천·대전천과 인근 공원을 함께 확인할 수 있습니다." }
     ],
     "unitGroups": [
       { "category": "분양", "areaLabel": "59㎡", "households": 456 },
@@ -75,9 +75,10 @@
       { "id": "lh-leaders-city-4-inspection", "publisher": "LH 청약플러스", "label": "리더스시티 4블록 사용검사 안내", "url": "https://apply.lh.or.kr/lhapply/apply/noti/an/view.do?bbsSn=9102429931&ccrCnntSysDsCd=02&mi=1079", "kind": "official", "checkedAt": "2026-08-25" },
       { "id": "kapt-leaders-city-4", "publisher": "K-apt 공동주택관리정보시스템", "label": "리더스시티4BL 공개 단지정보", "url": "https://www.k-apt.go.kr/bid/bidDetail.do?aptCode=&aptName=%EB%A6%AC%EB%8D%94%EC%8A%A4%EC%8B%9C%ED%8B%B0&bidArea=&bidNo=&bidNum=20250523154005895&bidState=&bidTitle=&codeAuth=&codeAuthSub=&codeClassifyType1=&codeClassifyType2=&codeClassifyType3=&codeSucWay=&codeWay=&dTime=1748227353035&dateArea=1&dateEnd=2025-05-26&dateStart=2025-04-26&mainKaptCode=&pageNo=1&searchBidGb=bid_gb_1&searchDateGb=reg&type=4", "kind": "public-data", "checkedAt": "2026-08-25" },
       { "id": "schoolinfo-cheondong-elementary", "publisher": "학교알리미", "label": "대전천동초등학교 정보", "url": "https://www.schoolinfo.go.kr/ei/ss/Pneiss_b01_s0.do?SHL_IDF_CD=5dccf925-e168-4b84-a93f-734c5d5f581c", "kind": "public-data", "checkedAt": "2026-08-25" },
-      { "id": "ccnnews-leaders-city-4-preview", "publisher": "충청뉴스", "label": "리더스시티 4블록 입주자 사전방문 보도", "url": "https://www.ccnnews.co.kr/news/articleView.html?idxno=338241", "kind": "news", "checkedAt": "2026-08-25", "note": "커뮤니티 시설은 당시 소개 내용이며 현재 운영 여부 확인이 필요합니다." }
+      { "id": "ccnnews-leaders-city-4-preview", "publisher": "충청뉴스", "label": "리더스시티 4블록 입주자 사전방문 보도", "url": "https://www.ccnnews.co.kr/news/articleView.html?idxno=338241", "kind": "news", "checkedAt": "2026-08-25", "note": "커뮤니티 시설은 당시 소개 내용이며 현재 운영 여부 확인이 필요합니다." },
+      { "id": "daejeon-council-cheondong-middle-2026", "publisher": "대전광역시의회", "label": "천동중학교 2027년 3월 개교 예정 확인", "url": "https://council.daejeon.go.kr/cms/mntsViewer.do?mntsId=8359&var08=MBR000185", "kind": "official", "checkedAt": "2026-08-26", "note": "2026년 1월 29일 교육위원회 회의록에서 교육청이 개교 일정에 지장이 없다고 답변했습니다." }
     ],
-    "confirmedAt": "2026-08-25"
+    "confirmedAt": "2026-08-26"
   },
   {
     "slug": "leaders-city-5",
@@ -129,7 +130,7 @@
     ],
     "livingSections": [
       { "category": "transport", "title": "신흥역·대전역·판암IC", "description": "LH는 신흥역, KTX 대전역, 판암IC를 주요 교통 여건으로 소개합니다. 철도·도로에 가까운 동은 소음과 조망 체감이 달라질 수 있어 현장 확인이 중요합니다." },
-      { "category": "education", "title": "천동초와 가오권 학교", "description": "천동초등학교가 인근에 있으며 가오권 학교가 공개자료에 소개됩니다. 실제 배정학교는 교육청 최신 통학구역을 확인해야 합니다." },
+      { "category": "education", "title": "천동초와 천동중학교(2027년 3월 개교 예정)", "description": "천동초등학교가 인근에 있으며 천동중학교는 2027년 3월 개교 예정입니다. 실제 배정학교와 통학구역은 교육청 최신 자료를 확인해야 합니다." },
       { "category": "daily-life", "title": "병원과 생활 인프라", "description": "충남대학교병원과 주변 생활 인프라가 공개자료에 안내돼 있습니다. 상가 영업 여부와 이동시간은 현장과 지도 기준으로 확인합니다." },
       { "category": "nature", "title": "공원·하천 생활권", "description": "샘골근린공원, 판암근린공원, 비학산, 대동천, 대전천과 연계되는 생활권이며 출입구에 따라 접근성이 달라질 수 있습니다." }
     ],
@@ -163,8 +164,9 @@
       { "id": "lh-leaders-city-5-supply", "publisher": "LH 청약플러스", "label": "리더스시티 5블록 공급정보", "url": "https://apply.lh.or.kr/lhapply/apply/wt/wrtanc/selectWrtancInfo.do?aisTpCd=08&ccrCnntSysDsCd=02&mi=1026&panId=0000060351&uppAisTpCd=06", "kind": "official", "checkedAt": "2026-08-25" },
       { "id": "lh-hanaro-leaders-city-5", "publisher": "LH 하나로 내집", "label": "리더스시티 5블록 생활환경", "url": "https://hanaro.lh.or.kr/siteDetail/view?menuKey=60O0Um5kwF&sPageCnt=&schArea=&schHsClsfCd=&schPoint=&schRegion=&schSplyHH=&schStatus=&schText=&siteDetailId=79", "kind": "official", "checkedAt": "2026-08-25" },
       { "id": "schoolinfo-cheondong-elementary", "publisher": "학교알리미", "label": "대전천동초등학교 정보", "url": "https://www.schoolinfo.go.kr/ei/ss/Pneiss_b01_s0.do?SHL_IDF_CD=5dccf925-e168-4b84-a93f-734c5d5f581c", "kind": "public-data", "checkedAt": "2026-08-25" },
-      { "id": "ccnnews-leaders-city-5-supply", "publisher": "충청뉴스", "label": "리더스시티 5블록 공급·커뮤니티 보도", "url": "https://www.ccnnews.co.kr/news/articleView.html?idxno=253199", "kind": "news", "checkedAt": "2026-08-25", "note": "커뮤니티 시설은 당시 계획·소개 내용이며 현재 운영 여부 확인이 필요합니다." }
+      { "id": "ccnnews-leaders-city-5-supply", "publisher": "충청뉴스", "label": "리더스시티 5블록 공급·커뮤니티 보도", "url": "https://www.ccnnews.co.kr/news/articleView.html?idxno=253199", "kind": "news", "checkedAt": "2026-08-25", "note": "커뮤니티 시설은 당시 계획·소개 내용이며 현재 운영 여부 확인이 필요합니다." },
+      { "id": "daejeon-council-cheondong-middle-2026", "publisher": "대전광역시의회", "label": "천동중학교 2027년 3월 개교 예정 확인", "url": "https://council.daejeon.go.kr/cms/mntsViewer.do?mntsId=8359&var08=MBR000185", "kind": "official", "checkedAt": "2026-08-26", "note": "2026년 1월 29일 교육위원회 회의록에서 교육청이 개교 일정에 지장이 없다고 답변했습니다." }
     ],
-    "confirmedAt": "2026-08-25"
+    "confirmedAt": "2026-08-26"
   }
 ]

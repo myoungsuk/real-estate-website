@@ -17,9 +17,11 @@ const gridId = "home-naver-listing-grid";
   <nav class="listing-sort" aria-label="메인 매물 정렬">
     <span>정렬</span>
     <button type="button" data-listing-sort="default" aria-pressed="true">기본순</button>
-    <button type="button" data-listing-sort="price" aria-pressed="false">가격순</button>
-    <button type="button" data-listing-sort="latest" aria-pressed="false">최신순</button>
-    <button type="button" data-listing-sort="area" aria-pressed="false">면적순</button>
+    <button type="button" data-listing-sort="price" aria-pressed="false">가격 낮은순</button>
+    <button type="button" data-listing-sort="price-desc" aria-pressed="false">가격 높은순</button>
+    <button type="button" data-listing-sort="latest" aria-pressed="false">최근 확인순</button>
+    <button type="button" data-listing-sort="area" aria-pressed="false">면적 작은순</button>
+    <button type="button" data-listing-sort="area-desc" aria-pressed="false">면적 큰순</button>
   </nav>
   <div class="listing-grid listing-grid--home" id={gridId}>
     {items.map((listing, index) => (
@@ -40,6 +42,8 @@ const gridId = "home-naver-listing-grid";
 </div>
 
 <script>
+  import { compareNaverListingSortData } from "../lib/naver-listing-sort.mjs";
+
   document.querySelectorAll<HTMLElement>("[data-listing-pager]").forEach((pager) => {
     if (pager.dataset.paginationReady === "true") return;
     const items = Array.from(pager.querySelectorAll<HTMLElement>("[data-naver-listing-card]"));
@@ -68,12 +72,7 @@ const gridId = "home-naver-listing-grid";
     };
 
     const applySort = (sortKey: string) => {
-      orderedItems = [...items].sort((a, b) => {
-        if (sortKey === "price") return Number(a.dataset.price) - Number(b.dataset.price) || Number(a.dataset.rank) - Number(b.dataset.rank);
-        if (sortKey === "latest") return (b.dataset.confirmedAt ?? "").localeCompare(a.dataset.confirmedAt ?? "") || Number(a.dataset.rank) - Number(b.dataset.rank);
-        if (sortKey === "area") return Number(a.dataset.area) - Number(b.dataset.area) || Number(a.dataset.rank) - Number(b.dataset.rank);
-        return Number(a.dataset.rank) - Number(b.dataset.rank);
-      });
+      orderedItems = [...items].sort((a, b) => compareNaverListingSortData(a.dataset, b.dataset, sortKey));
       grid?.append(...orderedItems);
       sortButtons.forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.listingSort === sortKey)));
       showPage(0);
