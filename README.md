@@ -34,6 +34,14 @@ npm run sync:external:dry-run
 
 GitHub Actions의 `Sync external content`는 Repository Variable `YOUTUBE_CHANNEL_ID`를 사용해 매시간 17분에 실행되며, `master`에서 `workflow_dispatch` 수동 실행도 지원합니다. 자세한 운영·장애 확인 절차는 `docs/operations/CONTENT_GUIDE.md`를 확인합니다.
 
+부동산뱅크 공개 사무소 매물은 2026-08-26 1:1 문의로 허용된 본인 매물·하루 1회 범위에서 매일 00:10 KST 자동 동기화합니다. 부동산뱅크 목록의 신규·변경 매물은 반영하고, 직전 부동산뱅크 기준선에서 사라진 매물은 삭제하지만 다른 공급처에서 등록한 네이버 매물은 유지합니다. 네이버 페이지나 로그인 영역은 조회하지 않습니다.
+
+```bash
+npm run sync:bank:dry-run
+```
+
+실행 범위와 장애 시 중단 조건은 `docs/operations/BANK_LISTING_SYNC.md`에 정리되어 있습니다.
+
 ## 운영자가 수정하는 파일
 
 | 파일 | 용도 |
@@ -79,7 +87,7 @@ GitHub 자동 배포 연결과 Production 설정은 `docs/operations/CLOUDFLARE_
 - `/api/admin`과 `/api/admin/*`만 Worker 코드를 먼저 실행합니다.
 - 인증은 Cloudflare Access, 정확한 허용 이메일 2개와 Email OTP를 사용합니다.
 - Worker가 `Cf-Access-Jwt-Assertion`의 서명, issuer, audience와 이메일을 다시 검증합니다.
-- `/admin/listings/editor/`에서 부동산뱅크 `.xls`를 브라우저 안에서 분석해 공개 매물을 일괄 반영하고, 그 밖의 네이버 매물을 직접 등록·수정·등록 종료할 수 있습니다. 원본 엑셀은 서버로 전송하지 않습니다.
+- 부동산뱅크 공개 매물은 하루 1회 자동 동기화하고 `/admin/listings/editor/`의 `.xls` 가져오기는 장애·형식 변경 시 수동 보완 경로로 유지합니다. 그 밖의 네이버 매물은 직접 등록·수정·등록 종료할 수 있으며 원본 엑셀은 서버로 전송하지 않습니다.
 - `/admin/content/`에서 첫 화면 대표·사무소·리더스시티 설명을 수정할 수 있습니다.
 - `/admin/external-links/`에서 블로그·유튜브 링크, 요약, 공개 상태와 썸네일을 관리합니다. 링크 썸네일을 못 불러오면 직접 사진을 올릴 수 있습니다.
 - `/admin/complexes/`에서 대전 동구 지역·단지 설명과 출처·확인일을 관리합니다.

@@ -7,14 +7,14 @@ import { office } from "../../../lib/site";
 
 <AdminLayout
   title="네이버 매물 등록·동기화 | 리더스시티행복한공인중개사사무소 관리자"
-  description="부동산뱅크 엑셀을 안전하게 가져오고 그 밖의 네이버 매물을 직접 등록·수정·종료합니다."
+  description="부동산뱅크 자동 동기화를 엑셀로 안전하게 보완하고 그 밖의 네이버 매물을 직접 등록·수정·종료합니다."
 >
   <div class="admin-page-header admin-page-header--compact">
     <div>
       <nav class="admin-breadcrumbs" aria-label="현재 위치"><a href="/admin/">대시보드</a><span>/</span><a href="/admin/listings/">네이버 매물</a><span>/</span><span aria-current="page">등록·동기화</span></nav>
       <p class="admin-eyebrow">NAVER LISTING EDITOR</p>
-      <h1>부동산뱅크 가져오기와 직접 등록</h1>
-      <p>부동산뱅크 매물은 엑셀로 한 번에 반영하고, 그 밖의 네이버 매물은 현재 공개 카드 형식에 맞춰 직접 관리합니다.</p>
+      <h1>부동산뱅크 동기화 보완과 직접 등록</h1>
+      <p>부동산뱅크 공개 매물은 하루 1회 자동 반영하며, 엑셀은 자동 동기화 장애 시 보완합니다. 그 밖의 네이버 매물은 현재 공개 카드 형식에 맞춰 직접 관리합니다.</p>
     </div>
     <a class="admin-text-link" href={office.naverListingsUrl} target="_blank" rel="noopener noreferrer">네이버 공개 매물 확인 <span aria-hidden="true">↗</span></a>
   </div>
@@ -23,7 +23,7 @@ import { office } from "../../../lib/site";
 
   <section class="admin-panel admin-bank-import" aria-labelledby="bank-import-heading">
     <div class="admin-panel__heading">
-      <div><p class="admin-eyebrow">부동산뱅크 전용</p><h2 id="bank-import-heading">엑셀 매물 가져오기</h2></div>
+      <div><p class="admin-eyebrow">부동산뱅크 보완용</p><h2 id="bank-import-heading">엑셀 매물 가져오기</h2></div>
       <span class="admin-panel__number" aria-hidden="true">A</span>
     </div>
     <p class="admin-panel-description">부동산뱅크 매물관리에서 엑셀출력한 <strong>.xls</strong> 파일만 지원합니다. 원본 파일은 브라우저에서만 읽고 서버에는 공개 가능한 JSON만 전송합니다.</p>
@@ -51,7 +51,7 @@ import { office } from "../../../lib/site";
       <ul class="admin-security-checklist" aria-label="원본 파일 보안 처리">
         <li>소유자·매도자·전화번호·내부 메모를 저장하지 않습니다.</li>
         <li>매물설명의 정확한 호수는 버리고 공개 동 번호만 사용합니다.</li>
-        <li>기존 공개 층 정보와 엑셀에 없는 수동 매물은 그대로 유지합니다.</li>
+        <li>엑셀 보완에서는 기존 공개 층 정보와 엑셀에 없는 수동 매물을 그대로 유지합니다.</li>
         <li>원본 XLS는 Worker·GitHub·브라우저 저장소로 보내지 않습니다.</li>
       </ul>
 
@@ -66,7 +66,7 @@ import { office } from "../../../lib/site";
       </div>
 
       <div class="admin-import-actions">
-        <p>사이트에만 있는 매물은 부동산뱅크 파일에 없어도 삭제하지 않습니다.</p>
+        <p>이 엑셀 보완에서는 사이트에만 있는 매물을 삭제하지 않습니다. 하루 1회 자동 동기화에서는 직전 부동산뱅크 목록에서 빠진 매물을 삭제합니다.</p>
         <button class="admin-primary-button" type="button" data-bank-apply data-write-control disabled>변경사항 반영</button>
       </div>
     </div>

@@ -97,12 +97,14 @@ npm run dev
 npm test
 npm run check
 npm run build
+npm run sync:bank:dry-run
 npm run sync:external:dry-run
 ```
 
 - `npm run check`: 공개 콘텐츠 검증 후 Astro·TypeScript 검사
 - `npm run build`: 검사 후 `dist/` 정적 산출물 생성
 - `npm run deploy`: 검사·빌드 후 Wrangler로 Cloudflare 배포
+- `npm run sync:bank:dry-run`: 허용된 부동산뱅크 공개 사무소 목록을 조회하고 예상 매물 변경을 파일 수정 없이 검증
 - `npm run sync:external:dry-run`: `YOUTUBE_CHANNEL_ID`로 공식 Naver RSS·YouTube Atom을 조회하고 예상 변경을 파일 수정 없이 검증
 - 실제 검색 공개 빌드: `PUBLIC_SITE_URL`과 `PUBLIC_ALLOW_INDEXING=true`를 함께 설정
 
@@ -114,6 +116,7 @@ npm run sync:external:dry-run
 - `src/data/office.json` → `src/lib/site.ts` → 헤더·푸터·사무소·오시는 길·네이버 등록 매물 링크·구조화 데이터
 - `src/data/listings.json` → `src/lib/listings.ts` → 매물 목록 필터와 공개 상세 정적 생성
 - `src/data/naver-listings.json` → `src/lib/naver-listings.ts` → 사진 없는 네이버 공개 매물 카드·홈 6건 단위 페이징·거래/유형 필터·기본/가격 낮은·높은/최근 확인/면적 작은·큰 정렬·외부 상세 링크
+- 부동산뱅크 공개 사무소 목록 → `scripts/sync-bank-listings.mjs` → EUC-KR 공개 HTML의 현재 페이지 전체 파싱·네이버 ID 기준 갱신·직전 부동산뱅크 기준선에서 사라진 항목 삭제·다른 공급처 항목 보존 → `naver-listings.json`. 2026-08-26 1:1 문의의 본인 매물·하루 1회 허용 범위만 사용하며 로그인·상세·네이버 페이지는 조회하지 않는다.
 - `src/data/complexes-overview.json` → 리더스시티 4·5블록 전체 소개·숫자 카드·비교표·공통 현장 확인사항·관련 콘텐츠와 출처
 - `src/data/complexes.json` → 대전 동구 주요 단지의 사진·기본 사실·면적별 세대 구성·공급 구성·생활환경·시설 확인 상태·FAQ·관련 콘텐츠·복수 출처와 목록·상세 정적 생성
 - 공식 Naver RSS·YouTube Atom → `scripts/sync-external-content.mjs` → `src/data/external-links.json` 신규 `published` 항목과 자체 WebP 썸네일. YouTube alternate URL의 `/shorts/`는 `youtubeFormat: short`, 그 밖의 개별 영상은 `video`로 분류하며 기존 항목은 append-only로 보존. 한 출처의 일시 장애는 3회 이내 재시도 후 경고와 함께 건너뛰고 정상 출처만 반영하며, 두 출처 모두 장애이거나 출처·채널·XML·ID 신뢰 검증이 실패하면 전체 실행을 중단
@@ -192,6 +195,7 @@ DB와 TR 흐름은 없다. 관리 API의 콘텐츠 쓰기는 `ADMIN_WRITE_ENABLE
 - GitHub Actions CI는 `npm ci`, `npm test`, `npm run build`로 검증만 수행하며 Cloudflare 배포는 실행하지 않는다.
 - `.github/workflows/sync-external-content.yml`은 매시간 17분 `schedule`과 `workflow_dispatch`를 지원하는 별도 워크플로이며 이 파일만 `contents: write`를 사용한다.
 - 동기화 워크플로는 허용된 콘텐츠·썸네일 경로 또는 45일 keepalive 상태 파일만 분리 커밋하고, 같은 실행에서 테스트·콘텐츠 검사·빌드를 다시 수행한다.
+- `.github/workflows/sync-bank-listings.yml`은 매일 00:10 KST와 수동 실행을 지원한다. 공개 목록만 조회하고 `.github/bank-listing-sync-state.json`과 `src/data/naver-listings.json`만 변경·커밋하며 같은 실행에서 테스트·콘텐츠 검사·빌드를 다시 수행한다.
 - Cloudflare Workers Builds는 GitHub `myoungsuk/real-estate-website`의 `master`에 연결되어 있으며, `master` 푸시 시 Production을 자동 빌드·배포한다.
 - Production 빌드는 `PUBLIC_SITE_URL=https://leaderscityhappy.com`, `PUBLIC_ALLOW_INDEXING=true`를 사용한다.
 - `master` 푸시 후에는 Cloudflare 새 배포 버전과 운영 URL 반영을 먼저 확인한다. 자동 배포가 진행 중인 동안 중복 수동 배포를 실행하지 않는다.

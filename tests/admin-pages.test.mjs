@@ -200,7 +200,7 @@ test("네이버 매물 관리 화면은 검색·유형 필터와 접근 가능�
   assert.match(adminStyles, /\.admin-empty-state\[hidden\][\s\S]*display: none !important/);
 });
 
-test("공개 매물 화면은 네이버 개별 매물 50건을 사진 없이 페이지·정렬해 표시한다", async () => {
+test("공개 매물 화면은 현재 네이버 개별 매물을 사진 없이 페이지·정렬해 표시한다", async () => {
   const [home, pager, properties, card, styles, rawData] = await Promise.all([
     readSource("src/pages/index.astro"),
     readSource("src/components/NaverListingPager.astro"),
@@ -210,8 +210,8 @@ test("공개 매물 화면은 네이버 개별 매물 50건을 사진 없이 페
     readSource("src/data/naver-listings.json"),
   ]);
   const data = JSON.parse(rawData);
-  assert.equal(data.items.length, 50);
-  assert.equal(new Set(data.items.map((item) => item.id)).size, 50);
+  assert.ok(data.items.length > 0);
+  assert.equal(new Set(data.items.map((item) => item.id)).size, data.items.length);
   assert.equal(data.items[0].title, "휴먼시아2단지 202동");
   assert.equal(data.items[0].floorLabel, "2/22층");
   assert.ok(data.items.every((item) => item.url === `https://fin.land.naver.com/articles/${item.id}`));
