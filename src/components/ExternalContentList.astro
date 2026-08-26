@@ -27,6 +27,7 @@ const {
 const safePageSize = Math.max(1, pageSize);
 const pageCount = Math.ceil(items.length / safePageSize);
 const gridId = `content-grid-${items[0]?.type ?? "all"}-${items[0]?.id ?? "empty"}`;
+const hasYoutubeItems = items.some((item) => item.type === "youtube");
 const showYoutubeFilters = youtubeFilters && items.some((item) => item.type === "youtube");
 const youtubeVideoCount = items.filter((item) => item.type === "youtube" && item.youtubeFormat === "video").length;
 const youtubeShortsCount = items.filter((item) => item.type === "youtube" && item.youtubeFormat === "short").length;
@@ -51,14 +52,13 @@ function getYoutubeVideoId(item: ExternalContent) {
     data-content-pager
     data-page-size={safePageSize}
     data-content-pagination-enabled={paginate ? "true" : "false"}
-    data-youtube-hover-preview={hoverPreview && showYoutubeFilters ? "true" : undefined}
+    data-youtube-hover-preview={hoverPreview && hasYoutubeItems ? "true" : undefined}
   >
     {showYoutubeFilters && (
       <div class="content-filter-bar">
         <nav class="content-filter" aria-label="유튜브 콘텐츠 유형">
-          <button type="button" aria-pressed="true" aria-controls={gridId} data-content-filter="all">전체 <span>{items.length}</span></button>
-          <button type="button" aria-pressed="false" aria-controls={gridId} data-content-filter="video">일반 영상 <span>{youtubeVideoCount}</span></button>
-          <button type="button" aria-pressed="false" aria-controls={gridId} data-content-filter="short">Shorts <span>{youtubeShortsCount}</span></button>
+          <button type="button" aria-pressed="true" aria-controls={gridId} data-content-filter="video">일반 영상 <span>{youtubeVideoCount}</span></button>
+          <button type="button" aria-pressed="false" aria-controls={gridId} data-content-filter="short">Shorts 보기 <span>{youtubeShortsCount}</span></button>
         </nav>
         {hoverPreview && <p class="content-filter__preview-hint">PC에서는 카드에 잠시 머물면 소리 없이 미리 재생됩니다.</p>}
       </div>
@@ -134,7 +134,7 @@ function getYoutubeVideoId(item: ExternalContent) {
     const nextButton = pager.querySelector<HTMLButtonElement>("[data-content-next]");
     const pageSize = Number(pager.dataset.pageSize ?? 6);
     const paginationEnabled = pager.dataset.contentPaginationEnabled !== "false";
-    let activeFilter = "all";
+    let activeFilter = filterButtons[0]?.dataset.contentFilter ?? "all";
     let currentPage = 0;
 
     const showPage = (requestedPage: number, moveToGrid = false) => {

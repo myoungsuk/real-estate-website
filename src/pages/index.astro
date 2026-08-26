@@ -2,7 +2,7 @@
 import BaseLayout from "../layouts/BaseLayout.astro";
 import ExternalContentList from "../components/ExternalContentList.astro";
 import NaverListingPager from "../components/NaverListingPager.astro";
-import { homeContent, publishedBlogContents, publishedYoutubeContents } from "../lib/content";
+import { homeContent, publishedBlogContents, publishedYoutubeVideoContents } from "../lib/content";
 import { getComplexFact, publishedComplexes } from "../lib/complexes";
 import { naverListings, naverListingsCheckedAt } from "../lib/naver-listings";
 import { formatOfficeHours, kakaoHref, office, phoneHref, smsHref } from "../lib/site";
@@ -199,7 +199,7 @@ const structuredData = {
         <h2 id="youtube-heading">YOUTUBE</h2>
         <a class="button button--light" href="/youtube/">유튜브 전체 보기</a>
       </div>
-      <ExternalContentList items={publishedYoutubeContents} emptyLabel="공개할 유튜브 콘텐츠를 준비하고 있습니다." pageSize={6} categoryLabel="유튜브 콘텐츠" youtubeFilters paginate={false} hoverPreview />
+      <ExternalContentList items={publishedYoutubeVideoContents} emptyLabel="공개할 일반 영상을 준비하고 있습니다." pageSize={6} categoryLabel="유튜브 일반 영상" paginate={false} hoverPreview />
     </div>
   </section>
 

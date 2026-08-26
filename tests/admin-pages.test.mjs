@@ -144,14 +144,15 @@ test("관리자 편집 화면은 부동산뱅크 가져오기와 네이버 매�
   assert.match(complexEditor, /name="sources"/);
 });
 
-test("외부 콘텐츠는 블로그와 유튜브를 나누고 유튜브는 한 목록에서 형식을 전환한다", async () => {
-  const [component, home, blog, youtube, privacy, headers, rawData] = await Promise.all([
+test("외부 콘텐츠는 블로그와 유튜브를 나누고 일반 영상을 기본으로 Shorts를 전환한다", async () => {
+  const [component, home, blog, youtube, privacy, headers, contentSource, rawData] = await Promise.all([
     readSource("src/components/ExternalContentList.astro"),
     readSource("src/pages/index.astro"),
     readSource("src/pages/blog.astro"),
     readSource("src/pages/youtube.astro"),
     readSource("src/pages/privacy.astro"),
     readSource("public/_headers"),
+    readSource("src/lib/content.ts"),
     readSource("src/data/external-links.json"),
   ]);
   const items = JSON.parse(rawData);
@@ -170,11 +171,12 @@ test("외부 콘텐츠는 블로그와 유튜브를 나누고 유튜브는 한 �
   assert.ok(videos.every((item) => /youtube\.com\/watch\?v=/.test(item.url)));
   assert.ok(videos.every((item) => item.youtubeFormat === "video" || item.youtubeFormat === "short"));
   assert.ok(videos.filter((item) => item.youtubeFormat === "video").length >= 40);
+  assert.ok(videos.filter((item) => item.youtubeFormat === "short").length >= 32);
   assert.match(component, /data-content-pager/);
   assert.match(component, /data-content-page/);
-  assert.match(component, /data-content-filter="all"/);
-  assert.match(component, /data-content-filter="video"/);
-  assert.match(component, /data-content-filter="short"/);
+  assert.doesNotMatch(component, /data-content-filter="all"/);
+  assert.match(component, /aria-pressed="true"[^>]*data-content-filter="video"/);
+  assert.match(component, /data-content-filter="short">Shorts 보기/);
   assert.match(component, /showPage\(0\)/);
   assert.match(component, /\(hover: hover\) and \(pointer: fine\)/);
   assert.match(component, /prefers-reduced-motion: reduce/);
@@ -182,10 +184,12 @@ test("외부 콘텐츠는 블로그와 유튜브를 나누고 유튜브는 한 �
   assert.match(component, /youtube-nocookie\.com\/embed/);
   assert.match(component, /}, 300\)/);
   assert.match(home, /publishedBlogContents[^]*pageSize=\{9\}/);
-  assert.match(home, /publishedYoutubeContents[^]*pageSize=\{6\}[^]*youtubeFilters[^]*paginate=\{false\}[^]*hoverPreview/);
+  assert.match(home, /publishedYoutubeVideoContents[^]*pageSize=\{6\}[^]*paginate=\{false\}[^]*hoverPreview/);
+  assert.doesNotMatch(home, /youtubeFilters/);
   assert.match(blog, /publishedBlogContents[^]*pageSize=\{9\}/);
   assert.match(youtube, /publishedYoutubeContents[^]*pageSize=\{6\}[^]*youtubeFilters[^]*hoverPreview/);
   assert.doesNotMatch(`${home}\n${youtube}`, /youtube-format-group/);
+  assert.match(contentSource, /timeZone: "Asia\/Seoul"/);
   assert.match(headers, /frame-src https:\/\/www\.youtube-nocookie\.com/);
   assert.match(privacy, /youtube-nocookie\.com/);
   assert.doesNotMatch(home, /\.slice\(0, 6\)/);
