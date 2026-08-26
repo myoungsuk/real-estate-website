@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { findBannedKeys, validateComplexes, validateExternalLinks, validateHomeContent, validateListing, validateNaverListings, validateOffice } from "../scripts/content-validation.mjs";
+import { readFile } from "node:fs/promises";
+import { findBannedKeys, validateComplexes, validateComplexOverview, validateExternalLinks, validateHomeContent, validateListing, validateNaverListings, validateOffice } from "../scripts/content-validation.mjs";
 
 const base = {
   id: "leaders-city-5-sale-001",
@@ -154,6 +155,13 @@ test("주요 단지는 두 개보다 많아도 허용한다", () => {
     image: null,
     facts: [],
     highlights: [],
+    unitGroups: [],
+    supplySummary: [],
+    livingSections: [],
+    amenityGroups: [],
+    checkpoints: [],
+    faqs: [],
+    relatedContentIds: [],
     sources: [],
     confirmedAt: null,
   });
@@ -189,6 +197,25 @@ test("공개 단지는 사진·사실·특징·출처·확인일을 모두 요�
   assert.match(errors, /highlights/);
   assert.match(errors, /sources/);
   assert.match(errors, /confirmedAt/);
+});
+
+test("리더스시티 면적별 세대수 합계와 공개 관련 콘텐츠를 검증한다", async () => {
+  const [complexes, overview, externalLinks] = await Promise.all([
+    readFile(new URL("../src/data/complexes.json", import.meta.url), "utf8").then(JSON.parse),
+    readFile(new URL("../src/data/complexes-overview.json", import.meta.url), "utf8").then(JSON.parse),
+    readFile(new URL("../src/data/external-links.json", import.meta.url), "utf8").then(JSON.parse),
+  ]);
+
+  assert.deepEqual(validateComplexes(complexes, externalLinks), []);
+  assert.deepEqual(validateComplexOverview(overview, complexes, externalLinks), []);
+
+  const wrongTotal = structuredClone(complexes);
+  wrongTotal[0].unitGroups[0].households += 1;
+  assert.match(validateComplexes(wrongTotal, externalLinks).join("\n"), /1,328/);
+
+  const missingContent = structuredClone(overview);
+  missingContent.relatedContentIds.push("missing-content");
+  assert.match(validateComplexOverview(missingContent, complexes, externalLinks).join("\n"), /없는 ID/);
 });
 
 test("블로그와 유튜브 콘텐츠는 공개 상태와 자체 이미지 경로를 검증한다", () => {

@@ -1,6 +1,9 @@
 const allowedStatuses = new Set(["draft", "published", "contracted", "ended"]);
 const allowedTradeTypes = new Set(["sale", "jeonse", "monthly-rent"]);
 const allowedComplexStatuses = new Set(["preparing", "published"]);
+const allowedComplexSourceKinds = new Set(["official", "public-data", "operator", "news"]);
+const allowedComplexAmenityVerifications = new Set(["official", "operator-confirmed", "historical-plan", "check-required"]);
+const allowedComplexLivingCategories = new Set(["transport", "education", "daily-life", "nature"]);
 const allowedExternalContentTypes = new Set(["blog", "youtube"]);
 const allowedExternalContentStatuses = new Set(["draft", "published"]);
 const allowedWeekDays = new Set(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]);
@@ -43,6 +46,69 @@ function validateImage(image, path, { required = false } = {}) {
   const errors = [];
   if (!isAllowedPublicImagePath(image.src)) errors.push(`${path}.src: /images/ 아래의 공개 이미지 경로가 필요합니다.`);
   if (!isNonEmptyString(image.alt)) errors.push(`${path}.alt: 이미지 대체 텍스트가 필요합니다.`);
+  return errors;
+}
+
+function validateTextPairs(items, path, firstKey, secondKey, { required = false } = {}) {
+  if (!Array.isArray(items) || (required && items.length === 0)) {
+    return [`${path}: ${required ? "한 개 이상의 항목" : "배열"}이 필요합니다.`];
+  }
+  const errors = [];
+  items.forEach((item, index) => {
+    if (!isNonEmptyString(item?.[firstKey]) || !isNonEmptyString(item?.[secondKey])) {
+      errors.push(`${path}[${index}]: 표시 문구와 설명이 필요합니다.`);
+    }
+  });
+  return errors;
+}
+
+function validateComplexSources(sources, path, confirmedAt, { required = false } = {}) {
+  if (!Array.isArray(sources) || (required && sources.length === 0)) {
+    return [`${path}: ${required ? "한 개 이상의 출처" : "배열"}가 필요합니다.`];
+  }
+  const errors = [];
+  const ids = new Set();
+  sources.forEach((source, index) => {
+    const sourcePath = `${path}[${index}]`;
+    if (!isKebabCase(source?.id)) errors.push(`${sourcePath}.id: 영문 kebab-case가 필요합니다.`);
+    if (ids.has(source?.id)) errors.push(`${sourcePath}.id: 중복 출처 ID입니다.`);
+    ids.add(source?.id);
+    for (const key of ["publisher", "label"]) {
+      if (!isNonEmptyString(source?.[key])) errors.push(`${sourcePath}.${key}: 출처 표시 정보가 필요합니다.`);
+    }
+    if (!allowedComplexSourceKinds.has(source?.kind)) errors.push(`${sourcePath}.kind: 허용되지 않은 출처 종류입니다.`);
+    if (!isIsoDateOrNull(source?.checkedAt) || source.checkedAt === null) {
+      errors.push(`${sourcePath}.checkedAt: YYYY-MM-DD 확인일이 필요합니다.`);
+    } else if (isNonEmptyString(confirmedAt) && source.checkedAt > confirmedAt) {
+      errors.push(`${sourcePath}.checkedAt: 페이지 확인일보다 늦을 수 없습니다.`);
+    }
+    if (source?.note !== undefined && !isNonEmptyString(source.note)) errors.push(`${sourcePath}.note: 비어 있지 않은 문자열이어야 합니다.`);
+    try {
+      const sourceUrl = new URL(source?.url);
+      if (sourceUrl.protocol !== "https:") errors.push(`${sourcePath}.url: HTTPS 출처가 필요합니다.`);
+    } catch {
+      errors.push(`${sourcePath}.url: 올바른 출처 URL이 필요합니다.`);
+    }
+  });
+  return errors;
+}
+
+function validateRelatedContentIds(ids, path, externalLinks) {
+  if (!Array.isArray(ids)) return [`${path}: 배열이어야 합니다.`];
+  const errors = [];
+  const seen = new Set();
+  const externalById = Array.isArray(externalLinks) ? new Map(externalLinks.map((item) => [item.id, item])) : null;
+  ids.forEach((id, index) => {
+    if (!isKebabCase(id)) errors.push(`${path}[${index}]: 영문 kebab-case ID가 필요합니다.`);
+    if (seen.has(id)) errors.push(`${path}[${index}]: 중복 콘텐츠 ID입니다.`);
+    seen.add(id);
+    if (externalById) {
+      const content = externalById.get(id);
+      if (!content) errors.push(`${path}[${index}]: external-links.json에 없는 ID입니다.`);
+      else if (content.status !== "published") errors.push(`${path}[${index}]: 공개 상태 콘텐츠만 연결할 수 있습니다.`);
+      else if (!isIsoDateOrNull(content.publishedAt) || content.publishedAt === null) errors.push(`${path}[${index}]: 연결 콘텐츠 게시일이 필요합니다.`);
+    }
+  });
   return errors;
 }
 
@@ -215,7 +281,7 @@ export function validateNaverListings(data) {
   return errors;
 }
 
-export function validateComplexes(complexes) {
+export function validateComplexes(complexes, externalLinks) {
   const errors = [];
   if (!Array.isArray(complexes) || complexes.length === 0) {
     return ["complexes: 공개할 주요 단지 항목이 하나 이상 필요합니다."];
@@ -235,39 +301,113 @@ export function validateComplexes(complexes) {
       errors.push(`${path}.introduction: 한 개 이상의 단지 소개 문단이 필요합니다.`);
     }
     errors.push(...validateImage(complex.image, `${path}.image`, { required: complex.status === "published" }));
-    for (const [field, labelKey, valueKey] of [
-      ["facts", "label", "value"],
-      ["highlights", "title", "description"],
-    ]) {
-      if (!Array.isArray(complex[field]) || (complex.status === "published" && complex[field].length === 0)) {
-        errors.push(`${path}.${field}: 공개 단지에는 한 개 이상의 항목이 필요합니다.`);
-      } else if (Array.isArray(complex[field])) {
-        complex[field].forEach((item, itemIndex) => {
-          if (!isNonEmptyString(item[labelKey]) || !isNonEmptyString(item[valueKey])) {
-            errors.push(`${path}.${field}[${itemIndex}]: 표시 문구와 설명이 필요합니다.`);
-          }
-        });
-      }
-    }
-    if (!Array.isArray(complex.sources) || (complex.status === "published" && complex.sources.length === 0)) {
-      errors.push(`${path}.sources: 공개 단지에는 한 개 이상의 출처가 필요합니다.`);
-    } else if (Array.isArray(complex.sources)) {
-      complex.sources.forEach((source, sourceIndex) => {
-        if (!isNonEmptyString(source.label)) errors.push(`${path}.sources[${sourceIndex}].label: 출처 이름이 필요합니다.`);
-        try {
-          const sourceUrl = new URL(source.url);
-          if (sourceUrl.protocol !== "https:") errors.push(`${path}.sources[${sourceIndex}].url: HTTPS 출처가 필요합니다.`);
-        } catch {
-          errors.push(`${path}.sources[${sourceIndex}].url: 올바른 출처 URL이 필요합니다.`);
-        }
+    const required = complex.status === "published";
+    errors.push(...validateTextPairs(complex.facts, `${path}.facts`, "label", "value", { required }));
+    errors.push(...validateTextPairs(complex.highlights, `${path}.highlights`, "title", "description", { required }));
+    errors.push(...validateTextPairs(complex.supplySummary, `${path}.supplySummary`, "label", "value", { required }));
+    errors.push(...validateTextPairs(complex.checkpoints, `${path}.checkpoints`, "title", "description", { required }));
+    errors.push(...validateTextPairs(complex.faqs, `${path}.faqs`, "question", "answer", { required }));
+    if (!Array.isArray(complex.unitGroups) || (required && complex.unitGroups.length === 0)) {
+      errors.push(`${path}.unitGroups: 공개 단지에는 한 개 이상의 면적별 세대 구성이 필요합니다.`);
+    } else if (Array.isArray(complex.unitGroups)) {
+      complex.unitGroups.forEach((unit, unitIndex) => {
+        const unitPath = `${path}.unitGroups[${unitIndex}]`;
+        if (!isNonEmptyString(unit?.category) || !isNonEmptyString(unit?.areaLabel)) errors.push(`${unitPath}: 공급 구분과 전용면적 표시가 필요합니다.`);
+        if (!isPositiveSafeInteger(unit?.households)) errors.push(`${unitPath}.households: 양의 정수 세대수가 필요합니다.`);
+        if (unit?.note !== undefined && !isNonEmptyString(unit.note)) errors.push(`${unitPath}.note: 비어 있지 않은 문자열이어야 합니다.`);
       });
     }
+    if (!Array.isArray(complex.livingSections) || (required && complex.livingSections.length === 0)) {
+      errors.push(`${path}.livingSections: 공개 단지에는 생활환경 안내가 필요합니다.`);
+    } else if (Array.isArray(complex.livingSections)) {
+      complex.livingSections.forEach((section, sectionIndex) => {
+        const sectionPath = `${path}.livingSections[${sectionIndex}]`;
+        if (!allowedComplexLivingCategories.has(section?.category)) errors.push(`${sectionPath}.category: 허용되지 않은 생활환경 종류입니다.`);
+        if (!isNonEmptyString(section?.title) || !isNonEmptyString(section?.description)) errors.push(`${sectionPath}: 제목과 설명이 필요합니다.`);
+      });
+    }
+    if (!Array.isArray(complex.amenityGroups) || (required && complex.amenityGroups.length === 0)) {
+      errors.push(`${path}.amenityGroups: 공개 단지에는 시설 정보와 확인 상태가 필요합니다.`);
+    } else if (Array.isArray(complex.amenityGroups)) {
+      complex.amenityGroups.forEach((group, groupIndex) => {
+        const groupPath = `${path}.amenityGroups[${groupIndex}]`;
+        if (!isNonEmptyString(group?.title)) errors.push(`${groupPath}.title: 시설 묶음 제목이 필요합니다.`);
+        if (!allowedComplexAmenityVerifications.has(group?.verification)) errors.push(`${groupPath}.verification: 허용되지 않은 확인 상태입니다.`);
+        if (!Array.isArray(group?.items) || group.items.length === 0 || group.items.some((item) => !isNonEmptyString(item))) {
+          errors.push(`${groupPath}.items: 한 개 이상의 시설명이 필요합니다.`);
+        }
+        if (group?.note !== undefined && !isNonEmptyString(group.note)) errors.push(`${groupPath}.note: 비어 있지 않은 문자열이어야 합니다.`);
+      });
+    }
+    errors.push(...validateRelatedContentIds(complex.relatedContentIds, `${path}.relatedContentIds`, externalLinks));
+    errors.push(...validateComplexSources(complex.sources, `${path}.sources`, complex.confirmedAt, { required }));
     if (complex.status === "published") {
       if (!isIsoDateOrNull(complex.confirmedAt) || complex.confirmedAt === null) errors.push(`${path}.confirmedAt: 공개 단지는 확인일이 필요합니다.`);
     }
     if (slugs.has(complex.slug)) errors.push(`${path}.slug: 중복 slug입니다.`);
     slugs.add(complex.slug);
   });
+
+  const leadersCity4 = complexes.find((complex) => complex.slug === "leaders-city-4");
+  const leadersCity5 = complexes.find((complex) => complex.slug === "leaders-city-5");
+  if (leadersCity4?.status === "published" && Array.isArray(leadersCity4.unitGroups)) {
+    const total = leadersCity4.unitGroups.reduce((sum, unit) => sum + (Number.isSafeInteger(unit.households) ? unit.households : 0), 0);
+    if (total !== 1328) errors.push("complexes.leaders-city-4.unitGroups: 세대수 합계는 1,328이어야 합니다.");
+  }
+  if (leadersCity5?.status === "published" && Array.isArray(leadersCity5.unitGroups)) {
+    const rentalTotal = leadersCity5.unitGroups.filter((unit) => unit.category === "10년 공공임대").reduce((sum, unit) => sum + (Number.isSafeInteger(unit.households) ? unit.households : 0), 0);
+    const saleTotal = leadersCity5.unitGroups.filter((unit) => unit.category === "분양").reduce((sum, unit) => sum + (Number.isSafeInteger(unit.households) ? unit.households : 0), 0);
+    if (rentalTotal !== 712) errors.push("complexes.leaders-city-5.unitGroups: 10년 공공임대 세대수 합계는 712이어야 합니다.");
+    if (saleTotal !== 1423) errors.push("complexes.leaders-city-5.unitGroups: 분양 세대수 합계는 1,423이어야 합니다.");
+    if (rentalTotal + saleTotal !== 2135) errors.push("complexes.leaders-city-5.unitGroups: 전체 세대수 합계는 2,135여야 합니다.");
+  }
+  return errors;
+}
+
+export function validateComplexOverview(overview, complexes, externalLinks) {
+  const errors = [];
+  for (const key of ["eyebrow", "title", "description", "note"]) {
+    if (!isNonEmptyString(overview?.[key])) errors.push(`complexOverview.${key}: 공개 문구가 필요합니다.`);
+  }
+  if (!isIsoDateOrNull(overview?.confirmedAt) || overview.confirmedAt === null) {
+    errors.push("complexOverview.confirmedAt: YYYY-MM-DD 확인일이 필요합니다.");
+  }
+  if (!Array.isArray(overview?.stats) || overview.stats.length === 0) {
+    errors.push("complexOverview.stats: 한 개 이상의 숫자 카드가 필요합니다.");
+  } else {
+    overview.stats.forEach((stat, index) => {
+      if (!isNonEmptyString(stat?.label) || !isNonEmptyString(stat?.value) || !isNonEmptyString(stat?.description)) {
+        errors.push(`complexOverview.stats[${index}]: 제목, 값과 설명이 필요합니다.`);
+      }
+    });
+  }
+  errors.push(...validateTextPairs(overview?.reasons, "complexOverview.reasons", "title", "description", { required: true }));
+  errors.push(...validateTextPairs(overview?.sharedCheckpoints, "complexOverview.sharedCheckpoints", "title", "description", { required: true }));
+  if (!Array.isArray(overview?.comparisonRows) || overview.comparisonRows.length === 0) {
+    errors.push("complexOverview.comparisonRows: 한 개 이상의 비교 항목이 필요합니다.");
+  } else {
+    overview.comparisonRows.forEach((row, index) => {
+      if (!isNonEmptyString(row?.label) || !row?.values || typeof row.values !== "object") {
+        errors.push(`complexOverview.comparisonRows[${index}]: 비교 항목과 블록별 값이 필요합니다.`);
+        return;
+      }
+      for (const complex of Array.isArray(complexes) ? complexes.filter((item) => item.status === "published") : []) {
+        if (!isNonEmptyString(row.values[complex.slug])) errors.push(`complexOverview.comparisonRows[${index}].values.${complex.slug}: 비교값이 필요합니다.`);
+      }
+    });
+  }
+  errors.push(...validateRelatedContentIds(overview?.relatedContentIds, "complexOverview.relatedContentIds", externalLinks));
+  errors.push(...validateComplexSources(overview?.sources, "complexOverview.sources", overview?.confirmedAt, { required: true }));
+
+  if (Array.isArray(complexes)) {
+    const leadersCity4 = complexes.find((complex) => complex.slug === "leaders-city-4");
+    const leadersCity5 = complexes.find((complex) => complex.slug === "leaders-city-5");
+    const combinedTotal = [leadersCity4, leadersCity5].reduce((sum, complex) => sum + (complex?.unitGroups?.reduce((subtotal, unit) => subtotal + (Number.isSafeInteger(unit.households) ? unit.households : 0), 0) ?? 0), 0);
+    if (combinedTotal !== 3463) errors.push("complexOverview: 4·5블록 세대수 합계는 3,463이어야 합니다.");
+  }
+  if (!overview?.stats?.some((stat) => stat.label === "전체 규모" && stat.value === "3,463세대")) {
+    errors.push("complexOverview.stats: 전체 규모 3,463세대 카드가 필요합니다.");
+  }
   return errors;
 }
 
@@ -336,15 +476,16 @@ export function validateHomeContent(homeContent) {
   return errors;
 }
 
-export function validateContent({ office, listings, naverListings, complexes, externalLinks, homeContent, faq, reviews }) {
+export function validateContent({ office, listings, naverListings, complexes, complexOverview, externalLinks, homeContent, faq, reviews }) {
   const errors = validateOffice(office);
   errors.push(...validateListings(listings));
   errors.push(...validateNaverListings(naverListings));
-  errors.push(...validateComplexes(complexes));
+  errors.push(...validateComplexes(complexes, externalLinks));
+  errors.push(...validateComplexOverview(complexOverview, complexes, externalLinks));
   errors.push(...validateExternalLinks(externalLinks));
   errors.push(...validateHomeContent(homeContent));
   if (!Array.isArray(faq) || !Array.isArray(reviews)) errors.push("FAQ·후기는 배열이어야 합니다.");
 
-  errors.push(...findBannedKeys({ office, listings, naverListings, complexes, externalLinks, homeContent, faq, reviews }));
+  errors.push(...findBannedKeys({ office, listings, naverListings, complexes, complexOverview, externalLinks, homeContent, faq, reviews }));
   return errors;
 }

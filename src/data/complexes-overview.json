@@ -1,0 +1,48 @@
+{
+  "eyebrow": "LEADERS CITY GUIDE",
+  "title": "4블록과 5블록, 숫자보다 생활 기준으로 비교하세요",
+  "description": "천동 리더스시티는 4·5블록 합계 3,463세대 규모의 신축 생활권입니다. 세대수와 전용면적뿐 아니라 출퇴근 동선, 학교, 의료·생활시설, 동·층별 환경과 계약 형태까지 함께 확인해 보세요.",
+  "note": "아래 정보는 LH·대전광역시·K-apt 등 공개자료와 운영자가 직접 확인한 내용을 구분해 안내합니다. 실제 계약 전에는 최신 공적 자료와 현장 상태를 다시 확인합니다.",
+  "confirmedAt": "2026-08-25",
+  "stats": [
+    { "label": "전체 규모", "value": "3,463세대", "description": "4블록 1,328세대 + 5블록 2,135세대" },
+    { "label": "전체 동수", "value": "26개동", "description": "4블록 10개동 + 5블록 16개동" },
+    { "label": "입주 시기", "value": "2024년", "description": "4블록 7월, 5블록 12월" },
+    { "label": "전용면적", "value": "39~84㎡대", "description": "공공임대 소형부터 분양 중형까지" },
+    { "label": "공급 구성", "value": "분양 + 공공임대", "description": "5블록에 10년 공공임대 712세대 포함" },
+    { "label": "현장 상담", "value": "5블록 단지 내", "description": "근린생활시설 105호에서 4·5블록 상담" }
+  ],
+  "reasons": [
+    { "title": "3,463세대가 만드는 생활권", "description": "두 블록을 하나의 생활권으로 보고 상가, 통학, 교통, 공원과 지역 서비스를 함께 살펴봅니다." },
+    { "title": "신흥역·대전역·판암IC", "description": "도시철도와 철도, 차량 이동을 모두 고려해 실제 출퇴근 시간대 동선을 확인합니다." },
+    { "title": "천동초와 가오권 학교", "description": "인근 학교를 살펴보되 실제 배정학교와 통학구역은 교육청 최신 자료로 다시 확인합니다." },
+    { "title": "병원·쇼핑·도심 접근", "description": "충남대학교병원과 생활시설 접근 조건은 고정된 분 단위보다 지도와 실제 이동 경로로 확인합니다." },
+    { "title": "공원·하천과 산책 환경", "description": "샘골근린공원, 판암근린공원, 비학산, 대동천·대전천의 실제 진입 동선과 경사를 살펴봅니다." },
+    { "title": "단지 안에서 이어지는 상담", "description": "5블록 단지 내 사무소에서 동별 조망, 소음, 일조와 주차 동선을 현장 기준으로 비교합니다." }
+  ],
+  "comparisonRows": [
+    { "label": "도로명주소", "values": { "leaders-city-4": "대전광역시 동구 안샘로 11", "leaders-city-5": "대전광역시 동구 안샘로14번길 7" } },
+    { "label": "세대수", "values": { "leaders-city-4": "1,328세대", "leaders-city-5": "2,135세대" } },
+    { "label": "동수", "values": { "leaders-city-4": "10개동", "leaders-city-5": "16개동" } },
+    { "label": "입주", "values": { "leaders-city-4": "2024년 7월", "leaders-city-5": "2024년 12월" } },
+    { "label": "공급 구성", "values": { "leaders-city-4": "분양 1,328세대", "leaders-city-5": "분양 1,423세대 + 10년 공공임대 712세대" } },
+    { "label": "전용면적", "values": { "leaders-city-4": "59·74·84㎡", "leaders-city-5": "임대 39·51·59㎡ / 분양 59·74·84㎡" } },
+    { "label": "가장 많은 면적 구간", "values": { "leaders-city-4": "74㎡ 516세대", "leaders-city-5": "전체 기준 59㎡ 구간 901세대" } },
+    { "label": "사무소 접근", "values": { "leaders-city-4": "5블록 단지 내 사무소와 인접", "leaders-city-5": "단지 내 근린생활시설 105호" } },
+    { "label": "계약 시 핵심 확인", "values": { "leaders-city-4": "타입·동·층·조망·주차 동선", "leaders-city-5": "분양/공공임대 구분·타입·철도 인접도·동·층" } }
+  ],
+  "sharedCheckpoints": [
+    { "title": "같은 면적도 구조가 다릅니다", "description": "전용면적이 같아도 타입별 거실 폭, 주방, 수납, 드레스룸과 환기 방식이 달라 평면도와 실제 내부를 함께 확인합니다." },
+    { "title": "동·층·방향이 생활을 바꿉니다", "description": "일조, 조망, 철도·도로 소음, 학교와 출입구 방향은 낮과 저녁 현장에서 비교합니다." },
+    { "title": "가격은 날짜와 조건을 붙여 봅니다", "description": "실거래가, 현재 호가, 거래완료 가격을 구분하고 계약일, 면적, 층, 방향, 옵션과 해제 여부를 함께 봅니다." },
+    { "title": "권리관계는 매물별로 다릅니다", "description": "등기부등본, 근저당, 임차관계, 잔금 시 말소 조건을 확인하고 5블록은 분양과 공공임대 계약 구조도 구분합니다." },
+    { "title": "신축도 상태 확인이 필요합니다", "description": "창호, 결로 흔적, 배수, 타일, 실리콘, 빌트인 가전과 하자보수 이력을 살펴봅니다." },
+    { "title": "생활 동선을 직접 걸어봅니다", "description": "주차장에서 세대, 학교, 지하철 방향, 상가와 공원까지 이동해 지도상의 거리와 체감 동선을 비교합니다." }
+  ],
+  "relatedContentIds": ["youtube-lj5vyuijnvs", "naver-blog-224321578531", "youtube-v5x9yvozziw"],
+  "sources": [
+    { "id": "daejeon-2023-159", "publisher": "대전광역시", "label": "천동3구역 정비계획 변경 고시", "url": "https://www.eum.go.kr/web/gs/gv/gvGosiDet.jsp?mobile_yn=&seq=584384", "kind": "official", "checkedAt": "2026-08-25" },
+    { "id": "lh-leaders-city-4-inspection", "publisher": "LH 청약플러스", "label": "리더스시티 4블록 사용검사 안내", "url": "https://apply.lh.or.kr/lhapply/apply/noti/an/view.do?bbsSn=9102429931&ccrCnntSysDsCd=02&mi=1079", "kind": "official", "checkedAt": "2026-08-25" },
+    { "id": "lh-leaders-city-5-supply", "publisher": "LH 청약플러스", "label": "리더스시티 5블록 공급정보", "url": "https://apply.lh.or.kr/lhapply/apply/wt/wrtanc/selectWrtancInfo.do?aisTpCd=08&ccrCnntSysDsCd=02&mi=1026&panId=0000060351&uppAisTpCd=06", "kind": "official", "checkedAt": "2026-08-25" }
+  ]
+}
