@@ -11,5 +11,10 @@ dist/
 playwright-report/
 test-results/
 *.log
+
+# Local review artifacts and source spreadsheets
+artifacts/
+docs/*.xls
+
 .DS_Store
 Thumbs.db
