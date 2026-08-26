@@ -169,6 +169,7 @@
 .admin-form-status[data-state="success"] { color: #176443; }
 .admin-form-status[data-state="error"] { color: #9a3541; }
 .admin-editor-layout { display: grid; gap: 18px; }
+.admin-overview-form { margin-bottom: 18px; }
 .admin-secondary-button,
 .admin-danger-button { min-height: 44px; padding: 8px 14px; border: 1px solid #b9c4ca; border-radius: 10px; color: #17344f; background: #fff; font-weight: 850; cursor: pointer; }
 .admin-secondary-button:disabled { color: #929da4; background: #edf0f2; cursor: not-allowed; }

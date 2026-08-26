@@ -17,6 +17,26 @@ import { complexes } from "../../../lib/complexes";
 
   <AdminWriteGate />
 
+  <form class="admin-panel admin-editor-form admin-overview-form" data-complex-overview-form>
+    <div class="admin-panel__heading">
+      <div><p class="admin-eyebrow">전체 안내 편집</p><h2>4·5블록 비교·공통 콘텐츠</h2></div>
+    </div>
+    <div class="admin-form-grid admin-form-grid--single">
+      <div class="admin-field"><label for="complex-overview-eyebrow">영역 표시</label><input id="complex-overview-eyebrow" name="eyebrow" required data-write-control disabled /></div>
+      <div class="admin-field"><label for="complex-overview-title">전체 안내 제목</label><input id="complex-overview-title" name="title" required data-write-control disabled /></div>
+      <div class="admin-field"><label for="complex-overview-description">전체 안내 설명</label><textarea id="complex-overview-description" name="description" rows="4" required data-write-control disabled></textarea></div>
+      <div class="admin-field"><label for="complex-overview-note">자료 확인 안내</label><textarea id="complex-overview-note" name="note" rows="3" required data-write-control disabled></textarea></div>
+      <div class="admin-field"><label for="complex-overview-stats">숫자 카드</label><textarea id="complex-overview-stats" name="stats" rows="7" data-write-control disabled></textarea><small>항목 | 값 | 설명 형식으로 한 줄에 한 개씩 입력합니다.</small></div>
+      <div class="admin-field"><label for="complex-overview-reasons">생활권 안내</label><textarea id="complex-overview-reasons" name="reasons" rows="7" data-write-control disabled></textarea><small>제목 | 설명 형식으로 입력합니다.</small></div>
+      <div class="admin-field"><label for="complex-overview-comparison">4·5블록 비교표</label><textarea id="complex-overview-comparison" name="comparisonRows" rows="10" data-write-control disabled></textarea><small>항목 | 4블록 값 | 5블록 값 형식으로 입력합니다.</small></div>
+      <div class="admin-field"><label for="complex-overview-checkpoints">공통 현장 확인사항</label><textarea id="complex-overview-checkpoints" name="sharedCheckpoints" rows="7" data-write-control disabled></textarea><small>제목 | 설명 형식으로 입력합니다.</small></div>
+      <div class="admin-field"><label for="complex-overview-related">관련 콘텐츠 ID</label><textarea id="complex-overview-related" name="relatedContentIds" rows="5" data-write-control disabled></textarea><small>external-links.json의 공개 ID를 한 줄에 하나씩 입력합니다.</small></div>
+      <div class="admin-field"><label for="complex-overview-sources">전체 정보 출처</label><textarea id="complex-overview-sources" name="sources" rows="7" data-write-control disabled></textarea><small>ID | 발행처 | 표시 이름 | 종류 | 확인일 | HTTPS 주소 | 참고 형식입니다.</small></div>
+      <div class="admin-field"><label for="complex-overview-confirmed">전체 정보 확인일</label><input id="complex-overview-confirmed" name="confirmedAt" type="date" data-write-control disabled /></div>
+    </div>
+    <div class="admin-editor__actions admin-editor__actions--inside"><p class="admin-form-status" data-complex-overview-status aria-live="polite">전체 안내를 불러오는 중입니다.</p><button class="admin-primary-button" type="submit" data-write-control disabled>전체 안내 저장</button></div>
+  </form>
+
   <div class="admin-editor-layout">
     <section class="admin-panel" aria-labelledby="complex-admin-list-heading">
       <div class="admin-panel__heading"><div><p class="admin-eyebrow">등록 목록</p><h2 id="complex-admin-list-heading">지역·단지 <span data-complex-count>{complexes.length}</span>건</h2></div><button class="admin-secondary-button" type="button" data-complex-new data-write-control disabled>새 단지</button></div>
@@ -43,7 +63,14 @@ import { complexes } from "../../../lib/complexes";
         <div class="admin-field"><label for="complex-image">대표 사진 교체</label><input id="complex-image" name="imageFile" type="file" accept="image/jpeg,image/png,image/webp" data-write-control disabled /><small>원본은 WebP·최대 1600px로 최적화합니다.</small></div>
         <div class="admin-field"><label for="complex-facts">핵심 수치</label><textarea id="complex-facts" name="facts" rows="6" placeholder="주소 | 대전광역시 동구 ...&#10;규모 | 총 1,328세대" data-write-control disabled></textarea><small>`항목 | 값` 형식으로 한 줄에 한 개씩 입력합니다.</small></div>
         <div class="admin-field"><label for="complex-highlights">생활권 장점</label><textarea id="complex-highlights" name="highlights" rows="7" placeholder="교통 연결 | 신흥역과 대전역을 ..." data-write-control disabled></textarea><small>`제목 | 설명` 형식으로 한 줄에 한 개씩 입력합니다.</small></div>
-        <div class="admin-field"><label for="complex-sources">정보 출처</label><textarea id="complex-sources" name="sources" rows="5" placeholder="LH 청약플러스 | https://..." data-write-control disabled></textarea><small>`표시 이름 | HTTPS 주소` 형식이며 공개 상태에서는 한 개 이상 필요합니다.</small></div>
+        <div class="admin-field"><label for="complex-sources">정보 출처</label><textarea id="complex-sources" name="sources" rows="7" data-write-control disabled></textarea><small>ID | 발행처 | 표시 이름 | 종류 | 확인일 | HTTPS 주소 | 참고 형식이며 공개 상태에서는 한 개 이상 필요합니다.</small></div>
+        <div class="admin-field"><label for="complex-unit-groups">면적별 세대 구성</label><textarea id="complex-unit-groups" name="unitGroups" rows="8" data-write-control disabled></textarea><small>공급 구분 | 면적 표시 | 세대수 | 비고 형식입니다.</small></div>
+        <div class="admin-field"><label for="complex-supply-summary">공급 구성 요약</label><textarea id="complex-supply-summary" name="supplySummary" rows="5" data-write-control disabled></textarea><small>항목 | 값 | 설명 형식입니다.</small></div>
+        <div class="admin-field"><label for="complex-living-sections">생활환경</label><textarea id="complex-living-sections" name="livingSections" rows="7" data-write-control disabled></textarea><small>분류 | 제목 | 설명 형식이며 분류는 transport, education, daily-life, nature 중 하나입니다.</small></div>
+        <div class="admin-field"><label for="complex-amenities">커뮤니티·시설</label><textarea id="complex-amenities" name="amenityGroups" rows="6" data-write-control disabled></textarea><small>제목 | 확인상태 | 시설1, 시설2 | 안내 형식입니다.</small></div>
+        <div class="admin-field"><label for="complex-checkpoints">현장 확인사항</label><textarea id="complex-checkpoints" name="checkpoints" rows="7" data-write-control disabled></textarea><small>제목 | 설명 형식입니다.</small></div>
+        <div class="admin-field"><label for="complex-faqs">단지 FAQ</label><textarea id="complex-faqs" name="faqs" rows="8" data-write-control disabled></textarea><small>질문 | 답변 형식입니다.</small></div>
+        <div class="admin-field"><label for="complex-related">관련 콘텐츠 ID</label><textarea id="complex-related" name="relatedContentIds" rows="5" data-write-control disabled></textarea><small>external-links.json의 공개 ID를 한 줄에 하나씩 입력합니다.</small></div>
         <div class="admin-field"><label for="complex-confirmed">확인일</label><input id="complex-confirmed" name="confirmedAt" type="date" data-write-control disabled /></div>
       </div>
       <div class="admin-editor__actions admin-editor__actions--inside"><p class="admin-form-status" data-complex-status-message aria-live="polite">지역과 단지 설명을 입력해 주세요.</p><button class="admin-primary-button" type="submit" data-write-control disabled>저장</button></div>
@@ -52,15 +79,45 @@ import { complexes } from "../../../lib/complexes";
 
   <script>
     import { convertImageFileToWebp, readAdminContent, setAdminFormStatus, uploadAdminImage, writeAdminContent, type AdminResource } from "../../../lib/admin-content-client";
-    import type { ComplexContent } from "../../../lib/complexes";
+    import type { ComplexContent, ComplexOverview, ComplexSource } from "../../../lib/complexes";
 
     const form = document.querySelector<HTMLFormElement>("[data-complex-form]");
+    const overviewForm = document.querySelector<HTMLFormElement>("[data-complex-overview-form]");
     const list = document.querySelector<HTMLElement>("[data-complex-list]");
     const count = document.querySelector<HTMLElement>("[data-complex-count]");
     const statusMessage = document.querySelector<HTMLElement>("[data-complex-status-message]");
+    const overviewStatusMessage = document.querySelector<HTMLElement>("[data-complex-overview-status]");
     const formTitle = document.querySelector<HTMLElement>("[data-complex-form-title]");
     let resource: AdminResource<ComplexContent[]> | null = null;
+    let overviewResource: AdminResource<ComplexOverview> | null = null;
     const field = (name: string) => form?.elements.namedItem(name) as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null;
+    const overviewField = (name: string) => overviewForm?.elements.namedItem(name) as HTMLInputElement | HTMLTextAreaElement | null;
+    const splitLines = (value: string) => value.split("\n").map((line) => line.trim()).filter(Boolean);
+    const splitParts = (line: string) => line.split("|").map((part) => part.trim());
+    const formatSources = (sources: ComplexSource[]) => sources.map((source) => [source.id, source.publisher, source.label, source.kind, source.checkedAt, source.url, source.note ?? ""].join(" | ")).join("\n");
+    const parseSources = (value: string) => splitLines(value).map((line) => {
+      const [id = "", publisher = "", label = "", kind = "", checkedAt = "", url = "", ...note] = splitParts(line);
+      return { id, publisher, label, kind: kind as ComplexSource["kind"], checkedAt, url, ...(note.join(" | ").trim() ? { note: note.join(" | ").trim() } : {}) };
+    });
+
+    const renderOverview = () => {
+      if (!overviewResource) return;
+      const overview = overviewResource.data;
+      const values: Record<string, string> = {
+        eyebrow: overview.eyebrow,
+        title: overview.title,
+        description: overview.description,
+        note: overview.note,
+        stats: overview.stats.map((item) => [item.label, item.value, item.description].join(" | ")).join("\n"),
+        reasons: overview.reasons.map((item) => [item.title, item.description].join(" | ")).join("\n"),
+        comparisonRows: overview.comparisonRows.map((item) => [item.label, item.values["leaders-city-4"] ?? "", item.values["leaders-city-5"] ?? ""].join(" | ")).join("\n"),
+        sharedCheckpoints: overview.sharedCheckpoints.map((item) => [item.title, item.description].join(" | ")).join("\n"),
+        relatedContentIds: overview.relatedContentIds.join("\n"),
+        sources: formatSources(overview.sources),
+        confirmedAt: overview.confirmedAt,
+      };
+      Object.entries(values).forEach(([name, value]) => { if (overviewField(name)) overviewField(name)!.value = value; });
+    };
 
     const renderList = () => {
       if (!list || !resource) return;
@@ -93,13 +150,71 @@ import { complexes } from "../../../lib/complexes";
         imageAlt: complex.image?.alt ?? "",
         facts: complex.facts.map((fact) => `${fact.label} | ${fact.value}`).join("\n"),
         highlights: complex.highlights.map((highlight) => `${highlight.title} | ${highlight.description}`).join("\n"),
-        sources: complex.sources.map((source) => `${source.label} | ${source.url}`).join("\n"),
+        unitGroups: complex.unitGroups.map((unit) => [unit.category, unit.areaLabel, String(unit.households), unit.note ?? ""].join(" | ")).join("\n"),
+        supplySummary: complex.supplySummary.map((item) => [item.label, item.value, item.description ?? ""].join(" | ")).join("\n"),
+        livingSections: complex.livingSections.map((item) => [item.category, item.title, item.description].join(" | ")).join("\n"),
+        amenityGroups: complex.amenityGroups.map((group) => [group.title, group.verification, group.items.join(", "), group.note ?? ""].join(" | ")).join("\n"),
+        checkpoints: complex.checkpoints.map((item) => [item.title, item.description].join(" | ")).join("\n"),
+        faqs: complex.faqs.map((item) => [item.question, item.answer].join(" | ")).join("\n"),
+        relatedContentIds: complex.relatedContentIds.join("\n"),
+        sources: formatSources(complex.sources),
         confirmedAt: complex.confirmedAt ?? "",
       };
       Object.entries(values).forEach(([name, value]) => { if (field(name)) field(name)!.value = value; });
       if (formTitle) formTitle.textContent = "지역·단지 수정";
     };
-    window.addEventListener("admin-write-ready", (event) => { if (!(event as CustomEvent<{ writeEnabled: boolean }>).detail.writeEnabled) return; void readAdminContent<ComplexContent[]>("complexes").then((current) => { resource = current; renderList(); setAdminFormStatus(statusMessage, "GitHub의 최신 내용을 불러왔습니다."); }).catch((error) => setAdminFormStatus(statusMessage, error instanceof Error ? error.message : "내용을 불러오지 못했습니다.", "error")); });
+    window.addEventListener("admin-write-ready", (event) => {
+      if (!(event as CustomEvent<{ writeEnabled: boolean }>).detail.writeEnabled) return;
+      void Promise.all([
+        readAdminContent<ComplexContent[]>("complexes"),
+        readAdminContent<ComplexOverview>("complexes-overview"),
+      ]).then(([current, currentOverview]) => {
+        resource = current;
+        overviewResource = currentOverview;
+        renderList();
+        renderOverview();
+        setAdminFormStatus(statusMessage, "GitHub의 최신 내용을 불러왔습니다.");
+        setAdminFormStatus(overviewStatusMessage, "GitHub의 최신 전체 안내를 불러왔습니다.");
+      }).catch((error) => {
+        const message = error instanceof Error ? error.message : "내용을 불러오지 못했습니다.";
+        setAdminFormStatus(statusMessage, message, "error");
+        setAdminFormStatus(overviewStatusMessage, message, "error");
+      });
+    });
+    overviewForm?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!overviewResource) return setAdminFormStatus(overviewStatusMessage, "최신 전체 안내를 먼저 불러와 주세요.", "error");
+      const submit = overviewForm.querySelector<HTMLButtonElement>("button[type='submit']");
+      if (submit) submit.disabled = true;
+      try {
+        const value = (name: string) => overviewField(name)?.value.trim() ?? "";
+        const rows = (name: string) => splitLines(value(name)).map(splitParts);
+        const next: ComplexOverview = {
+          eyebrow: value("eyebrow"),
+          title: value("title"),
+          description: value("description"),
+          note: value("note"),
+          confirmedAt: value("confirmedAt"),
+          stats: rows("stats").map(([label = "", itemValue = "", ...description]) => ({ label, value: itemValue, description: description.join(" | ").trim() })),
+          reasons: rows("reasons").map(([title = "", ...description]) => ({ title, description: description.join(" | ").trim() })),
+          comparisonRows: rows("comparisonRows").map(([label = "", leadersCity4 = "", ...leadersCity5]) => ({
+            label,
+            values: { "leaders-city-4": leadersCity4, "leaders-city-5": leadersCity5.join(" | ").trim() },
+          })),
+          sharedCheckpoints: rows("sharedCheckpoints").map(([title = "", ...description]) => ({ title, description: description.join(" | ").trim() })),
+          relatedContentIds: splitLines(value("relatedContentIds")),
+          sources: parseSources(value("sources")),
+        };
+        const result = await writeAdminContent("complexes-overview", overviewResource.sha, next);
+        overviewResource = { resource: "complexes-overview", sha: result.contentSha ?? overviewResource.sha, data: next };
+        renderOverview();
+        setAdminFormStatus(overviewStatusMessage, "전체 안내를 저장했습니다. GitHub 커밋이 생성되었습니다.", "success");
+      } catch (error) {
+        setAdminFormStatus(overviewStatusMessage, error instanceof Error ? error.message : "전체 안내를 저장하지 못했습니다.", "error");
+      } finally {
+        if (submit) submit.disabled = false;
+      }
+    });
     list?.addEventListener("click", (event) => { const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-complex-edit]"); if (button?.dataset.complexEdit) edit(button.dataset.complexEdit); });
     document.querySelector("[data-complex-new]")?.addEventListener("click", resetForm);
     form?.addEventListener("submit", async (event) => {
@@ -111,6 +226,7 @@ import { complexes } from "../../../lib/complexes";
           const [first, ...rest] = line.split("|");
           return { [firstKey]: first?.trim() ?? "", [secondKey]: rest.join("|").trim() };
         });
+        const parseRows = (name: string) => splitLines(value(name)).map(splitParts);
         const current = resource.data.find((candidate) => candidate.slug === originalSlug);
         let image = current?.image ?? null;
         const imageFile = (field("imageFile") as HTMLInputElement)?.files?.[0];
@@ -130,7 +246,32 @@ import { complexes } from "../../../lib/complexes";
           image,
           facts: parsePairs("facts", "label", "value") as ComplexContent["facts"],
           highlights: parsePairs("highlights", "title", "description") as ComplexContent["highlights"],
-          sources: parsePairs("sources", "label", "url") as ComplexContent["sources"],
+          unitGroups: parseRows("unitGroups").map(([category = "", areaLabel = "", households = "", ...note]) => ({
+            category,
+            areaLabel,
+            households: Number(households),
+            ...(note.join(" | ").trim() ? { note: note.join(" | ").trim() } : {}),
+          })),
+          supplySummary: parseRows("supplySummary").map(([label = "", itemValue = "", ...description]) => ({
+            label,
+            value: itemValue,
+            ...(description.join(" | ").trim() ? { description: description.join(" | ").trim() } : {}),
+          })),
+          livingSections: parseRows("livingSections").map(([category = "", title = "", ...description]) => ({
+            category: category as ComplexContent["livingSections"][number]["category"],
+            title,
+            description: description.join(" | ").trim(),
+          })),
+          amenityGroups: parseRows("amenityGroups").map(([title = "", verification = "", items = "", ...note]) => ({
+            title,
+            verification: verification as ComplexContent["amenityGroups"][number]["verification"],
+            items: items.split(",").map((item) => item.trim()).filter(Boolean),
+            ...(note.join(" | ").trim() ? { note: note.join(" | ").trim() } : {}),
+          })),
+          checkpoints: parsePairs("checkpoints", "title", "description") as ComplexContent["checkpoints"],
+          faqs: parsePairs("faqs", "question", "answer") as ComplexContent["faqs"],
+          relatedContentIds: splitLines(value("relatedContentIds")),
+          sources: parseSources(value("sources")),
           confirmedAt: value("confirmedAt") || null,
         };
         const next = originalSlug ? resource.data.map((candidate) => candidate.slug === originalSlug ? item : candidate) : [...resource.data, item];

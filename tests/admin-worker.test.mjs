@@ -7,6 +7,7 @@ import {
   parseAllowedEmails,
 } from "../worker/access-auth.mjs";
 import { handleAdminApi } from "../worker/admin-api.mjs";
+import { getAdminResourcePath } from "../worker/admin-resource-validation.mjs";
 import { createCsrfToken, verifyCsrfToken } from "../worker/admin-security.mjs";
 import { handleRequest, isAdminApiPath } from "../worker/index.mjs";
 
@@ -17,6 +18,11 @@ const authEnv = {
 };
 
 const authenticated = async () => ({ email: "owner@example.com", subject: "subject-1" });
+
+test("단지 전체 안내 JSON은 관리자 허용 경로로만 연결한다", () => {
+  assert.equal(getAdminResourcePath("complexes-overview"), "src/data/complexes-overview.json");
+  assert.equal(getAdminResourcePath("../complexes-overview"), null);
+});
 
 test("관리 API 경로만 같은 Worker에서 먼저 처리한다", () => {
   assert.equal(isAdminApiPath("/api/admin"), true);
