@@ -7,11 +7,11 @@
     "mark": "4",
     "name": "리더스시티 4블록",
     "status": "published",
-    "summary": "2024년 7월 입주를 시작한 10개동 총 1,328세대 규모의 천동 신축 단지입니다.",
+    "summary": "2024년 7월 입주를 시작한 10개동 1,328세대 규모의 단지로, 전용 59·74·84㎡ 주택형으로 구성됩니다.",
     "introTitle": "리더스시티 4블록, 1,328세대 신축 주거단지",
     "introduction": [
       "대전광역시 동구 안샘로 11에 위치하며 전용 59·74·84㎡ 주택형으로 구성되어 있습니다.",
-      "2024년 7월 사용검사를 마친 단지로, 신흥역·대전역·판암IC를 함께 이용하는 대전 동구 생활권과 학교·병원·공원 접근 조건을 비교해 볼 수 있습니다."
+      "2024년 7월 입주를 시작한 단지로, 신흥역·대전역·판암IC를 함께 이용하는 대전 동구 생활권과 학교·병원·공원 접근 조건을 비교해 볼 수 있습니다."
     ],
     "image": {
       "src": "/images/area/leaders-city-4-landscape.webp",
@@ -19,18 +19,63 @@
     },
     "facts": [
       { "label": "주소", "value": "대전광역시 동구 안샘로 11" },
+      { "label": "지번", "value": "대전광역시 동구 천동 173 일대" },
       { "label": "규모", "value": "10개동 · 1,328세대" },
+      { "label": "공급 구성", "value": "분양 1,328세대" },
+      { "label": "전용면적", "value": "59·74·84㎡" },
       { "label": "입주", "value": "2024년 7월" },
-      { "label": "전용면적", "value": "59·74·84㎡" }
+      { "label": "사업 시행", "value": "LH·계룡건설 컨소시엄 공동사업" },
+      { "label": "층수", "value": "지하 2층~지상 29층 공급 안내" }
     ],
     "highlights": [
-      { "title": "신축 생활권", "description": "2024년 7월 사용검사를 마친 천동3지구의 신축 대단지입니다." },
+      { "title": "신축 생활권", "description": "2024년 7월 입주를 시작한 천동3지구의 신축 대단지입니다." },
       { "title": "교통 연결", "description": "신흥역과 KTX 대전역, 판암IC를 함께 이용하는 대전 동구 생활권입니다." },
       { "title": "생활 환경", "description": "천동초·가오권 학교와 병원, 대동천·대전천과 인근 공원을 함께 확인할 수 있습니다." }
     ],
+    "unitGroups": [
+      { "category": "분양", "areaLabel": "59㎡", "households": 456 },
+      { "category": "분양", "areaLabel": "74㎡", "households": 516 },
+      { "category": "분양", "areaLabel": "84㎡", "households": 356 }
+    ],
+    "supplySummary": [
+      { "label": "분양", "value": "1,328세대", "description": "전용 59·74·84㎡로 구성" }
+    ],
+    "livingSections": [
+      { "category": "transport", "title": "신흥역·대전역·판암IC", "description": "대전도시철도 1호선 신흥역 생활권이며 대전역과 판암IC를 함께 이용할 수 있습니다. 실제 이동시간은 출발 동, 보행 경로, 시간대와 교통수단에 따라 달라집니다." },
+      { "category": "education", "title": "천동초와 통학구역", "description": "천동초등학교가 인근에 있습니다. 실제 통학구역과 배정학교는 학년도와 주소에 따라 달라질 수 있어 교육청 최신 자료를 확인해야 합니다." },
+      { "category": "daily-life", "title": "병원과 생활시설", "description": "홈플러스와 충남대학교병원 등 주변 생활시설 접근성이 공개자료에 소개돼 있습니다. 현재 영업 여부와 이용 동선은 지도와 현장에서 확인합니다." },
+      { "category": "nature", "title": "공원·하천 생활권", "description": "샘골근린공원, 판암근린공원, 비학산, 대동천·대전천 등 주변 녹지와 수변 생활권을 함께 살펴볼 수 있습니다." }
+    ],
+    "amenityGroups": [
+      {
+        "title": "입주자 사전방문 당시 소개된 시설",
+        "items": ["골프연습장", "피트니스센터", "주민카페", "작은도서관", "그룹 스터디룸", "문화교실", "공방", "공유오피스", "단지 내 어린이집", "맘스스테이션"],
+        "verification": "historical-plan",
+        "note": "2024년 입주자 사전방문 당시 설치 시설로 소개됐습니다. 현재 운영 여부와 이용 조건은 관리사무소 또는 현장에서 확인해 주세요."
+      }
+    ],
+    "checkpoints": [
+      { "title": "타입 차이", "description": "같은 59·74·84㎡라도 현관 수납, 주방 구조, 드레스룸, 팬트리와 거실 폭을 확인합니다." },
+      { "title": "동·층·방향", "description": "일조, 조망, 앞 동 간격, 도로와 학교 방향을 낮과 저녁에 각각 확인합니다." },
+      { "title": "등하교 시간 교통", "description": "천동초 인근 차량 흐름과 어린이보호구역 진입 동선을 살펴봅니다." },
+      { "title": "주차·생활 동선", "description": "해당 동과 가까운 주차구역, 지하주차장 연결, 택배·재활용장·커뮤니티 이동을 확인합니다." },
+      { "title": "신축 상태와 옵션", "description": "창호, 결로, 배수, 타일, 실리콘, 빌트인 기기와 매물별 옵션·하자보수 상태를 확인합니다." },
+      { "title": "권리·가격 근거", "description": "등기와 잔금 조건을 확인하고 실거래가와 현재 호가를 계약일·층·면적 기준으로 구분합니다." }
+    ],
+    "faqs": [
+      { "question": "59㎡는 모두 같은 구조인가요?", "answer": "같은 59㎡라도 타입에 따라 방 배치, 주방, 수납과 방향이 달라질 수 있습니다. 평면도와 실제 내부를 함께 확인하는 것이 좋습니다." },
+      { "question": "천동초 배정이 확정되나요?", "answer": "천동초가 인근에 있지만 실제 배정학교와 통학구역은 주소와 학년도에 따라 달라질 수 있습니다. 계약 전 교육청 최신 통학구역을 확인해야 합니다." },
+      { "question": "신흥역까지 몇 분인가요?", "answer": "출발 동, 단지 출입구, 보행 신호와 걸음 속도에 따라 달라집니다. 특정 분 수를 고정하기보다 현장에서 실제 동선을 확인합니다." },
+      { "question": "단지정보에 현재 시세를 고정하지 않는 이유는 무엇인가요?", "answer": "시세는 빠르게 변하고 실거래가와 호가도 다르기 때문입니다. 최신 가격은 게시일과 확인일이 있는 공개 매물과 콘텐츠에서 별도로 확인합니다." },
+      { "question": "관리비는 얼마인가요?", "answer": "관리비는 면적, 계절, 사용량과 공용시설 비용에 따라 달라집니다. K-apt 공시와 해당 매물의 최근 고지서를 함께 확인해야 합니다." }
+    ],
+    "relatedContentIds": ["youtube-mw4br0-anoc", "naver-blog-224293278469", "naver-blog-224378379746"],
     "sources": [
-      { "label": "LH 청약플러스 4블록 사용검사 확인", "url": "https://apply.lh.or.kr/lhapply/apply/noti/an/view.do?bbsSn=9102429931&ccrCnntSysDsCd=02&mi=1079" },
-      { "label": "리더스시티 4블록 입주 안내 자료", "url": "https://elif.krcon.co.kr/upload/complex/981794fceda049e8990beba105ebd159.pdf" }
+      { "id": "daejeon-2023-159", "publisher": "대전광역시", "label": "천동3구역 정비계획 변경 고시", "url": "https://www.eum.go.kr/web/gs/gv/gvGosiDet.jsp?mobile_yn=&seq=584384", "kind": "official", "checkedAt": "2026-08-25" },
+      { "id": "lh-leaders-city-4-inspection", "publisher": "LH 청약플러스", "label": "리더스시티 4블록 사용검사 안내", "url": "https://apply.lh.or.kr/lhapply/apply/noti/an/view.do?bbsSn=9102429931&ccrCnntSysDsCd=02&mi=1079", "kind": "official", "checkedAt": "2026-08-25" },
+      { "id": "kapt-leaders-city-4", "publisher": "K-apt 공동주택관리정보시스템", "label": "리더스시티4BL 공개 단지정보", "url": "https://www.k-apt.go.kr/bid/bidDetail.do?aptCode=&aptName=%EB%A6%AC%EB%8D%94%EC%8A%A4%EC%8B%9C%ED%8B%B0&bidArea=&bidNo=&bidNum=20250523154005895&bidState=&bidTitle=&codeAuth=&codeAuthSub=&codeClassifyType1=&codeClassifyType2=&codeClassifyType3=&codeSucWay=&codeWay=&dTime=1748227353035&dateArea=1&dateEnd=2025-05-26&dateStart=2025-04-26&mainKaptCode=&pageNo=1&searchBidGb=bid_gb_1&searchDateGb=reg&type=4", "kind": "public-data", "checkedAt": "2026-08-25" },
+      { "id": "schoolinfo-cheondong-elementary", "publisher": "학교알리미", "label": "대전천동초등학교 정보", "url": "https://www.schoolinfo.go.kr/ei/ss/Pneiss_b01_s0.do?SHL_IDF_CD=5dccf925-e168-4b84-a93f-734c5d5f581c", "kind": "public-data", "checkedAt": "2026-08-25" },
+      { "id": "ccnnews-leaders-city-4-preview", "publisher": "충청뉴스", "label": "리더스시티 4블록 입주자 사전방문 보도", "url": "https://www.ccnnews.co.kr/news/articleView.html?idxno=338241", "kind": "news", "checkedAt": "2026-08-25", "note": "커뮤니티 시설은 당시 소개 내용이며 현재 운영 여부 확인이 필요합니다." }
     ],
     "confirmedAt": "2026-08-25"
   },
@@ -42,11 +87,11 @@
     "mark": "5",
     "name": "리더스시티 5블록",
     "status": "published",
-    "summary": "총 2,135세대 규모로 2024년 12월 입주를 시작한 리더스시티5블록입니다.",
+    "summary": "16개동 2,135세대로 구성되며 분양 1,423세대와 10년 공공임대 712세대가 함께 있는 단지입니다.",
     "introTitle": "리더스시티 5블록, 단지 안에서 바로 상담합니다",
     "introduction": [
-      "리더스시티 행복한부동산은 리더스시티5블록 단지 내 상가에 직접 입점해 있습니다.",
-      "전용 39.98~84.96㎡, 총 2,135세대 규모로 2024년 12월 입주를 시작했으며, 단지 안에서 4·5블록의 매물과 생활 여건을 가까이 확인해 안내합니다."
+      "리더스시티 행복한부동산은 리더스시티5블록 단지 내 근린생활시설 105호에 있습니다.",
+      "전용 39.98~84.96㎡, 총 2,135세대 규모로 2024년 12월 입주를 시작했으며, 분양세대와 10년 공공임대의 계약 구조를 구분해 살펴봐야 합니다."
     ],
     "image": {
       "src": "/images/area/leaders-city-5-landscape.webp",
@@ -54,18 +99,71 @@
     },
     "facts": [
       { "label": "주소", "value": "대전광역시 동구 안샘로14번길 7" },
-      { "label": "규모", "value": "총 2,135세대" },
+      { "label": "지번", "value": "대전광역시 동구 천동 228-9 일대" },
+      { "label": "규모", "value": "16개동 · 2,135세대" },
+      { "label": "공급 구성", "value": "분양 1,423세대 + 10년 공공임대 712세대" },
+      { "label": "전용면적", "value": "39.98~84.96㎡" },
       { "label": "입주", "value": "2024년 12월" },
-      { "label": "전용면적", "value": "39.98~84.96㎡" }
+      { "label": "난방", "value": "개별가스난방" },
+      { "label": "층수", "value": "지하 3층~지상 29층 사업자료 안내" },
+      { "label": "사무소", "value": "5블록 근린생활시설 105호" }
     ],
     "highlights": [
-      { "title": "단지 내 상담", "description": "리더스시티5블록 근린생활시설 105호에 사무소가 있어 도보로 상담할 수 있습니다." },
-      { "title": "교통 연결", "description": "대전 도시철도 1호선 신흥역과 KTX 대전역, 판암IC를 함께 이용할 수 있습니다." },
-      { "title": "교육·생활", "description": "천동초와 가오권 학교, 충남대학교병원, 대동천·대전천과 인근 공원 생활권입니다." }
+      { "title": "단지 내 상담", "description": "리더스시티5블록 근린생활시설 105호에서 4·5블록을 현장 기준으로 비교할 수 있습니다." },
+      { "title": "공급 구성", "description": "분양 1,423세대와 10년 공공임대 712세대가 함께 있어 계약 구조를 구분해야 합니다." },
+      { "title": "생활 환경", "description": "신흥역·대전역·판암IC와 천동초, 병원, 공원·하천 생활권을 함께 살펴봅니다." }
     ],
+    "unitGroups": [
+      { "category": "10년 공공임대", "areaLabel": "39.9800A · 39.98㎡", "households": 208 },
+      { "category": "10년 공공임대", "areaLabel": "51.8900A · 51.89㎡", "households": 126 },
+      { "category": "10년 공공임대", "areaLabel": "51.8900B · 51.89㎡", "households": 28 },
+      { "category": "10년 공공임대", "areaLabel": "59.6400B · 59.64㎡", "households": 29 },
+      { "category": "10년 공공임대", "areaLabel": "59.9800D · 59.98㎡", "households": 321 },
+      { "category": "분양", "areaLabel": "59㎡", "households": 551, "note": "면적 구간 기준" },
+      { "category": "분양", "areaLabel": "74㎡", "households": 536, "note": "면적 구간 기준" },
+      { "category": "분양", "areaLabel": "84㎡", "households": 336, "note": "면적 구간 기준" }
+    ],
+    "supplySummary": [
+      { "label": "분양", "value": "1,423세대", "description": "5블록 전체의 66.7%" },
+      { "label": "10년 공공임대", "value": "712세대", "description": "5블록 전체의 33.3%" }
+    ],
+    "livingSections": [
+      { "category": "transport", "title": "신흥역·대전역·판암IC", "description": "LH는 신흥역, KTX 대전역, 판암IC를 주요 교통 여건으로 소개합니다. 철도·도로에 가까운 동은 소음과 조망 체감이 달라질 수 있어 현장 확인이 중요합니다." },
+      { "category": "education", "title": "천동초와 가오권 학교", "description": "천동초등학교가 인근에 있으며 가오권 학교가 공개자료에 소개됩니다. 실제 배정학교는 교육청 최신 통학구역을 확인해야 합니다." },
+      { "category": "daily-life", "title": "병원과 생활 인프라", "description": "충남대학교병원과 주변 생활 인프라가 공개자료에 안내돼 있습니다. 상가 영업 여부와 이동시간은 현장과 지도 기준으로 확인합니다." },
+      { "category": "nature", "title": "공원·하천 생활권", "description": "샘골근린공원, 판암근린공원, 비학산, 대동천, 대전천과 연계되는 생활권이며 출입구에 따라 접근성이 달라질 수 있습니다." }
+    ],
+    "amenityGroups": [
+      {
+        "title": "사업자료에 계획·소개된 시설",
+        "items": ["어린이집", "키즈룸·키즈스테이션", "피트니스", "실내골프장", "주민카페", "공유오피스", "공방", "문화교실", "놀이터", "경로당", "쉼터"],
+        "verification": "historical-plan",
+        "note": "사업자료에 계획·소개된 시설입니다. 실제 운영 시설과 이용 조건은 관리사무소 또는 현장에서 확인해 주세요."
+      }
+    ],
+    "checkpoints": [
+      { "title": "공급·계약 구분", "description": "분양세대와 공공임대를 구분하고 거래 또는 임대가 가능한 권리, 계약 주체와 최신 LH 안내를 확인합니다." },
+      { "title": "철도·도로 소음", "description": "동·층·방향별로 창문을 닫고 열었을 때의 소음을 낮과 저녁에 각각 확인합니다." },
+      { "title": "출입구·보행 동선", "description": "주출입구와 부출입구, 차량 동선, 천동초와 상가·지하철 방향까지의 보행 동선을 살펴봅니다." },
+      { "title": "주차·일조·조망", "description": "지하주차장 연결과 방문주차 등록, 앞 동 간격, 일조와 조망을 확인합니다." },
+      { "title": "신축 상태와 옵션", "description": "시스템에어컨, 중문, 주방가전 등 옵션과 창호, 배수, 결로, 타일 등 하자 상태를 확인합니다." },
+      { "title": "권리·가격 근거", "description": "등기, 근저당, 임대차관계와 잔금 조건을 확인하고 실거래가와 현재 호가를 구분합니다." }
+    ],
+    "faqs": [
+      { "question": "5블록 공공임대 세대도 일반 아파트처럼 바로 매매할 수 있나요?", "answer": "공공임대는 일반 분양세대와 계약 구조가 다릅니다. 거래·임대 가능 범위와 분양전환 관련 사항은 해당 세대의 LH 계약서와 최신 공고를 기준으로 확인해야 합니다." },
+      { "question": "59㎡는 모두 같은 구조인가요?", "answer": "같은 59㎡라도 타입에 따라 방 배치, 주방, 수납과 방향이 달라질 수 있습니다. 평면도와 실제 내부를 함께 확인하는 것이 좋습니다." },
+      { "question": "천동초 배정이 확정되나요?", "answer": "천동초가 인근에 있지만 실제 배정학교와 통학구역은 주소와 학년도에 따라 달라질 수 있습니다. 계약 전 교육청 최신 통학구역을 확인해야 합니다." },
+      { "question": "5블록은 철도 소음이 있나요?", "answer": "철도와의 거리와 방향이 동·층별로 달라 체감도 다릅니다. 관심 세대에서 창문을 닫고 열었을 때를 각각 확인하고 낮과 저녁 시간대를 비교하는 것이 좋습니다." },
+      { "question": "단지정보에 현재 시세를 고정하지 않는 이유는 무엇인가요?", "answer": "시세는 빠르게 변하고 실거래가와 호가도 다르기 때문입니다. 최신 가격은 게시일과 확인일이 있는 공개 매물과 콘텐츠에서 별도로 확인합니다." },
+      { "question": "관리비는 얼마인가요?", "answer": "관리비는 면적, 계절, 사용량과 공용시설 비용에 따라 달라집니다. K-apt 공시와 해당 매물의 최근 고지서를 함께 확인해야 합니다." }
+    ],
+    "relatedContentIds": ["youtube-3vl70tt-jr4", "naver-blog-224347446074", "youtube-umcbjryct3c"],
     "sources": [
-      { "label": "LH 청약플러스 5블록 공급정보", "url": "https://apply.lh.or.kr/lhapply/apply/wt/wrtanc/selectWrtancInfo.do?aisTpCd=08&ccrCnntSysDsCd=02&mi=1026&panId=0000060351&uppAisTpCd=06" },
-      { "label": "LH 하나로 내집 5블록 생활환경", "url": "https://hanaro.lh.or.kr/siteDetail/view?menuKey=60O0Um5kwF&sPageCnt=&schArea=&schHsClsfCd=&schPoint=&schRegion=&schSplyHH=&schStatus=&schText=&siteDetailId=79" }
+      { "id": "daejeon-2023-159", "publisher": "대전광역시", "label": "천동3구역 정비계획 변경 고시", "url": "https://www.eum.go.kr/web/gs/gv/gvGosiDet.jsp?mobile_yn=&seq=584384", "kind": "official", "checkedAt": "2026-08-25" },
+      { "id": "lh-leaders-city-5-supply", "publisher": "LH 청약플러스", "label": "리더스시티 5블록 공급정보", "url": "https://apply.lh.or.kr/lhapply/apply/wt/wrtanc/selectWrtancInfo.do?aisTpCd=08&ccrCnntSysDsCd=02&mi=1026&panId=0000060351&uppAisTpCd=06", "kind": "official", "checkedAt": "2026-08-25" },
+      { "id": "lh-hanaro-leaders-city-5", "publisher": "LH 하나로 내집", "label": "리더스시티 5블록 생활환경", "url": "https://hanaro.lh.or.kr/siteDetail/view?menuKey=60O0Um5kwF&sPageCnt=&schArea=&schHsClsfCd=&schPoint=&schRegion=&schSplyHH=&schStatus=&schText=&siteDetailId=79", "kind": "official", "checkedAt": "2026-08-25" },
+      { "id": "schoolinfo-cheondong-elementary", "publisher": "학교알리미", "label": "대전천동초등학교 정보", "url": "https://www.schoolinfo.go.kr/ei/ss/Pneiss_b01_s0.do?SHL_IDF_CD=5dccf925-e168-4b84-a93f-734c5d5f581c", "kind": "public-data", "checkedAt": "2026-08-25" },
+      { "id": "ccnnews-leaders-city-5-supply", "publisher": "충청뉴스", "label": "리더스시티 5블록 공급·커뮤니티 보도", "url": "https://www.ccnnews.co.kr/news/articleView.html?idxno=253199", "kind": "news", "checkedAt": "2026-08-25", "note": "커뮤니티 시설은 당시 계획·소개 내용이며 현재 운영 여부 확인이 필요합니다." }
     ],
     "confirmedAt": "2026-08-25"
   }

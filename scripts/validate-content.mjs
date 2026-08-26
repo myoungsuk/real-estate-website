@@ -7,6 +7,7 @@ const content = {
   listings: await readJson("../src/data/listings.json"),
   naverListings: await readJson("../src/data/naver-listings.json"),
   complexes: await readJson("../src/data/complexes.json"),
+  complexOverview: await readJson("../src/data/complexes-overview.json"),
   externalLinks: await readJson("../src/data/external-links.json"),
   homeContent: await readJson("../src/data/home-content.json"),
   faq: await readJson("../src/data/faq.json"),

@@ -1,4 +1,32 @@
 import complexData from "../data/complexes.json";
+import complexOverviewData from "../data/complexes-overview.json";
+
+export type ComplexSourceKind = "official" | "public-data" | "operator" | "news";
+export type ComplexAmenityVerification = "official" | "operator-confirmed" | "historical-plan" | "check-required";
+
+export interface ComplexSource {
+  id: string;
+  publisher: string;
+  label: string;
+  url: string;
+  kind: ComplexSourceKind;
+  checkedAt: string;
+  note?: string;
+}
+
+export interface ComplexOverview {
+  eyebrow: string;
+  title: string;
+  description: string;
+  note: string;
+  confirmedAt: string;
+  stats: Array<{ label: string; value: string; description: string }>;
+  reasons: Array<{ title: string; description: string }>;
+  comparisonRows: Array<{ label: string; values: Record<string, string> }>;
+  sharedCheckpoints: Array<{ title: string; description: string }>;
+  relatedContentIds: string[];
+  sources: ComplexSource[];
+}
 
 export interface ComplexContent {
   slug: string;
@@ -14,10 +42,27 @@ export interface ComplexContent {
   image: { src: string; alt: string } | null;
   facts: Array<{ label: string; value: string }>;
   highlights: Array<{ title: string; description: string }>;
-  sources: Array<{ label: string; url: string }>;
+  unitGroups: Array<{ category: string; areaLabel: string; households: number; note?: string }>;
+  supplySummary: Array<{ label: string; value: string; description?: string }>;
+  livingSections: Array<{
+    category: "transport" | "education" | "daily-life" | "nature";
+    title: string;
+    description: string;
+  }>;
+  amenityGroups: Array<{
+    title: string;
+    items: string[];
+    verification: ComplexAmenityVerification;
+    note?: string;
+  }>;
+  checkpoints: Array<{ title: string; description: string }>;
+  faqs: Array<{ question: string; answer: string }>;
+  relatedContentIds: string[];
+  sources: ComplexSource[];
   confirmedAt: string | null;
 }
 
+export const complexOverview = complexOverviewData as ComplexOverview;
 export const complexes = complexData as ComplexContent[];
 export const publishedComplexes = complexes.filter((complex) => complex.status === "published");
 
