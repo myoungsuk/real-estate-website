@@ -4,6 +4,28 @@ import PageIntro from "../components/PageIntro.astro";
 import faq from "../data/faq.json";
 import { kakaoHref, office, phoneHref, smsHref } from "../lib/site";
 
+type FaqItem = {
+  category: string;
+  question: string;
+  answer: string;
+};
+
+const faqCategories = [
+  { code: "A", id: "listing-consultation", title: "매물 확인과 상담", shortTitle: "매물·상담" },
+  { code: "B", id: "leaders-city", title: "리더스시티 4블록·5블록", shortTitle: "리더스시티" },
+  { code: "C", id: "price-market", title: "가격과 시세", shortTitle: "가격·시세" },
+  { code: "D", id: "sale-contract", title: "매매계약과 권리관계", shortTitle: "매매계약" },
+  { code: "E", id: "rent-deposit", title: "전세·월세와 보증금 보호", shortTitle: "전세·월세" },
+  { code: "F", id: "cost-finance", title: "중개보수·대출·세금과 관리비", shortTitle: "비용·금융" },
+  { code: "G", id: "defect-move-in", title: "하자·잔금과 입주", shortTitle: "하자·입주" },
+  { code: "H", id: "information-scope", title: "정보의 범위와 책임", shortTitle: "안내 범위" },
+];
+const indexedFaq = (faq as FaqItem[]).map((item, index) => ({ ...item, number: index + 1 }));
+const categorizedFaq = faqCategories.map((category) => ({
+  ...category,
+  items: indexedFaq.filter((item) => item.category === category.title),
+}));
+
 const title = "FAQ 및 상담 | 리더스시티행복한공인중개사사무소";
 const description = "매매·전세·월세의 자주 묻는 질문을 확인하고 문자로 비공개 상담을 요청할 수 있습니다.";
 const structuredData = faq.length > 0 ? {
@@ -37,16 +59,52 @@ const structuredData = faq.length > 0 ? {
               <p>매물 조건과 권리관계는 세대와 확인 시점마다 다릅니다. 법률·세무·대출·보증의 최종 판단은 실제 계약일의 공식 자료와 해당 기관을 통해 다시 확인해 주세요.</p>
             </div>
           </aside>
-          <div class="faq-list">
-            {faq.map((item: { question: string; answer: string }, index) => (
-              <details>
-                <summary>
-                  <span class="faq-item__number" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
-                  <span class="faq-item__question">{item.question}</span>
-                  <span class="faq-item__icon" aria-hidden="true">+</span>
-                </summary>
-                <div class="faq-item__answer"><p>{item.answer}</p></div>
-              </details>
+          <nav class="faq-category-nav" id="faq-categories" aria-labelledby="faq-category-heading">
+            <div class="faq-category-nav__heading">
+              <p class="eyebrow">카테고리</p>
+              <h3 id="faq-category-heading">궁금한 분야를 골라보세요</h3>
+            </div>
+            <ul class="faq-category-grid">
+              {categorizedFaq.map((category) => (
+                <li>
+                  <a href={`#faq-${category.id}`}>
+                    <span class="faq-category-link__code" aria-hidden="true">{category.code}</span>
+                    <span>
+                      <strong>{category.shortTitle}</strong>
+                      <small>{category.items.length}개 질문</small>
+                    </span>
+                    <span class="faq-category-link__arrow" aria-hidden="true">↓</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </nav>
+          <div class="faq-category-groups">
+            {categorizedFaq.map((category) => (
+              <section class="faq-category-section" id={`faq-${category.id}`} aria-labelledby={`faq-${category.id}-heading`}>
+                <header class="faq-category-section__heading">
+                  <div>
+                    <p class="eyebrow">{category.code}</p>
+                    <h3 id={`faq-${category.id}-heading`}>{category.title}</h3>
+                  </div>
+                  <div class="faq-category-section__meta">
+                    <span>{category.items.length}개 질문</span>
+                    <a href="#faq-categories">카테고리 보기 ↑</a>
+                  </div>
+                </header>
+                <div class="faq-list">
+                  {category.items.map((item) => (
+                    <details>
+                      <summary>
+                        <span class="faq-item__number" aria-hidden="true">{String(item.number).padStart(2, "0")}</span>
+                        <span class="faq-item__question">{item.question}</span>
+                        <span class="faq-item__icon" aria-hidden="true">+</span>
+                      </summary>
+                      <div class="faq-item__answer"><p>{item.answer}</p></div>
+                    </details>
+                  ))}
+                </div>
+              </section>
             ))}
           </div>
         </>

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { findBannedKeys, validateComplexes, validateComplexOverview, validateExternalLinks, validateHomeContent, validateListing, validateNaverListings, validateOffice } from "../scripts/content-validation.mjs";
+import { findBannedKeys, validateComplexes, validateComplexOverview, validateExternalLinks, validateFaq, validateHomeContent, validateListing, validateNaverListings, validateOffice } from "../scripts/content-validation.mjs";
 
 const base = {
   id: "leaders-city-5-sale-001",
@@ -36,6 +36,18 @@ test("월세에 매매가격이 함께 있으면 거부한다", () => {
 
 test("공개 저장 금지 필드를 재귀적으로 찾는다", () => {
   assert.match(findBannedKeys({ nested: { clientPhone: "010" } }).join("\n"), /clientPhone/);
+});
+
+test("FAQ는 허용 카테고리와 질문·답변을 요구하고 중복 질문을 거부한다", () => {
+  const valid = [{ category: "매물 확인과 상담", question: "방문 예약이 필요한가요?", answer: "사전 예약을 권합니다." }];
+  assert.deepEqual(validateFaq(valid), []);
+  const errors = validateFaq([
+    ...valid,
+    { category: "임의 분류", question: "방문 예약이 필요한가요?", answer: "" },
+  ]).join("\n");
+  assert.match(errors, /category/);
+  assert.match(errors, /중복 질문/);
+  assert.match(errors, /answer/);
 });
 
 test("대전 동구의 다른 동네 매물도 허용한다", () => {

@@ -267,7 +267,26 @@ test("공개 헤더와 상담 화면은 전체 상호·분리된 콘텐츠·FAQ 
   assert.match(faq, /data-consultation-form/);
   assert.match(faq, /홈페이지나 공개 게시판에 저장되지 않습니다/);
   assert.match(faq, /window\.location\.href/);
-  assert.equal(JSON.parse(faqData).length, 38);
+  assert.match(faq, /class="faq-category-nav"/);
+  assert.match(faq, /class="faq-category-section"/);
+  const faqItems = JSON.parse(faqData);
+  assert.equal(faqItems.length, 38);
+  assert.deepEqual(
+    Object.fromEntries([...new Set(faqItems.map((item) => item.category))].map((category) => [
+      category,
+      faqItems.filter((item) => item.category === category).length,
+    ])),
+    {
+      "매물 확인과 상담": 8,
+      "리더스시티 4블록·5블록": 5,
+      "가격과 시세": 4,
+      "매매계약과 권리관계": 6,
+      "전세·월세와 보증금 보호": 7,
+      "중개보수·대출·세금과 관리비": 4,
+      "하자·잔금과 입주": 3,
+      "정보의 범위와 책임": 1,
+    },
+  );
 });
 
 test("사무소·블로그·유튜브 안내 문구는 공개 범위와 자연스러운 표현을 사용한다", async () => {

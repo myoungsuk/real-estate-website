@@ -12,6 +12,16 @@ const allowedComplexLivingCategories = new Set(["transport", "education", "daily
 const allowedExternalContentTypes = new Set(["blog", "youtube"]);
 const allowedYoutubeContentFormats = new Set(["video", "short"]);
 const allowedExternalContentStatuses = new Set(["draft", "published"]);
+const allowedFaqCategories = new Set([
+  "매물 확인과 상담",
+  "리더스시티 4블록·5블록",
+  "가격과 시세",
+  "매매계약과 권리관계",
+  "전세·월세와 보증금 보호",
+  "중개보수·대출·세금과 관리비",
+  "하자·잔금과 입주",
+  "정보의 범위와 책임",
+]);
 const allowedWeekDays = new Set(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]);
 const bannedKeys = new Set([
   "exactUnit",
@@ -491,6 +501,25 @@ export function validateHomeContent(homeContent) {
   return errors;
 }
 
+export function validateFaq(faq) {
+  if (!Array.isArray(faq)) return ["faq: 배열이어야 합니다."];
+  const errors = [];
+  const questions = new Set();
+  faq.forEach((item, index) => {
+    const path = `faq[${index}]`;
+    if (!allowedFaqCategories.has(item?.category)) errors.push(`${path}.category: 허용된 FAQ 카테고리가 필요합니다.`);
+    if (!isNonEmptyString(item?.question)) {
+      errors.push(`${path}.question: 질문이 필요합니다.`);
+    } else if (questions.has(item.question.trim())) {
+      errors.push(`${path}.question: 중복 질문입니다.`);
+    } else {
+      questions.add(item.question.trim());
+    }
+    if (!isNonEmptyString(item?.answer)) errors.push(`${path}.answer: 답변이 필요합니다.`);
+  });
+  return errors;
+}
+
 export function validateContent({ office, listings, naverListings, complexes, complexOverview, externalLinks, homeContent, faq, reviews }) {
   const errors = validateOffice(office);
   errors.push(...validateListings(listings));
@@ -499,7 +528,8 @@ export function validateContent({ office, listings, naverListings, complexes, co
   errors.push(...validateComplexOverview(complexOverview, complexes, externalLinks));
   errors.push(...validateExternalLinks(externalLinks));
   errors.push(...validateHomeContent(homeContent));
-  if (!Array.isArray(faq) || !Array.isArray(reviews)) errors.push("FAQ·후기는 배열이어야 합니다.");
+  errors.push(...validateFaq(faq));
+  if (!Array.isArray(reviews)) errors.push("후기는 배열이어야 합니다.");
 
   errors.push(...findBannedKeys({ office, listings, naverListings, complexes, complexOverview, externalLinks, homeContent, faq, reviews }));
   return errors;

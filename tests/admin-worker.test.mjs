@@ -7,7 +7,7 @@ import {
   parseAllowedEmails,
 } from "../worker/access-auth.mjs";
 import { handleAdminApi } from "../worker/admin-api.mjs";
-import { getAdminResourcePath } from "../worker/admin-resource-validation.mjs";
+import { getAdminResourcePath, validateAdminResource } from "../worker/admin-resource-validation.mjs";
 import { createCsrfToken, verifyCsrfToken } from "../worker/admin-security.mjs";
 import { handleRequest, isAdminApiPath } from "../worker/index.mjs";
 
@@ -23,6 +23,15 @@ test("단지와 네이버 매물 JSON은 관리자 허용 경로로만 연결한
   assert.equal(getAdminResourcePath("complexes-overview"), "src/data/complexes-overview.json");
   assert.equal(getAdminResourcePath("naver-listings"), "src/data/naver-listings.json");
   assert.equal(getAdminResourcePath("../complexes-overview"), null);
+});
+
+test("관리자 FAQ 저장도 공개 카테고리 스키마를 검증한다", () => {
+  assert.deepEqual(validateAdminResource("faq", [
+    { category: "가격과 시세", question: "호가란 무엇인가요?", answer: "소유자가 제시한 희망 가격입니다." },
+  ]), []);
+  assert.match(validateAdminResource("faq", [
+    { question: "카테고리가 없으면 어떻게 되나요?", answer: "저장을 거부합니다." },
+  ]).join("\n"), /category/);
 });
 
 test("관리 API 경로만 같은 Worker에서 먼저 처리한다", () => {

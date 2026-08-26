@@ -2,6 +2,7 @@ import {
   validateComplexes,
   validateComplexOverview,
   validateExternalLinks,
+  validateFaq,
   validateHomeContent,
   validateListings,
   validateNaverListings,
@@ -33,7 +34,7 @@ export function validateAdminResource(resource, data) {
     case "complexes-overview": return validateComplexOverview(data);
     case "external-links": return validateExternalLinks(data);
     case "home-content": return validateHomeContent(data);
-    case "faq": return Array.isArray(data) ? [] : ["faq: 배열이어야 합니다."];
+    case "faq": return validateFaq(data);
     case "reviews": return Array.isArray(data) ? [] : ["reviews: 배열이어야 합니다."];
     default: return ["허용되지 않은 콘텐츠 종류입니다."];
   }
