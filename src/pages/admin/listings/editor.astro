@@ -304,7 +304,11 @@ import { office } from "../../../lib/site";
       const idField = field("id") as HTMLInputElement | null;
       if (idField) idField.readOnly = false;
       if (manualFormTitle) manualFormTitle.textContent = "새 네이버 매물";
-      if (manualDeleteButton) manualDeleteButton.hidden = true;
+      if (manualDeleteButton) {
+        manualDeleteButton.hidden = true;
+        delete manualDeleteButton.dataset.confirmDelete;
+        manualDeleteButton.textContent = "등록 종료";
+      }
       setAdminFormStatus(manualStatus, "공개 정보를 입력하고 카드 미리보기를 확인해 주세요.");
       updateManualPreview();
     };
@@ -329,7 +333,11 @@ import { office } from "../../../lib/site";
       const idField = field("id") as HTMLInputElement | null;
       if (idField) idField.readOnly = true;
       if (manualFormTitle) manualFormTitle.textContent = "네이버 매물 수정";
-      if (manualDeleteButton) manualDeleteButton.hidden = false;
+      if (manualDeleteButton) {
+        manualDeleteButton.hidden = false;
+        delete manualDeleteButton.dataset.confirmDelete;
+        manualDeleteButton.textContent = "등록 종료";
+      }
       setAdminFormStatus(manualStatus, "공개 정보와 카드 미리보기를 확인한 뒤 저장해 주세요.");
       updateManualPreview();
       manualForm?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -495,7 +503,12 @@ import { office } from "../../../lib/site";
       const originalId = field("originalId")?.value ?? "";
       const existing = resource.data.items.find((item) => item.id === originalId);
       if (!existing) return;
-      if (!window.confirm(existing.title + " (" + existing.id + ")을 홈페이지 목록에서 등록 종료할까요? Git 기록으로는 복구할 수 있습니다.")) return;
+      if (manualDeleteButton.dataset.confirmDelete !== existing.id) {
+        manualDeleteButton.dataset.confirmDelete = existing.id;
+        manualDeleteButton.textContent = "한 번 더 눌러 등록 종료";
+        setAdminFormStatus(manualStatus, existing.title + " (" + existing.id + ")을 등록 종료하려면 버튼을 한 번 더 눌러 주세요. Git 기록으로는 복구할 수 있습니다.", "error");
+        return;
+      }
       manualDeleteButton.disabled = true;
       setAdminFormStatus(manualStatus, "선택한 매물을 목록에서 제거하고 있습니다.", "saving");
       try {
@@ -511,6 +524,8 @@ import { office } from "../../../lib/site";
         setAdminFormStatus(manualStatus, error instanceof Error ? error.message : "등록 종료를 처리하지 못했습니다.", "error");
       } finally {
         manualDeleteButton.disabled = false;
+        delete manualDeleteButton.dataset.confirmDelete;
+        manualDeleteButton.textContent = "등록 종료";
       }
     });
   </script>

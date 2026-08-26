@@ -119,6 +119,9 @@ test("관리자 편집 화면은 부동산뱅크 가져오기와 네이버 매�
   ]);
   assert.match(listingEditor, /office\.naverListingsUrl/);
   assert.match(listingEditor, /readBankListingFile/);
+  assert.match(listingEditor, /한 번 더 눌러 등록 종료/);
+  assert.match(listingEditor, /dataset\.confirmDelete/);
+  assert.doesNotMatch(listingEditor, /window\.confirm/);
   assert.match(listingEditor, /createBankListingImport/);
   assert.match(listingEditor, /createManualNaverListing/);
   assert.match(listingEditor, /writeAdminContent\("naver-listings"/);
