@@ -6,7 +6,7 @@ import {
   createManualNaverListing,
   formatBankAreaLabel,
   formatBankPriceLabel,
-  parseBankConfirmedAt,
+  parseBankRegisteredAt,
 } from "../src/lib/admin/bank-listing-import.mjs";
 
 const makeRow = (overrides = {}) => {
@@ -51,7 +51,7 @@ const existing = {
   floorLabel: "고/29층",
   direction: "남서향",
   summary: "시스템에어컨 설치, 입주 협의 가능",
-  confirmedAt: "2026-08-24",
+  registeredAt: "2026-08-24",
   source: "네이버페이 부동산",
   url: "https://fin.land.naver.com/articles/2645402920",
 };
@@ -61,7 +61,7 @@ test("부동산뱅크 가격·면적·등록일을 현재 공개 표시로 변�
   assert.equal(formatBankPriceLabel("30,000"), "3억");
   assert.equal(formatBankAreaLabel("81.32B/59.64", "아파트"), "81B㎡ · 전용 59.64B㎡");
   assert.equal(formatBankAreaLabel("330/125.45", "단독/다가구"), "대지 330㎡ · 연면적 125.45㎡");
-  assert.equal(parseBankConfirmedAt("26.08.24 ~26.09.23"), "2026-08-24");
+  assert.equal(parseBankRegisteredAt("26.08.24 ~26.09.23"), "2026-08-24");
 });
 
 test("엑셀 가져오기는 기존 공개 층과 사이트 전용 매물을 보존한다", () => {
@@ -122,7 +122,7 @@ test("수동 등록은 공개 필드만 만들고 출처와 네이버 URL을 고
     floorLabel: "중/20층",
     direction: "남서향",
     summary: "네이버에 공개된 매물 설명",
-    confirmedAt: "2026-08-26",
+    registeredAt: "2026-08-26",
   });
   assert.deepEqual(result.errors, []);
   assert.equal(result.listing.source, "네이버페이 부동산");

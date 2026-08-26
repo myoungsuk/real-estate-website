@@ -4,7 +4,7 @@ import ExternalContentList from "../components/ExternalContentList.astro";
 import NaverListingPager from "../components/NaverListingPager.astro";
 import { homeContent, publishedBlogContents, publishedYoutubeVideoContents } from "../lib/content";
 import { getComplexFact, publishedComplexes } from "../lib/complexes";
-import { naverListings, naverListingsCheckedAt } from "../lib/naver-listings";
+import { naverListings, naverListingsUpdatedAt } from "../lib/naver-listings";
 import { formatOfficeHours, kakaoHref, office, phoneHref, smsHref } from "../lib/site";
 
 const title = "대전 동구 지역 전문 행복한부동산 | 매매·전세·월세";
@@ -133,7 +133,7 @@ const structuredData = {
         <div><p class="eyebrow">네이버 등록 매물</p><h2 id="listing-heading">현재 공개 중인 매물을 바로 확인하세요</h2></div>
         <a class="text-link" href={office.naverListingsUrl} target="_blank" rel="noopener noreferrer">네이버 등록 매물 보기 ↗</a>
       </div>
-      <p class="section-note">{naverListingsCheckedAt} 기준 네이버에 공개된 동 번호·광고 층수·가격·면적을 함께 보여드립니다.</p>
+      <p class="section-note"><strong>매물 목록 업데이트: {naverListingsUpdatedAt.replaceAll("-", ".")}</strong> · 네이버에 공개된 동 번호·광고 층수·가격·면적을 함께 보여드립니다.</p>
       <NaverListingPager items={naverListings} pageSize={6} />
     </div>
   </section>

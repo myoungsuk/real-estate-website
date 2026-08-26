@@ -222,6 +222,7 @@ test("공개 매물 화면은 현재 네이버 개별 매물을 사진 없이 �
   assert.equal(data.items[0].title, "휴먼시아2단지 202동");
   assert.equal(data.items[0].floorLabel, "2/22층");
   assert.ok(data.items.every((item) => item.url === `https://fin.land.naver.com/articles/${item.id}`));
+  assert.ok(data.items.every((item) => /^\d{4}-\d{2}-\d{2}$/u.test(item.registeredAt)));
   assert.match(home, /NaverListingPager items=\{naverListings\} pageSize=\{6\}/);
   assert.match(pager, /data-listing-page/);
   assert.doesNotMatch(pager, /data-listing-sort="default"|기본순/);
@@ -240,21 +241,24 @@ test("공개 매물 화면은 현재 네이버 개별 매물을 사진 없이 �
   assert.match(properties, /가격 높은순/);
   assert.match(properties, /면적 작은순/);
   assert.match(properties, /면적 큰순/);
-  assert.match(properties, /매물 목록 업데이트 \{listingsUpdatedAtLabel\}/);
+  assert.match(properties, /class="listing-update"/);
+  assert.match(properties, /naverListingsUpdatedAt/);
   assert.match(properties, /sort\.value !== "latest"/);
   assert.match(card, /target="_blank"/);
   assert.match(card, /listing\.floorLabel/);
   assert.match(card, /등록 \{registeredAtLabel\}/);
   assert.doesNotMatch(card, /확인<\/time>/);
+  assert.match(card, /data-registered-at/);
   assert.doesNotMatch(card, /listing-card__visual/);
   assert.match(styles, /\.empty-state\[hidden\][^}]*display: none !important/);
 });
 
-test("공개 헤더와 상담 화면은 전체 상호·분리된 콘텐츠·비저장 상담을 안내한다", async () => {
-  const [header, navigation, faq] = await Promise.all([
+test("공개 헤더와 상담 화면은 전체 상호·분리된 콘텐츠·FAQ 38개·비저장 상담을 안내한다", async () => {
+  const [header, navigation, faq, faqData] = await Promise.all([
     readSource("src/components/SiteHeader.astro"),
     readSource("src/lib/site.ts"),
     readSource("src/pages/faq.astro"),
+    readSource("src/data/faq.json"),
   ]);
   assert.match(header, /office\.legalName/);
   assert.match(navigation, /href: "\/blog\/"/);
@@ -263,6 +267,7 @@ test("공개 헤더와 상담 화면은 전체 상호·분리된 콘텐츠·비�
   assert.match(faq, /data-consultation-form/);
   assert.match(faq, /홈페이지나 공개 게시판에 저장되지 않습니다/);
   assert.match(faq, /window\.location\.href/);
+  assert.equal(JSON.parse(faqData).length, 38);
 });
 
 test("사무소·블로그·유튜브 안내 문구는 공개 범위와 자연스러운 표현을 사용한다", async () => {

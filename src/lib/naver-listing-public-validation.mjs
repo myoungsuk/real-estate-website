@@ -8,7 +8,7 @@ export const NAVER_LISTING_PUBLIC_KEYS = Object.freeze([
   "floorLabel",
   "direction",
   "summary",
-  "confirmedAt",
+  "registeredAt",
   "source",
   "url",
 ]);

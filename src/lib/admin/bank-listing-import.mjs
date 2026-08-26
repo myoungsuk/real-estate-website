@@ -44,7 +44,7 @@ const comparedFields = [
   "floorLabel",
   "direction",
   "summary",
-  "confirmedAt",
+  "registeredAt",
   "source",
   "url",
 ];
@@ -110,7 +110,7 @@ export function formatBankAreaLabel(value, propertyType) {
   return `${supply}${typeSuffix}㎡ · 전용 ${exclusive}${typeSuffix}㎡`;
 }
 
-export function parseBankConfirmedAt(value) {
+export function parseBankRegisteredAt(value) {
   const match = /^(\d{2})\.(\d{2})\.(\d{2})\s*~/u.exec(normalizeBankListingText(value));
   if (!match) return null;
   const year = 2000 + Number(match[1]);
@@ -166,10 +166,10 @@ function normalizeBankRow(row, rowNumber, existing) {
   const summary = row["특징"] || existing?.summary || "";
   if (!summary) errors.push("공개할 한줄 설명이 없습니다.");
 
-  const confirmedAt = parseBankConfirmedAt(row["등록기간"]);
-  if (!confirmedAt) errors.push("등록기간 시작일을 확인할 수 없습니다.");
+  const registeredAt = parseBankRegisteredAt(row["등록기간"]);
+  if (!registeredAt) errors.push("등록기간 시작일을 확인할 수 없습니다.");
 
-  if (errors.length > 0 || !listingNumber || !tradeType || !title || !priceLabel || !areaLabel || !confirmedAt) {
+  if (errors.length > 0 || !listingNumber || !tradeType || !title || !priceLabel || !areaLabel || !registeredAt) {
     return { rowNumber, bankListingId: listingNumber?.bankListingId ?? null, naverListingId: listingNumber?.naverListingId ?? null, errors };
   }
 
@@ -183,7 +183,7 @@ function normalizeBankRow(row, rowNumber, existing) {
     floorLabel: existing?.floorLabel ?? null,
     direction: row["방향"] || null,
     summary,
-    confirmedAt,
+    registeredAt,
     source: "네이버페이 부동산",
     url: `https://fin.land.naver.com/articles/${listingNumber.naverListingId}`,
   };
@@ -287,7 +287,7 @@ export function createManualNaverListing(input) {
     floorLabel: normalizeBankListingText(input?.floorLabel) || null,
     direction: normalizeBankListingText(input?.direction) || null,
     summary: normalizeBankListingText(input?.summary),
-    confirmedAt: normalizeBankListingText(input?.confirmedAt),
+    registeredAt: normalizeBankListingText(input?.registeredAt),
     source: "네이버페이 부동산",
     url: `https://fin.land.naver.com/articles/${id}`,
   };
@@ -297,7 +297,7 @@ export function createManualNaverListing(input) {
     if (!listing[key]) errors.push("필수 공개 정보를 모두 입력해 주세요.");
   }
   if (!["sale", "jeonse", "monthly-rent"].includes(listing.tradeType)) errors.push("거래 유형을 확인해 주세요.");
-  if (!isIsoDate(listing.confirmedAt)) errors.push("확인일을 입력해 주세요.");
+  if (!isIsoDate(listing.registeredAt)) errors.push("등록일을 입력해 주세요.");
   errors.push(...getNaverListingPublicTextErrors(listing, "수동 매물").map((message) => message.replace(/^수동 매물\.[^:]+:\s*/u, "")));
   return { listing, errors: [...new Set(errors)] };
 }

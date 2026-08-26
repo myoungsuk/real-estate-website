@@ -1,7 +1,7 @@
 ---
 import AdminApiStatus from "../../components/admin/AdminApiStatus.astro";
 import AdminLayout from "../../layouts/AdminLayout.astro";
-import { naverListings, naverListingsCheckedAt } from "../../lib/naver-listings";
+import { naverListings, naverListingsUpdatedAt } from "../../lib/naver-listings";
 
 const counts = {
   total: naverListings.length,
@@ -41,8 +41,8 @@ const counts = {
     </article>
     <article class="admin-stat-card">
       <span>최근 동기화 기준</span>
-      <strong>{naverListingsCheckedAt}</strong>
-      <small>사이트 데이터 확인일</small>
+      <strong>{naverListingsUpdatedAt}</strong>
+      <small>매물 목록 업데이트일</small>
     </article>
   </section>
 

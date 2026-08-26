@@ -2,7 +2,7 @@
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 import { naverListings, naverPropertyTypes, naverTradeNames } from "../../../lib/naver-listings";
 
-const sortedListings = [...naverListings].sort((a, b) => b.confirmedAt.localeCompare(a.confirmedAt));
+const sortedListings = [...naverListings].sort((a, b) => b.registeredAt.localeCompare(a.registeredAt));
 const formatDate = (value: string) => new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(`${value}T00:00:00+09:00`));
 ---
 
@@ -31,11 +31,11 @@ const formatDate = (value: string) => new Intl.DateTimeFormat("ko-KR", { year: "
     <div class="admin-table-wrap" data-admin-listing-results>
       <table class="admin-table">
         <caption class="sr-only">사이트에 반영된 네이버 공개 매물 목록</caption>
-        <thead><tr><th scope="col">매물명</th><th scope="col">유형</th><th scope="col">거래</th><th scope="col">가격</th><th scope="col">최근 확인일</th><th scope="col">관리</th></tr></thead>
+        <thead><tr><th scope="col">매물명</th><th scope="col">유형</th><th scope="col">거래</th><th scope="col">가격</th><th scope="col">등록일</th><th scope="col">관리</th></tr></thead>
         <tbody>{sortedListings.map((listing) => (
           <tr data-admin-listing-row data-admin-listing-type={listing.propertyType} data-admin-listing-search={[listing.title, listing.id, listing.propertyType, naverTradeNames[listing.tradeType], listing.areaLabel, listing.floorLabel, listing.direction].filter(Boolean).join(" ")}>
             <td data-label="매물명"><a class="admin-table__title" href={listing.url} target="_blank" rel="noopener noreferrer">{listing.title} ↗</a><small>네이버 매물번호 {listing.id}</small></td>
-            <td data-label="유형">{listing.propertyType}</td><td data-label="거래">{naverTradeNames[listing.tradeType]}</td><td data-label="가격">{listing.priceLabel}</td><td data-label="최근 확인일">{formatDate(listing.confirmedAt)}</td><td data-label="관리"><a class="admin-row-action" href={`/admin/listings/editor/?id=${listing.id}`}>수정·종료</a></td>
+            <td data-label="유형">{listing.propertyType}</td><td data-label="거래">{naverTradeNames[listing.tradeType]}</td><td data-label="가격">{listing.priceLabel}</td><td data-label="등록일">{formatDate(listing.registeredAt)}</td><td data-label="관리"><a class="admin-row-action" href={`/admin/listings/editor/?id=${listing.id}`}>수정·종료</a></td>
           </tr>
         ))}</tbody>
       </table>

@@ -133,8 +133,8 @@ import { office } from "../../../lib/site";
           <input id="manual-listing-direction" name="direction" maxlength="40" placeholder="예: 남서향" data-write-control disabled />
         </div>
         <div class="admin-field">
-          <label for="manual-listing-confirmed">확인일</label>
-          <input id="manual-listing-confirmed" name="confirmedAt" type="date" required data-write-control disabled />
+          <label for="manual-listing-registered">등록일</label>
+          <input id="manual-listing-registered" name="registeredAt" type="date" required data-write-control disabled />
         </div>
         <div class="admin-field admin-field--wide">
           <label for="manual-listing-summary">한줄 설명</label>
@@ -152,7 +152,7 @@ import { office } from "../../../lib/site";
       </div>
 
       <article class="admin-listing-preview" data-manual-preview aria-label="등록될 공개 카드 미리보기">
-        <p><span data-preview-property>매물 종류</span><time data-preview-date>확인일</time></p>
+        <p><span data-preview-property>매물 종류</span><time data-preview-date>등록일</time></p>
         <h3 data-preview-title>매물 제목</h3>
         <strong data-preview-price>거래 가격</strong>
         <p data-preview-details>면적 · 층 · 방향</p>
@@ -225,7 +225,7 @@ import { office } from "../../../lib/site";
       floorLabel: field("floorLabel")?.value,
       direction: field("direction")?.value,
       summary: field("summary")?.value,
-      confirmedAt: field("confirmedAt")?.value,
+      registeredAt: field("registeredAt")?.value,
     });
 
     const applyManagedFilter = () => {
@@ -245,7 +245,7 @@ import { office } from "../../../lib/site";
     const renderManagedList = () => {
       if (!managedList) return;
       managedList.replaceChildren();
-      const sorted = [...resource.data.items].sort((first, second) => second.confirmedAt.localeCompare(first.confirmedAt));
+      const sorted = [...resource.data.items].sort((first, second) => second.registeredAt.localeCompare(first.registeredAt));
       sorted.forEach((listing) => {
         const article = document.createElement("article");
         article.dataset.managedItem = listing.id;
@@ -288,7 +288,7 @@ import { office } from "../../../lib/site";
       const previewDetails = document.querySelector<HTMLElement>("[data-preview-details]");
       const previewSummary = document.querySelector<HTMLElement>("[data-preview-summary]");
       if (previewProperty) previewProperty.textContent = listing.propertyType || "매물 종류";
-      if (previewDate) previewDate.textContent = listing.confirmedAt || "확인일";
+      if (previewDate) previewDate.textContent = listing.registeredAt ? `등록 ${listing.registeredAt.replaceAll("-", ".")}` : "등록일";
       if (previewTitle) previewTitle.textContent = listing.title || "매물 제목";
       if (previewPrice) previewPrice.textContent = tradeName(listing.tradeType) + " " + (listing.priceLabel || "가격");
       if (previewDetails) previewDetails.textContent = details || "면적 · 층 · 방향";
@@ -300,7 +300,7 @@ import { office } from "../../../lib/site";
       manualForm?.reset();
       if (field("originalId")) field("originalId")!.value = "";
       if (field("tradeType")) field("tradeType")!.value = "sale";
-      if (field("confirmedAt")) field("confirmedAt")!.value = todayInKorea();
+      if (field("registeredAt")) field("registeredAt")!.value = todayInKorea();
       const idField = field("id") as HTMLInputElement | null;
       if (idField) idField.readOnly = false;
       if (manualFormTitle) manualFormTitle.textContent = "새 네이버 매물";
@@ -327,7 +327,7 @@ import { office } from "../../../lib/site";
         floorLabel: listing.floorLabel ?? "",
         direction: listing.direction ?? "",
         summary: listing.summary,
-        confirmedAt: listing.confirmedAt,
+        registeredAt: listing.registeredAt,
       };
       Object.entries(values).forEach(([name, value]) => { if (field(name)) field(name)!.value = value; });
       const idField = field("id") as HTMLInputElement | null;
@@ -380,7 +380,7 @@ import { office } from "../../../lib/site";
     const changeFieldNames: Record<string, string> = {
       title: "제목", propertyType: "매물 종류", tradeType: "거래 유형", priceLabel: "가격",
       areaLabel: "면적", floorLabel: "층", direction: "방향", summary: "설명",
-      confirmedAt: "확인일", source: "출처", url: "네이버 주소",
+      registeredAt: "등록일", source: "출처", url: "네이버 주소",
     };
 
     const setBankStat = (name: string, value: number) => {
@@ -419,7 +419,7 @@ import { office } from "../../../lib/site";
       currentAnalysis.newItems.forEach((item) => bankPreview.append(createImportPreviewItem("신규", item.title, "네이버 매물번호 " + item.id, "new")));
       currentAnalysis.changedItems.forEach((item) => bankPreview.append(createImportPreviewItem("변경", item.title, item.changes.map((fieldName) => changeFieldNames[fieldName] ?? fieldName).join(", "), "changed")));
       currentAnalysis.siteOnlyItems.forEach((item: { id: string; title: string }) => bankPreview.append(createImportPreviewItem("유지", item.title, "이번 엑셀에 없음 · 자동 삭제하지 않음", "kept")));
-      if (bankPreview.childElementCount === 0) bankPreview.append(createImportPreviewItem("동일", "변경할 매물이 없습니다.", "확인일만 갱신할 수 있습니다.", "same"));
+      if (bankPreview.childElementCount === 0) bankPreview.append(createImportPreviewItem("동일", "변경할 매물이 없습니다.", "매물 목록 업데이트일만 갱신할 수 있습니다.", "same"));
       bankSummary.hidden = false;
       bankApplyButton.disabled = !writeEnabled || !currentAnalysis.nextData || currentAnalysis.errors.length > 0;
     };
@@ -472,7 +472,7 @@ import { office } from "../../../lib/site";
       event.preventDefault();
       if (!writeEnabled || !resource.sha) return setAdminFormStatus(manualStatus, "최신 GitHub 매물을 불러온 뒤 저장해 주세요.", "error");
       const { listing, errors } = createManualNaverListing(currentFormInput()) as { listing: NaverListing; errors: string[] };
-      if (listing.confirmedAt > todayInKorea()) errors.push("확인일은 오늘보다 늦을 수 없습니다.");
+      if (listing.registeredAt > todayInKorea()) errors.push("등록일은 오늘보다 늦을 수 없습니다.");
       const originalId = field("originalId")?.value ?? "";
       if (!originalId && resource.data.items.some((item) => item.id === listing.id)) errors.push("이미 등록된 네이버 매물번호입니다. 목록에서 수정해 주세요.");
       if (errors.length > 0) return setAdminFormStatus(manualStatus, [...new Set(errors)].join("\n"), "error");

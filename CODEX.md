@@ -115,7 +115,7 @@ npm run sync:external:dry-run
 - `src/data/home-content.json` → `src/lib/content.ts` → 홈 대표·사무소·리더스시티 설명과 사진
 - `src/data/office.json` → `src/lib/site.ts` → 헤더·푸터·사무소·오시는 길·네이버 등록 매물 링크·구조화 데이터
 - `src/data/listings.json` → `src/lib/listings.ts` → 매물 목록 필터와 공개 상세 정적 생성
-- `src/data/naver-listings.json` → `src/lib/naver-listings.ts` → 사진 없는 네이버 공개 매물 카드·홈 6건 단위 페이징·거래/유형 필터·기본/가격 낮은·높은/최근 확인/면적 작은·큰 정렬·외부 상세 링크
+- `src/data/naver-listings.json` → `src/lib/naver-listings.ts` → 사진 없는 네이버 공개 매물 카드·홈 6건 단위 페이징·거래/유형 필터·최근 등록/가격 낮은·높은/면적 작은·큰 정렬·외부 상세 링크. 부동산뱅크 `등록기간` 시작일은 `registeredAt`으로 저장하고 최근 등록순을 기본값으로 사용한다.
 - 부동산뱅크 공개 사무소 목록 → `scripts/sync-bank-listings.mjs` → EUC-KR 공개 HTML의 현재 페이지 전체 파싱·네이버 ID 기준 갱신·직전 부동산뱅크 기준선에서 사라진 항목 삭제·다른 공급처 항목 보존 → `naver-listings.json`. 2026-08-26 1:1 문의의 본인 매물·하루 1회 허용 범위만 사용하며 로그인·상세·네이버 페이지는 조회하지 않는다.
 - `src/data/complexes-overview.json` → 리더스시티 4·5블록 전체 소개·숫자 카드·비교표·공통 현장 확인사항·관련 콘텐츠와 출처
 - `src/data/complexes.json` → 대전 동구 주요 단지의 사진·기본 사실·면적별 세대 구성·공급 구성·생활환경·시설 확인 상태·FAQ·관련 콘텐츠·복수 출처와 목록·상세 정적 생성
@@ -126,7 +126,7 @@ npm run sync:external:dry-run
 - `/admin/` → 관리자 대시보드와 관리 API 연결 상태
 - `/admin/listings/`, `/admin/listings/editor/` → 네이버 공개 매물 현황·검색·유형 필터, 부동산뱅크 EUC-KR HTML-table `.xls` 브라우저 가져오기, 그 밖의 네이버 매물 직접 등록·수정·등록 종료. 원본 XLS는 서버로 보내지 않고 정제된 `naver-listings.json`만 기존 관리자 API로 저장한다.
 - `/blog/`, `/youtube/` → 지역 콘텐츠를 원문 종류별로 분리하고, 유튜브는 일반 영상을 기본으로 `일반 영상·Shorts 보기`를 전환하며 독립 페이지에서 6개 단위로 탐색
-- `/faq/` → 승인된 FAQ와 서버에 저장하지 않는 문자 상담 작성 화면
+- `/faq/` → 승인된 공개 FAQ 38개와 서버에 저장하지 않는 문자 상담 작성 화면
 - `/admin/content/` → 홈 대표·사무소·리더스시티 설명과 대표 사진
 - `/admin/external-links/` → 네이버 블로그·유튜브를 분리한 관리 카테고리, 유튜브 일반 영상·Shorts 형식 선택, 카테고리별 건수·검색·링크 미리보기·썸네일
 - `/admin/complexes/` → 리더스시티 전체 비교 콘텐츠와 대전 동구 지역·단지 소개·사진·면적·공급·생활환경·시설 상태·FAQ·관련 콘텐츠·복수 출처·확인일
@@ -151,7 +151,7 @@ DB와 TR 흐름은 없다. 관리 API의 콘텐츠 쓰기는 `ADMIN_WRITE_ENABLE
 
 - `published` 매물만 공개 목록·상세·사이트맵에 생성한다.
 - 공개 매물에는 고유 ID·slug, 동구 내 동네, 거래유형, 가격, 전용면적, 출처, 확인일을 입력한다.
-- 네이버 외부 매물 카드는 네이버에 공개된 매물번호·동 번호·광고 층수·가격·면적·방향·확인일만 `naver-listings.json`에 기록하고, 각 카드가 같은 매물번호의 `fin.land.naver.com/articles/` 주소로 연결되어야 한다.
+- 네이버 외부 매물 카드는 네이버에 공개된 매물번호·동 번호·광고 층수·가격·면적·방향과 부동산뱅크 등록기간 시작일(`registeredAt`)만 `naver-listings.json`에 기록하고, 각 카드가 같은 매물번호의 `fin.land.naver.com/articles/` 주소로 연결되어야 한다. 목록 수집 기준일은 루트 `checkedAt`으로 별도 관리한다.
 - 네이버 공개 카드에 없는 정확한 호수나 고객·소유자 정보는 추가하지 않는다. 공개 동 번호와 광고 층수는 그대로 표시할 수 있다.
 - 매물 대표 이미지는 `thumbnail`, 상세 이미지는 `images`에 자체 `/images/` 경로와 대체 텍스트로 저장한다.
 - 매매는 매매가만, 전세는 보증금만, 월세는 보증금과 월 임대료만 입력한다.

@@ -29,7 +29,7 @@ export function compareNaverListingSortData(first, second, sortKey) {
     return compareOptionalNumbers(first.price, second.price, sortKey === "price-desc" ? "desc" : "asc") || rankDifference;
   }
   if (sortKey === "latest") {
-    return (second.confirmedAt ?? "").localeCompare(first.confirmedAt ?? "") || rankDifference;
+    return (second.registeredAt ?? "").localeCompare(first.registeredAt ?? "") || rankDifference;
   }
   if (sortKey === "area" || sortKey === "area-desc") {
     return compareOptionalNumbers(first.area, second.area, sortKey === "area-desc" ? "desc" : "asc") || rankDifference;

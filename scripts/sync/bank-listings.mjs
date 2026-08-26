@@ -23,7 +23,7 @@ const comparedFields = [
   "floorLabel",
   "direction",
   "summary",
-  "confirmedAt",
+  "registeredAt",
   "source",
   "url",
 ];
@@ -193,8 +193,8 @@ function parseDesktopListings(html) {
 
     const tradeType = tradeTypeMap.get(cells[0]);
     if (!tradeType) throw trustError(`${naverId}: 지원하지 않는 거래 유형입니다.`);
-    const confirmedAt = parseIsoDate(cells[3]);
-    if (!confirmedAt) throw trustError(`${naverId}: 확인일을 해석하지 못했습니다.`);
+    const registeredAt = parseIsoDate(cells[3]);
+    if (!registeredAt) throw trustError(`${naverId}: 등록기간 시작일을 해석하지 못했습니다.`);
     const descriptionRow = rows[index + 1] ?? "";
     const summary = /onClickOpenNaverDetail/u.test(descriptionRow) ? "" : stripHtml(descriptionRow);
 
@@ -205,7 +205,7 @@ function parseDesktopListings(html) {
       tradeType,
       propertyType: cells[1],
       location: cells[2],
-      confirmedAt,
+      registeredAt,
       title: stripHtml(naverAnchor.block),
       area: cells[5],
       floor: cells[6],
@@ -286,7 +286,7 @@ function createPublicListing(candidate, existing) {
     floorLabel,
     direction: candidate.direction ?? existing?.direction ?? null,
     summary,
-    confirmedAt: candidate.confirmedAt,
+    registeredAt: candidate.registeredAt,
     source: "네이버페이 부동산",
     url: `https://fin.land.naver.com/articles/${candidate.naverId}`,
   };

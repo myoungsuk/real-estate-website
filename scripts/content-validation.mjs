@@ -250,7 +250,7 @@ export function validateListings(listings) {
 export function validateNaverListings(data) {
   const errors = [];
   if (!isIsoDateOrNull(data?.checkedAt) || data.checkedAt === null) {
-    errors.push("naverListings.checkedAt: YYYY-MM-DD 확인일이 필요합니다.");
+    errors.push("naverListings.checkedAt: YYYY-MM-DD 매물 목록 업데이트일이 필요합니다.");
   }
   if (!Array.isArray(data?.items) || data.items.length === 0) {
     return [...errors, "naverListings.items: 네이버 공개 매물이 하나 이상 필요합니다."];
@@ -271,10 +271,10 @@ export function validateNaverListings(data) {
     for (const key of ["areaLabel", "floorLabel", "direction"]) {
       if (listing[key] !== null && !isNonEmptyString(listing[key])) errors.push(`${path}.${key}: 문자열 또는 null이어야 합니다.`);
     }
-    if (!isIsoDateOrNull(listing.confirmedAt) || listing.confirmedAt === null) {
-      errors.push(`${path}.confirmedAt: YYYY-MM-DD 확인일이 필요합니다.`);
-    } else if (isNonEmptyString(data.checkedAt) && listing.confirmedAt > data.checkedAt) {
-      errors.push(`${path}.confirmedAt: 데이터 확인일보다 늦을 수 없습니다.`);
+    if (!isIsoDateOrNull(listing.registeredAt) || listing.registeredAt === null) {
+      errors.push(`${path}.registeredAt: YYYY-MM-DD 등록일이 필요합니다.`);
+    } else if (isNonEmptyString(data.checkedAt) && listing.registeredAt > data.checkedAt) {
+      errors.push(`${path}.registeredAt: 매물 목록 업데이트일보다 늦을 수 없습니다.`);
     }
     if (listing.source !== "네이버페이 부동산") errors.push(`${path}.source: 네이버페이 부동산이어야 합니다.`);
     try {

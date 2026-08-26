@@ -12,7 +12,7 @@ export interface NaverListing {
   floorLabel: string | null;
   direction: string | null;
   summary: string;
-  confirmedAt: string;
+  registeredAt: string;
   source: "네이버페이 부동산";
   url: string;
 }
@@ -24,8 +24,8 @@ export interface NaverListingData {
 
 const data = naverListingData as NaverListingData;
 
-export const naverListingsCheckedAt = data.checkedAt;
-export const naverListings = data.items;
+export const naverListingsUpdatedAt = data.checkedAt;
+export const naverListings = [...data.items].sort((first, second) => second.registeredAt.localeCompare(first.registeredAt));
 export const naverPropertyTypes = [...new Set(naverListings.map((listing) => listing.propertyType))];
 
 export function getNaverListingPriceValue(priceLabel: string) {

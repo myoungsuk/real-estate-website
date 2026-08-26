@@ -20,7 +20,7 @@ function listingMarkup({
   trade = "매매",
   propertyType = "아파트",
   location = "대전동구 천동",
-  confirmedAt = "26.08.26",
+  registeredAt = "26.08.26",
   title = "리더스시티5BL",
   area = "81/59",
   floor = "고/29",
@@ -31,7 +31,7 @@ function listingMarkup({
   return `
     <table>
       <tr class="bg_white">
-        <td rowspan="2">${trade}</td><td rowspan="2">${propertyType}</td><td rowspan="2">${location}</td><td rowspan="2">${confirmedAt}</td>
+        <td rowspan="2">${trade}</td><td rowspan="2">${propertyType}</td><td rowspan="2">${location}</td><td rowspan="2">${registeredAt}</td>
         <td colspan="2"><a class="link_blue" href="javascript:onClickOpenNaverDetail('${naverId}');">${title}</a><a href="javascript:onClickOpenDetail('AT', '${bankId}');">새창</a></td>
         <td>${area}</td><td>${floor}</td><td>${price}</td>
       </tr>
@@ -97,7 +97,7 @@ function publicListing(id, overrides = {}) {
     floorLabel: "고/29층",
     direction: "남서향",
     summary: "공개 매물 설명",
-    confirmedAt: "2026-08-26",
+    registeredAt: "2026-08-26",
     source: "네이버페이 부동산",
     url: `https://fin.land.naver.com/articles/${id}`,
     ...overrides,
@@ -119,7 +119,7 @@ test("부동산뱅크 공개 HTML에서 카드 필드와 두 매물번호를 추
     tradeType: "sale",
     propertyType: "아파트",
     location: "대전동구 천동",
-    confirmedAt: "2026-08-26",
+    registeredAt: "2026-08-26",
     title: "리더스시티5BL",
     area: "81/59",
     floor: "고/29",

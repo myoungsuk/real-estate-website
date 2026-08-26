@@ -7,10 +7,10 @@ import {
 } from "../src/lib/naver-listing-sort.mjs";
 
 const listings = [
-  { rank: "0", price: "30000", area: "80", confirmedAt: "2026-08-24" },
-  { rank: "1", price: "10000", area: "120", confirmedAt: "2026-08-25" },
-  { rank: "2", price: "30000", area: "80", confirmedAt: "2026-08-25" },
-  { rank: "3", confirmedAt: "" },
+  { rank: "0", price: "30000", area: "80", registeredAt: "2026-08-24" },
+  { rank: "1", price: "10000", area: "120", registeredAt: "2026-08-25" },
+  { rank: "2", price: "30000", area: "80", registeredAt: "2026-08-25" },
+  { rank: "3", registeredAt: "" },
 ];
 
 function sortedRanks(sortKey) {

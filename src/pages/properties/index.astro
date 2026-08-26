@@ -3,12 +3,11 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
 import PageIntro from "../../components/PageIntro.astro";
 import ContactPanel from "../../components/ContactPanel.astro";
 import NaverListingCard from "../../components/NaverListingCard.astro";
-import { naverListings, naverListingsCheckedAt, naverPropertyTypes } from "../../lib/naver-listings";
+import { naverListings, naverListingsUpdatedAt, naverPropertyTypes } from "../../lib/naver-listings";
 import { office } from "../../lib/site";
 
 const title = "대전 동구 매매·전세·월세 매물 | 행복한부동산";
 const description = "대전 동구에서 직접 확인한 매매·전세·월세 매물을 지역과 조건별로 비교합니다.";
-const listingsUpdatedAtLabel = naverListingsCheckedAt.replaceAll("-", ".");
 ---
 
 <BaseLayout {title} {description}>
@@ -19,7 +18,8 @@ const listingsUpdatedAtLabel = naverListingsCheckedAt.replaceAll("-", ".");
         <div>
           <p class="eyebrow">NAVER 부동산</p>
           <h2>네이버에 공개된 개별 매물 {naverListings.length}건</h2>
-          <p>매물 목록 업데이트 {listingsUpdatedAtLabel} · 아래 카드를 누르면 해당 네이버 매물로 바로 이동합니다.</p>
+          <p class="listing-update"><span>매물 목록 업데이트</span><time datetime={naverListingsUpdatedAt}>{naverListingsUpdatedAt.replaceAll("-", ".")}</time></p>
+          <p>아래 카드를 누르면 해당 네이버 매물로 바로 이동합니다.</p>
         </div>
         <a class="button button--light" href={office.naverListingsUrl} target="_blank" rel="noopener noreferrer">네이버 매물 보기</a>
       </aside>
@@ -104,3 +104,27 @@ const listingsUpdatedAtLabel = naverListingsCheckedAt.replaceAll("-", ".");
     apply();
   }
 </script>
+
+<style>
+  .listing-update {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    margin: 0.7rem 0 0.45rem;
+    color: var(--white);
+  }
+
+  .listing-update span {
+    border-radius: 999px;
+    background: var(--rose-soft);
+    color: var(--rose-dark);
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    padding: 0.3rem 0.65rem;
+  }
+
+  .listing-update time {
+    font-weight: 800;
+  }
+</style>
