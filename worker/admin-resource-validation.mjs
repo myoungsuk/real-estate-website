@@ -1,5 +1,6 @@
 import {
   validateComplexes,
+  validateComplexOverview,
   validateExternalLinks,
   validateHomeContent,
   validateListings,
@@ -10,6 +11,7 @@ export const ADMIN_RESOURCE_PATHS = Object.freeze({
   listings: "src/data/listings.json",
   office: "src/data/office.json",
   complexes: "src/data/complexes.json",
+  "complexes-overview": "src/data/complexes-overview.json",
   "external-links": "src/data/external-links.json",
   "home-content": "src/data/home-content.json",
   faq: "src/data/faq.json",
@@ -25,6 +27,7 @@ export function validateAdminResource(resource, data) {
     case "listings": return validateListings(data);
     case "office": return validateOffice(data);
     case "complexes": return validateComplexes(data);
+    case "complexes-overview": return validateComplexOverview(data);
     case "external-links": return validateExternalLinks(data);
     case "home-content": return validateHomeContent(data);
     case "faq": return Array.isArray(data) ? [] : ["faq: 배열이어야 합니다."];

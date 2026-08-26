@@ -78,6 +78,11 @@ test("관리자 편집 화면은 네이버 매물 안내와 자체 콘텐츠 편
   assert.match(complexEditor, /uploadAdminImage\("area"/);
   assert.match(complexEditor, /name="facts"/);
   assert.match(complexEditor, /name="highlights"/);
+  assert.match(complexEditor, /writeAdminContent\("complexes-overview"/);
+  assert.match(complexEditor, /name="unitGroups"/);
+  assert.match(complexEditor, /name="livingSections"/);
+  assert.match(complexEditor, /name="amenityGroups"/);
+  assert.match(complexEditor, /name="relatedContentIds"/);
   assert.match(complexEditor, /name="sources"/);
 });
 
