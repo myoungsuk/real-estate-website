@@ -1,5 +1,19 @@
 [
   {
+    "id": "youtube-ufxzsys9u5q",
+    "type": "youtube",
+    "youtubeFormat": "video",
+    "status": "published",
+    "title": "대전 천동 리더스시티4블록 아파트 살 때, 호가보다 먼저 봐야 할 5가지",
+    "summary": "공식 YouTube 채널에서 “대전 천동 리더스시티4블록 아파트 살 때, 호가보다 먼저 봐야 할 5가지” 영상을 확인해 보세요.",
+    "url": "https://www.youtube.com/watch?v=UfXZSYS9U5Q",
+    "publishedAt": "2026-08-27",
+    "thumbnail": {
+      "src": "/images/youtube/UfXZSYS9U5Q.webp",
+      "alt": "대전 천동 리더스시티4블록 아파트 살 때, 호가보다 먼저 봐야 할 5가지 유튜브 영상 썸네일"
+    }
+  },
+  {
     "id": "naver-blog-224390896752",
     "type": "blog",
     "status": "published",
