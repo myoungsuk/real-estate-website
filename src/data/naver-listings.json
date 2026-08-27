@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-08-27",
+  "checkedAt": "2026-08-28",
   "items": [
     {
       "id": "2645736151",
@@ -618,76 +618,6 @@
       "url": "https://fin.land.naver.com/articles/2640655272"
     },
     {
-      "id": "2640418001",
-      "title": "대전르에브스위첸1단지",
-      "propertyType": "아파트분양권",
-      "tradeType": "sale",
-      "priceLabel": "4억 4,360",
-      "areaLabel": "84㎡ · 전용 59㎡",
-      "floorLabel": "저/29층",
-      "direction": "남서향",
-      "summary": "근린생활시설가깝고 단지조망 예쁜집입니다",
-      "registeredAt": "2026-07-28",
-      "source": "네이버페이 부동산",
-      "url": "https://fin.land.naver.com/articles/2640418001"
-    },
-    {
-      "id": "2640418242",
-      "title": "대전르에브스위첸2단지",
-      "propertyType": "아파트분양권",
-      "tradeType": "sale",
-      "priceLabel": "7억 7,920",
-      "areaLabel": "144㎡ · 전용 110㎡",
-      "floorLabel": "2/26층",
-      "direction": "남서향",
-      "summary": "필로티로 아이들키우기 좋은집 트램역 이동 편리",
-      "registeredAt": "2026-07-28",
-      "source": "네이버페이 부동산",
-      "url": "https://fin.land.naver.com/articles/2640418242"
-    },
-    {
-      "id": "2640536730",
-      "title": "리더스시티 4블록",
-      "propertyType": "아파트",
-      "tradeType": "sale",
-      "priceLabel": "4억 7,500",
-      "areaLabel": "99㎡ · 전용 74㎡",
-      "floorLabel": "20/29층",
-      "direction": "남동향",
-      "summary": "남동향 전망좋은집 시스템에어컨 5대, 중문등 설치",
-      "registeredAt": "2026-07-28",
-      "source": "네이버페이 부동산",
-      "url": "https://fin.land.naver.com/articles/2640536730"
-    },
-    {
-      "id": "2640535271",
-      "title": "리더스시티 4블록",
-      "propertyType": "아파트",
-      "tradeType": "sale",
-      "priceLabel": "5억 500",
-      "areaLabel": "99㎡ · 전용 74㎡",
-      "floorLabel": "중/29층",
-      "direction": "남동향",
-      "summary": "천동초등학교 전망 시스템에어컨외 옵션 다수 설치",
-      "registeredAt": "2026-07-28",
-      "source": "네이버페이 부동산",
-      "url": "https://fin.land.naver.com/articles/2640535271"
-    },
-    {
-      "id": "2640529660",
-      "title": "리더스시티 4블록",
-      "propertyType": "아파트",
-      "tradeType": "sale",
-      "priceLabel": "3억 8,000",
-      "areaLabel": "80㎡ · 전용 59㎡",
-      "floorLabel": "중/29층",
-      "direction": "남동향",
-      "summary": "작은방 양창으로 개방감 좋은집. 빠른 입주 가능",
-      "registeredAt": "2026-07-28",
-      "source": "네이버페이 부동산",
-      "url": "https://fin.land.naver.com/articles/2640529660"
-    },
-    {
       "id": "2640120487",
       "title": "천동홍익 1동",
       "propertyType": "아파트",
@@ -700,6 +630,34 @@
       "registeredAt": "2026-07-27",
       "source": "네이버페이 부동산",
       "url": "https://fin.land.naver.com/articles/2640120487"
+    },
+    {
+      "id": "2646192371",
+      "title": "리더스시티 4블록",
+      "propertyType": "아파트",
+      "tradeType": "sale",
+      "priceLabel": "3억 8,000",
+      "areaLabel": "80㎡ · 전용 59㎡",
+      "floorLabel": "중/29층",
+      "direction": "남동향",
+      "summary": "작은방 양창으로 개방감 좋은집. 빠른 입주 가능",
+      "registeredAt": "2026-08-27",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2646192371"
+    },
+    {
+      "id": "2646032733",
+      "title": "아침LH",
+      "propertyType": "아파트",
+      "tradeType": "sale",
+      "priceLabel": "3억 9,000",
+      "areaLabel": "112㎡ · 전용 84㎡",
+      "floorLabel": "12/25층",
+      "direction": "남동향",
+      "summary": "로얄동 즉시입주가능 전망좋아요",
+      "registeredAt": "2026-08-27",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2646032733"
     }
   ]
 }
