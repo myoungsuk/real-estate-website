@@ -31,6 +31,11 @@ function assertStructuredData(html, path) {
   return count;
 }
 
+export function isSearchVerificationFile(path, html) {
+  const match = /^naver[a-f0-9]{32}\.html$/u.exec(path);
+  return Boolean(match && html.trim() === `naver-site-verification: ${match[0]}`);
+}
+
 export async function assertProductionBuild({ distDir = "dist" } = {}) {
   const absoluteDist = resolve(distDir);
   const [robots, sitemapIndex, sitemap, markerRaw, headers] = await Promise.all([
@@ -66,6 +71,7 @@ export async function assertProductionBuild({ distDir = "dist" } = {}) {
   for (const htmlPath of htmlFiles) {
     const path = relative(absoluteDist, htmlPath).replaceAll("\\", "/");
     const html = await readFile(htmlPath, "utf8");
+    if (isSearchVerificationFile(path, html)) continue;
     const pageStructuredDataCount = assertStructuredData(html, path);
     structuredDataCount += pageStructuredDataCount;
     if (path === "index.html") assert(pageStructuredDataCount > 0, "index.html: 홈페이지 JSON-LD가 없습니다.");
