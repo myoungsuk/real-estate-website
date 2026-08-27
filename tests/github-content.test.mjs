@@ -7,6 +7,7 @@ import {
   uploadAdminImage,
   validateWebpBytes,
   writeAdminResource,
+  writeAdminResources,
 } from "../worker/github-content.mjs";
 
 const validWebpBytes = Uint8Array.from(
@@ -157,6 +158,239 @@ test("GitHub JSON 저장은 base tree에 단일 commit을 만들고 ref를 강�
   });
 });
 
+test("여러 관리자 JSON은 복수 blob과 한 tree, 한 commit, 한 ref 갱신으로 저장한다", async () => {
+  const blobShas = ["c".repeat(40), "d".repeat(40)];
+  const newTreeSha = "e".repeat(40);
+  const newCommitSha = "f".repeat(40);
+  const calls = [];
+  let blobIndex = 0;
+  const fetcher = async (url, init) => {
+    calls.push({ url, init });
+    if (url.endsWith("/git/blobs")) {
+      const sha = blobShas[blobIndex];
+      blobIndex += 1;
+      return Response.json({ sha }, { status: 201 });
+    }
+    if (url.endsWith("/git/trees")) return Response.json({ sha: newTreeSha }, { status: 201 });
+    if (url.endsWith("/git/commits")) return Response.json({ sha: newCommitSha }, { status: 201 });
+    if (url.endsWith("/git/refs/heads/master")) {
+      return Response.json({ ref: "refs/heads/master", object: { sha: newCommitSha } });
+    }
+    throw new Error(`예상하지 못한 GitHub 요청: ${url}`);
+  };
+  const changes = [
+    {
+      resource: "listings",
+      data: [],
+      sha: resourceSnapshot.resources.listings.sha,
+    },
+    {
+      resource: "faq",
+      data: [{ category: "가격과 시세", question: "질문", answer: "답변" }],
+      sha: resourceSnapshot.resources.faq.sha,
+    },
+  ];
+
+  const result = await writeAdminResources(changes, env, { fetcher, snapshot: resourceSnapshot });
+
+  assert.equal(calls.length, 5);
+  assert.deepEqual(
+    calls.slice(0, 2).map(({ init }) => Buffer.from(JSON.parse(init.body).content, "base64").toString("utf8")),
+    [
+      "[]\n",
+      `${JSON.stringify(changes[1].data, null, 2)}\n`,
+    ],
+  );
+  const treeBody = JSON.parse(calls[2].init.body);
+  const commitBody = JSON.parse(calls[3].init.body);
+  const refBody = JSON.parse(calls[4].init.body);
+  assert.equal(treeBody.base_tree, baseTreeSha);
+  assert.deepEqual(treeBody.tree, [
+    { path: ADMIN_RESOURCE_PATHS.listings, mode: "100644", type: "blob", sha: blobShas[0] },
+    { path: ADMIN_RESOURCE_PATHS.faq, mode: "100644", type: "blob", sha: blobShas[1] },
+  ]);
+  assert.equal(commitBody.message, "관리자: listings, faq 콘텐츠 일괄 수정");
+  assert.deepEqual(commitBody.parents, [baseCommitSha]);
+  assert.equal(commitBody.tree, newTreeSha);
+  assert.deepEqual(refBody, { sha: newCommitSha, force: false });
+  assert.deepEqual(result, {
+    resources: [
+      { resource: "listings", contentSha: blobShas[0] },
+      { resource: "faq", contentSha: blobShas[1] },
+    ],
+    commitSha: newCommitSha,
+    baseCommitSha: newCommitSha,
+  });
+});
+
+test("blob, tree, commit의 422는 충돌이 아니라 GitHub 장애로 처리한다", async () => {
+  for (const failureStage of ["blob", "tree", "commit"]) {
+    const calls = [];
+    const fetcher = async (url, init) => {
+      calls.push({ url, init });
+      if (url.endsWith("/git/blobs")) {
+        return failureStage === "blob"
+          ? Response.json({ message: "Validation Failed" }, { status: 422 })
+          : Response.json({ sha: "c".repeat(40) }, { status: 201 });
+      }
+      if (url.endsWith("/git/trees")) {
+        return failureStage === "tree"
+          ? Response.json({ message: "Validation Failed" }, { status: 422 })
+          : Response.json({ sha: "d".repeat(40) }, { status: 201 });
+      }
+      if (url.endsWith("/git/commits")) {
+        return failureStage === "commit"
+          ? Response.json({ message: "Validation Failed" }, { status: 422 })
+          : Response.json({ sha: "e".repeat(40) }, { status: 201 });
+      }
+      throw new Error(`실패 단계 뒤 호출되면 안 됩니다: ${url}`);
+    };
+
+    await assert.rejects(
+      writeAdminResource(
+        "listings",
+        [],
+        resourceSnapshot.resources.listings.sha,
+        env,
+        { fetcher, snapshot: resourceSnapshot },
+      ),
+      (error) => error.code === "GITHUB_UNAVAILABLE" && error.status === 502,
+    );
+    assert.equal(calls.length, { blob: 1, tree: 2, commit: 3 }[failureStage]);
+    assert.equal(calls.some(({ url }) => url.endsWith("/git/refs/heads/master")), false);
+  }
+});
+
+test("두 번째 blob 생성이 실패하면 tree, commit, ref를 호출하지 않는다", async () => {
+  const calls = [];
+  let blobIndex = 0;
+  const fetcher = async (url, init) => {
+    calls.push({ url, init });
+    if (!url.endsWith("/git/blobs")) throw new Error(`blob 실패 뒤 호출되면 안 됩니다: ${url}`);
+    blobIndex += 1;
+    return blobIndex === 1
+      ? Response.json({ sha: "c".repeat(40) }, { status: 201 })
+      : Response.json({ message: "Validation Failed" }, { status: 422 });
+  };
+
+  await assert.rejects(
+    writeAdminResources([
+      { resource: "listings", data: [], sha: resourceSnapshot.resources.listings.sha },
+      { resource: "faq", data: [], sha: resourceSnapshot.resources.faq.sha },
+    ], env, { fetcher, snapshot: resourceSnapshot }),
+    (error) => error.code === "GITHUB_UNAVAILABLE" && error.status === 502,
+  );
+  assert.equal(calls.length, 2);
+  assert.equal(calls.every(({ url }) => url.endsWith("/git/blobs")), true);
+});
+
+test("일괄 저장은 빈 변경, 중복 또는 허용되지 않은 resource를 Git 쓰기 전에 거부한다", async () => {
+  const cases = [
+    { changes: [], code: "CHANGES_REQUIRED" },
+    {
+      changes: [
+        { resource: "faq", data: [], sha: resourceSnapshot.resources.faq.sha },
+        { resource: "faq", data: [], sha: resourceSnapshot.resources.faq.sha },
+      ],
+      code: "DUPLICATE_RESOURCE",
+    },
+    { changes: [{ resource: "../faq", data: [], sha: "sha" }], code: "RESOURCE_NOT_ALLOWED" },
+  ];
+
+  for (const { changes, code } of cases) {
+    let called = false;
+    await assert.rejects(
+      writeAdminResources(changes, env, {
+        snapshot: resourceSnapshot,
+        fetcher: async () => { called = true; return new Response(); },
+      }),
+      (error) => error.code === code,
+    );
+    assert.equal(called, false);
+  }
+});
+
+test("일괄 저장은 변경 중 한 파일의 SHA가 오래됐으면 모든 Git 쓰기를 생략한다", async () => {
+  let called = false;
+  await assert.rejects(
+    writeAdminResources([
+      { resource: "listings", data: [], sha: resourceSnapshot.resources.listings.sha },
+      { resource: "faq", data: [], sha: "stale-sha" },
+    ], env, {
+      snapshot: resourceSnapshot,
+      fetcher: async () => { called = true; return new Response(); },
+    }),
+    (error) => error.code === "GITHUB_CONFLICT" && error.status === 409,
+  );
+  assert.equal(called, false);
+});
+
+test("일괄 저장도 snapshot 이후 branch가 이동하면 ref 갱신에서 409로 중단한다", async () => {
+  const calls = [];
+  let blobIndex = 0;
+  const movedCommitSha = "9".repeat(40);
+  const fetcher = async (url, init) => {
+    calls.push({ url, init });
+    if (url.endsWith("/git/blobs")) {
+      blobIndex += 1;
+      return Response.json({ sha: String(blobIndex + 2).repeat(40) }, { status: 201 });
+    }
+    if (url.endsWith("/git/trees")) return Response.json({ sha: "d".repeat(40) }, { status: 201 });
+    if (url.endsWith("/git/commits")) return Response.json({ sha: "e".repeat(40) }, { status: 201 });
+    if (url.endsWith("/git/refs/heads/master")) {
+      return Response.json({ message: "Reference update failed" }, { status: 422 });
+    }
+    if (url.endsWith("/git/ref/heads/master")) {
+      return Response.json({ object: { type: "commit", sha: movedCommitSha } });
+    }
+    throw new Error(`예상하지 못한 GitHub 요청: ${url}`);
+  };
+
+  await assert.rejects(
+    writeAdminResources([
+      { resource: "listings", data: [], sha: resourceSnapshot.resources.listings.sha },
+      { resource: "faq", data: [], sha: resourceSnapshot.resources.faq.sha },
+    ], env, { fetcher, snapshot: resourceSnapshot }),
+    (error) => error.code === "GITHUB_CONFLICT" && error.status === 409,
+  );
+  assert.equal(calls.length, 6);
+  assert.deepEqual(JSON.parse(calls[4].init.body), { sha: "e".repeat(40), force: false });
+  assert.equal(calls[5].init.method, "GET");
+});
+
+test("ref PATCH 422 뒤 branch tip이 같으면 GitHub 장애 502를 유지한다", async () => {
+  const calls = [];
+  const fetcher = async (url, init) => {
+    calls.push({ url, init });
+    if (url.endsWith("/git/blobs")) return Response.json({ sha: "c".repeat(40) }, { status: 201 });
+    if (url.endsWith("/git/trees")) return Response.json({ sha: "d".repeat(40) }, { status: 201 });
+    if (url.endsWith("/git/commits")) return Response.json({ sha: "e".repeat(40) }, { status: 201 });
+    if (url.endsWith("/git/refs/heads/master")) {
+      return Response.json({ message: "Validation Failed" }, { status: 422 });
+    }
+    if (url.endsWith("/git/ref/heads/master")) {
+      return Response.json({ object: { type: "commit", sha: baseCommitSha } });
+    }
+    throw new Error(`예상하지 못한 GitHub 요청: ${url}`);
+  };
+
+  await assert.rejects(
+    writeAdminResource(
+      "listings",
+      [],
+      resourceSnapshot.resources.listings.sha,
+      env,
+      { fetcher, snapshot: resourceSnapshot },
+    ),
+    (error) => error.code === "GITHUB_UNAVAILABLE"
+      && error.status === 502
+      && error.upstreamStatus === 422,
+  );
+  assert.equal(calls.length, 5);
+  assert.deepEqual(JSON.parse(calls[3].init.body), { sha: "e".repeat(40), force: false });
+  assert.equal(calls[4].init.method, "GET");
+});
+
 test("GitHub JSON 저장은 대상 파일 SHA가 snapshot과 다르면 쓰기 전에 거부한다", async () => {
   let called = false;
   await assert.rejects(
@@ -171,12 +405,19 @@ test("GitHub JSON 저장은 대상 파일 SHA가 snapshot과 다르면 쓰기 �
 
 test("branch가 snapshot 이후 이동하면 force 없이 ref CAS가 충돌한다", async () => {
   const calls = [];
+  const movedCommitSha = "9".repeat(40);
   const fetcher = async (url, init) => {
     calls.push({ url, init });
     if (url.endsWith("/git/blobs")) return Response.json({ sha: "c".repeat(40) }, { status: 201 });
     if (url.endsWith("/git/trees")) return Response.json({ sha: "d".repeat(40) }, { status: 201 });
     if (url.endsWith("/git/commits")) return Response.json({ sha: "e".repeat(40) }, { status: 201 });
-    return Response.json({ message: "Reference update failed" }, { status: 422 });
+    if (url.endsWith("/git/refs/heads/master")) {
+      return Response.json({ message: "Reference update failed" }, { status: 422 });
+    }
+    if (url.endsWith("/git/ref/heads/master")) {
+      return Response.json({ object: { type: "commit", sha: movedCommitSha } });
+    }
+    throw new Error(`예상하지 못한 GitHub 요청: ${url}`);
   };
 
   await assert.rejects(
@@ -189,7 +430,9 @@ test("branch가 snapshot 이후 이동하면 force 없이 ref CAS가 충돌한�
     ),
     (error) => error.code === "GITHUB_CONFLICT" && error.status === 409,
   );
-  assert.deepEqual(JSON.parse(calls.at(-1).init.body), { sha: "e".repeat(40), force: false });
+  assert.equal(calls.length, 5);
+  assert.deepEqual(JSON.parse(calls[3].init.body), { sha: "e".repeat(40), force: false });
+  assert.equal(calls[4].init.method, "GET");
 });
 
 test("이미지 업로드는 WebP 데이터와 허용 분류만 받는다", async () => {

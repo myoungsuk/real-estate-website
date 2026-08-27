@@ -62,6 +62,53 @@ test("만료된 CSRF는 새 세션을 받은 뒤 한 번만 재시도한다", as
   ]);
 });
 
+test("일괄 저장 클라이언트는 복수 변경과 non-null SHA 결과를 전달한다", async (t) => {
+  const originalFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const calls = [];
+  globalThis.fetch = async (url, init = {}) => {
+    calls.push({ url: String(url), init });
+    if (String(url).endsWith("/session")) {
+      return jsonResponse({
+        ok: true,
+        data: {
+          authenticated: true,
+          administrator: "o***@example.com",
+          authentication: "cloudflare-access-email-otp",
+          writeEnabled: true,
+          csrfToken: "batch-token",
+        },
+      });
+    }
+    return jsonResponse({
+      ok: true,
+      data: {
+        resources: [
+          { resource: "external-links", contentSha: "external-links-new-sha" },
+          { resource: "complexes-overview", contentSha: "complexes-overview-new-sha" },
+        ],
+        commitSha: "batch-commit-sha",
+        baseCommitSha: "batch-commit-sha",
+      },
+    });
+  };
+  const changes = [
+    { resource: "external-links", sha: "external-links-sha", data: [] },
+    { resource: "complexes-overview", sha: "complexes-overview-sha", data: {} },
+  ];
+
+  const client = await loadClient();
+  const result = await client.writeAdminContentBatch(changes);
+
+  assert.equal(result.commitSha, "batch-commit-sha");
+  assert.equal(result.baseCommitSha, "batch-commit-sha");
+  assert.equal(result.resources[0].contentSha, "external-links-new-sha");
+  assert.equal(calls[1].url, "/api/admin/v1/content");
+  assert.equal(calls[1].init.method, "PUT");
+  assert.equal(calls[1].init.headers["X-Admin-CSRF"], "batch-token");
+  assert.deepEqual(JSON.parse(calls[1].init.body), { changes });
+});
+
 test("CSRF 재시도도 거부되면 세 번째 쓰기 요청을 보내지 않는다", async (t) => {
   const originalFetch = globalThis.fetch;
   t.after(() => { globalThis.fetch = originalFetch; });

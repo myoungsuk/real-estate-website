@@ -38,6 +38,21 @@ export interface AdminResource<T> {
   data: T;
 }
 
+export interface AdminContentBatchChange<T = unknown> {
+  resource: string;
+  sha: string;
+  data: T;
+}
+
+export interface AdminContentBatchResult {
+  resources: Array<{
+    resource: string;
+    contentSha: string;
+  }>;
+  commitSha: string;
+  baseCommitSha: string;
+}
+
 let sessionPromise: Promise<AdminSession> | null = null;
 
 async function readEnvelope<T>(response: Response) {
@@ -127,6 +142,22 @@ export async function writeAdminContent<T>(resource: string, sha: string, data: 
       },
       credentials: "same-origin",
       body: JSON.stringify({ sha, data }),
+    }),
+  );
+}
+
+export async function writeAdminContentBatch(changes: readonly AdminContentBatchChange[]) {
+  return withWritableSession<AdminContentBatchResult>(
+    "관리자 저장 연결이 아직 활성화되지 않았습니다.",
+    (csrfToken) => fetch("/api/admin/v1/content", {
+      method: "PUT",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "X-Admin-CSRF": csrfToken,
+      },
+      credentials: "same-origin",
+      body: JSON.stringify({ changes }),
     }),
   );
 }

@@ -235,6 +235,393 @@ test("쓰기 설정과 CSRF가 있으면 허용된 콘텐츠를 GitHub 저장 �
   assert.doesNotMatch(JSON.stringify(auditEvents), /owner@example\.com|test-token|listings-sha|\[\]/u);
 });
 
+test("관리 API는 두 JSON 후보를 한 snapshot으로 검증하고 batch writer를 한 번 호출한다", async () => {
+  const env = {
+    ...authEnv,
+    ADMIN_WRITE_ENABLED: "true",
+    ADMIN_CSRF_SECRET: "12345678901234567890123456789012",
+    GITHUB_CONTENTS_TOKEN: "test-token",
+    GITHUB_REPOSITORY: "owner/repository",
+    GITHUB_BRANCH: "master",
+  };
+  const csrfToken = await createCsrfToken("owner@example.com", env.ADMIN_CSRF_SECRET);
+  const changes = [
+    {
+      resource: "home-content",
+      sha: "home-content-sha",
+      data: structuredClone(currentResources["home-content"]),
+    },
+    {
+      resource: "faq",
+      sha: "faq-sha",
+      data: structuredClone(currentResources.faq),
+    },
+  ];
+  let snapshotReads = 0;
+  let received = null;
+  const auditEvents = [];
+  const response = await handleAdminApi(
+    new Request("https://leaderscityhappy.com/api/admin/v1/content", {
+      method: "PUT",
+      headers: {
+        Origin: "https://leaderscityhappy.com",
+        "Content-Type": "application/json",
+        "X-Admin-CSRF": csrfToken,
+      },
+      body: JSON.stringify({ changes }),
+    }),
+    env,
+    {
+      authenticate: authenticated,
+      readResourcesSnapshot: async () => {
+        snapshotReads += 1;
+        return currentSnapshot;
+      },
+      writeResources: async (receivedChanges, _env, options) => {
+        received = { changes: receivedChanges, snapshot: options.snapshot };
+        return {
+          resources: receivedChanges.map(({ resource }) => ({ resource, contentSha: `${resource}-new-sha` })),
+          commitSha: "batch-commit-sha",
+          baseCommitSha: "batch-commit-sha",
+        };
+      },
+      auditLog: (entry) => auditEvents.push(entry),
+    },
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(snapshotReads, 1);
+  assert.deepEqual(received, { changes, snapshot: currentSnapshot });
+  assert.equal(body.data.commitSha, "batch-commit-sha");
+  assert.deepEqual(body.data.resources, [
+    { resource: "home-content", contentSha: "home-content-new-sha" },
+    { resource: "faq", contentSha: "faq-new-sha" },
+  ]);
+  assert.deepEqual(auditEvents[0], {
+    event: "admin_write",
+    actorId: auditEvents[0].actorId,
+    requestId: body.requestId,
+    operation: "content-batch-write",
+    resource: "batch",
+    resources: ["home-content", "faq"],
+    result: "success",
+    commitSha: "batch-commit-sha",
+  });
+  assert.doesNotMatch(JSON.stringify(auditEvents), /owner@example\.com|test-token|home-content-sha|faq-sha/u);
+});
+
+test("관리 API 일괄 저장은 서로 의존하는 두 후보를 결합한 상태로 교차 검증한다", async () => {
+  const env = {
+    ...authEnv,
+    ADMIN_WRITE_ENABLED: "true",
+    ADMIN_CSRF_SECRET: "12345678901234567890123456789012",
+    GITHUB_CONTENTS_TOKEN: "test-token",
+    GITHUB_REPOSITORY: "owner/repository",
+    GITHUB_BRANCH: "master",
+  };
+  const csrfToken = await createCsrfToken("owner@example.com", env.ADMIN_CSRF_SECRET);
+  const relatedId = currentResources["complexes-overview"].relatedContentIds[0];
+  const externalLinksCandidate = currentResources["external-links"].filter((item) => item.id !== relatedId);
+  const overviewCandidate = {
+    ...structuredClone(currentResources["complexes-overview"]),
+    relatedContentIds: currentResources["complexes-overview"].relatedContentIds.filter((id) => id !== relatedId),
+  };
+  const unchangedResources = Object.fromEntries(
+    Object.entries(currentResources).filter(([resource]) => resource !== "external-links"),
+  );
+  assert.match(
+    validateAdminResource("external-links", externalLinksCandidate, unchangedResources).join("\n"),
+    /external-links\.json에 없는 ID/,
+  );
+
+  const changes = [
+    { resource: "external-links", sha: "external-links-sha", data: externalLinksCandidate },
+    { resource: "complexes-overview", sha: "complexes-overview-sha", data: overviewCandidate },
+  ];
+  let received = null;
+  const response = await handleAdminApi(
+    new Request("https://leaderscityhappy.com/api/admin/v1/content", {
+      method: "PUT",
+      headers: {
+        Origin: "https://leaderscityhappy.com",
+        "Content-Type": "application/json",
+        "X-Admin-CSRF": csrfToken,
+      },
+      body: JSON.stringify({ changes }),
+    }),
+    env,
+    {
+      authenticate: authenticated,
+      readResourcesSnapshot: async () => currentSnapshot,
+      writeResources: async (receivedChanges) => {
+        received = receivedChanges;
+        return {
+          resources: receivedChanges.map(({ resource }) => ({ resource, contentSha: `${resource}-new-sha` })),
+          commitSha: "cross-resource-commit-sha",
+          baseCommitSha: "cross-resource-commit-sha",
+        };
+      },
+      auditLog: () => {},
+    },
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(received, changes);
+});
+
+test("콘텐츠 일괄 경로는 PUT만 허용하고 쓰기 capability를 노출한다", async () => {
+  for (const method of ["GET", "POST"]) {
+    const response = await handleAdminApi(
+      new Request("https://leaderscityhappy.com/api/admin/v1/content", { method }),
+      authEnv,
+      { authenticate: authenticated },
+    );
+    const body = await response.json();
+    assert.equal(response.status, 405);
+    assert.equal(response.headers.get("allow"), "PUT");
+    assert.equal(body.error.code, "METHOD_NOT_ALLOWED");
+  }
+
+  const env = {
+    ...authEnv,
+    ADMIN_WRITE_ENABLED: "true",
+    ADMIN_CSRF_SECRET: "12345678901234567890123456789012",
+    GITHUB_CONTENTS_TOKEN: "test-token",
+    GITHUB_REPOSITORY: "owner/repository",
+    GITHUB_BRANCH: "master",
+  };
+  const response = await handleAdminApi(
+    new Request("https://leaderscityhappy.com/api/admin/v1/system"),
+    env,
+    { authenticate: authenticated },
+  );
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.data.writeEnabled, true);
+  assert.equal(body.data.capabilities.includes("content-batch-write"), true);
+});
+
+test("관리 API 일괄 저장은 빈 변경, 중복, 비허용 resource, data 누락을 snapshot 조회 전에 거부한다", async () => {
+  const env = {
+    ...authEnv,
+    ADMIN_WRITE_ENABLED: "true",
+    ADMIN_CSRF_SECRET: "12345678901234567890123456789012",
+    GITHUB_CONTENTS_TOKEN: "test-token",
+    GITHUB_REPOSITORY: "owner/repository",
+    GITHUB_BRANCH: "master",
+  };
+  const csrfToken = await createCsrfToken("owner@example.com", env.ADMIN_CSRF_SECRET);
+  const cases = [
+    { changes: [], code: "CHANGES_REQUIRED" },
+    {
+      changes: [
+        { resource: "faq", sha: "faq-sha", data: currentResources.faq },
+        { resource: "faq", sha: "faq-sha", data: currentResources.faq },
+      ],
+      code: "DUPLICATE_RESOURCE",
+    },
+    {
+      changes: [{ resource: "../faq", sha: "faq-sha", data: currentResources.faq }],
+      code: "RESOURCE_NOT_ALLOWED",
+    },
+    { changes: [{ resource: "faq", sha: "faq-sha" }], code: "DATA_REQUIRED" },
+  ];
+
+  for (const { changes, code } of cases) {
+    let snapshotReads = 0;
+    let writeCalled = false;
+    const response = await handleAdminApi(
+      new Request("https://leaderscityhappy.com/api/admin/v1/content", {
+        method: "PUT",
+        headers: {
+          Origin: "https://leaderscityhappy.com",
+          "Content-Type": "application/json",
+          "X-Admin-CSRF": csrfToken,
+        },
+        body: JSON.stringify({ changes }),
+      }),
+      env,
+      {
+        authenticate: authenticated,
+        readResourcesSnapshot: async () => { snapshotReads += 1; return currentSnapshot; },
+        writeResources: async () => { writeCalled = true; return {}; },
+        auditLog: () => {},
+      },
+    );
+    const body = await response.json();
+    assert.equal(response.status, 400);
+    assert.equal(body.error.code, code);
+    assert.equal(snapshotReads, 0);
+    assert.equal(writeCalled, false);
+  }
+});
+
+test("단일 콘텐츠 경로의 비허용 resource는 기존 404를 유지한다", async () => {
+  const env = {
+    ...authEnv,
+    ADMIN_WRITE_ENABLED: "true",
+    ADMIN_CSRF_SECRET: "12345678901234567890123456789012",
+    GITHUB_CONTENTS_TOKEN: "test-token",
+    GITHUB_REPOSITORY: "owner/repository",
+    GITHUB_BRANCH: "master",
+  };
+  const csrfToken = await createCsrfToken("owner@example.com", env.ADMIN_CSRF_SECRET);
+  let snapshotReads = 0;
+  const response = await handleAdminApi(
+    new Request("https://leaderscityhappy.com/api/admin/v1/content/not-allowed", {
+      method: "PUT",
+      headers: {
+        Origin: "https://leaderscityhappy.com",
+        "Content-Type": "application/json",
+        "X-Admin-CSRF": csrfToken,
+      },
+      body: JSON.stringify({ sha: "not-allowed-sha", data: {} }),
+    }),
+    env,
+    {
+      authenticate: authenticated,
+      readResourcesSnapshot: async () => { snapshotReads += 1; return currentSnapshot; },
+      auditLog: () => {},
+    },
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 404);
+  assert.equal(body.error.code, "RESOURCE_NOT_ALLOWED");
+  assert.equal(snapshotReads, 0);
+});
+
+test("콘텐츠 일괄 저장의 정확한 URL도 잘못된 CSRF 토큰을 차단한다", async () => {
+  const env = {
+    ...authEnv,
+    ADMIN_WRITE_ENABLED: "true",
+    ADMIN_CSRF_SECRET: "12345678901234567890123456789012",
+    GITHUB_CONTENTS_TOKEN: "test-token",
+    GITHUB_REPOSITORY: "owner/repository",
+    GITHUB_BRANCH: "master",
+  };
+  let snapshotReads = 0;
+  let writeCalled = false;
+  const response = await handleAdminApi(
+    new Request("https://leaderscityhappy.com/api/admin/v1/content", {
+      method: "PUT",
+      headers: {
+        Origin: "https://leaderscityhappy.com",
+        "Content-Type": "application/json",
+        "X-Admin-CSRF": "invalid-token",
+      },
+      body: JSON.stringify({
+        changes: [{ resource: "faq", sha: "faq-sha", data: currentResources.faq }],
+      }),
+    }),
+    env,
+    {
+      authenticate: authenticated,
+      readResourcesSnapshot: async () => { snapshotReads += 1; return currentSnapshot; },
+      writeResources: async () => { writeCalled = true; return {}; },
+      auditLog: () => {},
+    },
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 403);
+  assert.equal(body.error.code, "CSRF_INVALID");
+  assert.equal(snapshotReads, 0);
+  assert.equal(writeCalled, false);
+});
+
+test("관리 API 일괄 저장은 한 파일이라도 검증 실패하면 Git 쓰기를 호출하지 않는다", async () => {
+  const env = {
+    ...authEnv,
+    ADMIN_WRITE_ENABLED: "true",
+    ADMIN_CSRF_SECRET: "12345678901234567890123456789012",
+    GITHUB_CONTENTS_TOKEN: "test-token",
+    GITHUB_REPOSITORY: "owner/repository",
+    GITHUB_BRANCH: "master",
+  };
+  const csrfToken = await createCsrfToken("owner@example.com", env.ADMIN_CSRF_SECRET);
+  let writeCalled = false;
+  const response = await handleAdminApi(
+    new Request("https://leaderscityhappy.com/api/admin/v1/content", {
+      method: "PUT",
+      headers: {
+        Origin: "https://leaderscityhappy.com",
+        "Content-Type": "application/json",
+        "X-Admin-CSRF": csrfToken,
+      },
+      body: JSON.stringify({
+        changes: [
+          {
+            resource: "home-content",
+            sha: "home-content-sha",
+            data: currentResources["home-content"],
+          },
+          {
+            resource: "faq",
+            sha: "faq-sha",
+            data: [{ question: "카테고리가 없으면 어떻게 되나요?", answer: "저장을 거부합니다." }],
+          },
+        ],
+      }),
+    }),
+    env,
+    {
+      authenticate: authenticated,
+      readResourcesSnapshot: async () => currentSnapshot,
+      writeResources: async () => { writeCalled = true; return {}; },
+      auditLog: () => {},
+    },
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 422);
+  assert.equal(body.error.code, "CONTENT_VALIDATION_FAILED");
+  assert.match(body.error.details.join("\n"), /category/);
+  assert.equal(writeCalled, false);
+});
+
+test("관리 API 일괄 저장은 한 파일의 SHA가 오래됐으면 Git 쓰기를 호출하지 않는다", async () => {
+  const env = {
+    ...authEnv,
+    ADMIN_WRITE_ENABLED: "true",
+    ADMIN_CSRF_SECRET: "12345678901234567890123456789012",
+    GITHUB_CONTENTS_TOKEN: "test-token",
+    GITHUB_REPOSITORY: "owner/repository",
+    GITHUB_BRANCH: "master",
+  };
+  const csrfToken = await createCsrfToken("owner@example.com", env.ADMIN_CSRF_SECRET);
+  let writeCalled = false;
+  const response = await handleAdminApi(
+    new Request("https://leaderscityhappy.com/api/admin/v1/content", {
+      method: "PUT",
+      headers: {
+        Origin: "https://leaderscityhappy.com",
+        "Content-Type": "application/json",
+        "X-Admin-CSRF": csrfToken,
+      },
+      body: JSON.stringify({
+        changes: [
+          { resource: "home-content", sha: "home-content-sha", data: currentResources["home-content"] },
+          { resource: "faq", sha: "stale-sha", data: currentResources.faq },
+        ],
+      }),
+    }),
+    env,
+    {
+      authenticate: authenticated,
+      readResourcesSnapshot: async () => currentSnapshot,
+      writeResources: async () => { writeCalled = true; return {}; },
+      auditLog: () => {},
+    },
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 409);
+  assert.equal(body.error.code, "GITHUB_CONFLICT");
+  assert.equal(writeCalled, false);
+});
+
 test("다른 출처의 관리자 저장 요청은 CSRF 토큰이 있어도 차단한다", async () => {
   const env = {
     ...authEnv,

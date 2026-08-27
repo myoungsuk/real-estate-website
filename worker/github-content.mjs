@@ -1,11 +1,12 @@
 import { ADMIN_RESOURCE_PATHS, getAdminResourcePath } from "./admin-resource-validation.mjs";
 
 export class GithubContentError extends Error {
-  constructor(code, message, status) {
+  constructor(code, message, status, upstreamStatus = null) {
     super(message);
     this.name = "GithubContentError";
     this.code = code;
     this.status = status;
+    this.upstreamStatus = upstreamStatus;
   }
 }
 
@@ -174,12 +175,12 @@ async function githubRequest(path, init, env, fetcher = fetch) {
     },
   });
   if (!response.ok) {
-    const status = response.status === 409 || response.status === 422 ? 409 : 502;
+    const status = response.status === 409 ? 409 : 502;
     const code = status === 409 ? "GITHUB_CONFLICT" : "GITHUB_UNAVAILABLE";
     const message = status === 409
       ? "다른 변경이 먼저 저장되었습니다. 최신 내용을 다시 불러와 주세요."
       : "GitHub 저장소와 통신하지 못했습니다.";
-    throw new GithubContentError(code, message, status);
+    throw new GithubContentError(code, message, status, response.status);
   }
   return response.json();
 }
@@ -260,46 +261,86 @@ export async function readAdminResource(resource, env, fetcher = fetch) {
   return { ...snapshot.resources[resource], baseCommitSha: snapshot.baseCommitSha };
 }
 
-export async function writeAdminResource(resource, data, sha, env, options = {}) {
-  const filePath = getAdminResourcePath(resource);
-  if (!filePath) throw new GithubContentError("RESOURCE_NOT_ALLOWED", "허용되지 않은 콘텐츠 종류입니다.", 404);
-  if (typeof sha !== "string" || sha.length === 0) {
-    throw new GithubContentError("SHA_REQUIRED", "최신 파일 버전을 확인한 뒤 저장해 주세요.", 409);
+function normalizeAdminResourceChanges(changes) {
+  if (!Array.isArray(changes) || changes.length === 0) {
+    throw new GithubContentError("CHANGES_REQUIRED", "저장할 콘텐츠 변경을 한 개 이상 입력해 주세요.", 400);
   }
+
+  const resources = new Set();
+  return changes.map((change) => {
+    if (!change || typeof change !== "object" || Array.isArray(change)) {
+      throw new GithubContentError("CHANGE_INVALID", "저장할 콘텐츠 변경 형식이 올바르지 않습니다.", 400);
+    }
+    const filePath = getAdminResourcePath(change.resource);
+    if (!filePath) {
+      throw new GithubContentError("RESOURCE_NOT_ALLOWED", "허용되지 않은 콘텐츠 종류입니다.", 404);
+    }
+    if (resources.has(change.resource)) {
+      throw new GithubContentError("DUPLICATE_RESOURCE", "같은 콘텐츠 종류를 한 번의 저장에 중복해서 넣을 수 없습니다.", 400);
+    }
+    if (typeof change.sha !== "string" || change.sha.length === 0) {
+      throw new GithubContentError("SHA_REQUIRED", "최신 파일 버전을 확인한 뒤 저장해 주세요.", 409);
+    }
+    if (!Object.hasOwn(change, "data")) {
+      throw new GithubContentError("DATA_REQUIRED", "저장할 콘텐츠 데이터가 필요합니다.", 400);
+    }
+    resources.add(change.resource);
+    return {
+      resource: change.resource,
+      filePath,
+      data: change.data,
+      sha: change.sha,
+    };
+  });
+}
+
+export async function writeAdminResources(changes, env, options = {}) {
+  const normalizedChanges = normalizeAdminResourceChanges(changes);
   const fetcher = typeof options === "function" ? options : options.fetcher ?? fetch;
   const snapshot = typeof options === "function" || !options.snapshot
     ? await readAdminResourcesSnapshot(env, fetcher)
     : options.snapshot;
-  const current = snapshot?.resources?.[resource];
   if (
     typeof snapshot?.baseCommitSha !== "string"
     || snapshot.baseCommitSha.length === 0
     || typeof snapshot?.treeSha !== "string"
     || snapshot.treeSha.length === 0
-    || !current
   ) {
     throw githubContentInvalid();
   }
-  if (current.sha !== sha) {
-    throw new GithubContentError("GITHUB_CONFLICT", "다른 변경이 먼저 저장되었습니다. 최신 내용을 다시 불러와 주세요.", 409);
+
+  for (const change of normalizedChanges) {
+    const current = snapshot.resources?.[change.resource];
+    if (!current) throw githubContentInvalid();
+    if (current.sha !== change.sha) {
+      throw new GithubContentError("GITHUB_CONFLICT", "다른 변경이 먼저 저장되었습니다. 최신 내용을 다시 불러와 주세요.", 409);
+    }
   }
 
   const config = getGithubConfig(env);
-  const content = `${JSON.stringify(data, null, 2)}\n`;
-  const blob = await githubRequest(
-    "/git/blobs",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        content: bytesToBase64(encoder.encode(content)),
-        encoding: "base64",
-      }),
-    },
-    env,
-    fetcher,
-  );
-  if (typeof blob.sha !== "string" || blob.sha.length === 0) throw githubContentInvalid();
+  const writtenResources = [];
+  for (const change of normalizedChanges) {
+    const content = `${JSON.stringify(change.data, null, 2)}\n`;
+    const blob = await githubRequest(
+      "/git/blobs",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: bytesToBase64(encoder.encode(content)),
+          encoding: "base64",
+        }),
+      },
+      env,
+      fetcher,
+    );
+    if (typeof blob.sha !== "string" || blob.sha.length === 0) throw githubContentInvalid();
+    writtenResources.push({
+      resource: change.resource,
+      path: change.filePath,
+      contentSha: blob.sha,
+    });
+  }
 
   const tree = await githubRequest(
     "/git/trees",
@@ -308,7 +349,12 @@ export async function writeAdminResource(resource, data, sha, env, options = {})
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         base_tree: snapshot.treeSha,
-        tree: [{ path: filePath, mode: "100644", type: "blob", sha: blob.sha }],
+        tree: writtenResources.map(({ path, contentSha }) => ({
+          path,
+          mode: "100644",
+          type: "blob",
+          sha: contentSha,
+        })),
       }),
     },
     env,
@@ -322,7 +368,9 @@ export async function writeAdminResource(resource, data, sha, env, options = {})
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        message: `관리자: ${resource} 콘텐츠 수정`,
+        message: normalizedChanges.length === 1
+          ? `관리자: ${normalizedChanges[0].resource} 콘텐츠 수정`
+          : `관리자: ${normalizedChanges.map(({ resource }) => resource).join(", ")} 콘텐츠 일괄 수정`,
         tree: tree.sha,
         parents: [snapshot.baseCommitSha],
       }),
@@ -332,22 +380,53 @@ export async function writeAdminResource(resource, data, sha, env, options = {})
   );
   if (typeof commit.sha !== "string" || commit.sha.length === 0) throw githubContentInvalid();
 
-  await githubRequest(
-    gitRefPath(config.branch, { plural: true }),
-    {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sha: commit.sha, force: false }),
-    },
-    env,
-    fetcher,
-  );
+  try {
+    await githubRequest(
+      gitRefPath(config.branch, { plural: true }),
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sha: commit.sha, force: false }),
+      },
+      env,
+      fetcher,
+    );
+  } catch (error) {
+    if (!(error instanceof GithubContentError) || error.upstreamStatus !== 422) throw error;
+
+    let currentCommitSha;
+    try {
+      const currentRef = await githubRequest(gitRefPath(config.branch), { method: "GET" }, env, fetcher);
+      currentCommitSha = currentRef.object?.type === "commit" ? currentRef.object.sha : null;
+      if (typeof currentCommitSha !== "string" || currentCommitSha.length === 0) throw githubContentInvalid();
+    } catch {
+      throw error;
+    }
+    if (currentCommitSha !== snapshot.baseCommitSha) {
+      throw new GithubContentError(
+        "GITHUB_CONFLICT",
+        "다른 변경이 먼저 저장되었습니다. 최신 내용을 다시 불러와 주세요.",
+        409,
+        error.upstreamStatus,
+      );
+    }
+    throw error;
+  }
 
   return {
-    resource,
+    resources: writtenResources.map(({ resource, contentSha }) => ({ resource, contentSha })),
     commitSha: commit.sha,
-    contentSha: blob.sha,
     baseCommitSha: commit.sha,
+  };
+}
+
+export async function writeAdminResource(resource, data, sha, env, options = {}) {
+  const result = await writeAdminResources([{ resource, data, sha }], env, options);
+  return {
+    resource,
+    commitSha: result.commitSha,
+    contentSha: result.resources[0].contentSha,
+    baseCommitSha: result.baseCommitSha,
   };
 }
 

@@ -7,6 +7,7 @@ import {
   readAdminResourcesSnapshot,
   uploadAdminImage,
   writeAdminResource,
+  writeAdminResources,
 } from "./github-content.mjs";
 import { createRequestId, errorResponse, jsonResponse } from "./http.mjs";
 import { fetchExternalLinkPreview } from "./link-preview.mjs";
@@ -80,6 +81,63 @@ function loadCurrentAdminResources(candidateResource, snapshot) {
   return Object.fromEntries(entries);
 }
 
+function normalizeBatchChanges(changes) {
+  if (!Array.isArray(changes) || changes.length === 0) {
+    throw new AdminWriteError("CHANGES_REQUIRED", "저장할 콘텐츠 변경을 한 개 이상 입력해 주세요.", 400);
+  }
+
+  const resources = new Set();
+  return changes.map((change) => {
+    if (!change || typeof change !== "object" || Array.isArray(change)) {
+      throw new AdminWriteError("CHANGE_INVALID", "저장할 콘텐츠 변경 형식이 올바르지 않습니다.", 400);
+    }
+    if (!Object.hasOwn(ADMIN_RESOURCE_PATHS, change.resource)) {
+      throw new AdminWriteError("RESOURCE_NOT_ALLOWED", "허용되지 않은 콘텐츠 종류입니다.", 400);
+    }
+    if (resources.has(change.resource)) {
+      throw new AdminWriteError("DUPLICATE_RESOURCE", "같은 콘텐츠 종류를 한 번의 저장에 중복해서 넣을 수 없습니다.", 400);
+    }
+    if (typeof change.sha !== "string" || change.sha.length === 0) {
+      throw new GithubContentError("SHA_REQUIRED", "최신 파일 버전을 확인한 뒤 저장해 주세요.", 409);
+    }
+    if (!Object.hasOwn(change, "data")) {
+      throw new AdminWriteError("DATA_REQUIRED", "저장할 콘텐츠 데이터가 필요합니다.", 400);
+    }
+    resources.add(change.resource);
+    return { resource: change.resource, sha: change.sha, data: change.data };
+  });
+}
+
+function validateBatchChanges(changes, snapshot) {
+  const candidateResources = {};
+  for (const resource of Object.keys(ADMIN_RESOURCE_PATHS)) {
+    const current = snapshot?.resources?.[resource];
+    if (!current) {
+      throw new GithubContentError("GITHUB_CONTENT_INVALID", "저장소 콘텐츠를 읽지 못했습니다.", 502);
+    }
+    candidateResources[resource] = current.data;
+  }
+
+  for (const change of changes) {
+    const current = snapshot.resources[change.resource];
+    if (current.sha !== change.sha) {
+      throw new GithubContentError("GITHUB_CONFLICT", "다른 변경이 먼저 저장되었습니다. 최신 내용을 다시 불러와 주세요.", 409);
+    }
+    candidateResources[change.resource] = change.data;
+  }
+
+  const errors = new Set();
+  for (const change of changes) {
+    const currentResources = Object.fromEntries(
+      Object.keys(ADMIN_RESOURCE_PATHS)
+        .filter((resource) => resource !== change.resource)
+        .map((resource) => [resource, candidateResources[resource]]),
+    );
+    for (const error of validateAdminResource(change.resource, change.data, currentResources)) errors.add(error);
+  }
+  return [...errors];
+}
+
 function getOperationErrorCode(error) {
   return error instanceof AdminWriteError || error instanceof GithubContentError
     ? error.code
@@ -151,6 +209,7 @@ export async function handleAdminApi(request, env, options = {}) {
   const readResource = options.readResource ?? readAdminResource;
   const readResourcesSnapshot = options.readResourcesSnapshot ?? readAdminResourcesSnapshot;
   const writeResource = options.writeResource ?? writeAdminResource;
+  const writeResources = options.writeResources ?? writeAdminResources;
   const uploadImage = options.uploadImage ?? uploadAdminImage;
   const fetchLinkPreview = options.fetchLinkPreview ?? fetchExternalLinkPreview;
   const auditLog = options.auditLog ?? defaultAuditLog;
@@ -218,7 +277,7 @@ export async function handleAdminApi(request, env, options = {}) {
         apiVersion: "v1",
         writeEnabled,
         capabilities: writeEnabled
-          ? ["health", "session", "system", "content-read", "content-write", "media-upload", "link-preview"]
+          ? ["health", "session", "system", "content-read", "content-write", "content-batch-write", "media-upload", "link-preview"]
           : ["health", "session", "system"],
       },
       requestId,
@@ -235,7 +294,58 @@ export async function handleAdminApi(request, env, options = {}) {
     });
   }
 
+  const contentBatchPath = `${API_VERSION_ROOT}/content`;
   const contentMatch = new RegExp(`^${API_VERSION_ROOT}/content/([a-z-]+)$`, "u").exec(url.pathname);
+
+  if (url.pathname === contentBatchPath && request.method === "PUT") {
+    let resources = [];
+    try {
+      await validateAdminWriteRequest(request, actor, env);
+      const body = await readJsonBody(request);
+      const changes = normalizeBatchChanges(body?.changes);
+      resources = changes.map(({ resource }) => resource);
+      const snapshot = await readResourcesSnapshot(env);
+      const errors = validateBatchChanges(changes, snapshot);
+      if (errors.length > 0) {
+        await emitAdminAudit(auditLog, actor, env, {
+          requestId,
+          operation: "content-batch-write",
+          resource: "batch",
+          resources,
+          result: "failure",
+          errorCode: "CONTENT_VALIDATION_FAILED",
+        });
+        return errorResponse({
+          code: "CONTENT_VALIDATION_FAILED",
+          message: "공개 콘텐츠 입력값을 다시 확인해 주세요.",
+          details: errors,
+          requestId,
+          status: 422,
+        });
+      }
+      const result = await writeResources(changes, env, { snapshot });
+      await emitAdminAudit(auditLog, actor, env, {
+        requestId,
+        operation: "content-batch-write",
+        resource: "batch",
+        resources,
+        result: "success",
+        commitSha: result.commitSha ?? null,
+      });
+      return successResponse(result, requestId);
+    } catch (error) {
+      await emitAdminAudit(auditLog, actor, env, {
+        requestId,
+        operation: "content-batch-write",
+        resource: "batch",
+        resources,
+        result: "failure",
+        errorCode: getOperationErrorCode(error),
+      });
+      return operationErrorResponse(error, requestId);
+    }
+  }
+
   if (contentMatch && request.method === "GET") {
     if (!writeEnabled) {
       return operationErrorResponse(new AdminWriteError("WRITE_DISABLED", "관리자 저장 연결이 아직 활성화되지 않았습니다.", 503), requestId);
@@ -252,6 +362,9 @@ export async function handleAdminApi(request, env, options = {}) {
     const resource = contentMatch[1];
     try {
       await validateAdminWriteRequest(request, actor, env);
+      if (!Object.hasOwn(ADMIN_RESOURCE_PATHS, resource)) {
+        throw new GithubContentError("RESOURCE_NOT_ALLOWED", "허용되지 않은 콘텐츠 종류입니다.", 404);
+      }
       const body = await readJsonBody(request);
       const snapshot = await readResourcesSnapshot(env);
       const currentResources = loadCurrentAdminResources(resource, snapshot);
@@ -336,6 +449,16 @@ export async function handleAdminApi(request, env, options = {}) {
       requestId,
       status: 405,
       headers: { Allow: "GET, PUT" },
+    });
+  }
+
+  if (url.pathname === contentBatchPath) {
+    return errorResponse({
+      code: "METHOD_NOT_ALLOWED",
+      message: "콘텐츠 일괄 저장은 PUT 요청만 지원합니다.",
+      requestId,
+      status: 405,
+      headers: { Allow: "PUT" },
     });
   }
 
