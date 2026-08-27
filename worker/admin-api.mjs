@@ -1,7 +1,13 @@
 import { AccessAuthError, authenticateAccess } from "./access-auth.mjs";
 import { ADMIN_RESOURCE_PATHS, validateAdminResource } from "./admin-resource-validation.mjs";
 import { AdminWriteError, createCsrfToken, isAdminWriteEnabled, validateAdminWriteRequest } from "./admin-security.mjs";
-import { GithubContentError, readAdminResource, uploadAdminImage, writeAdminResource } from "./github-content.mjs";
+import {
+  GithubContentError,
+  readAdminResource,
+  readAdminResourcesSnapshot,
+  uploadAdminImage,
+  writeAdminResource,
+} from "./github-content.mjs";
 import { createRequestId, errorResponse, jsonResponse } from "./http.mjs";
 import { fetchExternalLinkPreview } from "./link-preview.mjs";
 
@@ -60,16 +66,17 @@ function defaultAuditLog(entry) {
   console.info(JSON.stringify(entry));
 }
 
-async function loadCurrentAdminResources(candidateResource, readResource, env) {
+function loadCurrentAdminResources(candidateResource, snapshot) {
   if (!Object.hasOwn(ADMIN_RESOURCE_PATHS, candidateResource)) return {};
-  const entries = await Promise.all(
-    Object.keys(ADMIN_RESOURCE_PATHS)
-      .filter((resource) => resource !== candidateResource)
-      .map(async (resource) => {
-        const result = await readResource(resource, env);
-        return [resource, result.data];
-      }),
-  );
+  const entries = Object.keys(ADMIN_RESOURCE_PATHS)
+    .filter((resource) => resource !== candidateResource)
+    .map((resource) => {
+      const result = snapshot?.resources?.[resource];
+      if (!result) {
+        throw new GithubContentError("GITHUB_CONTENT_INVALID", "저장소 콘텐츠를 읽지 못했습니다.", 502);
+      }
+      return [resource, result.data];
+    });
   return Object.fromEntries(entries);
 }
 
@@ -142,6 +149,7 @@ export async function handleAdminApi(request, env, options = {}) {
   const requestId = createRequestId();
   const authenticate = options.authenticate ?? authenticateAccess;
   const readResource = options.readResource ?? readAdminResource;
+  const readResourcesSnapshot = options.readResourcesSnapshot ?? readAdminResourcesSnapshot;
   const writeResource = options.writeResource ?? writeAdminResource;
   const uploadImage = options.uploadImage ?? uploadAdminImage;
   const fetchLinkPreview = options.fetchLinkPreview ?? fetchExternalLinkPreview;
@@ -245,7 +253,8 @@ export async function handleAdminApi(request, env, options = {}) {
     try {
       await validateAdminWriteRequest(request, actor, env);
       const body = await readJsonBody(request);
-      const currentResources = await loadCurrentAdminResources(resource, readResource, env);
+      const snapshot = await readResourcesSnapshot(env);
+      const currentResources = loadCurrentAdminResources(resource, snapshot);
       const errors = validateAdminResource(resource, body.data, currentResources);
       if (errors.length > 0) {
         await emitAdminAudit(auditLog, actor, env, {
@@ -263,7 +272,7 @@ export async function handleAdminApi(request, env, options = {}) {
           status: 422,
         });
       }
-      const result = await writeResource(resource, body.data, body.sha, env);
+      const result = await writeResource(resource, body.data, body.sha, env, { snapshot });
       await emitAdminAudit(auditLog, actor, env, {
         requestId,
         operation: "content-write",

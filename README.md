@@ -92,7 +92,7 @@ GitHub 자동 배포 연결과 Production 설정은 `docs/operations/CLOUDFLARE_
 - `/admin/external-links/`에서 블로그·유튜브 링크, 요약, 공개 상태와 썸네일을 관리합니다. 링크 썸네일을 못 불러오면 직접 사진을 올릴 수 있습니다.
 - `/admin/complexes/`에서 대전 동구 지역·단지 설명과 출처·확인일을 관리합니다.
 - 저장 기능은 `ADMIN_WRITE_ENABLED=true`, 32자 이상의 `ADMIN_CSRF_SECRET`, 저장소 한 개로 제한된 `GITHUB_CONTENTS_TOKEN`, `GITHUB_REPOSITORY`, `GITHUB_BRANCH`가 모두 있어야 활성화됩니다.
-- Worker는 `ADMIN_ALLOWED_ORIGINS`의 정확한 HTTPS origin, 요청 URL origin, JSON Content-Type·만료되는 CSRF 토큰·콘텐츠 스키마·최신 GitHub SHA를 검증합니다. 미설정 기본값은 `https://leaderscityhappy.com`이며, 추가 origin은 쉼표로 구분하되 wildcard·경로·쿼리·userinfo·HTTP는 허용하지 않습니다.
+- Worker는 `ADMIN_ALLOWED_ORIGINS`의 정확한 HTTPS origin, 요청 URL origin, JSON Content-Type·만료되는 CSRF 토큰·콘텐츠 스키마를 검증합니다. JSON 저장 시 허용된 전체 리소스를 하나의 Git branch-tip commit/tree에서 읽어 교차 검증하고, 대상 blob SHA가 일치할 때만 그 base tree의 단일 commit을 만든 뒤 `force: false`로 branch ref를 갱신합니다. 미설정 기본값은 `https://leaderscityhappy.com`이며, 추가 origin은 쉼표로 구분하되 wildcard·경로·쿼리·userinfo·HTTP는 허용하지 않습니다.
 - 이미지 파일은 브라우저에서 WebP·최대 1600px로 변환해 EXIF를 제거하고 `public/images/content/`의 허용 경로에만 저장합니다.
 
 로컬 Worker 변수 예시는 `.dev.vars.example`을 참고합니다. 실제 이메일, Audience와 Access 팀 정보는 `.dev.vars` 또는 Cloudflare Secret에만 입력하고 커밋하지 않습니다.

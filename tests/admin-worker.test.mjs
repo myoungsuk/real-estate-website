@@ -42,11 +42,18 @@ const currentResources = Object.fromEntries(await Promise.all(
     JSON.parse(await readFile(new URL(`../src/data/${file}`, import.meta.url), "utf8")),
   ]),
 ));
-const readCurrentResource = async (resource) => ({
-  resource,
-  sha: `${resource}-sha`,
-  data: structuredClone(currentResources[resource]),
-});
+const currentSnapshot = {
+  baseCommitSha: "a".repeat(40),
+  treeSha: "b".repeat(40),
+  resources: Object.fromEntries(Object.keys(resourceFiles).map((resource) => [
+    resource,
+    {
+      resource,
+      sha: `${resource}-sha`,
+      data: structuredClone(currentResources[resource]),
+    },
+  ])),
+};
 
 test("단지와 네이버 매물 JSON은 관리자 허용 경로로만 연결한다", () => {
   assert.equal(getAdminResourcePath("complexes-overview"), "src/data/complexes-overview.json");
@@ -177,7 +184,7 @@ test("쓰기 설정과 CSRF가 있으면 허용된 콘텐츠를 GitHub 저장 �
   };
   const csrfToken = await createCsrfToken("owner@example.com", env.ADMIN_CSRF_SECRET);
   let received = null;
-  const resourcesRead = [];
+  let snapshotReads = 0;
   const auditEvents = [];
   const response = await handleAdminApi(
     new Request("https://leaderscityhappy.com/api/admin/v1/content/listings", {
@@ -187,18 +194,18 @@ test("쓰기 설정과 CSRF가 있으면 허용된 콘텐츠를 GitHub 저장 �
         "Content-Type": "application/json",
         "X-Admin-CSRF": csrfToken,
       },
-      body: JSON.stringify({ sha: "source-sha", data: [] }),
+      body: JSON.stringify({ sha: "listings-sha", data: [] }),
     }),
     env,
     {
       authenticate: authenticated,
-      readResource: async (resource) => {
-        resourcesRead.push(resource);
-        return readCurrentResource(resource);
+      readResourcesSnapshot: async () => {
+        snapshotReads += 1;
+        return currentSnapshot;
       },
-      writeResource: async (resource, data, sha) => {
-        received = { resource, data, sha };
-        return { resource, commitSha: "commit-sha", contentSha: "content-sha" };
+      writeResource: async (resource, data, sha, _env, options) => {
+        received = { resource, data, sha, snapshot: options.snapshot };
+        return { resource, commitSha: "commit-sha", contentSha: "content-sha", baseCommitSha: "commit-sha" };
       },
       auditLog: (entry) => auditEvents.push(entry),
     },
@@ -206,10 +213,14 @@ test("쓰기 설정과 CSRF가 있으면 허용된 콘텐츠를 GitHub 저장 �
   const body = await response.json();
 
   assert.equal(response.status, 200);
-  assert.deepEqual(received, { resource: "listings", data: [], sha: "source-sha" });
+  assert.deepEqual(received, {
+    resource: "listings",
+    data: [],
+    sha: "listings-sha",
+    snapshot: currentSnapshot,
+  });
   assert.equal(body.data.commitSha, "commit-sha");
-  assert.equal(resourcesRead.length, Object.keys(resourceFiles).length - 1);
-  assert.equal(resourcesRead.includes("listings"), false);
+  assert.equal(snapshotReads, 1);
   assert.equal(auditEvents.length, 1);
   assert.deepEqual(auditEvents[0], {
     event: "admin_write",
@@ -221,7 +232,7 @@ test("쓰기 설정과 CSRF가 있으면 허용된 콘텐츠를 GitHub 저장 �
     commitSha: "commit-sha",
   });
   assert.match(auditEvents[0].actorId, /^[A-Za-z0-9_-]{16}$/u);
-  assert.doesNotMatch(JSON.stringify(auditEvents), /owner@example\.com|test-token|source-sha|\[\]/u);
+  assert.doesNotMatch(JSON.stringify(auditEvents), /owner@example\.com|test-token|listings-sha|\[\]/u);
 });
 
 test("다른 출처의 관리자 저장 요청은 CSRF 토큰이 있어도 차단한다", async () => {
@@ -372,7 +383,7 @@ test("관리자 JSON 본문은 Content-Length와 무관하게 실제 3MB를 넘�
   assert.equal(previewCalls, 1);
 });
 
-test("관리자 저장은 후보와 현재 관련 JSON 전체를 함께 검증한 뒤 GitHub PUT을 중단한다", async () => {
+test("관리자 저장은 한 commit snapshot의 관련 JSON 전체를 검증한 뒤 GitHub 쓰기를 중단한다", async () => {
   const env = {
     ...authEnv,
     ADMIN_WRITE_ENABLED: "true",
@@ -394,12 +405,12 @@ test("관리자 저장은 후보와 현재 관련 JSON 전체를 함께 검증�
         "Content-Type": "application/json",
         "X-Admin-CSRF": csrfToken,
       },
-      body: JSON.stringify({ sha: "source-sha", data: candidate }),
+      body: JSON.stringify({ sha: "external-links-sha", data: candidate }),
     }),
     env,
     {
       authenticate: authenticated,
-      readResource: readCurrentResource,
+      readResourcesSnapshot: async () => currentSnapshot,
       writeResource: async () => { writeCalled = true; return {}; },
       auditLog: (entry) => auditEvents.push(entry),
     },
@@ -411,7 +422,7 @@ test("관리자 저장은 후보와 현재 관련 JSON 전체를 함께 검증�
   assert.match(body.error.details.join("\n"), /external-links\.json에 없는 ID/);
   assert.equal(writeCalled, false);
   assert.equal(auditEvents[0].errorCode, "CONTENT_VALIDATION_FAILED");
-  assert.doesNotMatch(JSON.stringify(auditEvents), /owner@example\.com|source-sha/u);
+  assert.doesNotMatch(JSON.stringify(auditEvents), /owner@example\.com|external-links-sha/u);
 });
 
 test("CSRF 토큰은 발급 이메일과 만료 시간을 검증한다", async () => {

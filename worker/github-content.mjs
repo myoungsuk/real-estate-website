@@ -1,4 +1,4 @@
-import { getAdminResourcePath } from "./admin-resource-validation.mjs";
+import { ADMIN_RESOURCE_PATHS, getAdminResourcePath } from "./admin-resource-validation.mjs";
 
 export class GithubContentError extends Error {
   constructor(code, message, status) {
@@ -184,48 +184,171 @@ async function githubRequest(path, init, env, fetcher = fetch) {
   return response.json();
 }
 
-function contentApiPath(filePath, branch) {
-  const encodedPath = filePath.split("/").map(encodeURIComponent).join("/");
-  return `/contents/${encodedPath}?ref=${encodeURIComponent(branch)}`;
+function gitRefPath(branch, { plural = false } = {}) {
+  const encodedBranch = branch.split("/").map(encodeURIComponent).join("/");
+  return `/git/${plural ? "refs" : "ref"}/heads/${encodedBranch}`;
+}
+
+function githubContentInvalid() {
+  return new GithubContentError("GITHUB_CONTENT_INVALID", "저장소 콘텐츠를 읽지 못했습니다.", 502);
+}
+
+async function readAdminResourcesAtCurrentRef(resources, env, fetcher) {
+  const config = getGithubConfig(env);
+  const ref = await githubRequest(gitRefPath(config.branch), { method: "GET" }, env, fetcher);
+  const baseCommitSha = ref.object?.type === "commit" ? ref.object.sha : null;
+  if (typeof baseCommitSha !== "string" || baseCommitSha.length === 0) throw githubContentInvalid();
+
+  const commit = await githubRequest(
+    `/git/commits/${encodeURIComponent(baseCommitSha)}`,
+    { method: "GET" },
+    env,
+    fetcher,
+  );
+  const treeSha = commit.tree?.sha;
+  if (typeof treeSha !== "string" || treeSha.length === 0) throw githubContentInvalid();
+
+  const tree = await githubRequest(
+    `/git/trees/${encodeURIComponent(treeSha)}?recursive=1`,
+    { method: "GET" },
+    env,
+    fetcher,
+  );
+  if (!Array.isArray(tree.tree) || tree.truncated === true) throw githubContentInvalid();
+
+  const entriesByPath = new Map(tree.tree.map((entry) => [entry.path, entry]));
+  const entries = resources.map((resource) => {
+    const filePath = getAdminResourcePath(resource);
+    const entry = entriesByPath.get(filePath);
+    if (entry?.type !== "blob" || typeof entry.sha !== "string" || entry.sha.length === 0) {
+      throw githubContentInvalid();
+    }
+    return { resource, entry };
+  });
+
+  const loaded = await Promise.all(entries.map(async ({ resource, entry }) => {
+    const blob = await githubRequest(
+      `/git/blobs/${encodeURIComponent(entry.sha)}`,
+      { method: "GET" },
+      env,
+      fetcher,
+    );
+    if (blob.encoding !== "base64" || typeof blob.content !== "string") throw githubContentInvalid();
+    try {
+      const bytes = base64ToBytes(blob.content);
+      return [resource, { resource, sha: entry.sha, data: JSON.parse(decoder.decode(bytes)) }];
+    } catch {
+      throw githubContentInvalid();
+    }
+  }));
+
+  return {
+    baseCommitSha,
+    treeSha,
+    resources: Object.fromEntries(loaded),
+  };
+}
+
+export async function readAdminResourcesSnapshot(env, fetcher = fetch) {
+  return readAdminResourcesAtCurrentRef(Object.keys(ADMIN_RESOURCE_PATHS), env, fetcher);
 }
 
 export async function readAdminResource(resource, env, fetcher = fetch) {
   const filePath = getAdminResourcePath(resource);
   if (!filePath) throw new GithubContentError("RESOURCE_NOT_ALLOWED", "허용되지 않은 콘텐츠 종류입니다.", 404);
-  const config = getGithubConfig(env);
-  const payload = await githubRequest(contentApiPath(filePath, config.branch), { method: "GET" }, env, fetcher);
-  try {
-    const bytes = base64ToBytes(payload.content);
-    return { resource, sha: payload.sha, data: JSON.parse(decoder.decode(bytes)) };
-  } catch {
-    throw new GithubContentError("GITHUB_CONTENT_INVALID", "저장소 콘텐츠를 읽지 못했습니다.", 502);
-  }
+  const snapshot = await readAdminResourcesAtCurrentRef([resource], env, fetcher);
+  return { ...snapshot.resources[resource], baseCommitSha: snapshot.baseCommitSha };
 }
 
-export async function writeAdminResource(resource, data, sha, env, fetcher = fetch) {
+export async function writeAdminResource(resource, data, sha, env, options = {}) {
   const filePath = getAdminResourcePath(resource);
   if (!filePath) throw new GithubContentError("RESOURCE_NOT_ALLOWED", "허용되지 않은 콘텐츠 종류입니다.", 404);
   if (typeof sha !== "string" || sha.length === 0) {
     throw new GithubContentError("SHA_REQUIRED", "최신 파일 버전을 확인한 뒤 저장해 주세요.", 409);
   }
+  const fetcher = typeof options === "function" ? options : options.fetcher ?? fetch;
+  const snapshot = typeof options === "function" || !options.snapshot
+    ? await readAdminResourcesSnapshot(env, fetcher)
+    : options.snapshot;
+  const current = snapshot?.resources?.[resource];
+  if (
+    typeof snapshot?.baseCommitSha !== "string"
+    || snapshot.baseCommitSha.length === 0
+    || typeof snapshot?.treeSha !== "string"
+    || snapshot.treeSha.length === 0
+    || !current
+  ) {
+    throw githubContentInvalid();
+  }
+  if (current.sha !== sha) {
+    throw new GithubContentError("GITHUB_CONFLICT", "다른 변경이 먼저 저장되었습니다. 최신 내용을 다시 불러와 주세요.", 409);
+  }
+
   const config = getGithubConfig(env);
-  const content = bytesToBase64(encoder.encode(`${JSON.stringify(data, null, 2)}\n`));
-  const payload = await githubRequest(
-    `/contents/${filePath.split("/").map(encodeURIComponent).join("/")}`,
+  const content = `${JSON.stringify(data, null, 2)}\n`;
+  const blob = await githubRequest(
+    "/git/blobs",
     {
-      method: "PUT",
+      method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        message: `관리자: ${resource} 콘텐츠 수정`,
-        content,
-        sha,
-        branch: config.branch,
+        content: bytesToBase64(encoder.encode(content)),
+        encoding: "base64",
       }),
     },
     env,
     fetcher,
   );
-  return { resource, commitSha: payload.commit?.sha ?? null, contentSha: payload.content?.sha ?? null };
+  if (typeof blob.sha !== "string" || blob.sha.length === 0) throw githubContentInvalid();
+
+  const tree = await githubRequest(
+    "/git/trees",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        base_tree: snapshot.treeSha,
+        tree: [{ path: filePath, mode: "100644", type: "blob", sha: blob.sha }],
+      }),
+    },
+    env,
+    fetcher,
+  );
+  if (typeof tree.sha !== "string" || tree.sha.length === 0) throw githubContentInvalid();
+
+  const commit = await githubRequest(
+    "/git/commits",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: `관리자: ${resource} 콘텐츠 수정`,
+        tree: tree.sha,
+        parents: [snapshot.baseCommitSha],
+      }),
+    },
+    env,
+    fetcher,
+  );
+  if (typeof commit.sha !== "string" || commit.sha.length === 0) throw githubContentInvalid();
+
+  await githubRequest(
+    gitRefPath(config.branch, { plural: true }),
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sha: commit.sha, force: false }),
+    },
+    env,
+    fetcher,
+  );
+
+  return {
+    resource,
+    commitSha: commit.sha,
+    contentSha: blob.sha,
+    baseCommitSha: commit.sha,
+  };
 }
 
 export async function uploadAdminImage({ category, dataUrl }, env, fetcher = fetch) {

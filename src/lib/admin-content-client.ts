@@ -34,6 +34,7 @@ export interface AdminSession {
 export interface AdminResource<T> {
   resource: string;
   sha: string;
+  baseCommitSha?: string;
   data: T;
 }
 
@@ -110,7 +111,12 @@ export async function readAdminContent<T>(resource: string) {
 }
 
 export async function writeAdminContent<T>(resource: string, sha: string, data: T) {
-  return withWritableSession<{ resource: string; commitSha: string | null; contentSha: string | null }>(
+  return withWritableSession<{
+    resource: string;
+    commitSha: string | null;
+    contentSha: string | null;
+    baseCommitSha?: string;
+  }>(
     "관리자 저장 연결이 아직 활성화되지 않았습니다.",
     (csrfToken) => fetch(`/api/admin/v1/content/${resource}`, {
       method: "PUT",
