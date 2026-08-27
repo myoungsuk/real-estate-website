@@ -2,6 +2,7 @@
 import SiteHeader from "../components/SiteHeader.astro";
 import SiteFooter from "../components/SiteFooter.astro";
 import MobileContactBar from "../components/MobileContactBar.astro";
+import { serializeJsonLd } from "../lib/json-ld.mjs";
 import "../styles/global.css";
 
 interface Props {
@@ -12,6 +13,7 @@ interface Props {
   shareImageAlt?: string;
   shareImageWidth?: number;
   shareImageHeight?: number;
+  noindex?: boolean;
 }
 
 const {
@@ -22,10 +24,12 @@ const {
   shareImageAlt = "리더스시티 행복한부동산 공인중개사사무소 로고",
   shareImageWidth = 1402,
   shareImageHeight = 1122,
+  noindex = false,
 } = Astro.props;
-const canonical = Astro.site ? new URL(Astro.url.pathname, Astro.site) : undefined;
+const canonical = Astro.site && !noindex ? new URL(Astro.url.pathname, Astro.site) : undefined;
 const shareImage = Astro.site ? new URL(shareImagePath, Astro.site) : undefined;
 const allowIndexing = import.meta.env.PUBLIC_ALLOW_INDEXING === "true";
+const serializedStructuredData = structuredData ? serializeJsonLd(structuredData) : null;
 ---
 
 <!doctype html>
@@ -35,7 +39,7 @@ const allowIndexing = import.meta.env.PUBLIC_ALLOW_INDEXING === "true";
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#17344f" />
     <meta name="description" content={description} />
-    <meta name="robots" content={allowIndexing ? "index,follow" : "noindex,nofollow"} />
+    <meta name="robots" content={allowIndexing && !noindex ? "index,follow" : "noindex,nofollow"} />
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="ko_KR" />
     <meta property="og:title" content={title} />
@@ -49,9 +53,10 @@ const allowIndexing = import.meta.env.PUBLIC_ALLOW_INDEXING === "true";
     {shareImage && <meta name="twitter:image" content={shareImage.toString()} />}
     {shareImage && <meta name="twitter:image:alt" content={shareImageAlt} />}
     {canonical && <link rel="canonical" href={canonical.toString()} />}
+    <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48 64x64" />
     <title>{title}</title>
-    {structuredData && (
-      <script is:inline type="application/ld+json" set:html={JSON.stringify(structuredData)} />
+    {serializedStructuredData && (
+      <script is:inline type="application/ld+json" set:html={serializedStructuredData} />
     )}
   </head>
   <body>

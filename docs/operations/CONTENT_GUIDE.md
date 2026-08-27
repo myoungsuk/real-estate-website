@@ -14,7 +14,7 @@
 2. 승인된 공개 정보만 수정한다.
 3. 사진은 개인정보와 권리를 검수하고 최적화한 뒤 `public/images/content/<분류>/` 또는 승인된 기존 이미지 경로에 둔다.
 4. `npm run check`와 `npm run build`를 실행한다.
-5. GitHub에 반영하고 Preview에서 휴대폰 화면과 전화·문자 링크를 확인한다.
+5. 로컬 화면과 pull request CI에서 휴대폰 화면과 전화·문자 링크를 확인한다. 현재 Cloudflare branch Preview는 비활성화되어 있다.
 6. Production 반영 후 다시 확인한다.
 
 부동산뱅크 매물은 매일 00:10 KST 공개 사무소 목록에서 자동 동기화합니다. `.xls` 가져오기는 자동 동기화 장애·형식 변경 시 `/admin/listings/editor/`에서 신규·변경·동일·사이트 전용 항목을 확인하는 보완 경로입니다. 그 밖의 네이버 매물은 같은 화면에서 네이버 매물번호·공개 제목·유형·거래·가격·면적·층·방향·설명·등록일을 직접 등록합니다. 등록일에는 매물이 원출처에 처음 등록된 날짜를 입력하며, 다시 확인한 날짜로 임의 갱신하지 않습니다. 공개 전에 현행 중개대상물 표시·광고 기준을 운영자가 별도로 확인해야 합니다.
@@ -98,8 +98,8 @@ GitHub Actions가 매시간 17분에 자동 실행되며, 운영자가 즉시 �
    - Value: `UCuOZDnM5vxOZELDgu-y-hNg`
    - 이 값은 공개 channelId이므로 Secret이나 `YOUTUBE_API_KEY`를 만들지 않습니다.
 2. `Actions` → `Sync external content` → `Run workflow`에서 `master` 브랜치를 선택해 실행합니다.
-3. 실행 로그의 신규 블로그·YouTube 건수, 생성 썸네일 수, 테스트·검사·빌드 결과와 커밋 SHA를 확인합니다.
-4. 콘텐츠 커밋 뒤 Cloudflare의 새 Production 배포와 `https://leaderscityhappy.com/blog/`, `https://leaderscityhappy.com/youtube/` 반영을 확인합니다.
+3. `validate` job의 신규 블로그·YouTube 건수, 생성 썸네일 수, 테스트·검사·Production-mode 빌드 결과를 확인합니다. 이 job은 `contents: read`로만 실행됩니다.
+4. 변경이 있으면 별도 `publish` job만 검증 artifact를 적용해 `master`에 커밋합니다. push 뒤 Action이 `/deployment-marker.json`의 `external` 또는 `automation` marker를 확인하는지 보고, `https://leaderscityhappy.com/blog/`, `https://leaderscityhappy.com/youtube/` 반영도 확인합니다.
 
 동기화는 공식 네이버 블로그 ID `p5468300`의 RSS와 위 YouTube 채널의 공식 Atom에서 보이는 신규 항목만 `published`로 추가합니다. YouTube alternate URL이 `/shorts/`이면 `youtubeFormat: short`, 나머지 허용 영상 URL은 `video`로 저장하고 공개 화면에서 두 목록을 분리합니다. 기존 항목의 요약·상태·썸네일을 덮어쓰거나 피드에서 사라진 항목을 삭제하지 않으며, 저장 URL은 공식 watch URL로 정규화합니다. RSS는 최근 항목 감지용이므로 전체 과거 글·영상 복원을 보장하지 않습니다. 장애가 복구되면 다음 피드 응답에 아직 포함된 누락 항목을 기존 ID와 비교해 추가합니다.
 
@@ -114,7 +114,7 @@ $env:YOUTUBE_CHANNEL_ID = "UCuOZDnM5vxOZELDgu-y-hNg"
 npm run sync:external:dry-run
 ```
 
-첫 수동 실행의 실제 신규 항목 커밋, Cloudflare Production 반영, branch protection/ruleset 호환은 2026-08-26에 확인했습니다. 월 1회 Actions 실행 이력에서 예약 실행과 Warning 누적 여부를 확인합니다.
+첫 수동 실행의 실제 신규 항목 커밋, Cloudflare Production 반영, branch protection/ruleset 호환은 2026-08-26에 확인했습니다. 매시간 예약 실행도 활성화되어 있습니다. 월 1회 Actions 실행 이력에서 예약 실행, Warning 누적, push 뒤 Production marker 확인 실패 여부를 점검합니다.
 
 ## 첫 화면과 지역·단지 설명
 

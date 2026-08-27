@@ -186,8 +186,8 @@ test("외부 콘텐츠는 블로그와 유튜브를 나누고 일반 영상을 �
   assert.match(component, /media\.closest<HTMLElement>\("\[data-content-item\]"\)/);
   assert.match(component, /youtube-nocookie\.com\/embed/);
   assert.match(component, /}, 300\)/);
-  assert.match(home, /publishedBlogContents[^]*pageSize=\{9\}/);
-  assert.match(home, /publishedYoutubeVideoContents[^]*pageSize=\{6\}[^]*paginate=\{false\}[^]*hoverPreview/);
+  assert.match(home, /homeBlogContents[^]*pageSize=\{9\}[^]*paginate=\{false\}/);
+  assert.match(home, /homeYoutubeContents[^]*pageSize=\{6\}[^]*paginate=\{false\}[^]*hoverPreview/);
   assert.doesNotMatch(home, /youtubeFilters/);
   assert.match(blog, /publishedBlogContents[^]*pageSize=\{9\}/);
   assert.match(youtube, /publishedYoutubeContents[^]*pageSize=\{6\}[^]*youtubeFilters[^]*hoverPreview/);
@@ -195,7 +195,8 @@ test("외부 콘텐츠는 블로그와 유튜브를 나누고 일반 영상을 �
   assert.match(contentSource, /timeZone: "Asia\/Seoul"/);
   assert.match(headers, /frame-src https:\/\/www\.youtube-nocookie\.com/);
   assert.match(privacy, /youtube-nocookie\.com/);
-  assert.doesNotMatch(home, /\.slice\(0, 6\)/);
+  assert.match(home, /publishedBlogContents\.slice\(0, 9\)/);
+  assert.match(home, /publishedYoutubeVideoContents\.slice\(0, 6\)/);
 });
 
 test("네이버 매물 관리 화면은 검색·유형 필터와 접근 가능한 결과 수를 제공한다", async () => {
@@ -234,6 +235,9 @@ test("공개 매물 화면은 현재 네이버 개별 매물을 사진 없이 �
   assert.match(pager, /applySort\("latest"\)/);
   assert.doesNotMatch(pager, /랭킹순/);
   assert.match(properties, /naverListings\.map/);
+  assert.match(properties, /name="complex"/);
+  assert.match(properties, /params\.get\("complex"\)/);
+  assert.match(properties, /card\.dataset\.listingTitle\?\.startsWith\(complexName\)/);
   assert.doesNotMatch(properties, /랭킹순/);
   assert.doesNotMatch(properties, /기본순|최근 확인순/);
   assert.match(properties, /<option value="latest">최근 등록순<\/option>/);

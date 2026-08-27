@@ -5,6 +5,7 @@ import ContactPanel from "../../components/ContactPanel.astro";
 import ExternalContentList from "../../components/ExternalContentList.astro";
 import { getPublishedExternalContentsByIds } from "../../lib/content";
 import { publishedComplexes } from "../../lib/complexes";
+import { getResponsivePublicImageSrcSet } from "../../lib/responsive-images";
 
 export function getStaticPaths() {
   return publishedComplexes.map((complex) => ({ params: { slug: complex.slug }, props: { complex } }));
@@ -35,7 +36,15 @@ const verificationLabels = {
     <div class="shell complex-story">
       {complex.image && (
         <figure class="complex-story__image">
-          <img src={complex.image.src} alt={complex.image.alt} width="1600" height="1600" />
+          <img
+            src={complex.image.src}
+            srcset={getResponsivePublicImageSrcSet(complex.image.src)}
+            sizes="(min-width: 1180px) 550px, (min-width: 700px) 48vw, calc(100vw - 32px)"
+            alt={complex.image.alt}
+            width="2000"
+            height="2000"
+            decoding="async"
+          />
           <figcaption>{complex.name} 단지 전경</figcaption>
         </figure>
       )}
@@ -43,7 +52,7 @@ const verificationLabels = {
         <p class="eyebrow">단지 이야기</p>
         <h2>{complex.introTitle}</h2>
         {complex.introduction.map((paragraph) => <p>{paragraph}</p>)}
-        <a class="button button--secondary" href={`/properties/?area=${complex.areaSlug}`}>{complex.areaName} 매물 보기</a>
+        <a class="button button--secondary" href={`/properties/?complex=${complex.slug}`}>{complex.name} 매물 보기</a>
       </div>
     </div>
   </section>

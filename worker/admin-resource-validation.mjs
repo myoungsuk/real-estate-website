@@ -1,4 +1,8 @@
 import {
+  findBannedKeys,
+  findSensitiveStrings,
+  findUnexpectedKeys,
+  validateContent,
   validateComplexes,
   validateComplexOverview,
   validateExternalLinks,
@@ -7,6 +11,7 @@ import {
   validateListings,
   validateNaverListings,
   validateOffice,
+  validateReviews,
 } from "../scripts/content-validation.mjs";
 
 export const ADMIN_RESOURCE_PATHS = Object.freeze({
@@ -21,11 +26,23 @@ export const ADMIN_RESOURCE_PATHS = Object.freeze({
   reviews: "src/data/reviews.json",
 });
 
+export const ADMIN_RESOURCE_CONTENT_KEYS = Object.freeze({
+  listings: "listings",
+  "naver-listings": "naverListings",
+  office: "office",
+  complexes: "complexes",
+  "complexes-overview": "complexOverview",
+  "external-links": "externalLinks",
+  "home-content": "homeContent",
+  faq: "faq",
+  reviews: "reviews",
+});
+
 export function getAdminResourcePath(resource) {
   return ADMIN_RESOURCE_PATHS[resource] ?? null;
 }
 
-export function validateAdminResource(resource, data) {
+function validateSingleResource(resource, data) {
   switch (resource) {
     case "listings": return validateListings(data);
     case "naver-listings": return validateNaverListings(data);
@@ -35,7 +52,29 @@ export function validateAdminResource(resource, data) {
     case "external-links": return validateExternalLinks(data);
     case "home-content": return validateHomeContent(data);
     case "faq": return validateFaq(data);
-    case "reviews": return Array.isArray(data) ? [] : ["reviews: 배열이어야 합니다."];
+    case "reviews": return validateReviews(data);
     default: return ["허용되지 않은 콘텐츠 종류입니다."];
   }
+}
+
+export function validateAdminResource(resource, data, currentResources = null) {
+  const contentKey = ADMIN_RESOURCE_CONTENT_KEYS[resource];
+  if (!contentKey) return ["허용되지 않은 콘텐츠 종류입니다."];
+
+  if (currentResources) {
+    const content = {};
+    for (const [resourceName, key] of Object.entries(ADMIN_RESOURCE_CONTENT_KEYS)) {
+      content[key] = resourceName === resource ? data : currentResources[resourceName];
+    }
+    return validateContent(content);
+  }
+
+  const errors = validateSingleResource(resource, data);
+  errors.push(...findUnexpectedKeys(contentKey, data, resource));
+  errors.push(...findBannedKeys(data, resource));
+  errors.push(...findSensitiveStrings(data, {
+    path: resource,
+    office: resource === "office" ? data : null,
+  }));
+  return [...new Set(errors)];
 }

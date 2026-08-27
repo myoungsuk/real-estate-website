@@ -2,6 +2,7 @@ CF_ACCESS_TEAM_DOMAIN=https://your-team.cloudflareaccess.com
 CF_ACCESS_AUD=replace-with-access-application-audience
 ADMIN_ALLOWED_EMAILS=admin1@example.com,admin2@example.com
 ADMIN_WRITE_ENABLED=false
+ADMIN_ALLOWED_ORIGINS=https://leaderscityhappy.com
 ADMIN_CSRF_SECRET=replace-with-at-least-32-random-characters
 GITHUB_CONTENTS_TOKEN=replace-with-fine-grained-token
 GITHUB_REPOSITORY=myoungsuk/real-estate-website

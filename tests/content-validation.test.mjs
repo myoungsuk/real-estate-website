@@ -1,7 +1,20 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { findBannedKeys, validateComplexes, validateComplexOverview, validateExternalLinks, validateFaq, validateHomeContent, validateListing, validateNaverListings, validateOffice } from "../scripts/content-validation.mjs";
+import {
+  findBannedKeys,
+  findSensitiveStrings,
+  findUnexpectedKeys,
+  validateComplexes,
+  validateComplexOverview,
+  validateExternalLinks,
+  validateFaq,
+  validateHomeContent,
+  validateListing,
+  validateNaverListings,
+  validateOffice,
+  validateReviews,
+} from "../scripts/content-validation.mjs";
 
 const base = {
   id: "leaders-city-5-sale-001",
@@ -36,6 +49,79 @@ test("월세에 매매가격이 함께 있으면 거부한다", () => {
 
 test("공개 저장 금지 필드를 재귀적으로 찾는다", () => {
   assert.match(findBannedKeys({ nested: { clientPhone: "010" } }).join("\n"), /clientPhone/);
+});
+
+test("공개 스키마에 없는 루트와 중첩 필드를 거부한다", () => {
+  assert.match(
+    findUnexpectedKeys("faq", [{ category: "매물 확인과 상담", question: "질문", answer: "답변", privateNote: "메모" }]).join("\n"),
+    /faq\[0\]\.privateNote/,
+  );
+  assert.match(
+    findUnexpectedKeys("homeContent", {
+      broker: { eyebrow: "대표", headline: "제목", lead: "설명", portrait: { src: "/images/a.webp", alt: "사진", token: "x" } },
+    }).join("\n"),
+    /portrait\.token/,
+  );
+});
+
+test("전역 민감 문자열 검사는 승인된 사무소 공개값만 예외로 둔다", () => {
+  const office = {
+    mobile: "010-2790-8675",
+    email: "office@example.com",
+    address: "대전광역시 동구 근린생활시설 105호",
+  };
+  assert.deepEqual(findSensitiveStrings({ text: "문의 010-2790-8675 office@example.com 105호" }, { office }), []);
+
+  const errors = findSensitiveStrings({
+    phone: "010-1111-2222",
+    email: "customer@example.net",
+    unit: "1203호",
+    token: "github_" + "pat_abcdefghijklmnopqrstuvwxyz123456",
+    jwt: "eyJabcdefghijk.abcdefghijk.abcdefghijk",
+  }, { office }).join("\n");
+  assert.match(errors, /휴대전화번호/);
+  assert.match(errors, /이메일/);
+  assert.match(errors, /정확한 호수/);
+  assert.match(errors, /GitHub 토큰/);
+  assert.match(errors, /JWT/);
+});
+
+test("공개 날짜는 실제 달력 날짜이며 오늘보다 늦을 수 없다", () => {
+  assert.match(validateListing({ ...base, confirmedAt: "2026-02-30" }).join("\n"), /confirmedAt/);
+  assert.match(validateListing({ ...base, publishedAt: "2999-01-01" }).join("\n"), /publishedAt/);
+
+  const naver = {
+    checkedAt: "2999-01-01",
+    items: [{
+      id: "2645736151",
+      title: "휴먼시아2단지 202동",
+      propertyType: "아파트",
+      tradeType: "sale",
+      priceLabel: "2억 6,000",
+      areaLabel: "111B㎡",
+      floorLabel: "2/22층",
+      direction: "남향",
+      summary: "네이버 공개 설명",
+      registeredAt: "2026-02-30",
+      source: "네이버페이 부동산",
+      url: "https://fin.land.naver.com/articles/2645736151",
+    }],
+  };
+  const naverErrors = validateNaverListings(naver).join("\n");
+  assert.match(naverErrors, /checkedAt/);
+  assert.match(naverErrors, /registeredAt/);
+
+  const reviewErrors = validateReviews([{
+    id: "approved-review",
+    displayName: "입주민",
+    content: "공개 동의를 받은 후기",
+    confirmedAt: "2026-08-26",
+    source: "운영자 확인",
+    isPublished: true,
+    privacyReviewed: true,
+    privacyReviewedAt: "2999-01-01",
+  }]).join("\n");
+  assert.match(reviewErrors, /privacyReviewedAt/);
 });
 
 test("FAQ는 허용 카테고리와 질문·답변을 요구하고 중복 질문을 거부한다", () => {
@@ -250,6 +336,10 @@ test("리더스시티 면적별 세대수 합계와 공개 관련 콘텐츠를 �
   const missingContent = structuredClone(overview);
   missingContent.relatedContentIds.push("missing-content");
   assert.match(validateComplexOverview(missingContent, complexes, externalLinks).join("\n"), /없는 ID/);
+
+  const unexpectedComparison = structuredClone(overview);
+  unexpectedComparison.comparisonRows[0].values["unknown-complex"] = "임의 값";
+  assert.match(validateComplexOverview(unexpectedComparison, complexes, externalLinks).join("\n"), /등록된 단지 slug/);
 });
 
 test("블로그와 유튜브 콘텐츠는 공개 상태와 자체 이미지 경로를 검증한다", () => {

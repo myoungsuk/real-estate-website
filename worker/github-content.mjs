@@ -12,6 +12,8 @@ export class GithubContentError extends Error {
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+const MAX_IMAGE_DIMENSION = 1600;
+const MAX_IMAGE_PIXELS = MAX_IMAGE_DIMENSION * MAX_IMAGE_DIMENSION;
 const mediaCategories = new Set(["listing", "blog", "youtube", "office", "area"]);
 
 function bytesToBase64(bytes) {
@@ -26,6 +28,129 @@ function bytesToBase64(bytes) {
 function base64ToBytes(value) {
   const binary = atob(value.replace(/\s/gu, ""));
   return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
+
+function mediaFormatError() {
+  return new GithubContentError("MEDIA_FORMAT_INVALID", "올바른 WebP 이미지가 아닙니다.", 400);
+}
+
+function readFourCc(bytes, offset) {
+  return String.fromCharCode(bytes[offset], bytes[offset + 1], bytes[offset + 2], bytes[offset + 3]);
+}
+
+function readUint24Le(bytes, offset) {
+  return bytes[offset] + (bytes[offset + 1] * 0x100) + (bytes[offset + 2] * 0x10000);
+}
+
+function readUint32Le(bytes, offset) {
+  return bytes[offset]
+    + (bytes[offset + 1] * 0x100)
+    + (bytes[offset + 2] * 0x10000)
+    + (bytes[offset + 3] * 0x1000000);
+}
+
+function readWebpBitstreamDimensions(type, bytes, offset, size) {
+  if (type === "VP8 ") {
+    if (
+      size < 10
+      || (bytes[offset] & 1) !== 0
+      || bytes[offset + 3] !== 0x9d
+      || bytes[offset + 4] !== 0x01
+      || bytes[offset + 5] !== 0x2a
+    ) {
+      throw mediaFormatError();
+    }
+    return {
+      width: (bytes[offset + 6] + (bytes[offset + 7] * 0x100)) & 0x3fff,
+      height: (bytes[offset + 8] + (bytes[offset + 9] * 0x100)) & 0x3fff,
+    };
+  }
+  if (type === "VP8L") {
+    if (size < 5 || bytes[offset] !== 0x2f) throw mediaFormatError();
+    const bits = readUint32Le(bytes, offset + 1);
+    return {
+      width: (bits & 0x3fff) + 1,
+      height: ((bits >>> 14) & 0x3fff) + 1,
+    };
+  }
+  throw mediaFormatError();
+}
+
+export function validateWebpBytes(bytes) {
+  if (!(bytes instanceof Uint8Array) || bytes.length < 20) throw mediaFormatError();
+  if (readFourCc(bytes, 0) !== "RIFF" || readFourCc(bytes, 8) !== "WEBP") throw mediaFormatError();
+  if (readUint32Le(bytes, 4) + 8 !== bytes.length) throw mediaFormatError();
+
+  let offset = 12;
+  let chunkIndex = 0;
+  let extendedDimensions = null;
+  let bitstreamDimensions = null;
+  let extendedFlags = 0;
+  let hasAlphaChunk = false;
+  while (offset < bytes.length) {
+    if (offset + 8 > bytes.length) throw mediaFormatError();
+    const type = readFourCc(bytes, offset);
+    const size = readUint32Le(bytes, offset + 4);
+    const dataOffset = offset + 8;
+    const dataEnd = dataOffset + size;
+    const paddedEnd = dataEnd + (size % 2);
+    if (dataEnd > bytes.length || paddedEnd > bytes.length) throw mediaFormatError();
+    if (size % 2 === 1 && bytes[dataEnd] !== 0) throw mediaFormatError();
+
+    if (["ANIM", "ANMF", "EXIF", "XMP ", "ICCP", "IPTC"].includes(type)) {
+      throw new GithubContentError("MEDIA_METADATA_DENIED", "애니메이션과 메타데이터가 없는 WebP만 업로드할 수 있습니다.", 400);
+    }
+    if (type === "VP8X") {
+      if (chunkIndex !== 0 || extendedDimensions || size !== 10) throw mediaFormatError();
+      extendedFlags = bytes[dataOffset];
+      if (
+        (extendedFlags & 0xc1) !== 0
+        || bytes[dataOffset + 1] !== 0
+        || bytes[dataOffset + 2] !== 0
+        || bytes[dataOffset + 3] !== 0
+      ) {
+        throw mediaFormatError();
+      }
+      if ((extendedFlags & 0x2e) !== 0) {
+        throw new GithubContentError("MEDIA_METADATA_DENIED", "애니메이션과 메타데이터가 없는 WebP만 업로드할 수 있습니다.", 400);
+      }
+      extendedDimensions = {
+        width: readUint24Le(bytes, dataOffset + 4) + 1,
+        height: readUint24Le(bytes, dataOffset + 7) + 1,
+      };
+    } else if (type === "VP8 " || type === "VP8L") {
+      if (bitstreamDimensions) throw mediaFormatError();
+      bitstreamDimensions = readWebpBitstreamDimensions(type, bytes, dataOffset, size);
+    } else if (type === "ALPH") {
+      if (!extendedDimensions || hasAlphaChunk || size === 0) throw mediaFormatError();
+      hasAlphaChunk = true;
+    } else {
+      throw mediaFormatError();
+    }
+
+    offset = paddedEnd;
+    chunkIndex += 1;
+  }
+
+  if (!bitstreamDimensions) throw mediaFormatError();
+  if (hasAlphaChunk && (extendedFlags & 0x10) === 0) throw mediaFormatError();
+  if (
+    extendedDimensions
+    && (extendedDimensions.width !== bitstreamDimensions.width || extendedDimensions.height !== bitstreamDimensions.height)
+  ) {
+    throw mediaFormatError();
+  }
+  const dimensions = extendedDimensions ?? bitstreamDimensions;
+  if (
+    dimensions.width <= 0
+    || dimensions.height <= 0
+    || dimensions.width > MAX_IMAGE_DIMENSION
+    || dimensions.height > MAX_IMAGE_DIMENSION
+    || dimensions.width * dimensions.height > MAX_IMAGE_PIXELS
+  ) {
+    throw new GithubContentError("MEDIA_DIMENSIONS_INVALID", "이미지 크기는 1,600px와 2,560,000픽셀 이하여야 합니다.", 413);
+  }
+  return dimensions;
 }
 
 function getGithubConfig(env) {
@@ -109,14 +234,16 @@ export async function uploadAdminImage({ category, dataUrl }, env, fetcher = fet
   }
   const match = /^data:image\/webp;base64,([A-Za-z0-9+/=]+)$/u.exec(dataUrl ?? "");
   if (!match) throw new GithubContentError("MEDIA_FORMAT_INVALID", "WebP 이미지만 업로드할 수 있습니다.", 400);
-  const bytes = base64ToBytes(match[1]);
+  let bytes;
+  try {
+    bytes = base64ToBytes(match[1]);
+  } catch {
+    throw mediaFormatError();
+  }
   if (bytes.length === 0 || bytes.length > MAX_IMAGE_BYTES) {
     throw new GithubContentError("MEDIA_SIZE_INVALID", "이미지는 2MB 이하로 최적화해 주세요.", 413);
   }
-  const header = decoder.decode(bytes.subarray(0, 12));
-  if (!header.startsWith("RIFF") || !header.endsWith("WEBP")) {
-    throw new GithubContentError("MEDIA_FORMAT_INVALID", "올바른 WebP 이미지가 아닙니다.", 400);
-  }
+  validateWebpBytes(bytes);
   const config = getGithubConfig(env);
   const fileName = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}.webp`;
   const filePath = `public/images/content/${category}/${fileName}`;

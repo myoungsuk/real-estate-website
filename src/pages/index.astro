@@ -5,11 +5,14 @@ import NaverListingPager from "../components/NaverListingPager.astro";
 import { homeContent, publishedBlogContents, publishedYoutubeVideoContents } from "../lib/content";
 import { getComplexFact, publishedComplexes } from "../lib/complexes";
 import { naverListings, naverListingsUpdatedAt } from "../lib/naver-listings";
+import { getResponsivePublicImageSrcSet } from "../lib/responsive-images";
 import { formatOfficeHours, kakaoHref, office, phoneHref, smsHref } from "../lib/site";
 
 const title = "대전 동구 지역 전문 행복한부동산 | 매매·전세·월세";
 const description = "백진옥 대표가 대전 동구의 매매·전세·월세와 리더스시티 정보를 직접 확인해 안내하는 행복한부동산입니다.";
 const quickComplexes = publishedComplexes.filter(({ slug }) => slug === "leaders-city-4" || slug === "leaders-city-5");
+const homeBlogContents = publishedBlogContents.slice(0, 9);
+const homeYoutubeContents = publishedYoutubeVideoContents.slice(0, 6);
 const structuredData = {
   "@context": "https://schema.org",
   "@type": ["RealEstateAgent", "LocalBusiness"],
@@ -108,7 +111,16 @@ const structuredData = {
   <section class="section area-photo-feature" aria-labelledby="office-photo-heading">
     <div class="shell area-photo-feature__grid">
       <figure>
-        <img src={homeContent.office.image.src} alt={homeContent.office.image.alt} width="2000" height="2000" loading="lazy" />
+        <img
+          src={homeContent.office.image.src}
+          srcset={getResponsivePublicImageSrcSet(homeContent.office.image.src)}
+          sizes="(min-width: 1180px) 560px, (min-width: 700px) 50vw, calc(100vw - 32px)"
+          alt={homeContent.office.image.alt}
+          width="2000"
+          height="2000"
+          loading="lazy"
+          decoding="async"
+        />
         <figcaption>{homeContent.office.eyebrow}</figcaption>
       </figure>
       <div class="area-photo-feature__copy">
@@ -188,7 +200,7 @@ const structuredData = {
         <h2 id="blog-heading">THE BLOG</h2>
         <a class="button button--secondary" href="/blog/">블로그 전체 보기</a>
       </div>
-      <ExternalContentList items={publishedBlogContents} emptyLabel="공개할 블로그 글을 준비하고 있습니다." pageSize={9} />
+      <ExternalContentList items={homeBlogContents} emptyLabel="공개할 블로그 글을 준비하고 있습니다." pageSize={9} paginate={false} />
     </div>
   </section>
 
@@ -199,7 +211,7 @@ const structuredData = {
         <h2 id="youtube-heading">YOUTUBE</h2>
         <a class="button button--light" href="/youtube/">유튜브 전체 보기</a>
       </div>
-      <ExternalContentList items={publishedYoutubeVideoContents} emptyLabel="공개할 일반 영상을 준비하고 있습니다." pageSize={6} categoryLabel="유튜브 일반 영상" paginate={false} hoverPreview />
+      <ExternalContentList items={homeYoutubeContents} emptyLabel="공개할 일반 영상을 준비하고 있습니다." pageSize={6} categoryLabel="유튜브 일반 영상" paginate={false} hoverPreview />
     </div>
   </section>
 

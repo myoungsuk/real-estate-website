@@ -6,26 +6,32 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: external-content-sync
   cancel-in-progress: false
 
 jobs:
-  sync:
+  validate:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      mode: ${{ steps.changes.outputs.mode }}
+      base_sha: ${{ steps.package.outputs.base_sha }}
+      marker_scope: ${{ steps.package.outputs.marker_scope }}
+      expected_marker: ${{ steps.package.outputs.expected_marker }}
     steps:
       - name: Require master branch
         run: test "$GITHUB_REF" = "refs/heads/master"
 
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: master
           fetch-depth: 1
+          persist-credentials: false
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
           cache: npm
@@ -41,25 +47,125 @@ jobs:
       - run: npm run check
       - run: npm run build
 
+      - name: Build and assert Production SEO output
+        env:
+          PUBLIC_SITE_URL: https://leaderscityhappy.com
+          PUBLIC_ALLOW_INDEXING: "true"
+        run: |
+          npm run build:site
+          npm run assert:production-build
+
       - name: Validate changed paths
         id: changes
         run: node scripts/check-sync-worktree.mjs
 
-      - name: Commit changed content
-        if: steps.changes.outputs.mode == 'content'
+      - name: Package verified changes
+        id: package
+        if: steps.changes.outputs.mode != 'none'
+        env:
+          CHANGE_MODE: ${{ steps.changes.outputs.mode }}
         run: |
+          set -euo pipefail
+          artifact="$RUNNER_TEMP/external-sync-artifact"
+          if [ "$CHANGE_MODE" = "content" ]; then
+            marker_scope="external"
+            mkdir -p "$artifact/src/data" "$artifact/public/images"
+            cp src/data/external-links.json "$artifact/src/data/external-links.json"
+            cp -R public/images/blog "$artifact/public/images/blog"
+            cp -R public/images/youtube "$artifact/public/images/youtube"
+          else
+            marker_scope="automation"
+            mkdir -p "$artifact/.github"
+            cp .github/automation-health.json "$artifact/.github/automation-health.json"
+          fi
+          echo "base_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "marker_scope=$marker_scope" >> "$GITHUB_OUTPUT"
+          echo "expected_marker=$(node scripts/deployment-marker.mjs print "$marker_scope")" >> "$GITHUB_OUTPUT"
+
+      - name: Upload verified changes
+        if: steps.changes.outputs.mode != 'none'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: external-sync-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/external-sync-artifact
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 1
+
+  publish:
+    needs: validate
+    if: needs.validate.outputs.mode != 'none'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: master
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+
+      - name: Require unchanged master base
+        env:
+          EXPECTED_BASE_SHA: ${{ needs.validate.outputs.base_sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_BASE_SHA"
+
+      - name: Download verified changes
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: external-sync-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/external-sync-artifact
+
+      - name: Apply and revalidate allowed paths
+        env:
+          CHANGE_MODE: ${{ needs.validate.outputs.mode }}
+        run: |
+          set -euo pipefail
+          if [ "$CHANGE_MODE" = "content" ]; then
+            cp "$RUNNER_TEMP/external-sync-artifact/src/data/external-links.json" src/data/external-links.json
+            cp -R "$RUNNER_TEMP/external-sync-artifact/public/images/blog/." public/images/blog/
+            cp -R "$RUNNER_TEMP/external-sync-artifact/public/images/youtube/." public/images/youtube/
+          else
+            cp "$RUNNER_TEMP/external-sync-artifact/.github/automation-health.json" .github/automation-health.json
+          fi
+          node scripts/check-sync-worktree.mjs
+
+      - name: Commit verified changes
+        env:
+          CHANGE_MODE: ${{ needs.validate.outputs.mode }}
+        run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- src/data/external-links.json public/images/blog/ public/images/youtube/
-          git diff --cached --quiet && exit 0
-          git commit -m "chore(content): sync external content"
-          git push origin HEAD:master
-      - name: Commit scheduler keepalive
-        if: steps.changes.outputs.mode == 'keepalive'
+          if [ "$CHANGE_MODE" = "content" ]; then
+            git add -- src/data/external-links.json public/images/blog/ public/images/youtube/
+            message="chore(content): sync external content"
+          else
+            git add -- .github/automation-health.json
+            message="chore(automation): refresh scheduler activity"
+          fi
+          git diff --cached --quiet && { echo "검증 산출물에 커밋할 변경이 없습니다." >&2; exit 1; }
+          git commit -m "$message"
+
+      - name: Push with job-scoped credential
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- .github/automation-health.json
-          git diff --cached --quiet && exit 0
-          git commit -m "chore(automation): refresh scheduler activity"
+          set -euo pipefail
+          auth="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w 0)"
+          echo "::add-mask::$auth"
+          export GIT_CONFIG_COUNT=1
+          export GIT_CONFIG_KEY_0=http.https://github.com/.extraheader
+          export GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth"
           git push origin HEAD:master
+
+      - name: Wait for Production content marker
+        env:
+          MARKER_SCOPE: ${{ needs.validate.outputs.marker_scope }}
+          EXPECTED_MARKER: ${{ needs.validate.outputs.expected_marker }}
+        run: node scripts/verify-production-deployment.mjs --scope "$MARKER_SCOPE" --expected "$EXPECTED_MARKER"

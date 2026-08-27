@@ -1,6 +1,6 @@
 # Cloudflare Workers Static Assets + 관리 API 배포
 
-## 현재 연결 상태 (2026-08-25)
+## 현재 연결 상태 (2026-08-27)
 
 - 운영 도메인 `https://leaderscityhappy.com`은 Worker `leaders-city-happy-realty`의 Custom Domain이다.
 - 같은 Worker의 보조 확인 주소는 `https://leaders-city-happy-realty.k4858678.workers.dev`이다. 공개 안내와 검색 등록에는 운영 도메인만 사용한다.
@@ -17,21 +17,37 @@
 
 ## GitHub 자동 배포
 
-Worker는 GitHub `myoungsuk/real-estate-website`의 `master`에 연결되어 있다. 빌드 명령은 `npm run build`, 배포 명령은 `npx wrangler deploy`, 루트 디렉터리는 `/`다. Production에는 `PUBLIC_SITE_URL=https://leaderscityhappy.com`, `PUBLIC_ALLOW_INDEXING=true`를 등록했고 Production 이외 브랜치 빌드는 비활성화했다.
+Worker는 GitHub `myoungsuk/real-estate-website`의 `master`에 연결되어 있다. 빌드 명령은 `npm run build`, 배포 명령은 `npx wrangler deploy`, 루트 디렉터리는 `/`다. Production에는 `PUBLIC_SITE_URL=https://leaderscityhappy.com`, `PUBLIC_ALLOW_INDEXING=true`를 등록했고 Production 이외 브랜치 빌드는 비활성화했다. 공개 전 승인은 로컬 화면 확인과 pull request CI로 수행한다.
 
 최초 Git 빌드 `91d02fd6`과 Worker 버전 `5e3350e4-276a-46a6-a696-ff0dc9ad0927`의 100% 운영 배포를 확인했다. GitHub Actions `CI #3`도 성공했다.
 
 1. GitHub `master`에 운영 승인 커밋을 푸시한다.
-2. GitHub Actions와 Cloudflare 빌드가 모두 성공했는지 확인한다.
+2. GitHub Actions의 기본 `noindex` 빌드와 별도 Production-mode SEO 빌드 검사가 모두 성공했는지 확인한다.
 3. Cloudflare 배포가 새 버전 100%로 전환됐는지 확인한다.
 4. 공개 홈, robots, sitemap, canonical과 Access 보호 경로를 회귀 확인한다.
-5. Production 이외 브랜치 빌드는 운영 승인 전까지 비활성화한다.
+5. Production 이외 브랜치 빌드는 비활성화 상태를 유지한다. 나중에 Preview를 켜더라도 Production Secret을 복사하지 않고 `noindex`를 유지한다.
 
-공식 RSS 동기화의 1차 운영 검증은 GitHub Actions `Sync external content`를 `master`에서 수동 실행한 뒤 진행한다. 먼저 Repository Variable `YOUTUBE_CHANNEL_ID=UCuOZDnM5vxOZELDgu-y-hNg`를 등록하고, 워크플로가 만든 콘텐츠 커밋 SHA와 Cloudflare가 빌드한 Git SHA가 같은지 확인한다. `/blog/` 또는 `/youtube/`의 신규 카드와 원문 링크가 정상일 때까지 schedule은 추가하지 않는다. `GITHUB_TOKEN` push는 GitHub의 기존 push 기반 CI를 다시 실행하지 않으므로 동기화 워크플로 자체의 테스트·검사·빌드 성공 로그를 함께 확인한다.
+부동산뱅크 동기화는 매일 00:10 KST, 공식 RSS 동기화는 매시간 17분에 예약 실행한다. 두 워크플로 모두 네트워크 조회·의존성 설치·테스트·빌드는 `contents: read` 검증 job에서 수행하고, 허용 파일만 담은 artifact를 별도 `contents: write` 배포 job이 적용한다. 모든 공식 GitHub Action은 검증한 commit SHA로 고정하고 checkout 자격 증명은 저장하지 않는다. 쓰기 토큰은 검증 스크립트가 아니라 최종 `git push` 단계에만 전달한다. 배포 job은 push 직전 `master`가 검증한 기준 SHA와 같은지 다시 확인해 동시 변경을 덮어쓰지 않는다.
+
+`GITHUB_TOKEN` push는 GitHub의 기존 push 기반 CI를 다시 실행하지 않으므로 동기화 워크플로 자체의 테스트·검사·Production-mode 빌드 성공 로그를 확인한다. push 뒤에는 새 빌드의 `/deployment-marker.json`에서 해당 콘텐츠 범위의 SHA-256 값이 검증 job의 예상값과 일치할 때까지 약 10분간 확인하며, 배포가 시작되지 않거나 잘못된 버전이 계속 제공되면 Action을 실패로 표시한다. 이 표시는 자동 롤백은 아니므로 실패 알림을 확인한 운영자가 Cloudflare 빌드 로그와 공개 화면을 점검한다.
 
 `wrangler.jsonc`는 `./dist` 정적 자산과 `worker/index.mjs` 관리 API를 같은 Worker로 배포합니다. `leaderscityhappy.com`은 Worker Custom Domain으로 선언하며 `/api/admin`과 `/api/admin/*`만 Worker를 먼저 실행하므로 공개 경로는 정적 자산으로 제공합니다. Production 빌드는 `PUBLIC_SITE_URL=https://leaderscityhappy.com`과 `PUBLIC_ALLOW_INDEXING=true`를 반드시 함께 설정합니다.
 
 Custom Domain 전환 롤백은 `wrangler.jsonc`의 Custom Domain 설정을 제거하고 기존 Pages 프로젝트에 `leaderscityhappy.com`을 다시 연결하는 순서로 수행한다. Pages 프로젝트나 `pages.dev` 주소는 전환 확인 전 삭제하지 않는다.
+
+## HTTP에서 HTTPS로 강제 이동
+
+Workers Static Assets의 `_redirects`는 경로 기반 규칙이며 domain-level 리디렉션을 지원하지 않는다. 프로토콜 조건도 없으므로 `/* https://leaderscityhappy.com/:splat 301` 같은 규칙은 HTTPS 요청까지 다시 리디렉션할 수 있어 사용하지 않는다.
+
+Cloudflare 대시보드의 해당 zone에서 `SSL/TLS` → `Edge Certificates` → `Always Use HTTPS`를 활성화한다. 대안으로 Redirect Rules의 Single Redirect에 `http://*`를 `https://${1}`로 보내는 301 규칙을 만들 수 있다. 설정 뒤 다음을 수동 확인한다.
+
+- `http://leaderscityhappy.com/<경로>?<쿼리>`가 한 번의 301로 같은 경로·쿼리의 HTTPS 주소로 이동
+- 최종 HTTPS 응답이 `200`
+- `www.leaderscityhappy.com`이 기존처럼 apex HTTPS 주소로 이동
+
+이 설정은 저장소 코드만으로 확정할 수 없는 Cloudflare zone 작업이다. 활성화와 실제 HTTP 응답 검증 전에는 완료로 표시하지 않는다.
+
+2026-08-27 Cloudflare `Always Use HTTPS`를 활성화했다. 실제 응답에서 `http://leaderscityhappy.com/properties/?sort=latest&trade=sale`는 같은 경로·쿼리의 apex HTTPS 주소로 한 번의 `301` 이동했고, 최종 HTTPS는 `200`을 반환했다. `https://www.leaderscityhappy.com/properties/?sort=latest&trade=sale`도 같은 apex HTTPS 주소로 `301` 이동했다. HSTS는 별도 승인 전까지 활성화하지 않는다.
 
 ## Cloudflare Access
 
@@ -44,6 +60,7 @@ Custom Domain 전환 롤백은 `wrangler.jsonc`의 Custom Domain 설정을 제�
    - `CF_ACCESS_TEAM_DOMAIN`
    - `CF_ACCESS_AUD`
    - `ADMIN_ALLOWED_EMAILS`: 쉼표로 구분한 서로 다른 이메일 2개
+   - `ADMIN_ALLOWED_ORIGINS`: 미설정 기본값은 `https://leaderscityhappy.com`. 설정할 때는 쉼표로 구분한 정확한 HTTPS origin만 사용하며 wildcard·경로·쿼리·userinfo·HTTP는 거부된다.
    - `ADMIN_WRITE_ENABLED=false`로 먼저 배포
    - `ADMIN_CSRF_SECRET`: 32자 이상의 무작위 Secret
    - `GITHUB_CONTENTS_TOKEN`: `myoungsuk/real-estate-website` 한 저장소의 Contents Read/Write만 가진 Fine-grained token
@@ -51,11 +68,15 @@ Custom Domain 전환 롤백은 `wrangler.jsonc`의 Custom Domain 설정을 제�
    - 시험 중에는 `GITHUB_BRANCH=admin-storage-test`
    - 운영 전환 시 검증·병합을 마친 뒤 `GITHUB_BRANCH=master`
 7. 허용 관리자 로그인, GitHub 파일 조회와 테스트 저장을 확인한 뒤에만 `ADMIN_WRITE_ENABLED=true`로 변경한다.
-8. Preview에는 실제 Production 이메일과 쓰기 Secret을 복사하지 않는다.
+8. 현재 Production 이외 브랜치 빌드는 비활성화되어 있다. 나중에 Preview를 활성화하더라도 실제 Production 이메일과 쓰기 Secret을 복사하지 않는다.
+
+관리 API는 `Origin` 헤더가 `ADMIN_ALLOWED_ORIGINS`에 포함되고 요청 URL의 origin과도 정확히 같은 경우에만 쓰기를 허용한다. 나중에 Preview나 `workers.dev`에서 쓰기가 꼭 필요할 때만 해당 HTTPS origin을 명시적으로 추가하고 Access 보호·쓰기 범위를 다시 시험한다.
 
 토큰은 만료 없음으로 발급했으므로 자동 만료에 기대지 않는다. 유출 의심, 담당자 변경, 저장 기능 폐기 시 GitHub Settings에서 즉시 폐기하고 새 토큰으로 교체한다. 사용하지 않는 동안에는 `ADMIN_WRITE_ENABLED=false`를 유지한다.
 
 Static Assets 내부 라우터에서는 `ctx.access`를 사용할 수 없으므로 Worker가 `Cf-Access-Jwt-Assertion`을 직접 검증한다. 설정 누락, JWT 오류, Audience 불일치 또는 허용 이메일 불일치 시 API는 차단된다.
+
+콘텐츠 PUT·미디어 POST의 성공과 실패는 `event`, `requestId`, HMAC 가명 `actorId`, `operation`, `resource`, `result`, `errorCode` 또는 `commitSha`만 구조화 로그로 남긴다. JWT·CSRF·GitHub token·요청 본문·raw 이메일은 기록하지 않는다. `actorId`는 `ADMIN_CSRF_SECRET`을 키로 만들기 때문에 Secret을 회전하면 같은 관리자의 값도 달라진다.
 
 ## 관리 API 확인
 
@@ -82,7 +103,9 @@ Access가 적용된 배포 환경에서 다음을 확인한다.
 - 홈·매물·단지·소개·오시는 길·404가 정상 응답하는지 확인
 - 전화·문자·네이버지도·블로그·유튜브 링크 확인
 - `/robots.txt`, `/sitemap-index.xml`, `/llms.txt` 확인
+- `/deployment-marker.json`이 유효하며 최신 자동 동기화 Action의 예상 marker와 일치하는지 확인
 - 실제 도메인과 canonical 일치 확인
+- apex HTTP가 경로·쿼리를 보존해 HTTPS로 301 이동하는지 확인
 - 공개 정적 페이지가 기존과 동일하게 제공되는지 확인
 - `/api/admin/*`만 Worker 호출로 집계되는지 확인
-- 문제 발생 시 직전 정상 배포로 롤백하거나 Git revert 후 재배포
+- 문제 발생 시 먼저 Cloudflare에서 직전 정상 배포로 롤백하고 공개 페이지와 marker를 확인한다. 이어서 `master`의 잘못된 커밋을 `git revert`로 되돌려 새 Production 배포를 만든 뒤 Git SHA·marker·공개 화면이 다시 일치하는지 확인한다. `master` 이력은 강제로 다시 쓰지 않는다.

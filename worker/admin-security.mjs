@@ -9,6 +9,37 @@ export class AdminWriteError extends Error {
 
 const encoder = new TextEncoder();
 const CSRF_MAX_AGE_SECONDS = 2 * 60 * 60;
+const DEFAULT_ADMIN_ALLOWED_ORIGINS = Object.freeze(["https://leaderscityhappy.com"]);
+
+export function parseAdminAllowedOrigins(value) {
+  const candidates = typeof value === "string" && value.trim() !== ""
+    ? value.split(",").map((origin) => origin.trim())
+    : DEFAULT_ADMIN_ALLOWED_ORIGINS;
+  const origins = new Set();
+  for (const candidate of candidates) {
+    try {
+      const url = new URL(candidate);
+      if (
+        url.protocol !== "https:"
+        || url.username !== ""
+        || url.password !== ""
+        || url.pathname !== "/"
+        || url.search !== ""
+        || url.hash !== ""
+        || candidate.replace(/\/$/u, "") !== url.origin
+      ) {
+        throw new Error("invalid origin");
+      }
+      origins.add(url.origin);
+    } catch {
+      throw new AdminWriteError("ORIGIN_CONFIG_INVALID", "관리자 요청 출처 설정이 올바르지 않습니다.", 503);
+    }
+  }
+  if (origins.size === 0) {
+    throw new AdminWriteError("ORIGIN_CONFIG_INVALID", "관리자 요청 출처 설정이 올바르지 않습니다.", 503);
+  }
+  return origins;
+}
 
 function bytesToBase64Url(bytes) {
   let binary = "";
@@ -34,7 +65,7 @@ async function importCsrfKey(secret) {
 }
 
 export function isAdminWriteEnabled(env) {
-  return env?.ADMIN_WRITE_ENABLED === "true"
+  const configured = env?.ADMIN_WRITE_ENABLED === "true"
     && typeof env?.ADMIN_CSRF_SECRET === "string"
     && env.ADMIN_CSRF_SECRET.length >= 32
     && typeof env?.GITHUB_CONTENTS_TOKEN === "string"
@@ -43,6 +74,13 @@ export function isAdminWriteEnabled(env) {
     && /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(env.GITHUB_REPOSITORY)
     && typeof env?.GITHUB_BRANCH === "string"
     && env.GITHUB_BRANCH.length > 0;
+  if (!configured) return false;
+  try {
+    parseAdminAllowedOrigins(env.ADMIN_ALLOWED_ORIGINS);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function createCsrfToken(email, secret, now = Date.now()) {
@@ -79,12 +117,15 @@ export async function validateAdminWriteRequest(request, actor, env) {
   }
 
   const url = new URL(request.url);
-  if (request.headers.get("Origin") !== url.origin) {
+  const origin = request.headers.get("Origin");
+  const allowedOrigins = parseAdminAllowedOrigins(env.ADMIN_ALLOWED_ORIGINS);
+  if (origin !== url.origin || !allowedOrigins.has(url.origin)) {
     throw new AdminWriteError("ORIGIN_DENIED", "허용되지 않은 요청 출처입니다.", 403);
   }
 
   const contentType = request.headers.get("Content-Type") ?? "";
-  if (!contentType.toLowerCase().startsWith("application/json")) {
+  const mediaType = contentType.split(";", 1)[0].trim().toLowerCase();
+  if (mediaType !== "application/json") {
     throw new AdminWriteError("CONTENT_TYPE_REQUIRED", "JSON 요청만 허용합니다.", 415);
   }
 

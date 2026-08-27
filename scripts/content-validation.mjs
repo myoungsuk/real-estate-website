@@ -34,6 +34,203 @@ const bannedKeys = new Set([
   "privateNote",
 ]);
 
+const valueSchema = Object.freeze({ kind: "value" });
+const objectSchema = (properties) => Object.freeze({ kind: "object", properties: Object.freeze(properties) });
+const arraySchema = (item) => Object.freeze({ kind: "array", item });
+const recordSchema = (value) => Object.freeze({ kind: "record", value });
+
+const imageSchema = objectSchema({ src: valueSchema, alt: valueSchema });
+const sourceSchema = objectSchema({
+  id: valueSchema,
+  publisher: valueSchema,
+  label: valueSchema,
+  url: valueSchema,
+  kind: valueSchema,
+  checkedAt: valueSchema,
+  note: valueSchema,
+});
+const textPairSchema = objectSchema({ title: valueSchema, description: valueSchema });
+
+const publicContentSchemas = Object.freeze({
+  office: objectSchema({
+    legalName: valueSchema,
+    brandName: valueSchema,
+    serviceArea: valueSchema,
+    representative: valueSchema,
+    mobile: valueSchema,
+    email: valueSchema,
+    address: valueSchema,
+    registrationNumber: valueSchema,
+    businessNumber: valueSchema,
+    parking: valueSchema,
+    hours: arraySchema(objectSchema({
+      label: valueSchema,
+      days: arraySchema(valueSchema),
+      opens: valueSchema,
+      closes: valueSchema,
+      note: valueSchema,
+    })),
+    introduction: arraySchema(valueSchema),
+    publicClaims: objectSchema({
+      basis: valueSchema,
+      items: arraySchema(objectSchema({ label: valueSchema, value: valueSchema })),
+    }),
+    naverPlaceUrl: valueSchema,
+    naverListingsUrl: valueSchema,
+    naverBlogUrl: valueSchema,
+    youtubeUrl: valueSchema,
+    kakaoUrl: valueSchema,
+  }),
+  listings: arraySchema(objectSchema({
+    id: valueSchema,
+    slug: valueSchema,
+    title: valueSchema,
+    status: valueSchema,
+    propertyType: valueSchema,
+    tradeType: valueSchema,
+    district: valueSchema,
+    neighborhoodSlug: valueSchema,
+    neighborhoodName: valueSchema,
+    complexName: valueSchema,
+    salePriceKrw: valueSchema,
+    depositKrw: valueSchema,
+    monthlyRentKrw: valueSchema,
+    exclusiveAreaM2: valueSchema,
+    floorLabel: valueSchema,
+    direction: valueSchema,
+    moveIn: valueSchema,
+    summary: valueSchema,
+    features: arraySchema(valueSchema),
+    thumbnail: imageSchema,
+    images: arraySchema(imageSchema),
+    source: valueSchema,
+    confirmedAt: valueSchema,
+    publishedAt: valueSchema,
+  })),
+  naverListings: objectSchema({
+    checkedAt: valueSchema,
+    items: arraySchema(objectSchema({
+      id: valueSchema,
+      title: valueSchema,
+      propertyType: valueSchema,
+      tradeType: valueSchema,
+      priceLabel: valueSchema,
+      areaLabel: valueSchema,
+      floorLabel: valueSchema,
+      direction: valueSchema,
+      summary: valueSchema,
+      registeredAt: valueSchema,
+      source: valueSchema,
+      url: valueSchema,
+    })),
+  }),
+  complexes: arraySchema(objectSchema({
+    slug: valueSchema,
+    areaSlug: valueSchema,
+    areaName: valueSchema,
+    eyebrow: valueSchema,
+    mark: valueSchema,
+    name: valueSchema,
+    status: valueSchema,
+    summary: valueSchema,
+    introTitle: valueSchema,
+    introduction: arraySchema(valueSchema),
+    image: imageSchema,
+    facts: arraySchema(objectSchema({ label: valueSchema, value: valueSchema })),
+    highlights: arraySchema(textPairSchema),
+    unitGroups: arraySchema(objectSchema({
+      category: valueSchema,
+      areaLabel: valueSchema,
+      households: valueSchema,
+      note: valueSchema,
+    })),
+    supplySummary: arraySchema(objectSchema({ label: valueSchema, value: valueSchema, description: valueSchema })),
+    livingSections: arraySchema(objectSchema({ category: valueSchema, title: valueSchema, description: valueSchema })),
+    amenityGroups: arraySchema(objectSchema({
+      title: valueSchema,
+      items: arraySchema(valueSchema),
+      verification: valueSchema,
+      note: valueSchema,
+    })),
+    checkpoints: arraySchema(textPairSchema),
+    faqs: arraySchema(objectSchema({ question: valueSchema, answer: valueSchema })),
+    relatedContentIds: arraySchema(valueSchema),
+    sources: arraySchema(sourceSchema),
+    confirmedAt: valueSchema,
+  })),
+  complexOverview: objectSchema({
+    eyebrow: valueSchema,
+    title: valueSchema,
+    description: valueSchema,
+    note: valueSchema,
+    confirmedAt: valueSchema,
+    stats: arraySchema(objectSchema({ label: valueSchema, value: valueSchema, description: valueSchema })),
+    reasons: arraySchema(textPairSchema),
+    comparisonRows: arraySchema(objectSchema({ label: valueSchema, values: recordSchema(valueSchema) })),
+    sharedCheckpoints: arraySchema(textPairSchema),
+    relatedContentIds: arraySchema(valueSchema),
+    sources: arraySchema(sourceSchema),
+  }),
+  externalLinks: arraySchema(objectSchema({
+    id: valueSchema,
+    type: valueSchema,
+    youtubeFormat: valueSchema,
+    status: valueSchema,
+    title: valueSchema,
+    summary: valueSchema,
+    url: valueSchema,
+    publishedAt: valueSchema,
+    thumbnail: imageSchema,
+  })),
+  homeContent: objectSchema({
+    broker: objectSchema({ eyebrow: valueSchema, headline: valueSchema, lead: valueSchema, portrait: imageSchema }),
+    office: objectSchema({
+      eyebrow: valueSchema,
+      title: valueSchema,
+      description: valueSchema,
+      image: imageSchema,
+      badges: arraySchema(valueSchema),
+    }),
+    areaGuide: objectSchema({
+      eyebrow: valueSchema,
+      title: valueSchema,
+      description: valueSchema,
+      cards: arraySchema(textPairSchema),
+    }),
+  }),
+  faq: arraySchema(objectSchema({ category: valueSchema, question: valueSchema, answer: valueSchema })),
+  reviews: arraySchema(objectSchema({
+    id: valueSchema,
+    displayName: valueSchema,
+    content: valueSchema,
+    confirmedAt: valueSchema,
+    source: valueSchema,
+    isPublished: valueSchema,
+    privacyReviewed: valueSchema,
+    privacyReviewedAt: valueSchema,
+    archivedAt: valueSchema,
+    updatedAt: valueSchema,
+  })),
+});
+
+const KOREA_TIME_OFFSET_MS = 9 * 60 * 60 * 1000;
+
+function getTodayInKorea(now = Date.now()) {
+  return new Date(now + KOREA_TIME_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+function isValidCalendarDate(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(value ?? "");
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  return parsed.getUTCFullYear() === year
+    && parsed.getUTCMonth() === month - 1
+    && parsed.getUTCDate() === day;
+}
+
 function isPositiveSafeInteger(value) {
   return Number.isSafeInteger(value) && value > 0;
 }
@@ -46,8 +243,9 @@ function isNonEmptyString(value) {
   return typeof value === "string" && value.trim() !== "";
 }
 
-function isIsoDateOrNull(value) {
-  return value === null || (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value));
+function isIsoDateOrNull(value, now = Date.now()) {
+  return value === null
+    || (typeof value === "string" && isValidCalendarDate(value) && value <= getTodayInKorea(now));
 }
 
 function isAllowedPublicImagePath(value) {
@@ -200,6 +398,113 @@ export function findBannedKeys(value, path = "root", errors = []) {
   return errors;
 }
 
+function findUnexpectedKeysWithSchema(value, schema, path, errors) {
+  if (value === null || value === undefined || schema.kind === "value") return errors;
+  if (schema.kind === "array") {
+    if (Array.isArray(value)) {
+      value.forEach((item, index) => findUnexpectedKeysWithSchema(item, schema.item, `${path}[${index}]`, errors));
+    }
+    return errors;
+  }
+  if (schema.kind === "record") {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      Object.entries(value).forEach(([key, child]) => findUnexpectedKeysWithSchema(child, schema.value, `${path}.${key}`, errors));
+    }
+    return errors;
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) return errors;
+  for (const [key, child] of Object.entries(value)) {
+    const childSchema = schema.properties[key];
+    if (!childSchema) {
+      errors.push(`${path}.${key}: 허용되지 않은 필드입니다.`);
+      continue;
+    }
+    findUnexpectedKeysWithSchema(child, childSchema, `${path}.${key}`, errors);
+  }
+  return errors;
+}
+
+export function findUnexpectedKeys(resource, value, path = resource, errors = []) {
+  const schema = publicContentSchemas[resource];
+  if (!schema) return [`${path}: 허용되지 않은 콘텐츠 종류입니다.`];
+  return findUnexpectedKeysWithSchema(value, schema, path, errors);
+}
+
+function normalizeDigits(value) {
+  return value.replace(/\D/gu, "");
+}
+
+function getApprovedSensitiveValues(office) {
+  const mobileNumbers = new Set();
+  const emails = new Set();
+  const unitLabels = new Set();
+  if (typeof office?.mobile === "string") mobileNumbers.add(normalizeDigits(office.mobile));
+  if (typeof office?.email === "string") emails.add(office.email.trim().toLowerCase());
+  if (typeof office?.address === "string") {
+    for (const match of office.address.matchAll(/(?<!\d)\d{1,4}\s*호(?!선|점|기|차)/gu)) {
+      unitLabels.add(match[0].replace(/\s/gu, ""));
+    }
+  }
+  return { mobileNumbers, emails, unitLabels };
+}
+
+function findSensitiveStringsRecursive(value, path, errors, approved) {
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => findSensitiveStringsRecursive(item, `${path}[${index}]`, errors, approved));
+    return errors;
+  }
+  if (value && typeof value === "object") {
+    Object.entries(value).forEach(([key, child]) => findSensitiveStringsRecursive(child, `${path}.${key}`, errors, approved));
+    return errors;
+  }
+  if (typeof value !== "string") return errors;
+
+  for (const match of value.matchAll(/(?<!\d)01[016789](?:[- .]?\d){7,8}(?!\d)/gu)) {
+    if (!approved.mobileNumbers.has(normalizeDigits(match[0]))) {
+      errors.push(`${path}: 공개 승인되지 않은 휴대전화번호 패턴이 있습니다.`);
+      break;
+    }
+  }
+  for (const match of value.matchAll(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/giu)) {
+    if (!approved.emails.has(match[0].toLowerCase())) {
+      errors.push(`${path}: 공개 승인되지 않은 이메일 주소 패턴이 있습니다.`);
+      break;
+    }
+  }
+  for (const match of value.matchAll(/(?<!\d)\d{1,4}\s*호(?!선|점|기|차)/gu)) {
+    if (!approved.unitLabels.has(match[0].replace(/\s/gu, ""))) {
+      errors.push(`${path}: 공개 승인되지 않은 정확한 호수 패턴이 있습니다.`);
+      break;
+    }
+  }
+  if (/(?<!\d)\d{6}-?[1-4]\d{6}(?!\d)/u.test(value)) {
+    errors.push(`${path}: 주민등록번호 형태의 민감정보가 있습니다.`);
+  }
+  if (/-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/u.test(value)) {
+    errors.push(`${path}: 비공개 키 형태의 문자열이 있습니다.`);
+  }
+  if (/\b(?:github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9]{20,})\b/u.test(value)) {
+    errors.push(`${path}: GitHub 토큰 형태의 문자열이 있습니다.`);
+  }
+  if (/\b(?:AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,}|glpat-[0-9A-Za-z_-]{20,}|xox[baprs]-[0-9A-Za-z-]{10,})\b/u.test(value)) {
+    errors.push(`${path}: 인증 토큰 형태의 문자열이 있습니다.`);
+  }
+  if (/\bBearer\s+[A-Za-z0-9._~+/=-]{12,}/iu.test(value)) {
+    errors.push(`${path}: Bearer 인증정보 형태의 문자열이 있습니다.`);
+  }
+  if (/\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/u.test(value)) {
+    errors.push(`${path}: JWT 형태의 문자열이 있습니다.`);
+  }
+  if (/(?:api[_ -]?key|access[_ -]?token|secret|password|passwd)\s*[:=]\s*[^\s,;]{8,}/iu.test(value)) {
+    errors.push(`${path}: 인증정보로 의심되는 문자열이 있습니다.`);
+  }
+  return errors;
+}
+
+export function findSensitiveStrings(value, { path = "root", office = null } = {}) {
+  return findSensitiveStringsRecursive(value, path, [], getApprovedSensitiveValues(office));
+}
+
 export function validateListing(listing, index = 0) {
   const path = `listings[${index}]`;
   const errors = [];
@@ -226,11 +531,20 @@ export function validateListing(listing, index = 0) {
   }
 
   if (listing.status === "published") {
-    for (const key of ["title", "summary", "source", "confirmedAt"]) {
+    for (const key of ["title", "summary", "source"]) {
       if (typeof listing[key] !== "string" || listing[key].trim() === "") errors.push(`${path}.${key}: 공개 매물 필수값입니다.`);
+    }
+    if (!isIsoDateOrNull(listing.confirmedAt) || listing.confirmedAt === null) {
+      errors.push(`${path}.confirmedAt: 오늘 이하의 실제 YYYY-MM-DD 확인일이 필요합니다.`);
+    }
+    if (!isIsoDateOrNull(listing.publishedAt)) {
+      errors.push(`${path}.publishedAt: 오늘 이하의 실제 YYYY-MM-DD 또는 null이어야 합니다.`);
     }
     if (!(typeof listing.exclusiveAreaM2 === "number" && listing.exclusiveAreaM2 > 0)) errors.push(`${path}.exclusiveAreaM2: 양수여야 합니다.`);
     if (!Array.isArray(listing.features)) errors.push(`${path}.features: 배열이어야 합니다.`);
+  } else {
+    if (!isIsoDateOrNull(listing.confirmedAt)) errors.push(`${path}.confirmedAt: 오늘 이하의 실제 YYYY-MM-DD 또는 null이어야 합니다.`);
+    if (!isIsoDateOrNull(listing.publishedAt)) errors.push(`${path}.publishedAt: 오늘 이하의 실제 YYYY-MM-DD 또는 null이어야 합니다.`);
   }
 
   errors.push(...validateImage(listing.thumbnail, `${path}.thumbnail`));
@@ -405,10 +719,20 @@ export function validateComplexOverview(overview, complexes, externalLinks) {
   if (!Array.isArray(overview?.comparisonRows) || overview.comparisonRows.length === 0) {
     errors.push("complexOverview.comparisonRows: 한 개 이상의 비교 항목이 필요합니다.");
   } else {
+    const allowedComparisonSlugs = Array.isArray(complexes)
+      ? new Set(complexes.map((complex) => complex.slug).filter(isKebabCase))
+      : null;
     overview.comparisonRows.forEach((row, index) => {
       if (!isNonEmptyString(row?.label) || !row?.values || typeof row.values !== "object") {
         errors.push(`complexOverview.comparisonRows[${index}]: 비교 항목과 블록별 값이 필요합니다.`);
         return;
+      }
+      if (allowedComparisonSlugs) {
+        for (const slug of Object.keys(row.values)) {
+          if (!allowedComparisonSlugs.has(slug)) {
+            errors.push(`complexOverview.comparisonRows[${index}].values.${slug}: 등록된 단지 slug만 허용합니다.`);
+          }
+        }
       }
       for (const complex of Array.isArray(complexes) ? complexes.filter((item) => item.status === "published") : []) {
         if (!isNonEmptyString(row.values[complex.slug])) errors.push(`complexOverview.comparisonRows[${index}].values.${complex.slug}: 비교값이 필요합니다.`);
@@ -520,6 +844,41 @@ export function validateFaq(faq) {
   return errors;
 }
 
+export function validateReviews(reviews) {
+  if (!Array.isArray(reviews)) return ["reviews: 배열이어야 합니다."];
+  const errors = [];
+  const ids = new Set();
+  reviews.forEach((review, index) => {
+    const path = `reviews[${index}]`;
+    if (!isKebabCase(review?.id)) errors.push(`${path}.id: 영문 kebab-case가 필요합니다.`);
+    if (ids.has(review?.id)) errors.push(`${path}.id: 중복 ID입니다.`);
+    ids.add(review?.id);
+    if (typeof review?.isPublished !== "boolean") errors.push(`${path}.isPublished: boolean 값이 필요합니다.`);
+    if (review?.isPublished) {
+      for (const key of ["displayName", "content", "source"]) {
+        if (!isNonEmptyString(review?.[key])) errors.push(`${path}.${key}: 공개 후기 필수값입니다.`);
+      }
+      if (!isIsoDateOrNull(review?.confirmedAt) || review.confirmedAt === null) {
+        errors.push(`${path}.confirmedAt: 오늘 이하의 실제 YYYY-MM-DD 확인일이 필요합니다.`);
+      }
+      if (review?.privacyReviewed !== true) errors.push(`${path}.privacyReviewed: 공개 전 개인정보 검수가 필요합니다.`);
+      if (!isIsoDateOrNull(review?.privacyReviewedAt) || review.privacyReviewedAt === null) {
+        errors.push(`${path}.privacyReviewedAt: 오늘 이하의 실제 YYYY-MM-DD 검수일이 필요합니다.`);
+      }
+    } else {
+      if (!isIsoDateOrNull(review?.confirmedAt)) errors.push(`${path}.confirmedAt: 오늘 이하의 실제 YYYY-MM-DD 또는 null이어야 합니다.`);
+      if (!isIsoDateOrNull(review?.privacyReviewedAt)) errors.push(`${path}.privacyReviewedAt: 오늘 이하의 실제 YYYY-MM-DD 또는 null이어야 합니다.`);
+    }
+    if (review?.archivedAt !== undefined && !isIsoDateOrNull(review.archivedAt)) {
+      errors.push(`${path}.archivedAt: 오늘 이하의 실제 YYYY-MM-DD 또는 null이어야 합니다.`);
+    }
+    if (review?.updatedAt !== undefined && !isNonEmptyString(review.updatedAt)) {
+      errors.push(`${path}.updatedAt: 비어 있지 않은 문자열이어야 합니다.`);
+    }
+  });
+  return errors;
+}
+
 export function validateContent({ office, listings, naverListings, complexes, complexOverview, externalLinks, homeContent, faq, reviews }) {
   const errors = validateOffice(office);
   errors.push(...validateListings(listings));
@@ -529,8 +888,13 @@ export function validateContent({ office, listings, naverListings, complexes, co
   errors.push(...validateExternalLinks(externalLinks));
   errors.push(...validateHomeContent(homeContent));
   errors.push(...validateFaq(faq));
-  if (!Array.isArray(reviews)) errors.push("후기는 배열이어야 합니다.");
+  errors.push(...validateReviews(reviews));
 
-  errors.push(...findBannedKeys({ office, listings, naverListings, complexes, complexOverview, externalLinks, homeContent, faq, reviews }));
-  return errors;
+  const content = { office, listings, naverListings, complexes, complexOverview, externalLinks, homeContent, faq, reviews };
+  for (const [resource, value] of Object.entries(content)) {
+    errors.push(...findUnexpectedKeys(resource, value));
+  }
+  errors.push(...findBannedKeys(content));
+  errors.push(...findSensitiveStrings(content, { office }));
+  return [...new Set(errors)];
 }

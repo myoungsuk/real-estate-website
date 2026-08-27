@@ -31,6 +31,10 @@ const hasYoutubeItems = items.some((item) => item.type === "youtube");
 const showYoutubeFilters = youtubeFilters && items.some((item) => item.type === "youtube");
 const youtubeVideoCount = items.filter((item) => item.type === "youtube" && item.youtubeFormat === "video").length;
 const youtubeShortsCount = items.filter((item) => item.type === "youtube" && item.youtubeFormat === "short").length;
+const initiallyFilteredItems = showYoutubeFilters
+  ? items.filter((item) => item.type === "youtube" && item.youtubeFormat === "video")
+  : items;
+const initiallyVisibleIds = new Set(initiallyFilteredItems.slice(0, safePageSize).map((item) => item.id));
 
 function getYoutubeVideoId(item: ExternalContent) {
   if (item.type !== "youtube") return null;
@@ -65,7 +69,7 @@ function getYoutubeVideoId(item: ExternalContent) {
     )}
     <div class="content-card-grid" id={gridId}>
       {items.map((item) => (
-        <article class:list={["content-card", `content-card--${item.type}`]} data-content-item data-content-format={item.type === "youtube" ? item.youtubeFormat : undefined}>
+        <article class:list={["content-card", `content-card--${item.type}`]} data-content-item data-content-format={item.type === "youtube" ? item.youtubeFormat : undefined} hidden={!initiallyVisibleIds.has(item.id)}>
           <div
             class="content-card__media"
             data-youtube-preview-media={hoverPreview && item.type === "youtube" && getYoutubeVideoId(item) ? "true" : undefined}
@@ -100,7 +104,7 @@ function getYoutubeVideoId(item: ExternalContent) {
       <span class="empty-state__number" aria-hidden="true">0</span>
       <div><h3 data-content-filter-empty-heading>선택한 콘텐츠를 준비하고 있습니다.</h3><p>승인된 링크와 썸네일이 등록되면 이곳에 카드로 표시됩니다.</p></div>
     </div>
-    <p class="sr-only" aria-live="polite" data-content-filter-status></p>
+    <p class="sr-only" role="status" aria-live="polite" aria-atomic="true" data-content-filter-status></p>
     {paginate && pageCount > 1 && (
       <nav class="content-pagination" aria-label={`${categoryLabel ?? (items[0].type === "blog" ? "블로그" : "유튜브")} 페이지`} data-content-pagination>
         <button type="button" data-content-prev aria-controls={gridId} aria-label="이전 페이지">‹</button>
@@ -121,6 +125,8 @@ function getYoutubeVideoId(item: ExternalContent) {
 )}
 
 <script>
+  const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
   document.querySelectorAll<HTMLElement>("[data-content-pager]").forEach((pager) => {
     if (pager.dataset.paginationReady === "true") return;
     const items = Array.from(pager.querySelectorAll<HTMLElement>("[data-content-item]"));
@@ -158,9 +164,25 @@ function getYoutubeVideoId(item: ExternalContent) {
       if (filterEmptyHeading) filterEmptyHeading.textContent = activeFilter === "short" ? "공개할 Shorts를 준비하고 있습니다." : activeFilter === "video" ? "공개할 일반 영상을 준비하고 있습니다." : "공개할 유튜브 콘텐츠를 준비하고 있습니다.";
       if (filterStatus) {
         const label = activeFilter === "short" ? "Shorts" : activeFilter === "video" ? "일반 영상" : "전체";
-        filterStatus.textContent = `${label} ${filteredItems.length}건 중 ${Math.min(filteredItems.length, pageSize)}건을 표시합니다.`;
+        const firstVisible = filteredItems.length > 0 ? currentPage * pageSize + 1 : 0;
+        const lastVisible = Math.min(filteredItems.length, firstVisible + pageSize - 1);
+        const visibleCount = lastVisible > 0 ? lastVisible - firstVisible + 1 : 0;
+        const pageLabel = paginationEnabled && pageCount > 0 ? `, ${currentPage + 1}/${pageCount}페이지` : "";
+        filterStatus.textContent = `${label} 총 ${filteredItems.length}건 중 ${firstVisible}~${lastVisible}번째 ${visibleCount}건을 표시합니다${pageLabel}.`;
       }
-      if (moveToGrid) pager.querySelector(".content-card-grid")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      const activePageButton = pageButtons[currentPage];
+      const pageList = activePageButton?.parentElement;
+      if (activePageButton && pageList && !activePageButton.hidden) {
+        const buttonLeft = activePageButton.offsetLeft;
+        const buttonRight = buttonLeft + activePageButton.offsetWidth;
+        if (buttonLeft < pageList.scrollLeft || buttonRight > pageList.scrollLeft + pageList.clientWidth) {
+          pageList.scrollTo({
+            left: Math.max(0, buttonLeft - (pageList.clientWidth - activePageButton.offsetWidth) / 2),
+            behavior: moveToGrid && !prefersReducedMotion ? "smooth" : "auto",
+          });
+        }
+      }
+      if (moveToGrid) pager.querySelector(".content-card-grid")?.scrollIntoView({ behavior: prefersReducedMotion ? "auto" : "smooth", block: "start" });
     };
 
     filterButtons.forEach((button) => button.addEventListener("click", () => {
@@ -176,7 +198,7 @@ function getYoutubeVideoId(item: ExternalContent) {
   });
 
   const canHoverPreview = window.matchMedia("(hover: hover) and (pointer: fine)").matches
-    && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    && !prefersReducedMotion;
 
   if (canHoverPreview) {
     let stopActivePreview: (() => void) | null = null;

@@ -27,6 +27,7 @@ const gridId = "home-naver-listing-grid";
       <NaverListingCard {listing} compact rank={index} hidden={index >= safePageSize} />
     ))}
   </div>
+  <p class="sr-only" role="status" aria-live="polite" aria-atomic="true" data-listing-status></p>
   {pageCount > 1 && (
     <nav class="content-pagination listing-pagination" aria-label="메인 매물 페이지" data-listing-pagination>
       <button type="button" data-listing-prev aria-controls={gridId} aria-label="이전 페이지">‹</button>
@@ -43,6 +44,8 @@ const gridId = "home-naver-listing-grid";
 <script>
   import { compareNaverListingSortData } from "../lib/naver-listing-sort.mjs";
 
+  const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
   document.querySelectorAll<HTMLElement>("[data-listing-pager]").forEach((pager) => {
     if (pager.dataset.paginationReady === "true") return;
     const items = Array.from(pager.querySelectorAll<HTMLElement>("[data-naver-listing-card]"));
@@ -51,13 +54,14 @@ const gridId = "home-naver-listing-grid";
     const previousButton = pager.querySelector<HTMLButtonElement>("[data-listing-prev]");
     const nextButton = pager.querySelector<HTMLButtonElement>("[data-listing-next]");
     const grid = pager.querySelector<HTMLElement>(".listing-grid");
+    const status = pager.querySelector<HTMLElement>("[data-listing-status]");
     const pageSize = Number(pager.dataset.pageSize ?? 6);
     const pageCount = Math.ceil(items.length / pageSize);
     let orderedItems = [...items];
     let currentPage = 0;
 
     const showPage = (requestedPage: number, moveToGrid = false) => {
-      currentPage = Math.min(Math.max(requestedPage, 0), pageCount - 1);
+      currentPage = pageCount > 0 ? Math.min(Math.max(requestedPage, 0), pageCount - 1) : 0;
       orderedItems.forEach((item, index) => {
         item.hidden = Math.floor(index / pageSize) !== currentPage;
       });
@@ -65,9 +69,29 @@ const gridId = "home-naver-listing-grid";
         if (index === currentPage) button.setAttribute("aria-current", "page");
         else button.removeAttribute("aria-current");
       });
-      if (previousButton) previousButton.disabled = currentPage === 0;
-      if (nextButton) nextButton.disabled = currentPage === pageCount - 1;
-      if (moveToGrid) grid?.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (previousButton) previousButton.disabled = pageCount === 0 || currentPage === 0;
+      if (nextButton) nextButton.disabled = pageCount === 0 || currentPage === pageCount - 1;
+      if (status) {
+        const firstVisible = orderedItems.length > 0 ? currentPage * pageSize + 1 : 0;
+        const lastVisible = Math.min(orderedItems.length, firstVisible + pageSize - 1);
+        const visibleCount = lastVisible > 0 ? lastVisible - firstVisible + 1 : 0;
+        const sortLabel = sortButtons.find((button) => button.getAttribute("aria-pressed") === "true")?.textContent?.trim() ?? "현재 정렬";
+        const pageLabel = pageCount > 0 ? `, ${currentPage + 1}/${pageCount}페이지` : "";
+        status.textContent = `매물 총 ${orderedItems.length}건 중 ${firstVisible}~${lastVisible}번째 ${visibleCount}건을 표시합니다${pageLabel}, ${sortLabel}.`;
+      }
+      const activePageButton = pageButtons[currentPage];
+      const pageList = activePageButton?.parentElement;
+      if (activePageButton && pageList) {
+        const buttonLeft = activePageButton.offsetLeft;
+        const buttonRight = buttonLeft + activePageButton.offsetWidth;
+        if (buttonLeft < pageList.scrollLeft || buttonRight > pageList.scrollLeft + pageList.clientWidth) {
+          pageList.scrollTo({
+            left: Math.max(0, buttonLeft - (pageList.clientWidth - activePageButton.offsetWidth) / 2),
+            behavior: moveToGrid && !prefersReducedMotion ? "smooth" : "auto",
+          });
+        }
+      }
+      if (moveToGrid) grid?.scrollIntoView({ behavior: prefersReducedMotion ? "auto" : "smooth", block: "start" });
     };
 
     const applySort = (sortKey: string) => {

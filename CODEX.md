@@ -97,18 +97,20 @@ npm run dev
 npm test
 npm run check
 npm run build
+npm run assert:production-build
 npm run sync:bank:dry-run
 npm run sync:external:dry-run
 ```
 
 - `npm run check`: 공개 콘텐츠 검증 후 Astro·TypeScript 검사
 - `npm run build`: 검사 후 `dist/` 정적 산출물 생성
+- `npm run assert:production-build`: Production 환경변수로 만든 산출물의 robots·canonical·sitemap·JSON-LD·배포 marker 검사
 - `npm run deploy`: 검사·빌드 후 Wrangler로 Cloudflare 배포
 - `npm run sync:bank:dry-run`: 허용된 부동산뱅크 공개 사무소 목록을 조회하고 예상 매물 변경을 파일 수정 없이 검증
 - `npm run sync:external:dry-run`: `YOUTUBE_CHANNEL_ID`로 공식 Naver RSS·YouTube Atom을 조회하고 예상 변경을 파일 수정 없이 검증
 - 실제 검색 공개 빌드: `PUBLIC_SITE_URL`과 `PUBLIC_ALLOW_INDEXING=true`를 함께 설정
 
-`PUBLIC_ALLOW_INDEXING=true`인데 `PUBLIC_SITE_URL`이 없으면 빌드를 실패시킨다. Preview와 로컬 기본값은 `noindex`다.
+`PUBLIC_ALLOW_INDEXING=true`인데 `PUBLIC_SITE_URL`이 없으면 빌드를 실패시킨다. 로컬 기본값은 `noindex`다. 현재 Cloudflare의 Production 이외 브랜치 빌드는 비활성화되어 있어, 별도 Preview URL이 아니라 로컬 화면과 PR CI를 공개 전 승인 근거로 사용한다.
 
 ## 핵심 모듈과 화면 흐름
 
@@ -179,7 +181,7 @@ DB와 TR 흐름은 없다. 관리 API의 콘텐츠 쓰기는 `ADMIN_WRITE_ENABLE
 - 각 공개 페이지에 고유 title, description, canonical을 둔다.
 - 승인된 실제 정보만 구조화 데이터에 넣는다.
 - sitemap과 robots.txt를 제공한다.
-- 필터 쿼리, 초안, 종료 매물, Preview는 색인 대상에서 제외한다.
+- 필터·정렬 쿼리는 사이트맵에서 제외하고 기본 목록 canonical로 통합한다. 초안·종료 매물과 Preview는 색인 대상에서 제외한다.
 - 관리자 화면은 sitemap과 `llms.txt`에서 제외하고 `noindex`, `no-store`를 적용한다.
 - `llms.txt`는 보조 안내 파일이며 검색·AI 인용을 보장한다고 표현하지 않는다.
 - Google Search Console과 네이버 Search Advisor의 소유 확인 파일은 원본 이름과 내용을 유지해 `public/`에 둔다.
@@ -192,15 +194,18 @@ DB와 TR 흐름은 없다. 관리 API의 콘텐츠 쓰기는 `ADMIN_WRITE_ENABLE
 - Static Assets 라우터는 `ctx.access`를 전달하지 않으므로 관리 API가 `Cf-Access-Jwt-Assertion`을 `jose`로 다시 검증한다.
 - Access 정책은 정확한 허용 이메일 2개와 Email OTP를 사용한다.
 - `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD`, `ADMIN_ALLOWED_EMAILS`는 Production 환경에 등록하고 실제 값을 저장소에 넣지 않는다.
-- GitHub Actions CI는 `npm ci`, `npm test`, `npm run build`로 검증만 수행하며 Cloudflare 배포는 실행하지 않는다.
-- `.github/workflows/sync-external-content.yml`은 매시간 17분 `schedule`과 `workflow_dispatch`를 지원하는 별도 워크플로이며 이 파일만 `contents: write`를 사용한다.
+- GitHub Actions CI는 `npm ci`, `npm test`, 기본 `noindex` 빌드와 별도 Production-mode SEO 산출물 검사를 수행하며 Cloudflare 배포는 실행하지 않는다.
+- GitHub 공식 Actions는 검증한 전체 commit SHA로 고정하고 모든 checkout은 `persist-credentials: false`를 사용한다.
+- `.github/workflows/sync-external-content.yml`은 매시간 17분 `schedule`과 `workflow_dispatch`를 지원한다. 네트워크 수집·의존성·테스트는 `contents: read` job에서 수행하고, 검증 artifact를 적용하는 별도 job만 `contents: write`를 사용하며 토큰은 push 단계에만 환경변수로 전달한다.
 - 동기화 워크플로는 허용된 콘텐츠·썸네일 경로 또는 45일 keepalive 상태 파일만 분리 커밋하고, 같은 실행에서 테스트·콘텐츠 검사·빌드를 다시 수행한다.
-- `.github/workflows/sync-bank-listings.yml`은 매일 00:10 KST와 수동 실행을 지원한다. 공개 목록만 조회하고 `.github/bank-listing-sync-state.json`과 `src/data/naver-listings.json`만 변경·커밋하며 같은 실행에서 테스트·콘텐츠 검사·빌드를 다시 수행한다.
+- `.github/workflows/sync-bank-listings.yml`도 매일 00:10 KST와 수동 실행을 지원하며 같은 read-validation/write-publish 권한 분리를 사용한다. 공개 목록만 조회하고 `.github/bank-listing-sync-state.json`과 `src/data/naver-listings.json`만 변경·커밋한다.
 - Cloudflare Workers Builds는 GitHub `myoungsuk/real-estate-website`의 `master`에 연결되어 있으며, `master` 푸시 시 Production을 자동 빌드·배포한다.
 - Production 빌드는 `PUBLIC_SITE_URL=https://leaderscityhappy.com`, `PUBLIC_ALLOW_INDEXING=true`를 사용한다.
-- `master` 푸시 후에는 Cloudflare 새 배포 버전과 운영 URL 반영을 먼저 확인한다. 자동 배포가 진행 중인 동안 중복 수동 배포를 실행하지 않는다.
+- `npm run build`는 공개 `deployment-marker.json`에 Bank·외부 콘텐츠·scheduler 상태의 SHA-256 marker를 생성한다. 동기화 워크플로는 push 후 해당 scope가 운영 URL과 일치할 때까지 최대 약 10분 확인하며 불일치·시간 초과를 실패로 표시한다.
+- `master` 푸시 후에는 deployment marker와 Cloudflare 새 배포 버전, 운영 URL 반영을 확인한다. 자동 배포가 진행 중인 동안 중복 수동 배포를 실행하지 않는다.
 - 자동 배포가 실패하거나 시작되지 않은 사실을 확인한 경우에만 Production 환경변수 빌드와 `npx wrangler deploy --dry-run`을 다시 검증한 뒤 `npx wrangler deploy`로 수동 배포한다.
 - GitHub·Cloudflare 계정 연결 변경, Production/Preview 환경변수 변경, 사용자 도메인 DNS 변경은 외부 운영 작업이다.
+- Workers Static Assets `_redirects`는 domain-level·프로토콜 조건을 지원하지 않으므로 HTTP→HTTPS 강제에 사용하지 않는다. Cloudflare zone의 `Always Use HTTPS`를 활성화하고 HTTP 응답의 301과 query/path 보존을 확인한다.
 - 잘못된 배포는 직전 정상 Cloudflare 배포로 롤백하거나 Git revert 후 재배포한다.
 
 ## 조건부 컴파일·인코딩·리소스
@@ -208,7 +213,7 @@ DB와 TR 흐름은 없다. 관리 API의 콘텐츠 쓰기는 `ADMIN_WRITE_ENABLE
 - C/C++식 조건부 컴파일 매크로는 없다.
 - 공개 빌드 환경 분기는 `PUBLIC_SITE_URL`, `PUBLIC_ALLOW_INDEXING`을 사용한다.
 - 외부 콘텐츠 동기화는 공개 설정 `YOUTUBE_CHANNEL_ID`를 GitHub Actions Repository Variable로 사용한다. API Key나 Secret으로 취급하지 않는다.
-- 관리 API 환경은 `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD`, `ADMIN_ALLOWED_EMAILS`, `ADMIN_WRITE_ENABLED`, `ADMIN_CSRF_SECRET`, `GITHUB_CONTENTS_TOKEN`, `GITHUB_REPOSITORY`, `GITHUB_BRANCH`를 사용한다.
+- 관리 API 환경은 `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD`, `ADMIN_ALLOWED_EMAILS`, `ADMIN_WRITE_ENABLED`, `ADMIN_ALLOWED_ORIGINS`, `ADMIN_CSRF_SECRET`, `GITHUB_CONTENTS_TOKEN`, `GITHUB_REPOSITORY`, `GITHUB_BRANCH`를 사용한다. `ADMIN_ALLOWED_ORIGINS` 미설정 시 운영 원점 `https://leaderscityhappy.com`만 관리자 쓰기를 허용한다.
 - GitHub 토큰은 Fine-grained token으로 저장소 한 개의 Contents Read/Write만 허용하고 Cloudflare Secret에만 둔다.
 - 소스와 콘텐츠는 UTF-8, LF, 2칸 들여쓰기를 따른다.
 - 공개 사진은 권한과 개인정보를 확인하고 EXIF·GPS를 제거한 WebP/AVIF 최적화본을 우선한다.

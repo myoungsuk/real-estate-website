@@ -6,23 +6,31 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: external-content-sync
   cancel-in-progress: false
 
 jobs:
-  sync:
+  validate:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      mode: ${{ steps.changes.outputs.mode }}
+      base_sha: ${{ steps.package.outputs.base_sha }}
+      expected_marker: ${{ steps.package.outputs.expected_marker }}
     steps:
-      - uses: actions/checkout@v7
+      - name: Require master branch
+        run: test "$GITHUB_REF" = "refs/heads/master"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: master
           fetch-depth: 1
+          persist-credentials: false
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
           cache: npm
@@ -36,16 +44,98 @@ jobs:
       - run: npm run check
       - run: npm run build
 
+      - name: Build and assert Production SEO output
+        env:
+          PUBLIC_SITE_URL: https://leaderscityhappy.com
+          PUBLIC_ALLOW_INDEXING: "true"
+        run: |
+          npm run build:site
+          npm run assert:production-build
+
       - name: Validate changed paths
         id: changes
         run: node scripts/check-bank-sync-worktree.mjs
 
-      - name: Commit changed listings
+      - name: Package verified changes
+        id: package
         if: steps.changes.outputs.mode == 'content'
         run: |
+          set -euo pipefail
+          artifact="$RUNNER_TEMP/bank-sync-artifact"
+          mkdir -p "$artifact/.github" "$artifact/src/data"
+          cp .github/bank-listing-sync-state.json "$artifact/.github/bank-listing-sync-state.json"
+          cp src/data/naver-listings.json "$artifact/src/data/naver-listings.json"
+          echo "base_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "expected_marker=$(node scripts/deployment-marker.mjs print bank)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload verified changes
+        if: steps.changes.outputs.mode == 'content'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: bank-sync-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/bank-sync-artifact
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 1
+
+  publish:
+    needs: validate
+    if: needs.validate.outputs.mode == 'content'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: master
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+
+      - name: Require unchanged master base
+        env:
+          EXPECTED_BASE_SHA: ${{ needs.validate.outputs.base_sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_BASE_SHA"
+
+      - name: Download verified changes
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: bank-sync-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/bank-sync-artifact
+
+      - name: Apply and revalidate allowed paths
+        run: |
+          set -euo pipefail
+          cp "$RUNNER_TEMP/bank-sync-artifact/.github/bank-listing-sync-state.json" .github/bank-listing-sync-state.json
+          cp "$RUNNER_TEMP/bank-sync-artifact/src/data/naver-listings.json" src/data/naver-listings.json
+          node scripts/check-bank-sync-worktree.mjs
+
+      - name: Commit verified listings
+        run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -- .github/bank-listing-sync-state.json src/data/naver-listings.json
-          git diff --cached --quiet && exit 0
+          git diff --cached --quiet && { echo "검증 산출물에 커밋할 변경이 없습니다." >&2; exit 1; }
           git commit -m "chore(content): sync Bank listings"
+
+      - name: Push with job-scoped credential
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          auth="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w 0)"
+          echo "::add-mask::$auth"
+          export GIT_CONFIG_COUNT=1
+          export GIT_CONFIG_KEY_0=http.https://github.com/.extraheader
+          export GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth"
           git push origin HEAD:master
+
+      - name: Wait for Production content marker
+        env:
+          EXPECTED_MARKER: ${{ needs.validate.outputs.expected_marker }}
+        run: node scripts/verify-production-deployment.mjs --scope bank --expected "$EXPECTED_MARKER"

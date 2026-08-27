@@ -1,5 +1,5 @@
 import { AccessAuthError, authenticateAccess } from "./access-auth.mjs";
-import { validateAdminResource } from "./admin-resource-validation.mjs";
+import { ADMIN_RESOURCE_PATHS, validateAdminResource } from "./admin-resource-validation.mjs";
 import { AdminWriteError, createCsrfToken, isAdminWriteEnabled, validateAdminWriteRequest } from "./admin-security.mjs";
 import { GithubContentError, readAdminResource, uploadAdminImage, writeAdminResource } from "./github-content.mjs";
 import { createRequestId, errorResponse, jsonResponse } from "./http.mjs";
@@ -11,6 +11,9 @@ const READ_ONLY_PATHS = new Set([
   `${API_VERSION_ROOT}/session`,
   `${API_VERSION_ROOT}/system`,
 ]);
+const MAX_JSON_BODY_BYTES = 3 * 1024 * 1024;
+const auditEncoder = new TextEncoder();
+const jsonDecoder = new TextDecoder();
 
 function maskEmail(email) {
   const [local, domain] = email.split("@");
@@ -26,14 +29,92 @@ function successResponse(data, requestId, status = 200) {
   );
 }
 
+async function getAuditActorId(email, secret) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    auditEncoder.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = new Uint8Array(await crypto.subtle.sign(
+    "HMAC",
+    key,
+    auditEncoder.encode(`admin-audit:${email.toLowerCase()}`),
+  ));
+  let binary = "";
+  for (const byte of signature.subarray(0, 12)) binary += String.fromCharCode(byte);
+  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/u, "");
+}
+
+async function emitAdminAudit(auditLog, actor, env, entry) {
+  try {
+    const actorId = await getAuditActorId(actor.email, env.ADMIN_CSRF_SECRET);
+    auditLog({ event: "admin_write", actorId, ...entry });
+  } catch {
+    // 감사 로그 장애가 저장 결과나 응답에 비밀값을 노출하지 않게 한다.
+  }
+}
+
+function defaultAuditLog(entry) {
+  console.info(JSON.stringify(entry));
+}
+
+async function loadCurrentAdminResources(candidateResource, readResource, env) {
+  if (!Object.hasOwn(ADMIN_RESOURCE_PATHS, candidateResource)) return {};
+  const entries = await Promise.all(
+    Object.keys(ADMIN_RESOURCE_PATHS)
+      .filter((resource) => resource !== candidateResource)
+      .map(async (resource) => {
+        const result = await readResource(resource, env);
+        return [resource, result.data];
+      }),
+  );
+  return Object.fromEntries(entries);
+}
+
+function getOperationErrorCode(error) {
+  return error instanceof AdminWriteError || error instanceof GithubContentError
+    ? error.code
+    : "ADMIN_OPERATION_FAILED";
+}
+
 async function readJsonBody(request) {
   const contentLength = Number(request.headers.get("Content-Length") ?? 0);
-  if (Number.isFinite(contentLength) && contentLength > 3 * 1024 * 1024) {
+  if (Number.isFinite(contentLength) && contentLength > MAX_JSON_BODY_BYTES) {
     throw new AdminWriteError("REQUEST_TOO_LARGE", "요청 데이터가 너무 큽니다.", 413);
   }
+
+  const chunks = [];
+  let totalBytes = 0;
   try {
-    return await request.json();
-  } catch {
+    if (request.body) {
+      const reader = request.body.getReader();
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          totalBytes += value.byteLength;
+          if (totalBytes > MAX_JSON_BODY_BYTES) {
+            try { await reader.cancel(); } catch { /* 본문 제한 오류를 유지한다. */ }
+            throw new AdminWriteError("REQUEST_TOO_LARGE", "요청 데이터가 너무 큽니다.", 413);
+          }
+          chunks.push(value);
+        }
+      } finally {
+        reader.releaseLock();
+      }
+    }
+
+    const bytes = new Uint8Array(totalBytes);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return JSON.parse(jsonDecoder.decode(bytes));
+  } catch (error) {
+    if (error instanceof AdminWriteError) throw error;
     throw new AdminWriteError("JSON_INVALID", "JSON 요청 내용을 읽지 못했습니다.", 400);
   }
 }
@@ -64,6 +145,7 @@ export async function handleAdminApi(request, env, options = {}) {
   const writeResource = options.writeResource ?? writeAdminResource;
   const uploadImage = options.uploadImage ?? uploadAdminImage;
   const fetchLinkPreview = options.fetchLinkPreview ?? fetchExternalLinkPreview;
+  const auditLog = options.auditLog ?? defaultAuditLog;
 
   let actor;
   try {
@@ -159,11 +241,20 @@ export async function handleAdminApi(request, env, options = {}) {
   }
 
   if (contentMatch && request.method === "PUT") {
+    const resource = contentMatch[1];
     try {
       await validateAdminWriteRequest(request, actor, env);
       const body = await readJsonBody(request);
-      const errors = validateAdminResource(contentMatch[1], body.data);
+      const currentResources = await loadCurrentAdminResources(resource, readResource, env);
+      const errors = validateAdminResource(resource, body.data, currentResources);
       if (errors.length > 0) {
+        await emitAdminAudit(auditLog, actor, env, {
+          requestId,
+          operation: "content-write",
+          resource,
+          result: "failure",
+          errorCode: "CONTENT_VALIDATION_FAILED",
+        });
         return errorResponse({
           code: "CONTENT_VALIDATION_FAILED",
           message: "공개 콘텐츠 입력값을 다시 확인해 주세요.",
@@ -172,9 +263,23 @@ export async function handleAdminApi(request, env, options = {}) {
           status: 422,
         });
       }
-      const result = await writeResource(contentMatch[1], body.data, body.sha, env);
+      const result = await writeResource(resource, body.data, body.sha, env);
+      await emitAdminAudit(auditLog, actor, env, {
+        requestId,
+        operation: "content-write",
+        resource,
+        result: "success",
+        commitSha: result.commitSha ?? null,
+      });
       return successResponse(result, requestId);
     } catch (error) {
+      await emitAdminAudit(auditLog, actor, env, {
+        requestId,
+        operation: "content-write",
+        resource,
+        result: "failure",
+        errorCode: getOperationErrorCode(error),
+      });
       return operationErrorResponse(error, requestId);
     }
   }
@@ -184,8 +289,22 @@ export async function handleAdminApi(request, env, options = {}) {
       await validateAdminWriteRequest(request, actor, env);
       const body = await readJsonBody(request);
       const result = await uploadImage(body, env);
+      await emitAdminAudit(auditLog, actor, env, {
+        requestId,
+        operation: "media-upload",
+        resource: "media",
+        result: "success",
+        commitSha: result.commitSha ?? null,
+      });
       return successResponse(result, requestId, 201);
     } catch (error) {
+      await emitAdminAudit(auditLog, actor, env, {
+        requestId,
+        operation: "media-upload",
+        resource: "media",
+        result: "failure",
+        errorCode: getOperationErrorCode(error),
+      });
       return operationErrorResponse(error, requestId);
     }
   }

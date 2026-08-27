@@ -39,9 +39,11 @@ npm run sync:bank:dry-run
 npm run sync:bank
 ```
 
-정기 실행은 `.github/workflows/sync-bank-listings.yml`이 담당한다. 변경이 있을 때만 아래 두 파일을 커밋해 `master`로 푸시하며 Cloudflare Git 연결이 Production을 다시 배포한다.
+정기 실행은 `.github/workflows/sync-bank-listings.yml`이 담당한다. `validate` job은 `contents: read` 권한으로 공개 목록 조회, 동기화, 테스트, 검사, Production-mode 빌드를 수행한다. 변경이 있을 때만 검증된 아래 두 파일을 artifact로 넘기며, 별도 `publish` job만 `contents: write` 권한으로 `master`에 커밋해 Cloudflare Git 연결이 Production을 다시 배포한다.
 
 - `.github/bank-listing-sync-state.json`
 - `src/data/naver-listings.json`
 
-워크플로는 동기화 후 `npm test`, `npm run check`, `npm run build`를 모두 통과해야 커밋한다. 첫 Production 실행에서는 42건 부동산뱅크 기준선, 다른 공급처 매물 보존, 신규·변경·삭제 수, 공개 카드와 네이버 링크를 운영자가 확인한다.
+워크플로는 동기화 후 `npm test`, `npm run check`, 기본 빌드와 Production-mode SEO 빌드 검사를 모두 통과해야 커밋한다. checkout 자격 증명을 저장하지 않고 공식 Action은 검증한 commit SHA로 고정한다. 배포 직전 `master`가 검증 기준 SHA와 다르면 덮어쓰지 않고 실패한다. push 뒤에는 약 10분 동안 `https://leaderscityhappy.com/deployment-marker.json`의 `bank` marker가 예상값과 같은지 확인하며, 배포가 시작되지 않거나 다른 버전이 제공되면 Action을 실패로 표시한다.
+
+첫 Production 실행은 2026-08-27에 완료했으며, 50건 부동산뱅크 기준선과 다른 공급처 매물 보존, 자동 커밋 `2c885955`, 공개 목록 반영을 확인했다. 이후에는 Actions summary의 신규·변경·삭제 수, Production marker 결과, 공개 카드와 네이버 링크를 함께 확인한다.

@@ -5,6 +5,7 @@ import ContactPanel from "../../components/ContactPanel.astro";
 import ExternalContentList from "../../components/ExternalContentList.astro";
 import { getPublishedExternalContentsByIds } from "../../lib/content";
 import { complexOverview, publishedComplexes } from "../../lib/complexes";
+import { getResponsivePublicImageSrcSet } from "../../lib/responsive-images";
 
 const title = "천동 리더스시티 4·5블록 단지정보·비교 | 행복한부동산";
 const description = "천동 리더스시티 4·5블록의 3,463세대 규모, 공급 구성, 전용면적, 생활환경과 계약 전 확인사항을 출처 기준으로 비교합니다.";
@@ -99,7 +100,18 @@ const relatedContents = getPublishedExternalContentsByIds(complexOverview.relate
       <div class="complex-index-grid">
         {publishedComplexes.map((complex) => (
           <a class="complex-index-card" href={`/complexes/${complex.slug}/`}>
-            {complex.image && <img src={complex.image.src} alt={complex.image.alt} width="1200" height="1200" loading="lazy" />}
+            {complex.image && (
+              <img
+                src={complex.image.src}
+                srcset={getResponsivePublicImageSrcSet(complex.image.src)}
+                sizes="(min-width: 1180px) 574px, (min-width: 700px) calc(50vw - 24px), calc(100vw - 32px)"
+                alt={complex.image.alt}
+                width="2000"
+                height="2000"
+                loading="lazy"
+                decoding="async"
+              />
+            )}
             <span>{complex.areaName} · {complex.eyebrow}</span>
             <strong>{complex.mark}</strong>
             <div><h2>{complex.name}</h2><p>{complex.summary}</p><b>단지 페이지 보기 →</b></div>

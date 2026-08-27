@@ -12,6 +12,8 @@
   --rose-dark: #954650;
   --rose-soft: #f1dfe1;
   --gold: #c8a46a;
+  --focus-ring: #075b74;
+  --focus-ring-light: #f5d491;
   --shadow: 0 18px 50px rgba(16, 40, 61, 0.1);
   --radius: 18px;
   --shell: 1180px;
@@ -59,7 +61,9 @@ h3 { font-size: 1.35rem; }
 .skip-link { position: fixed; top: 10px; left: 10px; z-index: 1000; padding: 12px 18px; color: var(--white); background: var(--navy-950); transform: translateY(-160%); }
 .skip-link:focus { transform: translateY(0); }
 
-:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
+:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 3px; }
+.section--navy :focus-visible, .site-footer :focus-visible { outline-color: var(--focus-ring-light); }
+.section--navy .content-card :focus-visible { outline-color: var(--focus-ring); }
 
 .site-header { position: sticky; top: 0; z-index: 100; border-bottom: 1px solid rgba(16, 40, 61, 0.1); background: rgba(255, 254, 250, 0.95); backdrop-filter: blur(12px); }
 .site-header__inner { min-height: 74px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
@@ -70,7 +74,7 @@ h3 { font-size: 1.35rem; }
 .brand__text strong { max-width: min(48vw, 320px); color: var(--navy-950); font-size: 1rem; line-height: 1.22; letter-spacing: -0.04em; word-break: keep-all; }
 .brand__text small { margin-top: 5px; color: var(--muted); font-size: 0.72rem; letter-spacing: -0.01em; }
 .menu-button { min-width: 48px; min-height: 44px; border: 1px solid var(--line); border-radius: 999px; color: var(--navy-950); background: var(--white); font-weight: 750; cursor: pointer; }
-.site-nav { position: absolute; top: 100%; left: 0; right: 0; padding: 18px 16px 24px; border-bottom: 1px solid var(--line); background: var(--paper); box-shadow: var(--shadow); }
+.site-nav { position: absolute; top: 100%; left: 0; right: 0; max-height: calc(100dvh - 74px); padding: 18px 16px max(24px, calc(16px + env(safe-area-inset-bottom))); overflow-y: auto; overscroll-behavior: contain; border-bottom: 1px solid var(--line); background: var(--paper); box-shadow: var(--shadow); }
 .site-nav[hidden] { display: none; }
 .site-nav ul { display: grid; gap: 4px; margin: 0 0 16px; padding: 0; list-style: none; }
 .site-nav li a { display: flex; align-items: center; min-height: 48px; padding: 0 12px; border-radius: 10px; font-weight: 700; }
@@ -477,6 +481,7 @@ h3 { font-size: 1.35rem; }
 .complex-faq-list { border-top: 1px solid var(--line); }
 .complex-faq-list details { border-bottom: 1px solid var(--line); }
 .complex-faq-list summary { min-height: 60px; display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 14px 0; color: var(--navy-950); font-weight: 800; cursor: pointer; }
+.complex-faq-list summary:focus-visible { outline-offset: -4px; }
 .complex-faq-list summary::-webkit-details-marker { display: none; }
 .complex-faq-list summary span { flex: 0 0 auto; font-size: 1.35rem; transition: transform 160ms ease; }
 .complex-faq-list details[open] summary span { transform: rotate(45deg); }
@@ -489,7 +494,7 @@ h3 { font-size: 1.35rem; }
 .content-card { min-height: 0; display: grid; grid-template-rows: auto 1fr; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius); color: var(--ink); background: var(--white); transition: transform 180ms ease, box-shadow 180ms ease; }
 .content-card:hover { transform: translateY(-5px); box-shadow: var(--shadow); }
 .content-filter-bar { display: grid; gap: 10px; margin-bottom: 26px; }
-.content-filter { max-width: 100%; display: flex; justify-content: center; gap: 8px; padding: 2px 2px 7px; overflow-x: auto; scrollbar-width: thin; }
+.content-filter { max-width: 100%; display: flex; justify-content: center; gap: 8px; padding: 6px 6px 7px; overflow-x: auto; scrollbar-width: thin; }
 .content-filter button { flex: 0 0 auto; min-height: 44px; padding: 8px 17px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: var(--white); font: inherit; font-size: 0.84rem; font-weight: 850; cursor: pointer; transition: color 160ms ease, background-color 160ms ease, border-color 160ms ease; }
 .content-filter button span { margin-left: 5px; font-size: 0.76rem; }
 .content-filter button:hover, .content-filter button[aria-pressed="true"] { color: var(--white); border-color: var(--navy-950); background: var(--navy-950); }
@@ -516,8 +521,10 @@ h3 { font-size: 1.35rem; }
 .content-card[hidden] { display: none; }
 .content-card-grid { scroll-margin-top: 100px; }
 .content-pagination { display: flex; flex-wrap: nowrap; justify-content: center; align-items: center; gap: 10px; margin-top: 34px; }
-.content-pagination__pages { min-width: 0; display: flex; flex: 0 1 auto; flex-wrap: nowrap; justify-content: flex-start; gap: 7px; padding: 2px 0 6px; overflow-x: auto; scrollbar-width: thin; }
+.content-pagination[hidden] { display: none !important; }
+.content-pagination__pages { min-width: 0; display: flex; flex: 0 1 auto; flex-wrap: nowrap; justify-content: flex-start; gap: 7px; padding: 6px; overflow-x: auto; scrollbar-width: thin; }
 .content-pagination button { min-width: 44px; min-height: 44px; display: inline-grid; place-items: center; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; color: var(--navy-950); background: var(--white); font: inherit; font-size: 0.84rem; font-weight: 850; cursor: pointer; transition: color 160ms ease, background 160ms ease, border-color 160ms ease; }
+.content-pagination button[hidden] { display: none; }
 .content-pagination__pages button, .content-pagination > button { flex: 0 0 44px; }
 .content-pagination button:hover:not(:disabled), .content-pagination button[aria-current="page"] { color: var(--white); border-color: var(--rose-dark); background: var(--rose-dark); }
 .content-pagination button:disabled { opacity: 0.38; cursor: not-allowed; }
@@ -597,6 +604,7 @@ h3 { font-size: 1.35rem; }
 .faq-list details { overflow: hidden; border: 1px solid var(--line); border-radius: 16px; background: var(--white); transition: border-color 180ms ease, box-shadow 180ms ease; }
 .faq-list details[open] { border-color: rgba(159, 63, 75, 0.42); box-shadow: 0 16px 34px rgba(16, 40, 61, 0.08); }
 .faq-list summary { min-height: 72px; display: grid; grid-template-columns: 40px minmax(0, 1fr) 34px; gap: 13px; align-items: center; padding: 14px 16px; color: var(--navy-950); font-weight: 800; cursor: pointer; list-style: none; }
+.faq-list summary:focus-visible { outline-offset: -4px; }
 .faq-list summary::-webkit-details-marker { display: none; }
 .faq-list summary::marker { content: ""; }
 .faq-item__number { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; color: var(--rose-dark); background: var(--rose-soft); font-family: Georgia, serif; font-size: 0.76rem; letter-spacing: 0.04em; }
@@ -725,11 +733,12 @@ h3 { font-size: 1.35rem; }
 
 @media (min-width: 1024px) {
   .site-header__inner { min-height: 82px; }
+  .site-nav { max-height: calc(100dvh - 82px); }
   .hero { min-height: 720px; display: grid; align-items: center; }
   .site-footer { padding-bottom: 54px; }
   .contact-bar { display: none; }
   .listing-grid { grid-template-columns: repeat(3, 1fr); }
-  .filter-panel { grid-template-columns: repeat(3, minmax(0, 1fr)) auto; }
+  .filter-panel { grid-template-columns: repeat(4, minmax(0, 1fr)) auto; }
   .filter-panel .button { width: auto; }
   .content-card-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .complex-fact-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -742,7 +751,7 @@ h3 { font-size: 1.35rem; }
 @media (min-width: 1280px) {
   .brand__text strong { max-width: 290px; font-size: 0.94rem; }
   .menu-button { display: none; }
-  .site-nav, .site-nav[hidden] { position: static; display: flex; align-items: center; gap: 12px; padding: 0; border: 0; background: transparent; box-shadow: none; }
+  .site-nav, .site-nav[hidden] { position: static; max-height: none; display: flex; align-items: center; gap: 12px; padding: 0; overflow: visible; overscroll-behavior: auto; border: 0; background: transparent; box-shadow: none; }
   .site-nav ul { display: flex; align-items: center; gap: 0; margin: 0; }
   .site-nav li a { min-height: 44px; padding: 0 8px; font-size: 0.84rem; }
   .site-nav li a[aria-current="page"] { background: transparent; }

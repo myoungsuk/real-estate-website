@@ -23,6 +23,7 @@ const registeredAtLabel = listing.registeredAt.replaceAll("-", ".");
   data-naver-listing-card
   data-trade={listing.tradeType}
   data-property-type={listing.propertyType}
+  data-listing-title={listing.title}
   data-rank={rank}
   data-price={getNaverListingPriceValue(listing.priceLabel)}
   data-area={listing.areaLabel ? getNaverListingAreaValue(listing.areaLabel) : undefined}

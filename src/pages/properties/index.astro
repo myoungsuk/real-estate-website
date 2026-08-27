@@ -3,6 +3,7 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
 import PageIntro from "../../components/PageIntro.astro";
 import ContactPanel from "../../components/ContactPanel.astro";
 import NaverListingCard from "../../components/NaverListingCard.astro";
+import { publishedComplexes } from "../../lib/complexes";
 import { naverListings, naverListingsUpdatedAt, naverPropertyTypes } from "../../lib/naver-listings";
 import { office } from "../../lib/site";
 
@@ -35,6 +36,13 @@ const description = "대전 동구에서 직접 확인한 매매·전세·월세
           <select id="propertyType" name="propertyType">
             <option value="">전체</option>
             {naverPropertyTypes.map((propertyType) => <option value={propertyType}>{propertyType}</option>)}
+          </select>
+        </div>
+        <div>
+          <label for="complex">단지</label>
+          <select id="complex" name="complex">
+            <option value="">전체</option>
+            {publishedComplexes.map((complex) => <option value={complex.slug} data-complex-name={complex.name}>{complex.name}</option>)}
           </select>
         </div>
         <div>
@@ -74,19 +82,25 @@ const description = "대전 동구에서 직접 확인한 매매·전세·월세
   if (form && count && empty && grid) {
     const trade = form.elements.namedItem("trade") as HTMLSelectElement;
     const propertyType = form.elements.namedItem("propertyType") as HTMLSelectElement;
+    const complex = form.elements.namedItem("complex") as HTMLSelectElement;
     const sort = form.elements.namedItem("sort") as HTMLSelectElement;
     const params = new URLSearchParams(window.location.search);
     if (["sale", "jeonse", "monthly-rent"].includes(params.get("trade") ?? "")) trade.value = params.get("trade")!;
     const allowedPropertyTypes = [...propertyType.options].map((option) => option.value).filter(Boolean);
     if (allowedPropertyTypes.includes(params.get("type") ?? "")) propertyType.value = params.get("type")!;
+    const allowedComplexes = [...complex.options].map((option) => option.value).filter(Boolean);
+    if (allowedComplexes.includes(params.get("complex") ?? "")) complex.value = params.get("complex")!;
     if (isNaverListingSortKey(params.get("sort") ?? "")) sort.value = params.get("sort")!;
 
     const apply = () => {
       const sortedCards = [...cards].sort((a, b) => compareNaverListingSortData(a.dataset, b.dataset, sort.value));
       grid.append(...sortedCards);
       let visible = 0;
+      const complexName = complex.selectedOptions[0]?.dataset.complexName;
       sortedCards.forEach((card) => {
-        const show = (!trade.value || card.dataset.trade === trade.value) && (!propertyType.value || card.dataset.propertyType === propertyType.value);
+        const show = (!trade.value || card.dataset.trade === trade.value)
+          && (!propertyType.value || card.dataset.propertyType === propertyType.value)
+          && (!complex.value || Boolean(complexName && card.dataset.listingTitle?.startsWith(complexName)));
         card.hidden = !show;
         if (show) visible += 1;
       });
@@ -95,6 +109,7 @@ const description = "대전 동구에서 직접 확인한 매매·전세·월세
       const next = new URLSearchParams();
       if (trade.value) next.set("trade", trade.value);
       if (propertyType.value) next.set("type", propertyType.value);
+      if (complex.value) next.set("complex", complex.value);
       if (sort.value !== "latest") next.set("sort", sort.value);
       history.replaceState(null, "", `${location.pathname}${next.size ? `?${next}` : ""}`);
     };

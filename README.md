@@ -1,6 +1,6 @@
 # 대전 동구 행복한부동산 홈페이지
 
-Astro가 정적 HTML을 만들고 Cloudflare Workers Static Assets로 제공하는 공개 홈페이지입니다. 같은 Worker의 `/api/admin/*`에는 Cloudflare Access로 보호되는 관리 API 기반이 있으며, GitHub 저장 연결은 구현되어 있지만 평상시 콘텐츠 쓰기는 차단합니다. GitHub 변경의 자동 배포는 Cloudflare Git 연결을 완료한 뒤 동작합니다.
+Astro가 정적 HTML을 만들고 Cloudflare Workers Static Assets로 제공하는 공개 홈페이지입니다. 같은 Worker의 `/api/admin/*`에는 Cloudflare Access로 보호되는 관리 API가 있으며, Production은 승인된 관리자만 GitHub `master`에 공개 콘텐츠를 저장할 수 있도록 운영 쓰기가 활성화되어 있습니다. `master` 변경은 Cloudflare Git 연결을 통해 자동 배포됩니다.
 
 ## 시작하기
 
@@ -21,7 +21,7 @@ npm run check
 npm run build
 ```
 
-빌드 결과는 `dist/`에 생성됩니다. `npm run check`는 Astro·TypeScript 검사와 공개 콘텐츠 검증을 함께 실행합니다.
+빌드 결과는 `dist/`에 생성됩니다. `npm run check`는 Astro·TypeScript 검사와 공개 콘텐츠 검증을 함께 실행합니다. 빌드는 자동 동기화 결과의 Production 반영 여부를 확인하기 위한 `dist/deployment-marker.json`도 생성합니다. CI는 기본 `noindex` 빌드와 별도로 실제 Production 환경변수 빌드를 만들고 robots·canonical·sitemap·JSON-LD를 검사합니다.
 
 공식 네이버 블로그 RSS와 YouTube Atom의 신규 항목은 매시간 17분 예약 실행과 필요 시 수동 실행이 가능한 별도 워크플로로 동기화합니다. YouTube는 Atom alternate URL을 기준으로 일반 영상과 Shorts를 구분하며, 로컬 dry-run은 공개 YouTube channelId를 설정한 뒤 실행하고 파일을 바꾸지 않습니다.
 
@@ -32,7 +32,7 @@ $env:YOUTUBE_CHANNEL_ID = "UCuOZDnM5vxOZELDgu-y-hNg"
 npm run sync:external:dry-run
 ```
 
-GitHub Actions의 `Sync external content`는 Repository Variable `YOUTUBE_CHANNEL_ID`를 사용해 매시간 17분에 실행되며, `master`에서 `workflow_dispatch` 수동 실행도 지원합니다. 자세한 운영·장애 확인 절차는 `docs/operations/CONTENT_GUIDE.md`를 확인합니다.
+GitHub Actions의 `Sync external content`는 Repository Variable `YOUTUBE_CHANNEL_ID`를 사용해 매시간 17분에 실행되며, `master`에서 `workflow_dispatch` 수동 실행도 지원합니다. 수집·의존성 실행·검사는 읽기 권한 job에서 수행하고, 검증 산출물을 적용하는 별도 job만 push 단계에서 쓰기 권한을 사용합니다. push 후 공개 deployment marker가 일치할 때까지 확인하며 시간 안에 반영되지 않으면 Action을 실패로 표시합니다. 자세한 운영·장애 확인 절차는 `docs/operations/CONTENT_GUIDE.md`를 확인합니다.
 
 부동산뱅크 공개 사무소 매물은 2026-08-26 1:1 문의로 허용된 본인 매물·하루 1회 범위에서 매일 00:10 KST 자동 동기화합니다. 부동산뱅크 목록의 신규·변경 매물은 반영하고, 직전 부동산뱅크 기준선에서 사라진 매물은 삭제하지만 다른 공급처에서 등록한 네이버 매물은 유지합니다. 네이버 페이지나 로그인 영역은 조회하지 않습니다.
 
@@ -79,7 +79,7 @@ Google·네이버 소유 확인 파일은 제공받은 파일명과 내용을 �
 npm run deploy
 ```
 
-GitHub 자동 배포 연결과 Production 설정은 `docs/operations/CLOUDFLARE_DEPLOY.md`에 정리되어 있습니다.
+GitHub 자동 배포 연결과 Production 설정은 `docs/operations/CLOUDFLARE_DEPLOY.md`에 정리되어 있습니다. 현재 Production 이외 브랜치 빌드는 비활성화되어 있으므로 공개 전 승인은 로컬 화면과 PR CI 결과로 수행하고, Production 반영 뒤 공개 화면을 다시 확인합니다.
 
 ## 관리자 콘텐츠 관리
 
@@ -92,7 +92,7 @@ GitHub 자동 배포 연결과 Production 설정은 `docs/operations/CLOUDFLARE_
 - `/admin/external-links/`에서 블로그·유튜브 링크, 요약, 공개 상태와 썸네일을 관리합니다. 링크 썸네일을 못 불러오면 직접 사진을 올릴 수 있습니다.
 - `/admin/complexes/`에서 대전 동구 지역·단지 설명과 출처·확인일을 관리합니다.
 - 저장 기능은 `ADMIN_WRITE_ENABLED=true`, 32자 이상의 `ADMIN_CSRF_SECRET`, 저장소 한 개로 제한된 `GITHUB_CONTENTS_TOKEN`, `GITHUB_REPOSITORY`, `GITHUB_BRANCH`가 모두 있어야 활성화됩니다.
-- Worker는 Origin·JSON Content-Type·만료되는 CSRF 토큰·콘텐츠 스키마·최신 GitHub SHA를 검증합니다.
+- Worker는 `ADMIN_ALLOWED_ORIGINS`의 정확한 HTTPS origin, 요청 URL origin, JSON Content-Type·만료되는 CSRF 토큰·콘텐츠 스키마·최신 GitHub SHA를 검증합니다. 미설정 기본값은 `https://leaderscityhappy.com`이며, 추가 origin은 쉼표로 구분하되 wildcard·경로·쿼리·userinfo·HTTP는 허용하지 않습니다.
 - 이미지 파일은 브라우저에서 WebP·최대 1600px로 변환해 EXIF를 제거하고 `public/images/content/`의 허용 경로에만 저장합니다.
 
 로컬 Worker 변수 예시는 `.dev.vars.example`을 참고합니다. 실제 이메일, Audience와 Access 팀 정보는 `.dev.vars` 또는 Cloudflare Secret에만 입력하고 커밋하지 않습니다.

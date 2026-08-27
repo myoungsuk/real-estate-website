@@ -450,12 +450,25 @@ test("git status porcelain 경로를 안전하게 해석하고 rename은 거부�
   assert.throws(() => parseGitStatusPorcelain("R  old-path\0new-path\0"), /rename/u);
 });
 
-test("thumbnail:null UI fallback과 테스트 선행·예약 워크플로를 고정한다", () => {
+test("thumbnail:null UI fallback과 읽기 검증·쓰기 배포 분리·예약 워크플로를 고정한다", () => {
   assert.match(externalContentComponent, /item\.thumbnail \?/u);
   assert.match(externalContentComponent, /item\.type === "blog" \? "N" : "▶"/u);
   const testStep = syncWorkflow.indexOf("- run: npm test");
   const validateStep = syncWorkflow.indexOf("- name: Validate changed paths");
-  const commitStep = syncWorkflow.indexOf("- name: Commit changed content");
-  assert.ok(testStep > 0 && testStep < validateStep && validateStep < commitStep);
+  const packageStep = syncWorkflow.indexOf("- name: Package verified changes");
+  const publishJob = syncWorkflow.indexOf("\n  publish:");
+  const commitStep = syncWorkflow.indexOf("- name: Commit verified changes");
+  const pushStep = syncWorkflow.indexOf("- name: Push with job-scoped credential");
+  assert.ok(
+    testStep > 0 &&
+      testStep < validateStep &&
+      validateStep < packageStep &&
+      packageStep < publishJob &&
+      publishJob < commitStep &&
+      commitStep < pushStep,
+  );
+  assert.match(syncWorkflow, /permissions:\s*\n\s*contents: read/u);
+  assert.match(syncWorkflow, /publish:[\s\S]*?permissions:\s*\n\s*contents: write/u);
+  assert.equal((syncWorkflow.match(/persist-credentials: false/gu) ?? []).length, 2);
   assert.match(syncWorkflow, /schedule:\s*\n\s*- cron: "17 \* \* \* \*"/u);
 });
