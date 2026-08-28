@@ -42,7 +42,7 @@ const structuredData = faq.length > 0 ? {
 } : undefined;
 ---
 
-<BaseLayout {title} {description} {structuredData}>
+<BaseLayout {title} {description} {structuredData} breadcrumbItems={[{ name: "홈", path: "/" }, { name: "FAQ 및 상담", path: "/faq/" }]}>
   <PageIntro eyebrow="FAQ & CONSULTATION" title="FAQ 및 상담" description="자주 묻는 질문을 먼저 확인하고, 더 궁금한 내용은 사이트에 남기지 않고 문자로 바로 상담해 주세요." />
   <section class="section" aria-labelledby="faq-heading">
     <div class="shell narrow-shell">

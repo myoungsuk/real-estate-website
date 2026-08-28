@@ -8,7 +8,7 @@ const title = "대전 동구 지역 콘텐츠 | 행복한부동산";
 const description = "행복한부동산이 운영하는 네이버 블로그와 유튜브의 대전 동구 지역 콘텐츠를 안내합니다.";
 ---
 
-<BaseLayout {title} {description}>
+<BaseLayout {title} {description} breadcrumbItems={[{ name: "홈", path: "/" }, { name: "지역 콘텐츠", path: "/contents/" }]}>
   <PageIntro eyebrow="LOCAL CONTENT" title="블로그와 유튜브를 따로 확인하세요" description="읽을 지역 소식은 블로그에서, 현장 영상은 유튜브에서 구분해 볼 수 있습니다." />
   <section class="section" aria-labelledby="content-category-heading">
     <div class="shell">

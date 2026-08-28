@@ -11,7 +11,7 @@ const title = "대전 동구 매매·전세·월세 매물 | 행복한부동산"
 const description = "대전 동구에서 직접 확인한 매매·전세·월세 매물을 지역과 조건별로 비교합니다.";
 ---
 
-<BaseLayout {title} {description}>
+<BaseLayout {title} {description} breadcrumbItems={[{ name: "홈", path: "/" }, { name: "매물", path: "/properties/" }]}>
   <PageIntro eyebrow="PROPERTY" title="네이버 등록 매물" description="네이버페이 부동산에 공개된 개별 매물을 우리 사이트에서도 한눈에 확인할 수 있습니다." />
   <section class="section properties-section">
     <div class="shell">

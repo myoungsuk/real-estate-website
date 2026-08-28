@@ -21,7 +21,7 @@ npm run check
 npm run build
 ```
 
-빌드 결과는 `dist/`에 생성됩니다. `npm run check`는 Astro·TypeScript 검사와 공개 콘텐츠 검증을 함께 실행합니다. 빌드는 자동 동기화 결과의 Production 반영 여부를 확인하기 위한 `dist/deployment-marker.json`도 생성합니다. CI는 기본 `noindex` 빌드와 별도로 실제 Production 환경변수 빌드를 만들고 robots·canonical·sitemap·JSON-LD를 검사합니다.
+빌드 결과는 `dist/`에 생성됩니다. `npm run check`는 Astro·TypeScript 검사와 공개 콘텐츠 검증을 함께 실행합니다. 빌드는 검색 대상·자동 동기화 결과의 Production 반영 여부를 확인하기 위한 `dist/deployment-marker.json`도 생성합니다. CI는 기본 `noindex` 빌드와 별도로 실제 Production 환경변수 빌드를 만들고 robots·canonical·sitemap·JSON-LD·IndexNow 공개키를 검사합니다.
 
 공식 네이버 블로그 RSS와 YouTube Atom의 신규 항목은 매시간 17분 예약 실행과 필요 시 수동 실행이 가능한 별도 워크플로로 동기화합니다. YouTube는 Atom alternate URL을 기준으로 일반 영상과 Shorts를 구분하며, 로컬 dry-run은 공개 YouTube channelId를 설정한 뒤 실행하고 파일을 바꾸지 않습니다.
 
@@ -72,6 +72,8 @@ PUBLIC_ALLOW_INDEXING=true
 ```
 
 Google·네이버 소유 확인 파일은 제공받은 파일명과 내용을 바꾸지 않고 `public/` 루트에 추가합니다. 자세한 절차는 `docs/operations/SEARCH_REGISTRATION.md`를 확인합니다.
+
+홈을 제외한 공개 HTML에는 경로 계층을 나타내는 `BreadcrumbList` JSON-LD를 제공합니다. `master`의 CI가 성공하면 `.github/workflows/notify-indexnow.yml`이 변경 파일과 Production sitemap을 기준으로 관련 URL만 고르고, Cloudflare의 `search` 배포 marker와 공개 검증키가 확인된 뒤 네이버 IndexNow에 알립니다. 공개키는 인증 비밀값이 아니며 저장소에 포함합니다. IndexNow는 sitemap·수집 요청을 대체하거나 실제 색인을 보장하지 않습니다.
 
 ## Cloudflare 배포
 

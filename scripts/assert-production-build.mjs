@@ -1,6 +1,7 @@
 import { readFile, readdir } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { INDEXNOW_KEY } from "./indexnow.mjs";
 
 const PRODUCTION_ORIGIN = "https://leaderscityhappy.com";
 
@@ -38,12 +39,13 @@ export function isSearchVerificationFile(path, html) {
 
 export async function assertProductionBuild({ distDir = "dist" } = {}) {
   const absoluteDist = resolve(distDir);
-  const [robots, sitemapIndex, sitemap, markerRaw, headers] = await Promise.all([
+  const [robots, sitemapIndex, sitemap, markerRaw, headers, indexNowKey] = await Promise.all([
     readFile(join(absoluteDist, "robots.txt"), "utf8"),
     readFile(join(absoluteDist, "sitemap-index.xml"), "utf8"),
     readFile(join(absoluteDist, "sitemap-0.xml"), "utf8"),
     readFile(join(absoluteDist, "deployment-marker.json"), "utf8"),
     readFile(join(absoluteDist, "_headers"), "utf8"),
+    readFile(join(absoluteDist, `${INDEXNOW_KEY}.txt`), "utf8"),
   ]);
 
   assert(robots.includes("Allow: /"), "robots.txt: Production 공개 허용 규칙이 없습니다.");
@@ -54,10 +56,11 @@ export async function assertProductionBuild({ distDir = "dist" } = {}) {
   assert(sitemapIndex.includes(`${PRODUCTION_ORIGIN}/sitemap-0.xml`), "sitemap index가 Production origin을 사용하지 않습니다.");
   assert(!sitemap.includes("/admin/"), "sitemap에 관리자 URL이 포함되었습니다.");
   assert(!sitemap.includes("http://leaderscityhappy.com"), "sitemap에 HTTP URL이 포함되었습니다.");
+  assert(indexNowKey.trim() === INDEXNOW_KEY, "Production IndexNow 공개 키 파일이 올바르지 않습니다.");
 
   const marker = JSON.parse(markerRaw);
   assert(marker.schemaVersion === 1 && marker.algorithm === "sha256", "deployment marker 형식이 올바르지 않습니다.");
-  for (const scope of ["bank", "external", "automation"]) {
+  for (const scope of ["search", "bank", "external", "automation"]) {
     assert(/^[a-f0-9]{64}$/u.test(marker.scopes?.[scope] ?? ""), `deployment marker의 ${scope} hash가 올바르지 않습니다.`);
   }
   assert(
@@ -83,6 +86,7 @@ export async function assertProductionBuild({ distDir = "dist" } = {}) {
     if (path === "404.html") continue;
     assert(html.includes('name="robots" content="index,follow"'), `${path}: Production index,follow가 없습니다.`);
     assert(html.includes(`rel="canonical" href="${PRODUCTION_ORIGIN}/`), `${path}: Production canonical이 없거나 origin이 다릅니다.`);
+    if (path !== "index.html") assert(html.includes('"@type":"BreadcrumbList"'), `${path}: BreadcrumbList JSON-LD가 없습니다.`);
   }
   assert(structuredDataCount > 0, "Production 공개 HTML에 JSON-LD가 없습니다.");
   return { htmlCount: htmlFiles.length, structuredDataCount };

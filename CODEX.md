@@ -104,7 +104,7 @@ npm run sync:external:dry-run
 
 - `npm run check`: 공개 콘텐츠 검증 후 Astro·TypeScript 검사
 - `npm run build`: 검사 후 `dist/` 정적 산출물 생성
-- `npm run assert:production-build`: Production 환경변수로 만든 산출물의 robots·canonical·sitemap·JSON-LD·배포 marker 검사
+- `npm run assert:production-build`: Production 환경변수로 만든 산출물의 robots·canonical·sitemap·JSON-LD·IndexNow 공개키·배포 marker 검사
 - `npm run deploy`: 검사·빌드 후 Wrangler로 Cloudflare 배포
 - `npm run sync:bank:dry-run`: 허용된 부동산뱅크 공개 사무소 목록을 조회하고 예상 매물 변경을 파일 수정 없이 검증
 - `npm run sync:external:dry-run`: `YOUTUBE_CHANNEL_ID`로 공식 Naver RSS·YouTube Atom을 조회하고 예상 변경을 파일 수정 없이 검증
@@ -123,8 +123,9 @@ npm run sync:external:dry-run
 - `src/data/complexes.json` → 대전 동구 주요 단지의 사진·기본 사실·면적별 세대 구성·공급 구성·생활환경·시설 확인 상태·FAQ·관련 콘텐츠·복수 출처와 목록·상세 정적 생성
 - 공식 Naver RSS·YouTube Atom → `scripts/sync-external-content.mjs` → `src/data/external-links.json` 신규 `published` 항목과 자체 WebP 썸네일. YouTube alternate URL의 `/shorts/`는 `youtubeFormat: short`, 그 밖의 개별 영상은 `video`로 분류하며 기존 항목은 append-only로 보존. 한 출처의 일시 장애는 3회 이내 재시도 후 경고와 함께 건너뛰고 정상 출처만 반영하며, 두 출처 모두 장애이거나 출처·채널·XML·ID 신뢰 검증이 실패하면 전체 실행을 중단
 - `src/data/external-links.json` → 자동화 전 공식 블로그 128건·일반 영상 40건과 2026-08-26 확인한 공식 Shorts 32건을 기준으로 누적되는 원문 링크·자체 썸네일·최신순 카드
-- `src/layouts/BaseLayout.astro` → 페이지별 title, description, canonical, robots, JSON-LD
+- `src/layouts/BaseLayout.astro` → 페이지별 title, description, canonical, robots, JSON-LD와 공개 하위 페이지 `BreadcrumbList`
 - `src/pages/robots.txt.ts`, `llms.txt.ts`, sitemap integration → 검색 로봇 안내
+- `scripts/indexnow.mjs`, `.github/workflows/notify-indexnow.yml` → 성공한 `master` CI의 변경 URL 계획 → Production `search` marker·공개키 확인 → 네이버 IndexNow 알림
 - `/admin/` → 관리자 대시보드와 관리 API 연결 상태
 - `/admin/listings/`, `/admin/listings/editor/` → 네이버 공개 매물 현황·검색·유형 필터, 부동산뱅크 EUC-KR HTML-table `.xls` 브라우저 가져오기, 그 밖의 네이버 매물 직접 등록·수정·등록 종료. 원본 XLS는 서버로 보내지 않고 정제된 `naver-listings.json`만 기존 관리자 API로 저장한다.
 - `/blog/`, `/youtube/` → 지역 콘텐츠를 원문 종류별로 분리하고, 유튜브는 일반 영상을 기본으로 `일반 영상·Shorts 보기`를 전환하며 독립 페이지에서 6개 단위로 탐색
@@ -186,6 +187,8 @@ DB와 TR 흐름은 없다. 관리 API의 콘텐츠 쓰기는 `ADMIN_WRITE_ENABLE
 - `llms.txt`는 보조 안내 파일이며 검색·AI 인용을 보장한다고 표현하지 않는다.
 - Google Search Console과 네이버 Search Advisor의 소유 확인 파일은 원본 이름과 내용을 유지해 `public/`에 둔다.
 - 실제 검색 등록과 색인 요청은 배포·도메인·운영자 공개 검수 후 수행한다.
+- 홈을 제외한 공개 HTML은 실제 화면 계층과 같은 절대 URL의 `BreadcrumbList`를 제공한다.
+- 성공한 `master` push의 공개 페이지 변경은 Production `search` marker 확인 뒤 네이버 IndexNow에 알린다. 공개키는 비밀정보가 아니며, sitemap·수집 요청을 대체하거나 색인을 보장한다고 표현하지 않는다.
 
 ## Cloudflare 배포
 
@@ -201,7 +204,7 @@ DB와 TR 흐름은 없다. 관리 API의 콘텐츠 쓰기는 `ADMIN_WRITE_ENABLE
 - `.github/workflows/sync-bank-listings.yml`도 매일 00:10 KST와 수동 실행을 지원하며 같은 read-validation/write-publish 권한 분리를 사용한다. 공개 목록만 조회하고 `.github/bank-listing-sync-state.json`과 `src/data/naver-listings.json`만 변경·커밋한다.
 - Cloudflare Workers Builds는 GitHub `myoungsuk/real-estate-website`의 `master`에 연결되어 있으며, `master` 푸시 시 Production을 자동 빌드·배포한다.
 - Production 빌드는 `PUBLIC_SITE_URL=https://leaderscityhappy.com`, `PUBLIC_ALLOW_INDEXING=true`를 사용한다.
-- `npm run build`는 공개 `deployment-marker.json`에 Bank·외부 콘텐츠·scheduler 상태의 SHA-256 marker를 생성한다. 동기화 워크플로는 push 후 해당 scope가 운영 URL과 일치할 때까지 최대 약 10분 확인하며 불일치·시간 초과를 실패로 표시한다.
+- `npm run build`는 공개 `deployment-marker.json`에 검색 대상·Bank·외부 콘텐츠·scheduler 상태의 SHA-256 marker를 생성한다. 동기화와 IndexNow 워크플로는 push 후 해당 scope가 운영 URL과 일치할 때까지 확인하며 불일치·시간 초과를 실패로 표시한다.
 - `master` 푸시 후에는 deployment marker와 Cloudflare 새 배포 버전, 운영 URL 반영을 확인한다. 자동 배포가 진행 중인 동안 중복 수동 배포를 실행하지 않는다.
 - 자동 배포가 실패하거나 시작되지 않은 사실을 확인한 경우에만 Production 환경변수 빌드와 `npx wrangler deploy --dry-run`을 다시 검증한 뒤 `npx wrangler deploy`로 수동 배포한다.
 - GitHub·Cloudflare 계정 연결 변경, Production/Preview 환경변수 변경, 사용자 도메인 DNS 변경은 외부 운영 작업이다.

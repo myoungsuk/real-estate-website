@@ -10,7 +10,7 @@ const title = "대전 동구 유튜브 | 리더스시티행복한공인중개사
 const description = "유튜브에 공개한 대전 동구와 리더스시티 현장 영상을 모아 안내합니다.";
 ---
 
-<BaseLayout {title} {description}>
+<BaseLayout {title} {description} breadcrumbItems={[{ name: "홈", path: "/" }, { name: "유튜브", path: "/youtube/" }]}>
   <PageIntro eyebrow="대전동구유튜브---천동리더스시티행복한부동산tv" title="대전 동구 유튜브" description="대전 동구와 리더스시티의 현장 모습을 영상으로 편하게 확인해 보세요." />
   <section class="section" aria-labelledby="youtube-content-heading">
     <div class="shell">

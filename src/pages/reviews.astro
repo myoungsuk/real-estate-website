@@ -8,7 +8,7 @@ const title = "상담 후기 | 대전 동구 행복한부동산";
 const description = "실제 거래·상담과 공개 동의가 확인된 후기만 소개합니다.";
 ---
 
-<BaseLayout {title} {description}>
+<BaseLayout {title} {description} breadcrumbItems={[{ name: "홈", path: "/" }, { name: "상담 후기", path: "/reviews/" }]}>
   <PageIntro eyebrow="REVIEWS" title="상담 후기" description="후기는 실제 여부와 공개 동의가 확인된 내용만 소개합니다." />
   <section class="section"><div class="shell narrow-shell">{reviews.length > 0 ? <div class="review-grid"></div> : <div class="empty-state"><span class="empty-state__number" aria-hidden="true">0</span><div><h2>현재 공개된 후기가 없습니다</h2><p>가짜 별점이나 임의 후기를 만들지 않습니다. 공개 동의가 확인된 실제 후기가 준비되면 등록합니다.</p></div></div>}</div></section>
   <ContactPanel />

@@ -15,8 +15,10 @@ async function createFixture() {
   const files = {
     ".github/bank-listing-sync-state.json": "{\"bank\":1}\n",
     ".github/automation-health.json": "{\"health\":1}\n",
+    "astro.config.mjs": "export default {};\n",
     "src/data/naver-listings.json": "{\"items\":[]}\n",
     "src/data/external-links.json": "[]\n",
+    "public/4e63ed9293cf0b859764be32c769f7b26336ebb71489cd6d9ff3f58a811e27a3.txt": "4e63ed9293cf0b859764be32c769f7b26336ebb71489cd6d9ff3f58a811e27a3\n",
     "public/images/blog/a.webp": "blog",
     "public/images/youtube/b.webp": "youtube",
   };
@@ -38,6 +40,7 @@ test("deployment marker scope hashes are deterministic and isolated", async (con
   await writeFile(join(rootDir, "src/data/naver-listings.json"), "{\"items\":[1]}\n");
   const changed = await createDeploymentMarker({ rootDir });
   assert.notEqual(changed.scopes.bank, first.scopes.bank);
+  assert.notEqual(changed.scopes.search, first.scopes.search);
   assert.equal(changed.scopes.external, first.scopes.external);
   assert.equal(changed.scopes.automation, first.scopes.automation);
 });
@@ -47,7 +50,7 @@ test("deployment marker writes all public verification scopes", async (context) 
   context.after(() => rm(rootDir, { recursive: true, force: true }));
   const marker = await writeDeploymentMarker({ rootDir });
   assert.equal(marker.schemaVersion, 1);
-  for (const scope of ["bank", "external", "automation"]) {
+  for (const scope of ["search", "bank", "external", "automation"]) {
     assert.match(marker.scopes[scope], /^[a-f0-9]{64}$/u);
     assert.equal(marker.scopes[scope], await calculateDeploymentScopeHash(scope, { rootDir }));
   }

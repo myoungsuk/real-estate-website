@@ -29,7 +29,15 @@ const verificationLabels = {
 };
 ---
 
-<BaseLayout {title} {description}>
+<BaseLayout
+  {title}
+  {description}
+  breadcrumbItems={[
+    { name: "홈", path: "/" },
+    { name: "단지 정보", path: "/complexes/" },
+    { name: complex.name, path: `/complexes/${complex.slug}/` },
+  ]}
+>
   <PageIntro eyebrow={`${complex.areaName} · ${complex.eyebrow} ${complex.mark}`} title={complex.name} description={complex.summary} />
 
   <section class="section">

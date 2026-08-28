@@ -1,0 +1,66 @@
+name: Notify IndexNow
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: notify-indexnow-master
+  cancel-in-progress: false
+
+jobs:
+  notify:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Build Production sitemap and deployment marker
+        env:
+          PUBLIC_SITE_URL: https://leaderscityhappy.com
+          PUBLIC_ALLOW_INDEXING: "true"
+        run: npm run build:site
+      - name: Plan changed public URLs
+        id: plan
+        shell: bash
+        run: |
+          git diff --name-only --diff-filter=ACDMRT HEAD^ HEAD > "${RUNNER_TEMP}/indexnow-changed-files.txt"
+          node scripts/indexnow.mjs plan \
+            --changed-files "${RUNNER_TEMP}/indexnow-changed-files.txt" \
+            --sitemap dist/sitemap-0.xml \
+            --output "${RUNNER_TEMP}/indexnow-urls.txt"
+          url_count="$(awk 'NF { count += 1 } END { print count + 0 }' "${RUNNER_TEMP}/indexnow-urls.txt")"
+          echo "url_count=${url_count}" >> "${GITHUB_OUTPUT}"
+      - name: Calculate expected search marker
+        if: steps.plan.outputs.url_count != '0'
+        id: marker
+        shell: bash
+        run: echo "expected=$(node scripts/deployment-marker.mjs print search)" >> "${GITHUB_OUTPUT}"
+      - name: Wait for Production search marker
+        if: steps.plan.outputs.url_count != '0'
+        run: >-
+          node scripts/verify-production-deployment.mjs
+          --scope search
+          --expected "${{ steps.marker.outputs.expected }}"
+      - name: Verify published IndexNow key
+        if: steps.plan.outputs.url_count != '0'
+        run: node scripts/indexnow.mjs verify-key
+      - name: Notify Naver IndexNow
+        if: steps.plan.outputs.url_count != '0'
+        run: node scripts/indexnow.mjs submit --urls-file "${RUNNER_TEMP}/indexnow-urls.txt"

@@ -7,7 +7,7 @@ const title = "리더스시티 행복한부동산 사무소 소개 | 대전 동�
 const description = "리더스시티5블록 단지 내에 위치한 리더스시티행복한공인중개사사무소입니다. 백진옥 대표가 천동·신흥동을 포함한 대전 동구의 매매·전세·월세 정보를 확인하고 직접 상담합니다.";
 ---
 
-<BaseLayout {title} {description}>
+<BaseLayout {title} {description} breadcrumbItems={[{ name: "홈", path: "/" }, { name: "사무소 소개", path: "/office/" }]}>
   <section class="office-hero" aria-labelledby="office-hero-heading">
     <div class="shell office-hero__grid">
       <div class="office-hero__copy">

@@ -2,13 +2,14 @@
 import SiteHeader from "../components/SiteHeader.astro";
 import SiteFooter from "../components/SiteFooter.astro";
 import MobileContactBar from "../components/MobileContactBar.astro";
-import { serializeJsonLd } from "../lib/json-ld.mjs";
+import { createBreadcrumbList, serializeJsonLd } from "../lib/json-ld.mjs";
 import "../styles/global.css";
 
 interface Props {
   title: string;
   description: string;
   structuredData?: Record<string, unknown> | Record<string, unknown>[];
+  breadcrumbItems?: { name: string; path: string }[];
   shareImage?: string;
   shareImageAlt?: string;
   shareImageWidth?: number;
@@ -20,6 +21,7 @@ const {
   title,
   description,
   structuredData,
+  breadcrumbItems,
   shareImage: shareImagePath = "/images/brand/leaders-city-happy-logo.png",
   shareImageAlt = "리더스시티 행복한부동산 공인중개사사무소 로고",
   shareImageWidth = 1402,
@@ -29,7 +31,19 @@ const {
 const canonical = Astro.site && !noindex ? new URL(Astro.url.pathname, Astro.site) : undefined;
 const shareImage = Astro.site ? new URL(shareImagePath, Astro.site) : undefined;
 const allowIndexing = import.meta.env.PUBLIC_ALLOW_INDEXING === "true";
-const serializedStructuredData = structuredData ? serializeJsonLd(structuredData) : null;
+const breadcrumbStructuredData = breadcrumbItems
+  ? createBreadcrumbList(breadcrumbItems.map((item) => ({
+      name: item.name,
+      url: new URL(item.path, Astro.site ?? Astro.url.origin).toString(),
+    })))
+  : null;
+const structuredDataItems = [
+  ...(Array.isArray(structuredData) ? structuredData : structuredData ? [structuredData] : []),
+  ...(breadcrumbStructuredData ? [breadcrumbStructuredData] : []),
+];
+const serializedStructuredData = structuredDataItems.length > 0
+  ? serializeJsonLd(structuredDataItems.length === 1 ? structuredDataItems[0] : structuredDataItems)
+  : null;
 ---
 
 <!doctype html>

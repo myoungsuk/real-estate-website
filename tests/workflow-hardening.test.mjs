@@ -53,3 +53,20 @@ for (const name of ["sync-bank-listings.yml", "sync-external-content.yml"]) {
     assert.ok(pushIndex > 0 && pushIndex < markerIndex);
   });
 }
+
+test("IndexNow 알림은 성공한 master CI와 Production search marker 뒤에만 실행된다", async () => {
+  const workflow = await readWorkflow("notify-indexnow.yml");
+  assertPinnedOfficialActions(workflow);
+  assert.match(workflow, /workflow_run:[\s\S]*workflows: \[CI\][\s\S]*types: \[completed\]/u);
+  assert.match(workflow, /permissions:\s*\n\s*contents: read/u);
+  assert.doesNotMatch(workflow, /contents: write|GITHUB_TOKEN|secrets\./u);
+  assert.match(workflow, /workflow_run\.conclusion == 'success'/u);
+  assert.match(workflow, /workflow_run\.event == 'push'/u);
+  assert.match(workflow, /workflow_run\.head_branch == 'master'/u);
+
+  const markerIndex = workflow.indexOf("- name: Wait for Production search marker");
+  const keyIndex = workflow.indexOf("- name: Verify published IndexNow key");
+  const notifyIndex = workflow.indexOf("- name: Notify Naver IndexNow");
+  assert.ok(markerIndex > 0 && markerIndex < keyIndex && keyIndex < notifyIndex);
+  assert.match(workflow, /--scope search/u);
+});

@@ -4,6 +4,12 @@ import { dirname, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 export const deploymentMarkerScopes = Object.freeze({
+  search: [
+    "astro.config.mjs",
+    "src",
+    "public/images",
+    "public/4e63ed9293cf0b859764be32c769f7b26336ebb71489cd6d9ff3f58a811e27a3.txt",
+  ],
   bank: [
     ".github/bank-listing-sync-state.json",
     "src/data/naver-listings.json",
@@ -90,7 +96,7 @@ async function main() {
     console.log(`Deployment marker written: ${JSON.stringify(marker.scopes)}`);
     return;
   }
-  throw new Error("사용법: node scripts/deployment-marker.mjs write | print <bank|external|automation>");
+  throw new Error("사용법: node scripts/deployment-marker.mjs write | print <search|bank|external|automation>");
 }
 
 const invokedPath = process.argv[1] ? pathToFileURL(resolve(process.argv[1])).href : null;

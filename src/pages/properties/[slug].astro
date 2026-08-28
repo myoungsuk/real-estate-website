@@ -17,7 +17,15 @@ const listingImages = listing.images?.length
     : [];
 ---
 
-<BaseLayout {title} {description}>
+<BaseLayout
+  {title}
+  {description}
+  breadcrumbItems={[
+    { name: "홈", path: "/" },
+    { name: "매물", path: "/properties/" },
+    { name: listing.title, path: `/properties/${listing.slug}/` },
+  ]}
+>
   <article class="section property-detail">
     <div class="shell">
       <nav class="breadcrumbs" aria-label="현재 위치"><a href="/">홈</a><span>/</span><a href="/properties/">매물</a><span>/</span><span aria-current="page">{listing.title}</span></nav>

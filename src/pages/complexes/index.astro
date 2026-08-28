@@ -12,7 +12,7 @@ const description = "천동 리더스시티 4·5블록의 3,463세대 규모, �
 const relatedContents = getPublishedExternalContentsByIds(complexOverview.relatedContentIds);
 ---
 
-<BaseLayout {title} {description}>
+<BaseLayout {title} {description} breadcrumbItems={[{ name: "홈", path: "/" }, { name: "단지 정보", path: "/complexes/" }]}>
   <PageIntro eyebrow={complexOverview.eyebrow} title={complexOverview.title} description={complexOverview.description} />
 
   <section class="section complex-overview" aria-labelledby="complex-stats-heading">
