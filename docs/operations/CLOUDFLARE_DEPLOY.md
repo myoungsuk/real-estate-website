@@ -113,3 +113,5 @@ Access가 적용된 배포 환경에서 다음을 확인한다.
 - 문제 발생 시 먼저 Cloudflare에서 직전 정상 배포로 롤백하고 공개 페이지와 marker를 확인한다. 이어서 `master`의 잘못된 커밋을 `git revert`로 되돌려 새 Production 배포를 만든 뒤 Git SHA·marker·공개 화면이 다시 일치하는지 확인한다. `master` 이력은 강제로 다시 쓰지 않는다.
 
 2026-08-27 운영 롤백 훈련에서는 활성 버전 `8bf6c623`에서 직전 정상 버전 `2b5a84ca`로 트래픽 100%를 롤백했다. 롤백 상태에서 홈 `200`과 구 버전에 없던 `/deployment-marker.json`의 `404`를 확인해 실제 트래픽 전환을 검증했다. 이어서 `8bf6c623`을 다시 100%로 승격하고 홈 `200`과 `automation` marker 일치를 확인했다. 이번 훈련은 정상 버전 간 트래픽 전환이므로 `master` 변경이나 `git revert`는 수행하지 않았다.
+
+<!-- git-revert-drill: 2026-08-28 temporary marker -->
