@@ -1,5 +1,19 @@
 [
   {
+    "id": "youtube-yhj4bfsjuc",
+    "type": "youtube",
+    "youtubeFormat": "short",
+    "status": "published",
+    "title": "#천동리더스시티 #shorts",
+    "summary": "공식 YouTube 채널에서 “#천동리더스시티 #shorts” Shorts를 확인해 보세요.",
+    "url": "https://www.youtube.com/watch?v=-yhj4bfsjUc",
+    "publishedAt": "2026-08-28",
+    "thumbnail": {
+      "src": "/images/youtube/-yhj4bfsjUc.webp",
+      "alt": "#천동리더스시티 #shorts YouTube Shorts 썸네일"
+    }
+  },
+  {
     "id": "youtube-ufxzsys9u5q",
     "type": "youtube",
     "youtubeFormat": "video",
