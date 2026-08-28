@@ -57,7 +57,6 @@ test("IndexNow는 운영 도메인 URL만 허용하고 올바른 요청 본문�
   assert.deepEqual(JSON.parse(request.options.body), {
     host: "leaderscityhappy.com",
     key: INDEXNOW_KEY,
-    keyLocation: INDEXNOW_KEY_LOCATION,
     urlList: ["https://leaderscityhappy.com/faq/"],
   });
 });

@@ -145,7 +145,6 @@ export async function submitIndexNowUrls(urls, {
   const body = {
     host: new URL(INDEXNOW_ORIGIN).host,
     key: INDEXNOW_KEY,
-    keyLocation: INDEXNOW_KEY_LOCATION,
     urlList,
   };
 

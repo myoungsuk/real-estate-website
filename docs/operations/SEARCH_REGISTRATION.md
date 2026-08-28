@@ -35,6 +35,7 @@ Cloudflare에서 DNS를 관리한다면 Domain 속성의 DNS TXT 인증을 우�
 - 자동 실행: `.github/workflows/notify-indexnow.yml`
 - 실행 조건: `master` push의 CI 성공 → 변경 URL 계획 → Cloudflare Production `search` marker 일치 → 공개키 확인 → 네이버 IndexNow 제출
 - 권한: GitHub `contents: read`만 사용하며 Secret이나 쓰기 토큰을 사용하지 않음
+- 공개키가 사이트 루트의 기본 위치에 있으므로 제출 본문에는 선택 항목인 `keyLocation`을 넣지 않습니다. 공개키 확인 단계는 실제 루트 URL을 직접 검사합니다.
 
 IndexNow는 새로 추가·수정·삭제된 URL을 검색엔진에 알리는 보조 수단입니다. 기존 URL 전체를 반복 제출하지 않으며, sitemap·수집 요청을 대체하거나 색인을 보장하지 않습니다.
 
