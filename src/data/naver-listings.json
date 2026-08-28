@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-08-28",
+  "checkedAt": "2026-08-29",
   "items": [
     {
       "id": "2645736151",
@@ -210,20 +210,6 @@
       "registeredAt": "2026-08-21",
       "source": "네이버페이 부동산",
       "url": "https://fin.land.naver.com/articles/2645030106"
-    },
-    {
-      "id": "2644293509",
-      "title": "리더스시티 4블록",
-      "propertyType": "아파트",
-      "tradeType": "sale",
-      "priceLabel": "5억 6,000",
-      "areaLabel": "111㎡ · 전용 84㎡",
-      "floorLabel": "중/29층",
-      "direction": "남동향",
-      "summary": "시스템에어컨6대설치 11월 초순 입주협의",
-      "registeredAt": "2026-08-18",
-      "source": "네이버페이 부동산",
-      "url": "https://fin.land.naver.com/articles/2644293509"
     },
     {
       "id": "2644130947",
@@ -562,20 +548,6 @@
       "url": "https://fin.land.naver.com/articles/2641299169"
     },
     {
-      "id": "2641301408",
-      "title": "리더스시티 4블록",
-      "propertyType": "아파트",
-      "tradeType": "sale",
-      "priceLabel": "4억 7,000",
-      "areaLabel": "99㎡ · 전용 74㎡",
-      "floorLabel": "저/29층",
-      "direction": "남서향",
-      "summary": "빠른 입주 가능 시스템에어컨4대, 중문 , 오븐설치",
-      "registeredAt": "2026-08-01",
-      "source": "네이버페이 부동산",
-      "url": "https://fin.land.naver.com/articles/2641301408"
-    },
-    {
       "id": "2640967176",
       "title": "위드힐",
       "propertyType": "아파트",
@@ -588,34 +560,6 @@
       "registeredAt": "2026-07-30",
       "source": "네이버페이 부동산",
       "url": "https://fin.land.naver.com/articles/2640967176"
-    },
-    {
-      "id": "2640765158",
-      "title": "리더스시티 4블록",
-      "propertyType": "아파트",
-      "tradeType": "sale",
-      "priceLabel": "5억 4,000",
-      "areaLabel": "111㎡ · 전용 84㎡",
-      "floorLabel": "13/29층",
-      "direction": "남동향",
-      "summary": "전망 탁트인집 시스템에어컨 4대 설치",
-      "registeredAt": "2026-07-29",
-      "source": "네이버페이 부동산",
-      "url": "https://fin.land.naver.com/articles/2640765158"
-    },
-    {
-      "id": "2640655272",
-      "title": "신흥SK뷰",
-      "propertyType": "아파트",
-      "tradeType": "sale",
-      "priceLabel": "5억 6,500",
-      "areaLabel": "113㎡ · 전용 84㎡",
-      "floorLabel": "6/33층",
-      "direction": "남동향",
-      "summary": "앞동이라 가리는 것 없이 밝고 환한 집입니다. 시스템에어컨...",
-      "registeredAt": "2026-07-29",
-      "source": "네이버페이 부동산",
-      "url": "https://fin.land.naver.com/articles/2640655272"
     },
     {
       "id": "2640120487",
@@ -658,6 +602,104 @@
       "registeredAt": "2026-08-27",
       "source": "네이버페이 부동산",
       "url": "https://fin.land.naver.com/articles/2646032733"
+    },
+    {
+      "id": "2646432595",
+      "title": "대전르에브스위첸2단지",
+      "propertyType": "아파트분양권",
+      "tradeType": "sale",
+      "priceLabel": "7억 7,920",
+      "areaLabel": "144㎡ · 전용 110㎡",
+      "floorLabel": "2/26층",
+      "direction": "남서향",
+      "summary": "필로티로 아이들키우기 좋은집 트램역 이동 편리",
+      "registeredAt": "2026-08-28",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2646432595"
+    },
+    {
+      "id": "2646433232",
+      "title": "리더스시티 4블록",
+      "propertyType": "아파트",
+      "tradeType": "sale",
+      "priceLabel": "5억 500",
+      "areaLabel": "99㎡ · 전용 74㎡",
+      "floorLabel": "중/29층",
+      "direction": "남동향",
+      "summary": "천동초등학교 전망 시스템에어컨외 옵션 다수 설치",
+      "registeredAt": "2026-08-28",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2646433232"
+    },
+    {
+      "id": "2646436423",
+      "title": "리더스시티 4블록",
+      "propertyType": "아파트",
+      "tradeType": "sale",
+      "priceLabel": "5억 6,000",
+      "areaLabel": "111㎡ · 전용 84㎡",
+      "floorLabel": "중/29층",
+      "direction": "남동향",
+      "summary": "시스템에어컨6대설치 11월 초순 입주협의",
+      "registeredAt": "2026-08-28",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2646436423"
+    },
+    {
+      "id": "2646441200",
+      "title": "리더스시티 5블록",
+      "propertyType": "아파트",
+      "tradeType": "sale",
+      "priceLabel": "3억 7,000",
+      "areaLabel": "81㎡ · 전용 59㎡",
+      "floorLabel": "저/29층",
+      "direction": "남서향",
+      "summary": "27년1월 중순 협의입주 시스템에어컨외 옵션 다수 설치",
+      "registeredAt": "2026-08-28",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2646441200"
+    },
+    {
+      "id": "2646433738",
+      "title": "대전르에브스위첸1단지",
+      "propertyType": "아파트분양권",
+      "tradeType": "sale",
+      "priceLabel": "4억 4,360",
+      "areaLabel": "84㎡ · 전용 59㎡",
+      "floorLabel": "저/29층",
+      "direction": "남서향",
+      "summary": "근린생활시설가깝고 단지조망 예쁜집입니다",
+      "registeredAt": "2026-08-28",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2646433738"
+    },
+    {
+      "id": "2646435529",
+      "title": "리더스시티 4블록",
+      "propertyType": "아파트",
+      "tradeType": "sale",
+      "priceLabel": "4억 7,000",
+      "areaLabel": "99㎡ · 전용 74㎡",
+      "floorLabel": "7/29층",
+      "direction": "남서향",
+      "summary": "빠른 입주 가능 시스템에어컨4대, 중문 , 오븐설치",
+      "registeredAt": "2026-08-28",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2646435529"
+    },
+    {
+      "id": "2646432132",
+      "title": "리더스시티 4블록",
+      "propertyType": "아파트",
+      "tradeType": "sale",
+      "priceLabel": "4억 7,500",
+      "areaLabel": "99㎡ · 전용 74㎡",
+      "floorLabel": "20/29층",
+      "direction": "남동향",
+      "summary": "남동향 전망좋은집 시스템에어컨 5대, 중문등 설치",
+      "registeredAt": "2026-08-28",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2646432132"
     }
   ]
 }
