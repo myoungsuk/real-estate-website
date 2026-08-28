@@ -40,8 +40,8 @@ IndexNow는 새로 추가·수정·삭제된 URL을 검색엔진에 알리는 �
 
 ## AI 검색
 
-`robots.txt`에서 공개 경로를 허용하고 관리자 경로만 차단합니다. OAI-SearchBot 같은 AI 검색봇도 별도 차단하지 않되, 실제 Cloudflare 응답이 200인지 배포 후 User-Agent별로 확인합니다. 공개 하위 HTML에는 사이트 계층을 설명하는 `BreadcrumbList`가 있고, 홈의 `RealEstateAgent`·`LocalBusiness`, FAQ의 `FAQPage` 구조화 데이터는 기존 승인 정보만 사용합니다.
+`robots.txt`에서 공개 경로를 허용하고 관리자 경로만 차단합니다. OAI-SearchBot 같은 AI 검색봇도 별도 차단하지 않되, 실제 Cloudflare 응답이 200인지 배포 후 User-Agent별로 확인합니다. 공개 하위 HTML에는 사이트 계층을 설명하는 `BreadcrumbList`가 있고, 홈은 `WebSite`와 `RealEstateAgent`·`LocalBusiness`를 고정 ID로 연결한 구조화 데이터, FAQ는 `FAQPage`를 기존 승인 정보만으로 제공합니다.
 
-2026-08-28 Cloudflare AI Crawl Control에서 OAI-SearchBot·ChatGPT-User·GPTBot·Googlebot·BingBot·PerplexityBot·ClaudeBot의 크롤러 차단 스위치가 모두 꺼진 상태를 확인했습니다. 지난 24시간 AI 크롤러 요청 234개 중 118개가 허용됐고 실패 116개 중 111개는 존재하지 않는 경로의 404였습니다. 같은 User-Agent로 운영 홈을 직접 요청한 검사도 모두 HTTP 200이었습니다.
+2026-08-28 Cloudflare AI Crawl Control에서 OAI-SearchBot·ChatGPT-User·GPTBot·Googlebot·BingBot·PerplexityBot·ClaudeBot의 크롤러 차단 스위치가 모두 꺼진 상태를 확인했습니다. 지난 24시간 AI 크롤러 요청 233개 중 117개가 허용됐고 실패 116개 중 111개는 404였습니다. 경로별 확인 결과 대부분 `/.env`, `/.git/config`, `wp-config.php`, `credentials.json` 같은 비밀파일 탐색 요청이므로 404를 유지합니다. 정상적인 관례 경로인 `/sitemap.xml`만 공식 `/sitemap-index.xml`로 301 이동합니다. 같은 User-Agent로 운영 홈을 직접 요청한 검사도 모두 HTTP 200이었습니다.
 
 `/llms.txt`는 사이트의 공식 정보를 요약하는 보조 파일입니다. Google은 별도의 AI 전용 최적화나 `llms.txt`가 기존 SEO를 대신한다고 안내하지 않으므로, 검색 노출이나 AI 인용을 보장하는 수단으로 취급하지 않습니다. AI 검색에도 고유한 실제 정보, 읽을 수 있는 HTML, 내부 링크, sitemap, 정상적인 검색봇 접근이 기본입니다.

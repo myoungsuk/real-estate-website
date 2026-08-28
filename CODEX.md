@@ -123,7 +123,7 @@ npm run sync:external:dry-run
 - `src/data/complexes.json` → 대전 동구 주요 단지의 사진·기본 사실·면적별 세대 구성·공급 구성·생활환경·시설 확인 상태·FAQ·관련 콘텐츠·복수 출처와 목록·상세 정적 생성
 - 공식 Naver RSS·YouTube Atom → `scripts/sync-external-content.mjs` → `src/data/external-links.json` 신규 `published` 항목과 자체 WebP 썸네일. YouTube alternate URL의 `/shorts/`는 `youtubeFormat: short`, 그 밖의 개별 영상은 `video`로 분류하며 기존 항목은 append-only로 보존. 한 출처의 일시 장애는 3회 이내 재시도 후 경고와 함께 건너뛰고 정상 출처만 반영하며, 두 출처 모두 장애이거나 출처·채널·XML·ID 신뢰 검증이 실패하면 전체 실행을 중단
 - `src/data/external-links.json` → 자동화 전 공식 블로그 128건·일반 영상 40건과 2026-08-26 확인한 공식 Shorts 32건을 기준으로 누적되는 원문 링크·자체 썸네일·최신순 카드
-- `src/layouts/BaseLayout.astro` → 페이지별 title, description, canonical, robots, JSON-LD와 공개 하위 페이지 `BreadcrumbList`
+- `src/layouts/BaseLayout.astro` → 페이지별 title, description, canonical, robots, JSON-LD와 공개 하위 페이지 `BreadcrumbList`. 홈은 `WebSite`와 `RealEstateAgent`·`LocalBusiness`를 고정 `@id`로 연결한 단일 `@graph`를 제공
 - `src/pages/robots.txt.ts`, `llms.txt.ts`, sitemap integration → 검색 로봇 안내
 - `scripts/indexnow.mjs`, `.github/workflows/notify-indexnow.yml` → 성공한 `master` CI의 변경 URL 계획 → Production `search` marker·공개키 확인 → 네이버 IndexNow 알림
 - `/admin/` → 관리자 대시보드와 관리 API 연결 상태
@@ -180,6 +180,7 @@ DB와 TR 흐름은 없다. 관리 API의 콘텐츠 쓰기는 `ADMIN_WRITE_ENABLE
 ## SEO·검색 노출
 
 - 각 공개 페이지에 고유 title, description, canonical을 둔다.
+- 홈의 `WebSite`와 중개사무소 구조화 데이터는 고정 `@id`로 연결하고 승인된 공식 채널만 `sameAs`로 사용한다.
 - 승인된 실제 정보만 구조화 데이터에 넣는다.
 - sitemap과 robots.txt를 제공한다.
 - 필터·정렬 쿼리는 사이트맵에서 제외하고 기본 목록 canonical로 통합한다. 초안·종료 매물과 Preview는 색인 대상에서 제외한다.
@@ -209,6 +210,7 @@ DB와 TR 흐름은 없다. 관리 API의 콘텐츠 쓰기는 `ADMIN_WRITE_ENABLE
 - 자동 배포가 실패하거나 시작되지 않은 사실을 확인한 경우에만 Production 환경변수 빌드와 `npx wrangler deploy --dry-run`을 다시 검증한 뒤 `npx wrangler deploy`로 수동 배포한다.
 - GitHub·Cloudflare 계정 연결 변경, Production/Preview 환경변수 변경, 사용자 도메인 DNS 변경은 외부 운영 작업이다.
 - Workers Static Assets `_redirects`는 domain-level·프로토콜 조건을 지원하지 않으므로 HTTP→HTTPS 강제에 사용하지 않는다. Cloudflare zone의 `Always Use HTTPS`를 활성화하고 HTTP 응답의 301과 query/path 보존을 확인한다.
+- 관례적인 `/sitemap.xml` 요청만 `_redirects`에서 공식 `/sitemap-index.xml`로 301 이동하며, 존재하지 않는 경로 전체를 홈으로 리디렉션하지 않는다.
 - 잘못된 배포는 직전 정상 Cloudflare 배포로 롤백하거나 Git revert 후 재배포한다.
 
 ## 조건부 컴파일·인코딩·리소스

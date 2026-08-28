@@ -18,18 +18,17 @@ async function collectHtmlFiles(directory, files = []) {
   return files;
 }
 
-function assertStructuredData(html, path) {
+function parseStructuredData(html, path) {
   const scripts = html.matchAll(/<script[^>]*type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gu);
-  let count = 0;
+  const values = [];
   for (const match of scripts) {
     try {
-      JSON.parse(match[1]);
-      count += 1;
+      values.push(JSON.parse(match[1]));
     } catch (error) {
       throw new Error(`${path}: JSON-LD를 파싱할 수 없습니다. ${error.message}`);
     }
   }
-  return count;
+  return values;
 }
 
 export function isSearchVerificationFile(path, html) {
@@ -39,10 +38,11 @@ export function isSearchVerificationFile(path, html) {
 
 export async function assertProductionBuild({ distDir = "dist" } = {}) {
   const absoluteDist = resolve(distDir);
-  const [robots, sitemapIndex, sitemap, markerRaw, headers, indexNowKey] = await Promise.all([
+  const [robots, sitemapIndex, sitemap, redirects, markerRaw, headers, indexNowKey] = await Promise.all([
     readFile(join(absoluteDist, "robots.txt"), "utf8"),
     readFile(join(absoluteDist, "sitemap-index.xml"), "utf8"),
     readFile(join(absoluteDist, "sitemap-0.xml"), "utf8"),
+    readFile(join(absoluteDist, "_redirects"), "utf8"),
     readFile(join(absoluteDist, "deployment-marker.json"), "utf8"),
     readFile(join(absoluteDist, "_headers"), "utf8"),
     readFile(join(absoluteDist, `${INDEXNOW_KEY}.txt`), "utf8"),
@@ -56,6 +56,10 @@ export async function assertProductionBuild({ distDir = "dist" } = {}) {
   assert(sitemapIndex.includes(`${PRODUCTION_ORIGIN}/sitemap-0.xml`), "sitemap index가 Production origin을 사용하지 않습니다.");
   assert(!sitemap.includes("/admin/"), "sitemap에 관리자 URL이 포함되었습니다.");
   assert(!sitemap.includes("http://leaderscityhappy.com"), "sitemap에 HTTP URL이 포함되었습니다.");
+  assert(
+    redirects.trim() === "/sitemap.xml /sitemap-index.xml 301",
+    "_redirects: sitemap 별칭이 공식 sitemap index로만 이동하지 않습니다.",
+  );
   assert(indexNowKey.trim() === INDEXNOW_KEY, "Production IndexNow 공개 키 파일이 올바르지 않습니다.");
 
   const marker = JSON.parse(markerRaw);
@@ -75,9 +79,19 @@ export async function assertProductionBuild({ distDir = "dist" } = {}) {
     const path = relative(absoluteDist, htmlPath).replaceAll("\\", "/");
     const html = await readFile(htmlPath, "utf8");
     if (isSearchVerificationFile(path, html)) continue;
-    const pageStructuredDataCount = assertStructuredData(html, path);
+    const pageStructuredData = parseStructuredData(html, path);
+    const pageStructuredDataCount = pageStructuredData.length;
     structuredDataCount += pageStructuredDataCount;
-    if (path === "index.html") assert(pageStructuredDataCount > 0, "index.html: 홈페이지 JSON-LD가 없습니다.");
+    if (path === "index.html") {
+      assert(pageStructuredDataCount > 0, "index.html: 홈페이지 JSON-LD가 없습니다.");
+      const graph = pageStructuredData.flatMap((value) => value?.["@graph"] ?? []);
+      const website = graph.find((node) => node?.["@type"] === "WebSite");
+      const business = graph.find((node) => Array.isArray(node?.["@type"]) && node["@type"].includes("RealEstateAgent"));
+      assert(website?.["@id"] === `${PRODUCTION_ORIGIN}/#website`, "index.html: WebSite 고정 ID가 올바르지 않습니다.");
+      assert(business?.["@id"] === `${PRODUCTION_ORIGIN}/#real-estate-agent`, "index.html: 중개사무소 고정 ID가 올바르지 않습니다.");
+      assert(website?.publisher?.["@id"] === business?.["@id"], "index.html: WebSite와 중개사무소가 연결되지 않았습니다.");
+      assert(business?.sameAs?.includes("https://map.naver.com/p/entry/place/1135476130"), "index.html: 네이버 플레이스 동일 사업자 링크가 없습니다.");
+    }
     if (path.startsWith("admin/")) {
       assert(html.includes('name="robots" content="noindex,nofollow,noarchive"'), `${path}: 관리자 noindex가 없습니다.`);
       assert(!html.includes('rel="canonical"'), `${path}: 관리자 페이지에 canonical이 포함되었습니다.`);

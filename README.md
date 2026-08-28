@@ -75,6 +75,8 @@ Google·네이버 소유 확인 파일은 제공받은 파일명과 내용을 �
 
 홈을 제외한 공개 HTML에는 경로 계층을 나타내는 `BreadcrumbList` JSON-LD를 제공합니다. `master`의 CI가 성공하면 `.github/workflows/notify-indexnow.yml`이 변경 파일과 Production sitemap을 기준으로 관련 URL만 고르고, Cloudflare의 `search` 배포 marker와 공개 검증키가 확인된 뒤 네이버 IndexNow에 알립니다. 공개키는 인증 비밀값이 아니며 저장소에 포함합니다. IndexNow는 sitemap·수집 요청을 대체하거나 실제 색인을 보장하지 않습니다.
 
+홈은 `WebSite`와 승인된 `RealEstateAgent`·`LocalBusiness` 정보를 고정 ID로 연결하고 네이버 플레이스·공식 블로그·공식 YouTube 채널을 동일 사업자 채널로 제공합니다. 관례적인 `/sitemap.xml` 요청은 공식 `/sitemap-index.xml`로만 301 이동하며, 그 밖의 존재하지 않는 경로는 정상 404를 유지합니다.
+
 ## Cloudflare 배포
 
 ```bash

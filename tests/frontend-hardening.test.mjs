@@ -63,14 +63,15 @@ test("단지 상세의 매물 링크는 공개 매물 화면의 단지 필터와
   assert.match(card, /data-listing-title=\{listing\.title\}/);
 });
 
-test("반응형 지역 이미지, Astro 캐시 경로, 404 noindex와 favicon을 제공한다", async () => {
-  const [home, complexIndex, complexDetail, layout, notFound, headers, favicon] = await Promise.all([
+test("반응형 지역 이미지, Astro 캐시 경로, 404 noindex와 sitemap 별칭을 제공한다", async () => {
+  const [home, complexIndex, complexDetail, layout, notFound, headers, redirects, favicon] = await Promise.all([
     readSource("src/pages/index.astro"),
     readSource("src/pages/complexes/index.astro"),
     readSource("src/pages/complexes/[slug].astro"),
     readSource("src/layouts/BaseLayout.astro"),
     readSource("src/pages/404.astro"),
     readSource("public/_headers"),
+    readSource("public/_redirects"),
     readFile(new URL("public/favicon.ico", root)),
   ]);
   assert.match(home, /srcset=\{getResponsivePublicImageSrcSet/);
@@ -79,6 +80,7 @@ test("반응형 지역 이미지, Astro 캐시 경로, 404 noindex와 favicon을
   assert.match(headers, /\/_astro\/\*[\s\S]*max-age=31536000, immutable/);
   assert.match(headers, /\/deployment-marker\.json[\s\S]*Cache-Control: no-store, max-age=0/);
   assert.doesNotMatch(headers, /\/assets\/\*/);
+  assert.equal(redirects.trim(), "/sitemap.xml /sitemap-index.xml 301");
   assert.match(layout, /Astro\.site && !noindex/);
   assert.match(layout, /href="\/favicon\.ico"/);
   assert.match(notFound, /<BaseLayout \{title\} \{description\} noindex>/);

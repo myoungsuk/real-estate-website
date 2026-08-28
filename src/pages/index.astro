@@ -13,37 +13,54 @@ const description = "백진옥 대표가 대전 동구의 매매·전세·월세
 const quickComplexes = publishedComplexes.filter(({ slug }) => slug === "leaders-city-4" || slug === "leaders-city-5");
 const homeBlogContents = publishedBlogContents.slice(0, 9);
 const homeYoutubeContents = publishedYoutubeVideoContents.slice(0, 6);
+const siteUrl = Astro.site?.toString();
+const websiteId = siteUrl ? new URL("#website", siteUrl).toString() : undefined;
+const businessId = siteUrl ? new URL("#real-estate-agent", siteUrl).toString() : undefined;
 const structuredData = {
   "@context": "https://schema.org",
-  "@type": ["RealEstateAgent", "LocalBusiness"],
-  name: office.legalName,
-  alternateName: office.brandName,
-  url: Astro.site?.toString(),
-  telephone: office.mobile,
-  email: office.email,
-  areaServed: office.serviceArea,
-  image: Astro.site ? new URL(homeContent.broker.portrait.src, Astro.site).toString() : undefined,
-  logo: Astro.site ? new URL("/images/brand/leaders-city-happy-logo.png", Astro.site).toString() : undefined,
-  hasMap: office.naverPlaceUrl,
-  sameAs: [office.naverBlogUrl, office.youtubeUrl],
-  identifier: [
-    { "@type": "PropertyValue", name: "중개사무소 등록번호", value: office.registrationNumber },
-    { "@type": "PropertyValue", name: "사업자등록번호", value: office.businessNumber },
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": websiteId,
+      name: office.brandName,
+      alternateName: office.legalName,
+      url: siteUrl,
+      inLanguage: "ko-KR",
+      publisher: businessId ? { "@id": businessId } : undefined,
+    },
+    {
+      "@type": ["RealEstateAgent", "LocalBusiness"],
+      "@id": businessId,
+      name: office.legalName,
+      alternateName: office.brandName,
+      url: siteUrl,
+      telephone: office.mobile,
+      email: office.email,
+      areaServed: office.serviceArea,
+      image: Astro.site ? new URL(homeContent.broker.portrait.src, Astro.site).toString() : undefined,
+      logo: Astro.site ? new URL("/images/brand/leaders-city-happy-logo.png", Astro.site).toString() : undefined,
+      hasMap: office.naverPlaceUrl,
+      sameAs: [office.naverPlaceUrl, office.naverBlogUrl, office.youtubeUrl],
+      identifier: [
+        { "@type": "PropertyValue", name: "중개사무소 등록번호", value: office.registrationNumber },
+        { "@type": "PropertyValue", name: "사업자등록번호", value: office.businessNumber },
+      ],
+      openingHoursSpecification: office.hours
+        .filter((hour) => hour.opens && hour.closes)
+        .map((hour) => ({
+          "@type": "OpeningHoursSpecification",
+          dayOfWeek: hour.days,
+          opens: hour.opens,
+          closes: hour.closes,
+        })),
+      address: {
+        "@type": "PostalAddress",
+        streetAddress: office.address,
+        addressLocality: "대전광역시 동구",
+        addressCountry: "KR",
+      },
+    },
   ],
-  openingHoursSpecification: office.hours
-    .filter((hour) => hour.opens && hour.closes)
-    .map((hour) => ({
-      "@type": "OpeningHoursSpecification",
-      dayOfWeek: hour.days,
-      opens: hour.opens,
-      closes: hour.closes,
-    })),
-  address: {
-    "@type": "PostalAddress",
-    streetAddress: office.address,
-    addressLocality: "대전광역시 동구",
-    addressCountry: "KR",
-  },
 };
 ---
 

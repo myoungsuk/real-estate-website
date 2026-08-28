@@ -39,6 +39,8 @@ Custom Domain 전환 롤백은 `wrangler.jsonc`의 Custom Domain 설정을 제�
 
 Workers Static Assets의 `_redirects`는 경로 기반 규칙이며 domain-level 리디렉션을 지원하지 않는다. 프로토콜 조건도 없으므로 `/* https://leaderscityhappy.com/:splat 301` 같은 규칙은 HTTPS 요청까지 다시 리디렉션할 수 있어 사용하지 않는다.
 
+현재 `_redirects`는 관례적인 `/sitemap.xml` 요청을 `/sitemap-index.xml`로 보내는 정확한 301 규칙 한 개만 둔다. 없는 경로 전체를 홈으로 보내면 검색엔진이 soft 404로 판단할 수 있으므로 catch-all 리디렉션을 추가하지 않는다.
+
 Cloudflare 대시보드의 해당 zone에서 `SSL/TLS` → `Edge Certificates` → `Always Use HTTPS`를 활성화한다. 대안으로 Redirect Rules의 Single Redirect에 `http://*`를 `https://${1}`로 보내는 301 규칙을 만들 수 있다. 설정 뒤 다음을 수동 확인한다.
 
 - `http://leaderscityhappy.com/<경로>?<쿼리>`가 한 번의 301로 같은 경로·쿼리의 HTTPS 주소로 이동
@@ -102,7 +104,7 @@ Access가 적용된 배포 환경에서 다음을 확인한다.
 
 - 홈·매물·단지·소개·오시는 길·404가 정상 응답하는지 확인
 - 전화·문자·네이버지도·블로그·유튜브 링크 확인
-- `/robots.txt`, `/sitemap-index.xml`, `/llms.txt` 확인
+- `/robots.txt`, `/sitemap-index.xml`, `/llms.txt`와 `/sitemap.xml`의 정확한 301 이동 확인
 - `/deployment-marker.json`이 유효하며 최신 자동 동기화 Action의 예상 marker와 일치하는지 확인
 - 실제 도메인과 canonical 일치 확인
 - apex HTTP가 경로·쿼리를 보존해 HTTPS로 301 이동하는지 확인
