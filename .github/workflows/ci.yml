@@ -11,7 +11,7 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -31,3 +31,9 @@ jobs:
         run: |
           npm run build:site
           npm run assert:production-build
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run public-site Playwright E2E
+        run: npm run test:e2e
+      - name: Run mobile Lighthouse audit
+        run: npm run audit:lighthouse

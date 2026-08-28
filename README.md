@@ -19,9 +19,11 @@ npm run dev
 npm test
 npm run check
 npm run build
+npm run test:e2e
+npm run audit:lighthouse
 ```
 
-빌드 결과는 `dist/`에 생성됩니다. `npm run check`는 Astro·TypeScript 검사와 공개 콘텐츠 검증을 함께 실행합니다. 빌드는 검색 대상·자동 동기화 결과의 Production 반영 여부를 확인하기 위한 `dist/deployment-marker.json`도 생성합니다. CI는 기본 `noindex` 빌드와 별도로 실제 Production 환경변수 빌드를 만들고 robots·canonical·sitemap·JSON-LD·IndexNow 공개키를 검사합니다.
+빌드 결과는 `dist/`에 생성됩니다. `npm run check`는 Astro·TypeScript 검사와 공개 콘텐츠 검증을 함께 실행합니다. `npm run test:e2e`와 `npm run audit:lighthouse`는 먼저 생성된 `dist/`를 대상으로 각각 Chromium 핵심 흐름과 모바일 성능·접근성·SEO 기준을 검사합니다. 빌드는 검색 대상·자동 동기화 결과의 Production 반영 여부를 확인하기 위한 `dist/deployment-marker.json`도 생성합니다. CI는 기본 `noindex` 빌드와 별도로 실제 Production 환경변수 빌드를 만들고 robots·canonical·sitemap·JSON-LD·IndexNow 공개키를 검사한 뒤 Playwright와 Lighthouse도 실행합니다.
 
 공식 네이버 블로그 RSS와 YouTube Atom의 신규 항목은 매시간 17분 예약 실행과 필요 시 수동 실행이 가능한 별도 워크플로로 동기화합니다. YouTube는 Atom alternate URL을 기준으로 일반 영상과 Shorts를 구분하며, 로컬 dry-run은 공개 YouTube channelId를 설정한 뒤 실행하고 파일을 바꾸지 않습니다.
 

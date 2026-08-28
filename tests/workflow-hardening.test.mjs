@@ -28,6 +28,15 @@ test("CI는 읽기 전용 자격 증명과 Production SEO 산출물 검사를 �
   assert.match(workflow, /permissions:\s*\n\s*contents: read/u);
   assert.doesNotMatch(workflow, /contents: write/u);
   assert.match(workflow, /PUBLIC_ALLOW_INDEXING: "true"[\s\S]*npm run assert:production-build/u);
+  const productionBuildIndex = workflow.indexOf("- name: Build and assert Production SEO output");
+  const playwrightInstallIndex = workflow.indexOf("- name: Install Playwright Chromium");
+  const playwrightIndex = workflow.indexOf("- name: Run public-site Playwright E2E");
+  const lighthouseIndex = workflow.indexOf("- name: Run mobile Lighthouse audit");
+  assert.ok(productionBuildIndex > 0 && productionBuildIndex < playwrightInstallIndex);
+  assert.ok(playwrightInstallIndex < playwrightIndex && playwrightIndex < lighthouseIndex);
+  assert.match(workflow, /npx playwright install --with-deps chromium/u);
+  assert.match(workflow, /npm run test:e2e/u);
+  assert.match(workflow, /npm run audit:lighthouse/u);
 });
 
 for (const name of ["sync-bank-listings.yml", "sync-external-content.yml"]) {

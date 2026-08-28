@@ -77,6 +77,7 @@
 ├─ public/             공개 정적 파일과 Cloudflare 헤더
 ├─ scripts/            빌드 전 콘텐츠 검증·외부 RSS 동기화
 ├─ tests/              Node 단위 테스트
+├─ e2e/                Playwright 공개 화면 핵심 흐름
 ├─ worker/             동일 Worker의 Access 검증·관리 API
 ├─ docs/operations/    콘텐츠·배포·검색 등록 절차
 ├─ docs/adr/           승인된 아키텍처 결정
@@ -98,6 +99,8 @@ npm test
 npm run check
 npm run build
 npm run assert:production-build
+npm run test:e2e
+npm run audit:lighthouse
 npm run sync:bank:dry-run
 npm run sync:external:dry-run
 ```
@@ -105,6 +108,8 @@ npm run sync:external:dry-run
 - `npm run check`: 공개 콘텐츠 검증 후 Astro·TypeScript 검사
 - `npm run build`: 검사 후 `dist/` 정적 산출물 생성
 - `npm run assert:production-build`: Production 환경변수로 만든 산출물의 robots·canonical·sitemap·JSON-LD·IndexNow 공개키·배포 marker 검사
+- `npm run test:e2e`: 먼저 생성된 `dist/`에서 홈 상담 링크, 매물 필터, 404, 360px 메뉴·가로 넘침을 Chromium으로 검사
+- `npm run audit:lighthouse`: 먼저 생성된 `dist/`의 홈·매물·단지 목록을 모바일 Lighthouse 90점, LCP·TBT·CLS 내부 기준으로 검사
 - `npm run deploy`: 검사·빌드 후 Wrangler로 Cloudflare 배포
 - `npm run sync:bank:dry-run`: 허용된 부동산뱅크 공개 사무소 목록을 조회하고 예상 매물 변경을 파일 수정 없이 검증
 - `npm run sync:external:dry-run`: `YOUTUBE_CHANNEL_ID`로 공식 Naver RSS·YouTube Atom을 조회하고 예상 변경을 파일 수정 없이 검증
@@ -198,7 +203,7 @@ DB와 TR 흐름은 없다. 관리 API의 콘텐츠 쓰기는 `ADMIN_WRITE_ENABLE
 - Static Assets 라우터는 `ctx.access`를 전달하지 않으므로 관리 API가 `Cf-Access-Jwt-Assertion`을 `jose`로 다시 검증한다.
 - Access 정책은 정확한 허용 이메일 2개와 Email OTP를 사용한다.
 - `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD`, `ADMIN_ALLOWED_EMAILS`는 Production 환경에 등록하고 실제 값을 저장소에 넣지 않는다.
-- GitHub Actions CI는 `npm ci`, `npm test`, 기본 `noindex` 빌드와 별도 Production-mode SEO 산출물 검사를 수행하며 Cloudflare 배포는 실행하지 않는다.
+- GitHub Actions CI는 `npm ci`, `npm test`, 기본 `noindex` 빌드, 별도 Production-mode SEO 산출물 검사, Playwright Chromium E2E와 모바일 Lighthouse를 수행하며 Cloudflare 배포는 실행하지 않는다.
 - GitHub 공식 Actions는 검증한 전체 commit SHA로 고정하고 모든 checkout은 `persist-credentials: false`를 사용한다.
 - `.github/workflows/sync-external-content.yml`은 매시간 17분 `schedule`과 `workflow_dispatch`를 지원한다. 네트워크 수집·의존성·테스트는 `contents: read` job에서 수행하고, 검증 artifact를 적용하는 별도 job만 `contents: write`를 사용하며 토큰은 push 단계에만 환경변수로 전달한다.
 - 동기화 워크플로는 허용된 콘텐츠·썸네일 경로 또는 45일 keepalive 상태 파일만 분리 커밋하고, 같은 실행에서 테스트·콘텐츠 검사·빌드를 다시 수행한다.
@@ -239,6 +244,8 @@ DB와 TR 흐름은 없다. 관리 API의 콘텐츠 쓰기는 `ADMIN_WRITE_ENABLE
 npm test
 npm run check
 npm run build
+npm run test:e2e
+npm run audit:lighthouse
 npx wrangler deploy --dry-run
 ```
 

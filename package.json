@@ -12,6 +12,8 @@
     "assert:production-build": "node scripts/assert-production-build.mjs",
     "preview": "astro preview",
     "test": "node --test tests/*.test.mjs",
+    "test:e2e": "node scripts/run-playwright.mjs",
+    "audit:lighthouse": "node scripts/run-lighthouse.mjs",
     "sync:bank": "node scripts/sync-bank-listings.mjs",
     "sync:bank:dry-run": "node scripts/sync-bank-listings.mjs --dry-run",
     "sync:external": "node scripts/sync-external-content.mjs",
@@ -28,8 +30,11 @@
   },
   "devDependencies": {
     "@astrojs/check": "0.9.10",
+    "@playwright/test": "1.58.2",
+    "chrome-launcher": "1.2.1",
     "fast-xml-parser": "^5.11.0",
     "fast-xml-validator": "^1.4.2",
+    "lighthouse": "13.4.1",
     "sharp": "^0.35.4",
     "typescript": "6.0.3",
     "wrangler": "4.126.0"
