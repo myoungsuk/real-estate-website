@@ -8,7 +8,7 @@
 - Google Search Console Domain 속성의 DNS 소유 확인과 `sitemap-index.xml` 제출을 완료했습니다. sitemap은 성공 상태이며 홈·사무소·단지·매물·블로그 등 일부 핵심 URL의 Google 색인을 확인했습니다.
 - 네이버 서치어드바이저 사이트 소유 확인, `sitemap-index.xml` 제출, 홈·매물 목록·단지 목록 수집 요청을 완료했습니다. 사이트 간단 진단의 접속·robots·로봇 메타·제목·설명·Open Graph 항목은 정상입니다.
 - 네이버 일반 검색의 실제 색인은 아직 확인되지 않았습니다. 제출 완료와 실제 색인은 별개이므로 며칠 간격으로 다시 확인합니다.
-- 향후 `master`의 공개 URL 변경은 성공한 CI와 Cloudflare Production `search` marker 확인 뒤 네이버 IndexNow로 자동 알립니다. 첫 운영 워크플로 실행 결과는 GitHub Actions에서 별도로 확인합니다.
+- 향후 `master`의 공개 URL 변경은 성공한 CI와 Cloudflare Production `search` marker 확인 뒤 네이버 IndexNow로 자동 알립니다. 2026-08-28 첫 운영 실행은 커밋 `c625c76`의 관련 URL 14개를 골라 Production marker `5dad9d34…`와 공개키를 확인한 뒤 네이버 `HTTP 200` 응답으로 완료했습니다.
 
 ## 사전 확인
 
@@ -41,5 +41,7 @@ IndexNow는 새로 추가·수정·삭제된 URL을 검색엔진에 알리는 �
 ## AI 검색
 
 `robots.txt`에서 공개 경로를 허용하고 관리자 경로만 차단합니다. OAI-SearchBot 같은 AI 검색봇도 별도 차단하지 않되, 실제 Cloudflare 응답이 200인지 배포 후 User-Agent별로 확인합니다. 공개 하위 HTML에는 사이트 계층을 설명하는 `BreadcrumbList`가 있고, 홈의 `RealEstateAgent`·`LocalBusiness`, FAQ의 `FAQPage` 구조화 데이터는 기존 승인 정보만 사용합니다.
+
+2026-08-28 Cloudflare AI Crawl Control에서 OAI-SearchBot·ChatGPT-User·GPTBot·Googlebot·BingBot·PerplexityBot·ClaudeBot의 크롤러 차단 스위치가 모두 꺼진 상태를 확인했습니다. 지난 24시간 AI 크롤러 요청 234개 중 118개가 허용됐고 실패 116개 중 111개는 존재하지 않는 경로의 404였습니다. 같은 User-Agent로 운영 홈을 직접 요청한 검사도 모두 HTTP 200이었습니다.
 
 `/llms.txt`는 사이트의 공식 정보를 요약하는 보조 파일입니다. Google은 별도의 AI 전용 최적화나 `llms.txt`가 기존 SEO를 대신한다고 안내하지 않으므로, 검색 노출이나 AI 인용을 보장하는 수단으로 취급하지 않습니다. AI 검색에도 고유한 실제 정보, 읽을 수 있는 HTML, 내부 링크, sitemap, 정상적인 검색봇 접근이 기본입니다.
