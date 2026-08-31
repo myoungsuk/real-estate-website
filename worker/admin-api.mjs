@@ -4,13 +4,23 @@ import { AdminWriteError, createCsrfToken, isAdminWriteEnabled, validateAdminWri
 import {
   GithubContentError,
   readAdminResource,
+  readAdminResourceHistory,
+  readAdminResourceRevision,
+  readAdminResourcesRevision,
   readAdminResourcesSnapshot,
   uploadAdminImage,
   writeAdminResource,
   writeAdminResources,
 } from "./github-content.mjs";
+import { calculateAdminResourceDigest } from "../src/lib/admin-resource-digest.mjs";
 import { createRequestId, errorResponse, jsonResponse } from "./http.mjs";
 import { fetchExternalLinkPreview } from "./link-preview.mjs";
+import {
+  DeploymentStatusInputError,
+  getDeploymentStatus,
+  getWorkerVersionMetadata,
+  readProductionDeploymentMarker,
+} from "./deployment-status.mjs";
 
 const API_VERSION_ROOT = "/api/admin/v1";
 const READ_ONLY_PATHS = new Set([
@@ -19,6 +29,7 @@ const READ_ONLY_PATHS = new Set([
   `${API_VERSION_ROOT}/system`,
 ]);
 const MAX_JSON_BODY_BYTES = 3 * 1024 * 1024;
+const COMMIT_SHA_PATTERN = /^[a-f0-9]{40}$/u;
 const auditEncoder = new TextEncoder();
 const jsonDecoder = new TextDecoder();
 
@@ -138,6 +149,63 @@ function validateBatchChanges(changes, snapshot) {
   return [...errors];
 }
 
+function canonicalizeJson(value) {
+  if (Array.isArray(value)) return value.map(canonicalizeJson);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonicalizeJson(value[key])]));
+}
+
+function getChangedResources(changes, snapshot) {
+  return changes
+    .filter((change) => JSON.stringify(canonicalizeJson(change.data)) !== JSON.stringify(canonicalizeJson(snapshot.resources[change.resource]?.data)))
+    .map((change) => change.resource);
+}
+
+function getRestoreConfirmation(resources) {
+  return `${resources.join(", ")} 이전 내용으로 복원`;
+}
+
+function normalizeRestoreRequest(body) {
+  const sourceCommit = typeof body?.sourceCommit === "string" ? body.sourceCommit.toLowerCase() : "";
+  if (!COMMIT_SHA_PATTERN.test(sourceCommit)) {
+    throw new AdminWriteError("HISTORY_COMMIT_INVALID", "복원할 GitHub 버전이 올바르지 않습니다.", 400);
+  }
+  if (!Array.isArray(body?.resources) || body.resources.length === 0 || body.resources.length > Object.keys(ADMIN_RESOURCE_PATHS).length) {
+    throw new AdminWriteError("RESTORE_RESOURCES_INVALID", "복원할 콘텐츠 종류를 다시 확인해 주세요.", 400);
+  }
+  const seen = new Set();
+  const resources = body.resources.map((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item) || !Object.hasOwn(ADMIN_RESOURCE_PATHS, item.resource)) {
+      throw new AdminWriteError("RESOURCE_NOT_ALLOWED", "허용되지 않은 콘텐츠 종류입니다.", 400);
+    }
+    if (seen.has(item.resource)) {
+      throw new AdminWriteError("DUPLICATE_RESOURCE", "같은 콘텐츠 종류를 한 번의 복원에 중복해서 넣을 수 없습니다.", 400);
+    }
+    const expectedCurrentSha = typeof item.expectedCurrentSha === "string" ? item.expectedCurrentSha.toLowerCase() : "";
+    if (!COMMIT_SHA_PATTERN.test(expectedCurrentSha)) {
+      throw new AdminWriteError("SHA_REQUIRED", "최신 파일 버전을 확인한 뒤 복원해 주세요.", 409);
+    }
+    seen.add(item.resource);
+    return { resource: item.resource, expectedCurrentSha };
+  });
+  const confirmation = getRestoreConfirmation(resources.map(({ resource }) => resource));
+  if (body.confirmation !== confirmation) {
+    throw new AdminWriteError("RESTORE_CONFIRMATION_INVALID", `복원 확인 문구 '${confirmation}'를 정확히 입력해 주세요.`, 400);
+  }
+  return { sourceCommit, resources, confirmation };
+}
+
+async function getProductionDigestMatch(request, env, resource, resourceDigest, readMarker) {
+  try {
+    const marker = await readMarker(request, env);
+    if (marker?.schemaVersion !== 2 || marker?.algorithm !== "sha256") return null;
+    const activeDigest = marker.resources?.[resource];
+    return typeof activeDigest === "string" ? activeDigest === resourceDigest : null;
+  } catch {
+    return null;
+  }
+}
+
 function getOperationErrorCode(error) {
   return error instanceof AdminWriteError || error instanceof GithubContentError
     ? error.code
@@ -207,12 +275,16 @@ export async function handleAdminApi(request, env, options = {}) {
   const requestId = createRequestId();
   const authenticate = options.authenticate ?? authenticateAccess;
   const readResource = options.readResource ?? readAdminResource;
+  const readResourceHistory = options.readResourceHistory ?? readAdminResourceHistory;
+  const readResourceRevision = options.readResourceRevision ?? readAdminResourceRevision;
+  const readResourcesRevision = options.readResourcesRevision ?? readAdminResourcesRevision;
   const readResourcesSnapshot = options.readResourcesSnapshot ?? readAdminResourcesSnapshot;
   const writeResource = options.writeResource ?? writeAdminResource;
   const writeResources = options.writeResources ?? writeAdminResources;
   const uploadImage = options.uploadImage ?? uploadAdminImage;
   const fetchLinkPreview = options.fetchLinkPreview ?? fetchExternalLinkPreview;
   const auditLog = options.auditLog ?? defaultAuditLog;
+  const readDeploymentMarker = options.readDeploymentMarker ?? readProductionDeploymentMarker;
 
   let actor;
   try {
@@ -270,18 +342,57 @@ export async function handleAdminApi(request, env, options = {}) {
   }
 
   if (request.method === "GET" && url.pathname === `${API_VERSION_ROOT}/system`) {
+    const workerVersion = getWorkerVersionMetadata(env);
     return successResponse(
       {
         deployment: "cloudflare-workers-static-assets",
         apiRuntime: "same-worker",
         apiVersion: "v1",
+        workerVersion,
         writeEnabled,
         capabilities: writeEnabled
-          ? ["health", "session", "system", "content-read", "content-write", "content-batch-write", "media-upload", "link-preview"]
-          : ["health", "session", "system"],
+          ? ["health", "session", "system", "deployment-status", "content-read", "content-history", "content-validate", "content-write", "content-batch-write", "content-restore", "media-upload", "link-preview"]
+          : ["health", "session", "system", "deployment-status"],
       },
       requestId,
     );
+  }
+
+  const deploymentStatusPath = `${API_VERSION_ROOT}/deployment-status`;
+  if (request.method === "GET" && url.pathname === deploymentStatusPath) {
+    try {
+      const data = await getDeploymentStatus(request, env, {
+        readMarker: options.readDeploymentMarker,
+        now: options.now?.() ?? Date.now(),
+      });
+      return successResponse(data, requestId);
+    } catch (error) {
+      if (error instanceof DeploymentStatusInputError) {
+        return errorResponse({
+          code: error.code,
+          message: error.message,
+          requestId,
+          status: error.status,
+        });
+      }
+      return errorResponse({
+        code: "DEPLOYMENT_STATUS_FAILED",
+        message: "공개 반영 상태를 확인하지 못했습니다.",
+        requestId,
+        status: 500,
+        retryable: true,
+      });
+    }
+  }
+
+  if (url.pathname === deploymentStatusPath) {
+    return errorResponse({
+      code: "METHOD_NOT_ALLOWED",
+      message: "배포 상태는 조회만 지원합니다.",
+      requestId,
+      status: 405,
+      headers: { Allow: "GET" },
+    });
   }
 
   if (READ_ONLY_PATHS.has(url.pathname)) {
@@ -295,7 +406,185 @@ export async function handleAdminApi(request, env, options = {}) {
   }
 
   const contentBatchPath = `${API_VERSION_ROOT}/content`;
+  const contentValidatePath = `${API_VERSION_ROOT}/content/validate`;
+  const contentRestorePath = `${API_VERSION_ROOT}/content/restore`;
+  const contentHistoryMatch = new RegExp(`^${API_VERSION_ROOT}/content-history/([a-z-]+)(?:/([a-f0-9]{40}))?$`, "u").exec(url.pathname);
   const contentMatch = new RegExp(`^${API_VERSION_ROOT}/content/([a-z-]+)$`, "u").exec(url.pathname);
+
+  if (contentHistoryMatch && request.method === "GET") {
+    if (!writeEnabled) {
+      return operationErrorResponse(new AdminWriteError("WRITE_DISABLED", "관리자 저장 연결이 아직 활성화되지 않았습니다.", 503), requestId);
+    }
+    const resource = contentHistoryMatch[1];
+    const sourceCommit = contentHistoryMatch[2] ?? null;
+    try {
+      if (!sourceCommit) {
+        const result = await readResourceHistory(resource, {
+          limit: url.searchParams.get("limit"),
+          cursor: url.searchParams.get("cursor"),
+        }, env);
+        return successResponse(result, requestId);
+      }
+
+      const [revision, snapshot] = await Promise.all([
+        readResourceRevision(resource, sourceCommit, env),
+        readResourcesSnapshot(env),
+      ]);
+      const current = snapshot.resources?.[resource];
+      if (!current) throw new GithubContentError("GITHUB_CONTENT_INVALID", "저장소 콘텐츠를 읽지 못했습니다.", 502);
+      const currentResources = loadCurrentAdminResources(resource, snapshot);
+      const validationErrors = validateAdminResource(resource, revision.data, currentResources);
+      const resourceDigest = await calculateAdminResourceDigest(revision.data);
+      const productionMatched = await getProductionDigestMatch(
+        request,
+        env,
+        resource,
+        resourceDigest,
+        readDeploymentMarker,
+      );
+      return successResponse({
+        resource,
+        source: {
+          commitSha: revision.sourceCommit,
+          resourceBlobSha: revision.sha,
+          resourceDigest,
+          data: revision.data,
+          productionMatched,
+        },
+        current: {
+          commitSha: snapshot.baseCommitSha,
+          resourceBlobSha: current.sha,
+          data: current.data,
+        },
+        validation: {
+          valid: validationErrors.length === 0,
+          errors: validationErrors,
+        },
+        confirmation: getRestoreConfirmation([resource]),
+      }, requestId);
+    } catch (error) {
+      return operationErrorResponse(error, requestId);
+    }
+  }
+
+  if (contentHistoryMatch) {
+    return errorResponse({
+      code: "METHOD_NOT_ALLOWED",
+      message: "콘텐츠 변경 이력은 조회만 지원합니다.",
+      requestId,
+      status: 405,
+      headers: { Allow: "GET" },
+    });
+  }
+
+  if (url.pathname === contentRestorePath && request.method === "POST") {
+    let auditResources = [];
+    let sourceCommit = null;
+    try {
+      await validateAdminWriteRequest(request, actor, env);
+      const body = await readJsonBody(request);
+      const restore = normalizeRestoreRequest(body);
+      sourceCommit = restore.sourceCommit;
+      auditResources = restore.resources.map(({ resource }) => resource);
+      const [revision, snapshot] = await Promise.all([
+        readResourcesRevision(auditResources, restore.sourceCommit, env),
+        readResourcesSnapshot(env),
+      ]);
+      const changes = restore.resources.map(({ resource, expectedCurrentSha }) => ({
+        resource,
+        sha: expectedCurrentSha,
+        data: revision.resources[resource]?.data,
+      }));
+      const errors = validateBatchChanges(changes, snapshot);
+      if (errors.length > 0) {
+        throw new AdminWriteError("CONTENT_VALIDATION_FAILED", "과거 콘텐츠가 현재 공개 규칙을 통과하지 못해 자동 복원하지 않았습니다.", 422);
+      }
+      if (getChangedResources(changes, snapshot).length === 0) {
+        throw new AdminWriteError("NO_CONTENT_CHANGES", "선택한 과거 내용이 현재 내용과 같습니다.", 400);
+      }
+      const result = {
+        ...await writeResources(changes, env, {
+          snapshot,
+          commitMessage: `관리자: ${auditResources.join(", ")}를 ${restore.sourceCommit.slice(0, 8)} 시점 내용으로 복원`,
+        }),
+        sourceCommit: restore.sourceCommit,
+        restoredResources: auditResources,
+        savedAt: new Date().toISOString(),
+      };
+      await emitAdminAudit(auditLog, actor, env, {
+        requestId,
+        operation: "content-restore",
+        resource: auditResources.length === 1 ? auditResources[0] : "batch",
+        resources: auditResources,
+        result: "success",
+        sourceCommit: restore.sourceCommit,
+        commitSha: result.commitSha ?? null,
+      });
+      return successResponse(result, requestId);
+    } catch (error) {
+      await emitAdminAudit(auditLog, actor, env, {
+        requestId,
+        operation: "content-restore",
+        resource: auditResources.length === 1 ? auditResources[0] : "batch",
+        resources: auditResources,
+        result: "failure",
+        sourceCommit,
+        errorCode: getOperationErrorCode(error),
+      });
+      return operationErrorResponse(error, requestId);
+    }
+  }
+
+  if (url.pathname === contentRestorePath) {
+    return errorResponse({
+      code: "METHOD_NOT_ALLOWED",
+      message: "콘텐츠 복원은 POST 요청만 지원합니다.",
+      requestId,
+      status: 405,
+      headers: { Allow: "POST" },
+    });
+  }
+
+  if (url.pathname === contentValidatePath && request.method === "POST") {
+    try {
+      await validateAdminWriteRequest(request, actor, env);
+      const body = await readJsonBody(request);
+      const changes = normalizeBatchChanges(body?.changes);
+      const snapshot = await readResourcesSnapshot(env);
+      const errors = validateBatchChanges(changes, snapshot);
+      if (errors.length > 0) {
+        return errorResponse({
+          code: "CONTENT_VALIDATION_FAILED",
+          message: "저장할 공개 내용을 다시 확인해 주세요.",
+          details: errors,
+          requestId,
+          status: 422,
+        });
+      }
+      const changedResources = getChangedResources(changes, snapshot);
+      if (changedResources.length === 0) {
+        throw new AdminWriteError("NO_CONTENT_CHANGES", "변경된 내용이 없습니다.", 400);
+      }
+      return successResponse({
+        valid: true,
+        snapshotCommit: snapshot.baseCommitSha,
+        changedResources,
+        warnings: [],
+      }, requestId);
+    } catch (error) {
+      return operationErrorResponse(error, requestId);
+    }
+  }
+
+  if (url.pathname === contentValidatePath) {
+    return errorResponse({
+      code: "METHOD_NOT_ALLOWED",
+      message: "콘텐츠 사전 검증은 POST 요청만 지원합니다.",
+      requestId,
+      status: 405,
+      headers: { Allow: "POST" },
+    });
+  }
 
   if (url.pathname === contentBatchPath && request.method === "PUT") {
     let resources = [];
@@ -323,7 +612,10 @@ export async function handleAdminApi(request, env, options = {}) {
           status: 422,
         });
       }
-      const result = await writeResources(changes, env, { snapshot });
+      const result = {
+        ...await writeResources(changes, env, { snapshot }),
+        savedAt: new Date().toISOString(),
+      };
       await emitAdminAudit(auditLog, actor, env, {
         requestId,
         operation: "content-batch-write",
@@ -385,7 +677,10 @@ export async function handleAdminApi(request, env, options = {}) {
           status: 422,
         });
       }
-      const result = await writeResource(resource, body.data, body.sha, env, { snapshot });
+      const result = {
+        ...await writeResource(resource, body.data, body.sha, env, { snapshot }),
+        savedAt: new Date().toISOString(),
+      };
       await emitAdminAudit(auditLog, actor, env, {
         requestId,
         operation: "content-write",

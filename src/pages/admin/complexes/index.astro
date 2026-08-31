@@ -79,6 +79,7 @@ import { complexes } from "../../../lib/complexes";
 
   <script>
     import { convertImageFileToWebp, readAdminContent, setAdminFormStatus, uploadAdminImage, writeAdminContent, type AdminResource } from "../../../lib/admin-content-client";
+    import { guardAdminFormChanges, reviewAdminContentChange } from "../../../lib/admin-content-review";
     import type { ComplexContent, ComplexOverview, ComplexSource } from "../../../lib/complexes";
 
     const form = document.querySelector<HTMLFormElement>("[data-complex-form]");
@@ -90,6 +91,8 @@ import { complexes } from "../../../lib/complexes";
     const formTitle = document.querySelector<HTMLElement>("[data-complex-form-title]");
     let resource: AdminResource<ComplexContent[]> | null = null;
     let overviewResource: AdminResource<ComplexOverview> | null = null;
+    const dirtyGuard = guardAdminFormChanges(form);
+    const overviewDirtyGuard = guardAdminFormChanges(overviewForm);
     const field = (name: string) => form?.elements.namedItem(name) as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null;
     const overviewField = (name: string) => overviewForm?.elements.namedItem(name) as HTMLInputElement | HTMLTextAreaElement | null;
     const splitLines = (value: string) => value.split("\n").map((line) => line.trim()).filter(Boolean);
@@ -117,6 +120,7 @@ import { complexes } from "../../../lib/complexes";
         confirmedAt: overview.confirmedAt,
       };
       Object.entries(values).forEach(([name, value]) => { if (overviewField(name)) overviewField(name)!.value = value; });
+      overviewDirtyGuard.markSaved();
     };
 
     const renderList = () => {
@@ -132,7 +136,7 @@ import { complexes } from "../../../lib/complexes";
       });
       if (count) count.textContent = String(resource.data.length);
     };
-    const resetForm = () => { form?.reset(); if (field("originalSlug")) field("originalSlug")!.value = ""; if (formTitle) formTitle.textContent = "새 지역·단지"; setAdminFormStatus(statusMessage, "지역과 단지 설명을 입력해 주세요."); };
+    const resetForm = () => { form?.reset(); if (field("originalSlug")) field("originalSlug")!.value = ""; if (formTitle) formTitle.textContent = "새 지역·단지"; dirtyGuard.markSaved(); setAdminFormStatus(statusMessage, "지역과 단지 설명을 입력해 주세요."); };
     const edit = (slug: string) => {
       const complex = resource?.data.find((item) => item.slug === slug); if (!complex) return;
       const values: Record<string, string> = {
@@ -162,6 +166,7 @@ import { complexes } from "../../../lib/complexes";
       };
       Object.entries(values).forEach(([name, value]) => { if (field(name)) field(name)!.value = value; });
       if (formTitle) formTitle.textContent = "지역·단지 수정";
+      dirtyGuard.markSaved();
     };
     window.addEventListener("admin-write-ready", (event) => {
       if (!(event as CustomEvent<{ writeEnabled: boolean }>).detail.writeEnabled) return;
@@ -173,6 +178,8 @@ import { complexes } from "../../../lib/complexes";
         overviewResource = currentOverview;
         renderList();
         renderOverview();
+        dirtyGuard.markSaved();
+        overviewDirtyGuard.markSaved();
         setAdminFormStatus(statusMessage, "GitHub의 최신 내용을 불러왔습니다.");
         setAdminFormStatus(overviewStatusMessage, "GitHub의 최신 전체 안내를 불러왔습니다.");
       }).catch((error) => {
@@ -186,6 +193,7 @@ import { complexes } from "../../../lib/complexes";
       if (!overviewResource) return setAdminFormStatus(overviewStatusMessage, "최신 전체 안내를 먼저 불러와 주세요.", "error");
       const submit = overviewForm.querySelector<HTMLButtonElement>("button[type='submit']");
       if (submit) submit.disabled = true;
+      setAdminFormStatus(overviewStatusMessage, "변경 요약과 서버 검증을 준비하고 있습니다.", "saving");
       try {
         const value = (name: string) => overviewField(name)?.value.trim() ?? "";
         const rows = (name: string) => splitLines(value(name)).map(splitParts);
@@ -205,10 +213,21 @@ import { complexes } from "../../../lib/complexes";
           relatedContentIds: splitLines(value("relatedContentIds")),
           sources: parseSources(value("sources")),
         };
+        const confirmed = await reviewAdminContentChange({
+          changes: [{ resource: "complexes-overview", sha: overviewResource.sha, data: next }],
+          beforeByResource: { "complexes-overview": overviewResource.data },
+          impactPages: ["리더스시티 전체 안내", "4·5블록 비교", "단지 목록"],
+        });
+        if (!confirmed) {
+          setAdminFormStatus(overviewStatusMessage, "저장을 취소했습니다. 입력한 내용은 그대로 유지됩니다.");
+          return;
+        }
+        setAdminFormStatus(overviewStatusMessage, "사전 검증을 통과한 전체 안내를 GitHub에 저장하고 있습니다.", "saving");
         const result = await writeAdminContent("complexes-overview", overviewResource.sha, next);
         overviewResource = { resource: "complexes-overview", sha: result.contentSha ?? overviewResource.sha, data: next };
         renderOverview();
-        setAdminFormStatus(overviewStatusMessage, "전체 안내를 저장했습니다. GitHub 커밋이 생성되었습니다.", "success");
+        overviewDirtyGuard.markSaved();
+        setAdminFormStatus(overviewStatusMessage, "전체 안내를 GitHub에 저장했습니다. 배포 상태 메뉴에서 공개 반영을 확인해 주세요.", "success");
       } catch (error) {
         setAdminFormStatus(overviewStatusMessage, error instanceof Error ? error.message : "전체 안내를 저장하지 못했습니다.", "error");
       } finally {
@@ -220,6 +239,7 @@ import { complexes } from "../../../lib/complexes";
     form?.addEventListener("submit", async (event) => {
       event.preventDefault(); if (!resource) return setAdminFormStatus(statusMessage, "최신 내용을 먼저 불러와 주세요.", "error");
       const submit = form.querySelector<HTMLButtonElement>("button[type='submit']"); if (submit) submit.disabled = true;
+      setAdminFormStatus(statusMessage, "변경 요약과 서버 검증을 준비하고 있습니다.", "saving");
       try {
         const value = (name: string) => field(name)?.value.trim() ?? ""; const originalSlug = value("originalSlug");
         const parsePairs = (name: string, firstKey: string, secondKey: string) => value(name).split("\n").map((line) => line.trim()).filter(Boolean).map((line) => {
@@ -230,7 +250,7 @@ import { complexes } from "../../../lib/complexes";
         const current = resource.data.find((candidate) => candidate.slug === originalSlug);
         let image = current?.image ?? null;
         const imageFile = (field("imageFile") as HTMLInputElement)?.files?.[0];
-        if (imageFile) image = { src: (await uploadAdminImage("area", await convertImageFileToWebp(imageFile))).src, alt: value("imageAlt") };
+        if (imageFile) image = { src: "/images/content/area/pending-admin-review.webp", alt: value("imageAlt") };
         if (image) image = { ...image, alt: value("imageAlt") };
         const item: ComplexContent = {
           slug: value("slug"),
@@ -275,7 +295,18 @@ import { complexes } from "../../../lib/complexes";
           confirmedAt: value("confirmedAt") || null,
         };
         const next = originalSlug ? resource.data.map((candidate) => candidate.slug === originalSlug ? item : candidate) : [...resource.data, item];
-        const result = await writeAdminContent("complexes", resource.sha, next); resource = { resource: "complexes", sha: result.contentSha ?? resource.sha, data: next }; renderList(); resetForm(); setAdminFormStatus(statusMessage, "저장했습니다. GitHub 커밋이 생성되었습니다. 자동 배포 연결 후 단지정보 화면에 반영됩니다.", "success");
+        const confirmed = await reviewAdminContentChange({
+          changes: [{ resource: "complexes", sha: resource.sha, data: next }],
+          beforeByResource: { complexes: resource.data },
+          impactPages: ["단지 목록", "단지 상세", "리더스시티 비교"],
+        });
+        if (!confirmed) {
+          setAdminFormStatus(statusMessage, "저장을 취소했습니다. 입력한 내용은 그대로 유지됩니다.");
+          return;
+        }
+        setAdminFormStatus(statusMessage, "사전 검증을 통과한 지역·단지 내용을 GitHub에 저장하고 있습니다.", "saving");
+        if (imageFile) item.image = { src: (await uploadAdminImage("area", await convertImageFileToWebp(imageFile))).src, alt: value("imageAlt") };
+        const result = await writeAdminContent("complexes", resource.sha, next); resource = { resource: "complexes", sha: result.contentSha ?? resource.sha, data: next }; renderList(); resetForm(); dirtyGuard.markSaved(); setAdminFormStatus(statusMessage, "지역·단지 내용을 GitHub에 저장했습니다. 배포 상태 메뉴에서 공개 반영을 확인해 주세요.", "success");
       } catch (error) { setAdminFormStatus(statusMessage, error instanceof Error ? error.message : "저장하지 못했습니다.", "error"); }
       finally { if (submit) submit.disabled = false; }
     });

@@ -17,6 +17,8 @@ const navigation = [
   { href: "/admin/content/", label: "첫 화면·사무소", shortLabel: "홈글" },
   { href: "/admin/external-links/", label: "블로그·유튜브", shortLabel: "링크" },
   { href: "/admin/complexes/", label: "지역·단지 설명", shortLabel: "지역" },
+  { href: "/admin/deployment/", label: "배포 상태", shortLabel: "배포" },
+  { href: "/admin/history/", label: "변경 이력·복원", shortLabel: "이력" },
 ];
 
 const isCurrentPath = (href: string) =>
@@ -70,7 +72,6 @@ const isCurrentPath = (href: string) =>
           <p>추가 관리</p>
           <ul class="admin-navigation__future" aria-label="준비 중인 메뉴">
             <li><span>FAQ·후기 <small>준비 중</small></span></li>
-            <li><span>배포 상태 <small>준비 중</small></span></li>
           </ul>
         </nav>
 

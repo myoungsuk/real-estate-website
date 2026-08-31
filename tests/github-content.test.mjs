@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { ADMIN_RESOURCE_PATHS } from "../worker/admin-resource-validation.mjs";
+import { calculateAdminResourceDigest } from "../src/lib/admin-resource-digest.mjs";
 import {
   readAdminResource,
+  readAdminResourceHistory,
+  readAdminResourceRevision,
   readAdminResourcesSnapshot,
   uploadAdminImage,
   validateWebpBytes,
@@ -110,6 +113,98 @@ test("단일 관리자 JSON 조회도 고정 commit을 응답에 포함한다", 
   assert.deepEqual(result.data, { resource: "listings" });
 });
 
+test("콘텐츠 변경 이력은 현재 branch의 허용 경로만 최대 건수와 cursor로 조회한다", async () => {
+  const commits = ["c".repeat(40), "d".repeat(40), "e".repeat(40)];
+  const trees = ["1".repeat(40), "2".repeat(40), "3".repeat(40)];
+  const blobs = ["4".repeat(40), "5".repeat(40), "6".repeat(40)];
+  const calls = [];
+  const result = await readAdminResourceHistory("home-content", { limit: 2 }, env, async (url, init) => {
+    calls.push({ url, init });
+    if (url.includes("/commits?")) {
+      const parsed = new URL(url);
+      assert.equal(parsed.searchParams.get("sha"), "master");
+      assert.equal(parsed.searchParams.get("path"), ADMIN_RESOURCE_PATHS["home-content"]);
+      assert.equal(parsed.searchParams.get("per_page"), "3");
+      return Response.json(commits.map((sha, index) => ({
+        sha,
+        commit: {
+          message: index === 0 ? "관리자: 공개 문구 수정\n상세" : "owner@example.com 010-1234-5678 수정",
+          author: { name: index === 0 ? "관리자" : "owner@example.com", date: `2026-08-${30 - index}T01:02:03Z` },
+          committer: { date: `2026-08-${30 - index}T01:02:03Z` },
+          tree: { sha: trees[index] },
+        },
+      })));
+    }
+    const treeIndex = trees.findIndex((sha) => url.includes(`/git/trees/${sha}`));
+    if (treeIndex >= 0) {
+      return Response.json({
+        truncated: false,
+        tree: [{ path: ADMIN_RESOURCE_PATHS["home-content"], type: "blob", sha: blobs[treeIndex] }],
+      });
+    }
+    throw new Error(`예상하지 못한 GitHub 요청: ${url}`);
+  });
+
+  assert.equal(result.entries.length, 2);
+  assert.equal(result.entries[0].title, "관리자: 공개 문구 수정");
+  assert.doesNotMatch(JSON.stringify(result), /owner@example\.com|010-1234-5678/u);
+  assert.equal(result.entries[1].resourceBlobSha, blobs[1]);
+  assert.equal(result.entries.every((entry) => entry.onCurrentBranch && entry.productionMatched === null), true);
+  assert.match(result.nextCursor, /^[A-Za-z0-9_-]+$/u);
+  assert.equal(calls.filter(({ url }) => url.includes("/git/trees/")).length, 2);
+});
+
+test("과거 JSON은 현재 branch의 조상 commit인지 확인한 뒤 허용 resource blob만 읽는다", async () => {
+  const sourceCommit = "c".repeat(40);
+  const treeSha = "d".repeat(40);
+  const blobSha = "e".repeat(40);
+  const calls = [];
+  const result = await readAdminResourceRevision("home-content", sourceCommit, env, async (url, init) => {
+    calls.push({ url, init });
+    if (url.includes(`/compare/${sourceCommit}...master`)) {
+      return Response.json({ status: "ahead", merge_base_commit: { sha: sourceCommit } });
+    }
+    if (url.endsWith(`/git/commits/${sourceCommit}`)) return Response.json({ tree: { sha: treeSha } });
+    if (url.endsWith(`/git/trees/${treeSha}?recursive=1`)) {
+      return Response.json({
+        truncated: false,
+        tree: [{ path: ADMIN_RESOURCE_PATHS["home-content"], type: "blob", sha: blobSha }],
+      });
+    }
+    if (url.endsWith(`/git/blobs/${blobSha}`)) {
+      return Response.json({ encoding: "base64", content: Buffer.from('{"past":true}\n').toString("base64") });
+    }
+    throw new Error(`예상하지 못한 GitHub 요청: ${url}`);
+  });
+
+  assert.equal(result.sourceCommit, sourceCommit);
+  assert.equal(result.sha, blobSha);
+  assert.deepEqual(result.data, { past: true });
+  assert.equal(calls.length, 4);
+});
+
+test("현재 branch 밖의 commit과 GitHub rate limit은 안전하게 실패한다", async () => {
+  const sourceCommit = "c".repeat(40);
+  let calls = 0;
+  await assert.rejects(
+    readAdminResourceRevision("home-content", sourceCommit, env, async () => {
+      calls += 1;
+      return Response.json({ status: "diverged", merge_base_commit: { sha: "f".repeat(40) } });
+    }),
+    (error) => error.code === "HISTORY_COMMIT_DENIED" && error.status === 400,
+  );
+  assert.equal(calls, 1);
+
+  await assert.rejects(
+    readAdminResourceHistory("home-content", { limit: 10 }, env, async () => Response.json({}, { status: 429 })),
+    (error) => error.code === "GITHUB_RATE_LIMITED" && error.status === 503 && error.upstreamStatus === 429,
+  );
+  await assert.rejects(
+    readAdminResourceHistory("home-content", { limit: 10 }, env, async () => Response.json({}, { status: 503 })),
+    (error) => error.code === "GITHUB_UNAVAILABLE" && error.status === 502 && error.upstreamStatus === 503,
+  );
+});
+
 test("GitHub JSON 저장은 base tree에 단일 commit을 만들고 ref를 강제 없이 갱신한다", async () => {
   const newBlobSha = "c".repeat(40);
   const newTreeSha = "d".repeat(40);
@@ -154,6 +249,7 @@ test("GitHub JSON 저장은 base tree에 단일 commit을 만들고 ref를 강�
     resource: "listings",
     commitSha: newCommitSha,
     contentSha: newBlobSha,
+    resourceDigest: await calculateAdminResourceDigest([]),
     baseCommitSha: newCommitSha,
   });
 });
@@ -215,8 +311,8 @@ test("여러 관리자 JSON은 복수 blob과 한 tree, 한 commit, 한 ref 갱�
   assert.deepEqual(refBody, { sha: newCommitSha, force: false });
   assert.deepEqual(result, {
     resources: [
-      { resource: "listings", contentSha: blobShas[0] },
-      { resource: "faq", contentSha: blobShas[1] },
+      { resource: "listings", contentSha: blobShas[0], resourceDigest: await calculateAdminResourceDigest(changes[0].data) },
+      { resource: "faq", contentSha: blobShas[1], resourceDigest: await calculateAdminResourceDigest(changes[1].data) },
     ],
     commitSha: newCommitSha,
     baseCommitSha: newCommitSha,

@@ -1,0 +1,274 @@
+---
+const resourceOptions = [
+  ["home-content", "첫 화면 콘텐츠"],
+  ["naver-listings", "네이버 매물"],
+  ["listing-review-state", "매물 재확인 상태"],
+  ["external-links", "블로그·유튜브"],
+  ["complexes", "지역·단지 설명"],
+  ["complexes-overview", "리더스시티 전체 안내"],
+  ["listings", "매물"],
+  ["office", "사무소"],
+  ["faq", "자주 묻는 질문"],
+  ["reviews", "후기"],
+] as const;
+---
+
+<section class="admin-panel admin-history-panel" aria-labelledby="admin-history-title" data-admin-history>
+  <div class="admin-panel__heading">
+    <div>
+      <p class="admin-eyebrow">GIT HISTORY</p>
+      <h2 id="admin-history-title">공개 콘텐츠 변경 이력</h2>
+    </div>
+    <span class="admin-status-badge" data-state="idle" data-history-badge>조회 전</span>
+  </div>
+
+  <p class="admin-panel-description">
+    현재 master에 포함된 공개 JSON 변경만 조회합니다. 과거 버전을 선택해도 기존 이력은 지우지 않고 새 복원 커밋을 만듭니다.
+  </p>
+
+  <form class="admin-history-toolbar" data-history-form>
+    <label>
+      <span>콘텐츠 종류</span>
+      <select name="resource" required data-history-resource>
+        <option value="">선택해 주세요</option>
+        {resourceOptions.map(([value, label]) => <option value={value}>{label}</option>)}
+      </select>
+    </label>
+    <button class="admin-primary-button" type="submit">변경 이력 불러오기</button>
+  </form>
+
+  <p class="admin-form-status" data-state="idle" aria-live="polite" data-history-status>
+    콘텐츠를 선택하면 최근 변경 10개를 확인할 수 있습니다.
+  </p>
+
+  <ol class="admin-history-list" aria-label="콘텐츠 변경 이력" data-history-list hidden></ol>
+  <button class="admin-secondary-button" type="button" data-history-more hidden>이전 변경 더 보기</button>
+
+  <section class="admin-history-preview" aria-labelledby="admin-history-preview-title" data-history-preview hidden>
+    <div class="admin-panel__heading">
+      <div>
+        <p class="admin-eyebrow">RESTORE REVIEW</p>
+        <h3 id="admin-history-preview-title">복원 전 변경 내용 확인</h3>
+      </div>
+      <span class="admin-status-badge" data-state="idle" data-preview-badge>검토 전</span>
+    </div>
+    <dl class="admin-history-facts">
+      <div><dt>복원할 버전</dt><dd data-preview-source>선택 전</dd></div>
+      <div><dt>현재 버전</dt><dd data-preview-current>확인 전</dd></div>
+      <div><dt>Production 일치</dt><dd data-preview-production>확인 전</dd></div>
+    </dl>
+    <ol class="admin-review-list" data-history-diff></ol>
+    <p class="admin-form-status" data-state="idle" aria-live="polite" data-preview-status></p>
+
+    <div class="admin-history-confirmation" data-history-confirmation hidden>
+      <label>
+        <span>2차 확인 문구</span>
+        <strong data-confirmation-guide></strong>
+        <input type="text" autocomplete="off" spellcheck="false" data-confirmation-input />
+      </label>
+      <button class="admin-danger-button" type="button" data-restore-button disabled>
+        새 커밋으로 복원
+      </button>
+    </div>
+  </section>
+</section>
+
+<script>
+  import {
+    readAdminContentHistory,
+    readAdminContentRevision,
+    restoreAdminContent,
+    type AdminContentHistoryEntry,
+    type AdminContentRevision,
+  } from "../../lib/admin-content-client";
+  import { createAdminContentDiff } from "../../lib/admin-content-diff.mjs";
+
+  const root = document.querySelector<HTMLElement>("[data-admin-history]");
+  const form = root?.querySelector<HTMLFormElement>("[data-history-form]");
+  const resourceSelect = root?.querySelector<HTMLSelectElement>("[data-history-resource]");
+  const status = root?.querySelector<HTMLElement>("[data-history-status]");
+  const badge = root?.querySelector<HTMLElement>("[data-history-badge]");
+  const list = root?.querySelector<HTMLOListElement>("[data-history-list]");
+  const moreButton = root?.querySelector<HTMLButtonElement>("[data-history-more]");
+  const preview = root?.querySelector<HTMLElement>("[data-history-preview]");
+  const previewBadge = root?.querySelector<HTMLElement>("[data-preview-badge]");
+  const previewSource = root?.querySelector<HTMLElement>("[data-preview-source]");
+  const previewCurrent = root?.querySelector<HTMLElement>("[data-preview-current]");
+  const previewProduction = root?.querySelector<HTMLElement>("[data-preview-production]");
+  const previewStatus = root?.querySelector<HTMLElement>("[data-preview-status]");
+  const diffList = root?.querySelector<HTMLOListElement>("[data-history-diff]");
+  const confirmation = root?.querySelector<HTMLElement>("[data-history-confirmation]");
+  const confirmationGuide = root?.querySelector<HTMLElement>("[data-confirmation-guide]");
+  const confirmationInput = root?.querySelector<HTMLInputElement>("[data-confirmation-input]");
+  const restoreButton = root?.querySelector<HTMLButtonElement>("[data-restore-button]");
+
+  let nextCursor: string | null = null;
+  let selectedRevision: AdminContentRevision | null = null;
+
+  const setStatus = (element: HTMLElement | null | undefined, message: string, state: "idle" | "saving" | "success" | "error" = "idle") => {
+    if (!element) return;
+    element.textContent = message;
+    element.dataset.state = state;
+  };
+
+  const shortSha = (sha: string) => sha.slice(0, 8);
+  const formatDate = (value: string) => new Intl.DateTimeFormat("ko-KR", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+
+  const createHistoryItem = (entry: AdminContentHistoryEntry) => {
+    const item = document.createElement("li");
+    item.className = "admin-history-item";
+    const content = document.createElement("div");
+    const title = document.createElement("strong");
+    title.textContent = entry.title;
+    const meta = document.createElement("span");
+    meta.textContent = `${formatDate(entry.committedAt)} · ${entry.author} · ${shortSha(entry.commitSha)}`;
+    content.append(title, meta);
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "admin-secondary-button";
+    button.textContent = "변경 확인";
+    button.addEventListener("click", () => void showRevision(entry.commitSha, button));
+    item.append(content, button);
+    return item;
+  };
+
+  const loadHistory = async (cursor: string | null = null) => {
+    const resource = resourceSelect?.value ?? "";
+    if (!resource || !list || !moreButton) return;
+    setStatus(status, "GitHub 변경 이력을 불러오는 중입니다.", "saving");
+    setStatus(badge, "조회 중", "saving");
+    moreButton.disabled = true;
+    try {
+      const result = await readAdminContentHistory(resource, cursor);
+      if (!cursor) list.replaceChildren();
+      for (const entry of result.entries) list.append(createHistoryItem(entry));
+      list.hidden = result.entries.length === 0 && !cursor;
+      nextCursor = result.nextCursor;
+      moreButton.hidden = !nextCursor;
+      moreButton.disabled = false;
+      const total = list.children.length;
+      setStatus(status, total > 0 ? `현재 branch에 포함된 변경 ${total}개를 표시합니다.` : "표시할 변경 이력이 없습니다.", "success");
+      setStatus(badge, total > 0 ? `${total}개 확인` : "이력 없음", "success");
+    } catch (error) {
+      setStatus(status, error instanceof Error ? error.message : "변경 이력을 불러오지 못했습니다.", "error");
+      setStatus(badge, "조회 실패", "error");
+      moreButton.disabled = false;
+    }
+  };
+
+  const appendDiffValue = (item: HTMLLIElement, label: string, value: string) => {
+    const row = document.createElement("p");
+    const strong = document.createElement("strong");
+    strong.textContent = `${label}: `;
+    row.append(strong, document.createTextNode(value));
+    item.append(row);
+  };
+
+  const showRevision = async (commitSha: string, trigger: HTMLButtonElement) => {
+    const resource = resourceSelect?.value ?? "";
+    if (!resource || !preview || !diffList || !confirmation || !confirmationInput || !restoreButton) return;
+    trigger.disabled = true;
+    preview.hidden = false;
+    confirmation.hidden = true;
+    confirmationInput.value = "";
+    restoreButton.disabled = true;
+    diffList.replaceChildren();
+    setStatus(previewStatus, "과거 JSON을 현재 공개 규칙으로 검증하는 중입니다.", "saving");
+    setStatus(previewBadge, "검증 중", "saving");
+    try {
+      const revision = await readAdminContentRevision(resource, commitSha);
+      selectedRevision = revision;
+      if (previewSource) previewSource.textContent = shortSha(revision.source.commitSha);
+      if (previewCurrent) previewCurrent.textContent = shortSha(revision.current.commitSha);
+      if (previewProduction) {
+        previewProduction.textContent = revision.source.productionMatched === true
+          ? "현재 공개 내용과 같음"
+          : revision.source.productionMatched === false
+            ? "현재 공개 내용과 다름"
+            : "확인 불가";
+      }
+      const diffs = createAdminContentDiff(resource, revision.current.data, revision.source.data);
+      for (const diff of diffs) {
+        const item = document.createElement("li");
+        item.className = "admin-review-item";
+        const heading = document.createElement("h4");
+        heading.textContent = diff.label;
+        item.append(heading);
+        appendDiffValue(item, "현재", diff.before);
+        appendDiffValue(item, "복원 후", diff.after);
+        diffList.append(item);
+      }
+      if (!revision.validation.valid) {
+        selectedRevision = null;
+        setStatus(previewBadge, "자동 복원 차단", "error");
+        setStatus(previewStatus, `현재 공개 규칙을 통과하지 못했습니다. ${revision.validation.errors.join(" ")}`, "error");
+      } else if (diffs.length === 0) {
+        selectedRevision = null;
+        setStatus(previewBadge, "변경 없음", "idle");
+        setStatus(previewStatus, "선택한 버전과 현재 내용이 같아 복원할 변경이 없습니다.", "idle");
+      } else {
+        if (confirmationGuide) confirmationGuide.textContent = revision.confirmation;
+        confirmationInput.placeholder = revision.confirmation;
+        confirmation.hidden = false;
+        setStatus(previewBadge, `${diffs.length}개 변경`, "success");
+        setStatus(previewStatus, "1차 변경 확인이 끝났습니다. 아래 확인 문구를 정확히 입력해야 복원할 수 있습니다.", "success");
+      }
+      preview.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (error) {
+      selectedRevision = null;
+      setStatus(previewBadge, "검증 실패", "error");
+      setStatus(previewStatus, error instanceof Error ? error.message : "과거 버전을 확인하지 못했습니다.", "error");
+    } finally {
+      trigger.disabled = false;
+    }
+  };
+
+  form?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    selectedRevision = null;
+    if (preview) preview.hidden = true;
+    void loadHistory();
+  });
+  resourceSelect?.addEventListener("change", () => {
+    selectedRevision = null;
+    nextCursor = null;
+    if (list) {
+      list.replaceChildren();
+      list.hidden = true;
+    }
+    if (moreButton) moreButton.hidden = true;
+    if (preview) preview.hidden = true;
+    setStatus(status, resourceSelect.value ? "변경 이력 불러오기를 눌러 주세요." : "콘텐츠를 선택해 주세요.", "idle");
+    setStatus(badge, "조회 전", "idle");
+  });
+  moreButton?.addEventListener("click", () => {
+    if (nextCursor) void loadHistory(nextCursor);
+  });
+  confirmationInput?.addEventListener("input", () => {
+    if (!restoreButton || !selectedRevision) return;
+    restoreButton.disabled = confirmationInput.value !== selectedRevision.confirmation;
+  });
+  restoreButton?.addEventListener("click", async () => {
+    if (!selectedRevision || !confirmationInput || !restoreButton) return;
+    const revision = selectedRevision;
+    restoreButton.disabled = true;
+    confirmationInput.disabled = true;
+    setStatus(previewStatus, "현재 branch와 파일 버전을 다시 확인한 뒤 새 복원 커밋을 만드는 중입니다.", "saving");
+    try {
+      const result = await restoreAdminContent(revision, confirmationInput.value);
+      selectedRevision = null;
+      setStatus(previewBadge, "GitHub 복원 저장 완료", "success");
+      setStatus(previewStatus, `복원 commit ${shortSha(result.commitSha)}이 생성되었습니다. 공개 반영은 배포 상태에서 따로 확인해 주세요.`, "success");
+      confirmation?.setAttribute("hidden", "");
+      setStatus(status, "복원 뒤 최신 이력을 다시 불러오세요.", "success");
+    } catch (error) {
+      setStatus(previewBadge, "복원 실패", "error");
+      setStatus(previewStatus, error instanceof Error ? error.message : "콘텐츠를 복원하지 못했습니다.", "error");
+      confirmationInput.disabled = false;
+      restoreButton.disabled = confirmationInput.value !== revision.confirmation;
+    }
+  });
+</script>

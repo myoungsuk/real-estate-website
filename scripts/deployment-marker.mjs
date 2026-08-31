@@ -2,6 +2,12 @@ import { createHash } from "node:crypto";
 import { lstat, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import {
+  ADMIN_RESOURCE_PATHS,
+  calculateAdminResourceDigest,
+} from "../src/lib/admin-resource-digest.mjs";
+
+export const DEPLOYMENT_MARKER_SCHEMA_VERSION = 2;
 
 export const deploymentMarkerScopes = Object.freeze({
   search: [
@@ -12,6 +18,8 @@ export const deploymentMarkerScopes = Object.freeze({
   ],
   bank: [
     ".github/bank-listing-sync-state.json",
+    ".github/listing-review-policy.json",
+    ".github/listing-review-state.json",
     "src/data/naver-listings.json",
   ],
   external: [
@@ -62,14 +70,56 @@ export async function calculateDeploymentScopeHash(scope, { rootDir = process.cw
   return hash.digest("hex");
 }
 
-export async function createDeploymentMarker({ rootDir = process.cwd() } = {}) {
+function normalizeCommit(value) {
+  return /^[a-f0-9]{40}$/u.test(value ?? "") ? value.toLowerCase() : null;
+}
+
+function normalizeBranch(value) {
+  const branch = value?.trim();
+  return branch && branch.length <= 255 && !/[\u0000-\u001f\u007f]/u.test(branch) ? branch : null;
+}
+
+export function resolveDeploymentSource(environment = process.env) {
+  if (environment.WORKERS_CI === "1" || environment.WORKERS_CI_COMMIT_SHA || environment.WORKERS_CI_BRANCH) {
+    return {
+      commit: normalizeCommit(environment.WORKERS_CI_COMMIT_SHA),
+      branch: normalizeBranch(environment.WORKERS_CI_BRANCH),
+      provider: "workers-builds",
+    };
+  }
+  if (environment.GITHUB_ACTIONS === "true" || environment.GITHUB_SHA || environment.GITHUB_REF_NAME) {
+    return {
+      commit: normalizeCommit(environment.GITHUB_SHA),
+      branch: normalizeBranch(environment.GITHUB_REF_NAME),
+      provider: "github-actions",
+    };
+  }
+  return { commit: null, branch: null, provider: "local" };
+}
+
+export async function calculateAdminResourceDigests({ rootDir = process.cwd() } = {}) {
+  const resources = {};
+  const absoluteRoot = resolve(rootDir);
+  for (const [resource, filePath] of Object.entries(ADMIN_RESOURCE_PATHS)) {
+    const absolutePath = resolve(absoluteRoot, filePath);
+    if (relative(absoluteRoot, absolutePath).startsWith("..")) {
+      throw new Error(`관리자 리소스 경로가 저장소 밖을 가리킵니다: ${filePath}`);
+    }
+    resources[resource] = await calculateAdminResourceDigest(JSON.parse(await readFile(absolutePath, "utf8")));
+  }
+  return resources;
+}
+
+export async function createDeploymentMarker({ rootDir = process.cwd(), environment = process.env } = {}) {
   const scopes = {};
   for (const scope of Object.keys(deploymentMarkerScopes)) {
     scopes[scope] = await calculateDeploymentScopeHash(scope, { rootDir });
   }
   return {
-    schemaVersion: 1,
+    schemaVersion: DEPLOYMENT_MARKER_SCHEMA_VERSION,
     algorithm: "sha256",
+    source: resolveDeploymentSource(environment),
+    resources: await calculateAdminResourceDigests({ rootDir }),
     scopes,
   };
 }

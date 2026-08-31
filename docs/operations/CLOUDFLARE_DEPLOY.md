@@ -31,7 +31,9 @@ Worker는 GitHub `myoungsuk/real-estate-website`의 `master`에 연결되어 있
 
 `GITHUB_TOKEN` push는 GitHub의 기존 push 기반 CI를 다시 실행하지 않으므로 동기화 워크플로 자체의 테스트·검사·Production-mode 빌드 성공 로그를 확인한다. push 뒤에는 새 빌드의 `/deployment-marker.json`에서 해당 콘텐츠 범위의 SHA-256 값이 검증 job의 예상값과 일치할 때까지 약 10분간 확인하며, 배포가 시작되지 않거나 잘못된 버전이 계속 제공되면 Action을 실패로 표시한다. 이 표시는 자동 롤백은 아니므로 실패 알림을 확인한 운영자가 Cloudflare 빌드 로그와 공개 화면을 점검한다.
 
-`wrangler.jsonc`는 `./dist` 정적 자산과 `worker/index.mjs` 관리 API를 같은 Worker로 배포합니다. `leaderscityhappy.com`은 Worker Custom Domain으로 선언하며 `/api/admin`과 `/api/admin/*`만 Worker를 먼저 실행하므로 공개 경로는 정적 자산으로 제공합니다. Production 빌드는 `PUBLIC_SITE_URL=https://leaderscityhappy.com`과 `PUBLIC_ALLOW_INDEXING=true`를 반드시 함께 설정합니다.
+`wrangler.jsonc`는 `./dist` 정적 자산과 `worker/index.mjs` 관리 API를 같은 Worker로 배포합니다. `leaderscityhappy.com`은 Worker Custom Domain으로 선언하며 `/api/admin`과 `/api/admin/*`만 Worker를 먼저 실행하므로 공개 경로는 정적 자산으로 제공합니다. `CF_VERSION_METADATA` binding은 인증된 관리자에게 현재 Worker version ID·생성 시각만 제공합니다. Production 빌드는 `PUBLIC_SITE_URL=https://leaderscityhappy.com`과 `PUBLIC_ALLOW_INDEXING=true`를 반드시 함께 설정합니다.
+
+`deployment-marker.json` v2는 기존 `search`, `bank`, `external`, `automation` scope hash를 그대로 유지하면서 Workers Builds의 `WORKERS_CI_COMMIT_SHA`·`WORKERS_CI_BRANCH`, GitHub Actions의 `GITHUB_SHA`·`GITHUB_REF_NAME`, 허용 관리자 JSON 10종의 정규화 SHA-256 digest를 추가한다. `bank` scope에는 공개 목록·Bank 기준선·재확인 상태·재확인 정책이 함께 포함된다. v1 scope reader는 2026-09-30까지 유지한다. 관리자 `/admin/deployment/`는 마지막 저장 commit·digest와 Production marker를 비교하며, marker 조회 실패는 GitHub 저장 실패가 아니라 `확인 불가`로 표시한다.
 
 Custom Domain 전환 롤백은 `wrangler.jsonc`의 Custom Domain 설정을 제거하고 기존 Pages 프로젝트에 `leaderscityhappy.com`을 다시 연결하는 순서로 수행한다. Pages 프로젝트나 `pages.dev` 주소는 전환 확인 전 삭제하지 않는다.
 
@@ -105,11 +107,13 @@ Access가 적용된 배포 환경에서 다음을 확인한다.
 - 홈·매물·단지·소개·오시는 길·404가 정상 응답하는지 확인
 - 전화·문자·네이버지도·블로그·유튜브 링크 확인
 - `/robots.txt`, `/sitemap-index.xml`, `/llms.txt`와 `/sitemap.xml`의 정확한 301 이동 확인
-- `/deployment-marker.json`이 유효하며 최신 자동 동기화 Action의 예상 marker와 일치하는지 확인
+- `/deployment-marker.json` v2의 source commit·branch, 허용 JSON resource digest와 최신 자동 동기화 Action의 예상 scope marker가 일치하는지 확인
+- 관리자 저장 시험에서는 `/admin/deployment/`가 같은 commit이면 `공개 완료`, 더 최신 commit의 같은 digest면 `최신 배포 포함`으로 표시하는지 확인
 - 실제 도메인과 canonical 일치 확인
 - apex HTTP가 경로·쿼리를 보존해 HTTPS로 301 이동하는지 확인
 - 공개 정적 페이지가 기존과 동일하게 제공되는지 확인
 - `/api/admin/*`만 Worker 호출로 집계되는지 확인
 - 문제 발생 시 먼저 Cloudflare에서 직전 정상 배포로 롤백하고 공개 페이지와 marker를 확인한다. 이어서 `master`의 잘못된 커밋을 `git revert`로 되돌려 새 Production 배포를 만든 뒤 Git SHA·marker·공개 화면이 다시 일치하는지 확인한다. `master` 이력은 강제로 다시 쓰지 않는다.
+- 공개 JSON 한 종류만 이전 내용으로 되돌릴 때는 `/admin/history/`에서 현재 `master`에 포함된 과거 commit을 선택하고 diff·현재 schema 검증·정확한 2차 확인 문구를 거쳐 새 복원 commit을 만든다. 복원 성공 뒤 `/admin/deployment/`에서 해당 resource digest의 Production 일치를 확인한다. 이 콘텐츠 복원은 사이트 전체 장애 대응용 Cloudflare 버전 롤백과 한 버튼으로 혼합하지 않는다.
 
 2026-08-27 운영 롤백 훈련에서는 활성 버전 `8bf6c623`에서 직전 정상 버전 `2b5a84ca`로 트래픽 100%를 롤백했다. 롤백 상태에서 홈 `200`과 구 버전에 없던 `/deployment-marker.json`의 `404`를 확인해 실제 트래픽 전환을 검증했다. 이어서 `8bf6c623`을 다시 100%로 승격하고 홈 `200`과 `automation` marker 일치를 확인했다. 이번 훈련은 정상 버전 간 트래픽 전환이므로 `master` 변경이나 `git revert`는 수행하지 않았다.

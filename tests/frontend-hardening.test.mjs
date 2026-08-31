@@ -24,8 +24,9 @@ test("낮은 화면의 모바일 메뉴와 잘리지 않는 고대비 포커스�
 });
 
 test("홈은 최신 콘텐츠만 렌더하고 페이저는 정확한 상태와 활성 페이지 노출을 제공한다", async () => {
-  const [home, contentPager, listingPager] = await Promise.all([
+  const [home, layout, contentPager, listingPager] = await Promise.all([
     readSource("src/pages/index.astro"),
+    readSource("src/layouts/BaseLayout.astro"),
     readSource("src/components/ExternalContentList.astro"),
     readSource("src/components/NaverListingPager.astro"),
   ]);
@@ -33,6 +34,10 @@ test("홈은 최신 콘텐츠만 렌더하고 페이저는 정확한 상태와 �
   assert.match(home, /publishedYoutubeVideoContents\.slice\(0, 6\)/);
   assert.match(home, /items=\{homeBlogContents\}[^>]*paginate=\{false\}/);
   assert.match(home, /items=\{homeYoutubeContents\}[^>]*paginate=\{false\}/);
+  assert.match(home, /<BaseLayout[\s\S]*inlineGlobalStyles/);
+  assert.match(layout, /global\.css\?inline/);
+  assert.match(layout, /inlineGlobalStyles[\s\S]*<style is:inline set:html=\{globalStyles\}/);
+  assert.match(layout, /<link rel="stylesheet" href=\{globalStylesheet\}/);
   assert.match(contentPager, /hidden=\{!initiallyVisibleIds\.has\(item\.id\)\}/);
   assert.match(contentPager, /firstVisible[\s\S]*lastVisible[\s\S]*visibleCount/);
   assert.match(contentPager, /pageList\.scrollTo/);
@@ -58,17 +63,22 @@ test("단지 상세의 매물 링크는 공개 매물 화면의 단지 필터와
   assert.match(detail, /\/properties\/\?complex=\$\{complex\.slug\}/);
   assert.doesNotMatch(detail, /\/properties\/\?area=/);
   assert.match(properties, /name="complex"/);
-  assert.match(properties, /next\.set\("complex", complex\.value\)/);
-  assert.match(properties, /card\.dataset\.listingTitle\?\.startsWith\(complexName\)/);
+  assert.match(properties, /getComplexSlug/);
+  assert.match(properties, /complexSlug=\{getComplexSlug\(listing\.title\)\}/);
+  assert.match(properties, /buildListingExplorerSearchParams/);
   assert.match(card, /data-listing-title=\{listing\.title\}/);
+  assert.match(card, /data-complex=\{complexSlug\}/);
 });
 
 test("반응형 지역 이미지, Astro 캐시 경로, 404 noindex와 sitemap 별칭을 제공한다", async () => {
-  const [home, complexIndex, complexDetail, layout, notFound, headers, redirects, favicon] = await Promise.all([
+  const [home, complexIndex, complexDetail, layout, compare, astroConfig, productionAssert, notFound, headers, redirects, favicon] = await Promise.all([
     readSource("src/pages/index.astro"),
     readSource("src/pages/complexes/index.astro"),
     readSource("src/pages/complexes/[slug].astro"),
     readSource("src/layouts/BaseLayout.astro"),
+    readSource("src/pages/properties/compare/index.astro"),
+    readSource("astro.config.mjs"),
+    readSource("scripts/assert-production-build.mjs"),
     readSource("src/pages/404.astro"),
     readSource("public/_headers"),
     readSource("public/_redirects"),
@@ -81,7 +91,13 @@ test("반응형 지역 이미지, Astro 캐시 경로, 404 noindex와 sitemap �
   assert.match(headers, /\/deployment-marker\.json[\s\S]*Cache-Control: no-store, max-age=0/);
   assert.doesNotMatch(headers, /\/assets\/\*/);
   assert.equal(redirects.trim(), "/sitemap.xml /sitemap-index.xml 301");
-  assert.match(layout, /Astro\.site && !noindex/);
+  assert.match(layout, /canonicalPath \?\? Astro\.url\.pathname/);
+  assert.match(layout, /noindexFollow \? "noindex,follow"/);
+  assert.match(compare, /canonicalPath="\/properties\/"/);
+  assert.match(astroConfig, /pathname !== "\/properties\/compare\/"/);
+  assert.match(productionAssert, /properties\/compare\/index\.html/);
+  assert.match(productionAssert, /name="robots" content="noindex,follow"/);
+  assert.match(productionAssert, /sitemap에 검색 제외 비교 URL/);
   assert.match(layout, /href="\/favicon\.ico"/);
   assert.match(notFound, /<BaseLayout \{title\} \{description\} noindex>/);
   assert.equal(favicon.readUInt16LE(2), 1);

@@ -3,7 +3,8 @@ import SiteHeader from "../components/SiteHeader.astro";
 import SiteFooter from "../components/SiteFooter.astro";
 import MobileContactBar from "../components/MobileContactBar.astro";
 import { createBreadcrumbList, serializeJsonLd } from "../lib/json-ld.mjs";
-import "../styles/global.css";
+import globalStyles from "../styles/global.css?inline";
+import globalStylesheet from "../styles/global.css?url";
 
 interface Props {
   title: string;
@@ -15,6 +16,9 @@ interface Props {
   shareImageWidth?: number;
   shareImageHeight?: number;
   noindex?: boolean;
+  noindexFollow?: boolean;
+  canonicalPath?: string;
+  inlineGlobalStyles?: boolean;
 }
 
 const {
@@ -27,8 +31,11 @@ const {
   shareImageWidth = 1402,
   shareImageHeight = 1122,
   noindex = false,
+  noindexFollow = false,
+  canonicalPath,
+  inlineGlobalStyles = false,
 } = Astro.props;
-const canonical = Astro.site && !noindex ? new URL(Astro.url.pathname, Astro.site) : undefined;
+const canonical = Astro.site && (!noindex || canonicalPath) ? new URL(canonicalPath ?? Astro.url.pathname, Astro.site) : undefined;
 const shareImage = Astro.site ? new URL(shareImagePath, Astro.site) : undefined;
 const allowIndexing = import.meta.env.PUBLIC_ALLOW_INDEXING === "true";
 const breadcrumbStructuredData = breadcrumbItems
@@ -52,8 +59,11 @@ const serializedStructuredData = structuredDataItems.length > 0
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#17344f" />
+    {inlineGlobalStyles
+      ? <style is:inline set:html={globalStyles} />
+      : <link rel="stylesheet" href={globalStylesheet} />}
     <meta name="description" content={description} />
-    <meta name="robots" content={allowIndexing && !noindex ? "index,follow" : "noindex,nofollow"} />
+    <meta name="robots" content={allowIndexing ? (noindexFollow ? "noindex,follow" : noindex ? "noindex,nofollow" : "index,follow") : "noindex,nofollow"} />
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="ko_KR" />
     <meta property="og:title" content={title} />

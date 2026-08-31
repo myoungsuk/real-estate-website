@@ -1,8 +1,33 @@
 ---
 import AdminLayout from "../../../layouts/AdminLayout.astro";
-import { naverListings, naverPropertyTypes, naverTradeNames } from "../../../lib/naver-listings";
+import { naverListings, naverPropertyTypes, naverTradeNames, type NaverListing } from "../../../lib/naver-listings";
+import { buildListingReviewQueue } from "../../../lib/listing-review.mjs";
+import reviewPolicy from "../../../../.github/listing-review-policy.json";
+import reviewState from "../../../../.github/listing-review-state.json";
 
-const sortedListings = [...naverListings].sort((a, b) => b.registeredAt.localeCompare(a.registeredAt));
+const todayParts = Object.fromEntries(new Intl.DateTimeFormat("en-US", {
+  timeZone: "Asia/Seoul",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+}).formatToParts(new Date()).map(({ type, value }) => [type, value]));
+const reviewQueue = buildListingReviewQueue(
+  naverListings,
+  reviewState,
+  reviewPolicy,
+  `${todayParts.year}-${todayParts.month}-${todayParts.day}`,
+) as {
+  enabled: boolean;
+  needsReview: number;
+  bank: number;
+  manual: number;
+  items: Array<NaverListing & {
+    reviewSource: "bank" | "manual";
+    referenceDate: string | null;
+    needsReview: boolean;
+  }>;
+};
+const sortedListings = [...reviewQueue.items].sort((a, b) => b.registeredAt.localeCompare(a.registeredAt));
 const formatDate = (value: string) => new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(`${value}T00:00:00+09:00`));
 ---
 
@@ -18,24 +43,36 @@ const formatDate = (value: string) => new Intl.DateTimeFormat("ko-KR", { year: "
 
   <p class="admin-inline-notice admin-inline-notice--ready"><span aria-hidden="true">i</span><span>부동산뱅크 공개 매물은 하루 1회 자동 동기화하며 엑셀은 보완용입니다. 그 밖의 네이버 매물은 직접 등록하고, 홈페이지에는 공개 정보와 네이버 개별 매물 링크만 표시합니다.</span></p>
 
+  <section class="admin-listing-review-summary" aria-labelledby="listing-review-summary-title">
+    <div><span>재확인 필요</span><strong>{reviewQueue.enabled ? `${reviewQueue.needsReview}건` : "기준 미설정"}</strong><small>경고 기준이 승인되기 전에는 재확인 경고를 만들지 않습니다.</small></div>
+    <div><span>Bank 자동 확인</span><strong>{reviewQueue.bank}건</strong><small>정상 동기화에서 마지막 확인일만 갱신합니다.</small></div>
+    <div><span>직접 등록</span><strong>{reviewQueue.manual}건</strong><small>날짜 경과만으로 자동 종료하거나 숨기지 않습니다.</small></div>
+  </section>
+
   <section class="admin-panel" aria-labelledby="listing-table-title">
     <div class="admin-panel__heading admin-panel__heading--list"><div><p class="admin-eyebrow">네이버 공개 기준</p><h2 id="listing-table-title">전체 매물 <span>{naverListings.length.toLocaleString("ko-KR")}건</span></h2></div><a class="admin-text-link" href="/properties/">공개 매물 화면 보기 <span aria-hidden="true">↗</span></a></div>
 
     <form class="admin-listing-filters" role="search" data-admin-listing-filters>
       <div class="admin-field admin-field--search"><label for="admin-listing-query">매물 검색</label><input id="admin-listing-query" type="search" name="q" placeholder="매물명, 유형, ID 검색" autocomplete="off" data-admin-listing-query /></div>
       <div class="admin-field"><label for="admin-listing-type">매물유형</label><select id="admin-listing-type" name="type" data-admin-listing-type><option value="all">전체 유형</option>{naverPropertyTypes.map((type) => <option value={type}>{type}</option>)}</select></div>
+      <div class="admin-field"><label for="admin-listing-review">확인 구분</label><select id="admin-listing-review" name="review" data-admin-listing-review><option value="all">전체 확인 상태</option><option value="due" disabled={!reviewQueue.enabled}>재확인 필요</option><option value="bank">Bank 자동 동기화</option><option value="manual">직접 등록</option><option value="recent">확인일 있음</option></select></div>
+      <div class="admin-field"><label for="admin-listing-sort">표시 순서</label><select id="admin-listing-sort" name="sort" data-admin-listing-sort><option value="registered">최근 등록순</option><option value="review-oldest">확인 오래된순</option><option value="review-recent">최근 확인순</option></select></div>
       <button class="admin-filter-reset" type="button" data-admin-listing-reset>필터 초기화</button>
     </form>
 
     <p class="admin-listing-count" aria-live="polite" data-admin-listing-count>전체 {naverListings.length.toLocaleString("ko-KR")}건</p>
+    <div class="admin-listing-review-actions">
+      <p aria-live="polite" data-listing-review-status>직접 등록 매물을 선택하면 확인일만 한 번에 기록할 수 있습니다.</p>
+      <button class="admin-secondary-button" type="button" data-listing-review-selected disabled>선택 0건 확인 완료</button>
+    </div>
     <div class="admin-table-wrap" data-admin-listing-results>
       <table class="admin-table">
         <caption class="sr-only">사이트에 반영된 네이버 공개 매물 목록</caption>
-        <thead><tr><th scope="col">매물명</th><th scope="col">유형</th><th scope="col">거래</th><th scope="col">가격</th><th scope="col">등록일</th><th scope="col">관리</th></tr></thead>
+        <thead><tr><th scope="col">매물명</th><th scope="col">유형</th><th scope="col">거래</th><th scope="col">가격</th><th scope="col">등록일</th><th scope="col">마지막 확인</th><th scope="col">관리</th></tr></thead>
         <tbody>{sortedListings.map((listing) => (
-          <tr data-admin-listing-row data-admin-listing-type={listing.propertyType} data-admin-listing-search={[listing.title, listing.id, listing.propertyType, naverTradeNames[listing.tradeType], listing.areaLabel, listing.floorLabel, listing.direction].filter(Boolean).join(" ")}>
+          <tr data-admin-listing-row data-admin-listing-type={listing.propertyType} data-admin-listing-source={listing.reviewSource} data-admin-listing-needs-review={String(listing.needsReview)} data-admin-listing-review-date={listing.referenceDate ?? ""} data-admin-listing-registered-at={listing.registeredAt} data-admin-listing-search={[listing.title, listing.id, listing.propertyType, naverTradeNames[listing.tradeType], listing.areaLabel, listing.floorLabel, listing.direction].filter(Boolean).join(" ")}>
             <td data-label="매물명"><a class="admin-table__title" href={listing.url} target="_blank" rel="noopener noreferrer">{listing.title} ↗</a><small>네이버 매물번호 {listing.id}</small></td>
-            <td data-label="유형">{listing.propertyType}</td><td data-label="거래">{naverTradeNames[listing.tradeType]}</td><td data-label="가격">{listing.priceLabel}</td><td data-label="등록일">{formatDate(listing.registeredAt)}</td><td data-label="관리"><a class="admin-row-action" href={`/admin/listings/editor/?id=${listing.id}`}>수정·종료</a></td>
+            <td data-label="유형">{listing.propertyType}</td><td data-label="거래">{naverTradeNames[listing.tradeType]}</td><td data-label="가격">{listing.priceLabel}</td><td data-label="등록일">{formatDate(listing.registeredAt)}</td><td data-label="마지막 확인"><span class:list={["admin-review-source", { "admin-review-source--manual": listing.reviewSource === "manual" }]}>{listing.reviewSource === "bank" ? "Bank" : "직접"}</span><small data-listing-review-date>{listing.referenceDate ? formatDate(listing.referenceDate) : "확인 기록 없음"}</small></td><td data-label="관리"><div class="admin-listing-row-actions">{listing.reviewSource === "manual" && <label class="admin-review-select"><input type="checkbox" value={listing.id} aria-label={`${listing.title} 확인 대상으로 선택`} data-listing-review-select disabled /><span>선택</span></label>}{listing.reviewSource === "manual" && <button class="admin-row-action" type="button" data-listing-review-confirm={listing.id} disabled>확인 완료</button>}<a class="admin-row-action" href={`/admin/listings/editor/?id=${listing.id}`}>수정·종료</a></div></td>
           </tr>
         ))}</tbody>
       </table>
@@ -45,9 +82,131 @@ const formatDate = (value: string) => new Intl.DateTimeFormat("ko-KR", { year: "
   </section>
 
   <script>
+    import listingReviewState from "../../../../.github/listing-review-state.json";
+    import {
+      readAdminContent,
+      writeAdminContent,
+      type AdminResource,
+    } from "../../../lib/admin-content-client";
+    import { reviewAdminContentChange } from "../../../lib/admin-content-review";
+    import { updateListingReviewStateForAdmin } from "../../../lib/listing-review.mjs";
+
+    interface ListingReviewState {
+      schemaVersion: 1;
+      updatedAt: string;
+      items: Record<string, {
+        source: "bank" | "manual";
+        lastSeenAt: string | null;
+        lastReviewedAt: string | null;
+      }>;
+    }
+
+    let reviewResource: AdminResource<ListingReviewState> = {
+      resource: "listing-review-state",
+      sha: "",
+      data: structuredClone(listingReviewState) as ListingReviewState,
+    };
+    let reviewWriteEnabled = false;
+    const reviewButtons = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-listing-review-confirm]"));
+    const reviewSelections = Array.from(document.querySelectorAll<HTMLInputElement>("[data-listing-review-select]"));
+    const selectedReviewButton = document.querySelector<HTMLButtonElement>("[data-listing-review-selected]");
+    const reviewStatus = document.querySelector<HTMLElement>("[data-listing-review-status]");
+    const todayInKorea = () => {
+      const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+      const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+      return `${values.year}-${values.month}-${values.day}`;
+    };
+    const displayDate = (value: string) => new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(`${value}T00:00:00+09:00`));
+    const updateReviewSelection = () => {
+      const selectedCount = reviewSelections.filter((input) => input.checked).length;
+      if (selectedReviewButton) {
+        selectedReviewButton.textContent = `선택 ${selectedCount.toLocaleString("ko-KR")}건 확인 완료`;
+        selectedReviewButton.disabled = !reviewWriteEnabled || selectedCount === 0;
+      }
+    };
+    const setReviewControlsDisabled = (disabled: boolean) => {
+      reviewButtons.forEach((button) => { button.disabled = disabled; });
+      reviewSelections.forEach((input) => { input.disabled = disabled; });
+      if (selectedReviewButton) selectedReviewButton.disabled = disabled;
+    };
+
+    const confirmReviewIds = async (requestedIds: string[]) => {
+      const ids = [...new Set(requestedIds)].filter((id) => reviewResource.data.items[id]?.source === "manual");
+      if (ids.length === 0 || !reviewWriteEnabled || !reviewResource.sha) return;
+      const today = todayInKorea();
+      const nextState = updateListingReviewStateForAdmin({
+        listings: Object.keys(reviewResource.data.items).map((id) => ({ id })),
+        currentState: reviewResource.data,
+        updatedAt: today,
+        reviewedManualIds: ids,
+      }) as ListingReviewState;
+      setReviewControlsDisabled(true);
+      if (reviewStatus) reviewStatus.textContent = `선택한 ${ids.length.toLocaleString("ko-KR")}건의 변경 내용을 확인하고 있습니다.`;
+      try {
+        const confirmed = await reviewAdminContentChange({
+          changes: [{ resource: "listing-review-state", sha: reviewResource.sha, data: nextState }],
+          beforeByResource: { "listing-review-state": reviewResource.data },
+          impactPages: ["관리자 매물 재확인 대기열"],
+        });
+        if (!confirmed) {
+          if (reviewStatus) reviewStatus.textContent = "확인 완료 저장을 취소했습니다. 선택 상태는 유지됩니다.";
+          return;
+        }
+        const result = await writeAdminContent("listing-review-state", reviewResource.sha, nextState);
+        reviewResource = {
+          resource: "listing-review-state",
+          sha: result.contentSha ?? reviewResource.sha,
+          data: nextState,
+        };
+        ids.forEach((id) => {
+          const selection = reviewSelections.find((input) => input.value === id);
+          const row = selection?.closest<HTMLElement>("[data-admin-listing-row]")
+            ?? reviewButtons.find((button) => button.dataset.listingReviewConfirm === id)?.closest<HTMLElement>("[data-admin-listing-row]");
+          if (selection) selection.checked = false;
+          if (row) {
+            row.dataset.adminListingReviewDate = today;
+            const date = row.querySelector<HTMLElement>("[data-listing-review-date]");
+            if (date) date.textContent = displayDate(today);
+            const button = row.querySelector<HTMLButtonElement>("[data-listing-review-confirm]");
+            if (button) button.textContent = "오늘 확인됨";
+          }
+        });
+        if (reviewStatus) reviewStatus.textContent = `${ids.length.toLocaleString("ko-KR")}건의 확인일을 GitHub에 저장했습니다. 배포 상태에서 공개 반영을 확인해 주세요.`;
+      } catch (error) {
+        if (reviewStatus) reviewStatus.textContent = error instanceof Error ? error.message : "확인일을 저장하지 못했습니다.";
+      } finally {
+        setReviewControlsDisabled(!reviewWriteEnabled);
+        updateReviewSelection();
+      }
+    };
+
+    window.addEventListener("admin-write-ready", (event) => {
+      reviewWriteEnabled = (event as CustomEvent<{ writeEnabled: boolean }>).detail.writeEnabled;
+      if (!reviewWriteEnabled) return;
+      void readAdminContent<ListingReviewState>("listing-review-state").then((current) => {
+        reviewResource = current;
+        setReviewControlsDisabled(false);
+        updateReviewSelection();
+      }).catch(() => {
+        reviewWriteEnabled = false;
+        if (reviewStatus) reviewStatus.textContent = "GitHub의 최신 재확인 상태를 불러오지 못했습니다.";
+      });
+    });
+
+    reviewSelections.forEach((input) => input.addEventListener("change", updateReviewSelection));
+    selectedReviewButton?.addEventListener("click", () => {
+      void confirmReviewIds(reviewSelections.filter((input) => input.checked).map((input) => input.value));
+    });
+    reviewButtons.forEach((button) => button.addEventListener("click", () => {
+      const id = button.dataset.listingReviewConfirm;
+      if (id) void confirmReviewIds([id]);
+    }));
+
     const form = document.querySelector<HTMLFormElement>("[data-admin-listing-filters]");
     const queryInput = form?.querySelector<HTMLInputElement>("[data-admin-listing-query]");
     const typeSelect = form?.querySelector<HTMLSelectElement>("[data-admin-listing-type]");
+    const reviewSelect = form?.querySelector<HTMLSelectElement>("[data-admin-listing-review]");
+    const sortSelect = form?.querySelector<HTMLSelectElement>("[data-admin-listing-sort]");
     const resetButton = form?.querySelector<HTMLButtonElement>("[data-admin-listing-reset]");
     const emptyResetButton = document.querySelector<HTMLButtonElement>("[data-admin-listing-empty-reset]");
     const count = document.querySelector<HTMLElement>("[data-admin-listing-count]");
@@ -55,23 +214,41 @@ const formatDate = (value: string) => new Intl.DateTimeFormat("ko-KR", { year: "
     const filterEmpty = document.querySelector<HTMLElement>("[data-admin-listing-filter-empty]");
     const rows = Array.from(document.querySelectorAll<HTMLElement>("[data-admin-listing-row]"));
 
-    if (form && queryInput && typeSelect && resetButton && count && results && filterEmpty) {
+    if (form && queryInput && typeSelect && reviewSelect && sortSelect && resetButton && count && results && filterEmpty) {
       const normalize = (value: string) => value.normalize("NFKC").trim().replace(/\s+/g, " ").toLocaleLowerCase("ko-KR");
       const params = new URLSearchParams(window.location.search);
       queryInput.value = params.get("q") ?? "";
       if ([...typeSelect.options].some((option) => option.value === params.get("type"))) typeSelect.value = params.get("type")!;
+      if ([...reviewSelect.options].some((option) => option.value === params.get("review") && !option.disabled)) reviewSelect.value = params.get("review")!;
+      if ([...sortSelect.options].some((option) => option.value === params.get("sort"))) sortSelect.value = params.get("sort")!;
 
       const applyFilters = () => {
         const query = normalize(queryInput.value);
         const selectedType = typeSelect.value;
+        const selectedReview = reviewSelect.value;
+        const selectedSort = sortSelect.value;
+        const sortedRows = [...rows].sort((left, right) => {
+          if (selectedSort === "registered") return (right.dataset.adminListingRegisteredAt ?? "").localeCompare(left.dataset.adminListingRegisteredAt ?? "");
+          const leftDate = left.dataset.adminListingReviewDate ?? "";
+          const rightDate = right.dataset.adminListingReviewDate ?? "";
+          if (selectedSort === "review-oldest") return leftDate.localeCompare(rightDate) || (left.dataset.adminListingRegisteredAt ?? "").localeCompare(right.dataset.adminListingRegisteredAt ?? "");
+          return rightDate.localeCompare(leftDate) || (right.dataset.adminListingRegisteredAt ?? "").localeCompare(left.dataset.adminListingRegisteredAt ?? "");
+        });
+        const tbody = rows[0]?.parentElement;
+        for (const row of sortedRows) tbody?.append(row);
         let visible = 0;
         rows.forEach((row) => {
           const matchesQuery = !query || normalize(row.dataset.adminListingSearch ?? "").includes(query);
           const matchesType = selectedType === "all" || row.dataset.adminListingType === selectedType;
-          row.hidden = !(matchesQuery && matchesType);
+          const matchesReview = selectedReview === "all"
+            || (selectedReview === "due" && row.dataset.adminListingNeedsReview === "true")
+            || (selectedReview === "bank" && row.dataset.adminListingSource === "bank")
+            || (selectedReview === "manual" && row.dataset.adminListingSource === "manual")
+            || (selectedReview === "recent" && Boolean(row.dataset.adminListingReviewDate));
+          row.hidden = !(matchesQuery && matchesType && matchesReview);
           if (!row.hidden) visible += 1;
         });
-        const isFiltered = Boolean(query) || selectedType !== "all";
+        const isFiltered = Boolean(query) || selectedType !== "all" || selectedReview !== "all" || selectedSort !== "registered";
         count.textContent = isFiltered ? `검색 결과 ${visible.toLocaleString("ko-KR")}건 / 전체 ${rows.length.toLocaleString("ko-KR")}건` : `전체 ${rows.length.toLocaleString("ko-KR")}건`;
         const isEmpty = visible === 0;
         results.hidden = isEmpty;
@@ -80,13 +257,17 @@ const formatDate = (value: string) => new Intl.DateTimeFormat("ko-KR", { year: "
         const next = new URLSearchParams();
         if (query) next.set("q", queryInput.value.trim());
         if (selectedType !== "all") next.set("type", selectedType);
+        if (selectedReview !== "all") next.set("review", selectedReview);
+        if (selectedSort !== "registered") next.set("sort", selectedSort);
         history.replaceState(null, "", `${location.pathname}${next.size ? `?${next}` : ""}`);
       };
 
-      const resetFilters = () => { queryInput.value = ""; typeSelect.value = "all"; applyFilters(); queryInput.focus(); };
+      const resetFilters = () => { queryInput.value = ""; typeSelect.value = "all"; reviewSelect.value = "all"; sortSelect.value = "registered"; applyFilters(); queryInput.focus(); };
       form.addEventListener("submit", (event) => { event.preventDefault(); applyFilters(); });
       queryInput.addEventListener("input", applyFilters);
       typeSelect.addEventListener("change", applyFilters);
+      reviewSelect.addEventListener("change", applyFilters);
+      sortSelect.addEventListener("change", applyFilters);
       resetButton.addEventListener("click", resetFilters);
       emptyResetButton?.addEventListener("click", resetFilters);
       applyFilters();

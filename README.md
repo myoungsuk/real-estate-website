@@ -13,6 +13,8 @@ npm run dev
 
 기본 개발 주소는 `http://localhost:4321`입니다.
 
+공개 매물 화면은 거래유형·매물유형·단지·가격·면적 조건과 정렬을 URL에 반영합니다. 관심 매물은 공개 매물번호만 같은 브라우저에 최대 30개 저장하고, 최대 3개를 비교할 수 있습니다. 문의 조건 도우미는 선택한 공개 매물과 입력 조건을 현재 화면에서 문장으로 만들 뿐 서버·GitHub·분석 로그로 전송하지 않습니다.
+
 ## 검사와 빌드
 
 ```bash
@@ -23,7 +25,7 @@ npm run test:e2e
 npm run audit:lighthouse
 ```
 
-빌드 결과는 `dist/`에 생성됩니다. `npm run check`는 Astro·TypeScript 검사와 공개 콘텐츠 검증을 함께 실행합니다. `npm run test:e2e`와 `npm run audit:lighthouse`는 먼저 생성된 `dist/`를 대상으로 각각 Chromium 핵심 흐름과 모바일 성능·접근성·SEO 기준을 검사합니다. 빌드는 검색 대상·자동 동기화 결과의 Production 반영 여부를 확인하기 위한 `dist/deployment-marker.json`도 생성합니다. CI는 기본 `noindex` 빌드와 별도로 실제 Production 환경변수 빌드를 만들고 robots·canonical·sitemap·JSON-LD·IndexNow 공개키를 검사한 뒤 Playwright와 Lighthouse도 실행합니다.
+빌드 결과는 `dist/`에 생성됩니다. `npm run check`는 Astro·TypeScript 검사와 공개 콘텐츠 검증을 함께 실행합니다. `npm run test:e2e`와 `npm run audit:lighthouse`는 먼저 생성된 `dist/`를 대상으로 각각 Chromium 핵심 흐름과 모바일 성능·접근성·SEO 기준을 검사합니다. 빌드는 검색 대상·자동 동기화 결과뿐 아니라 build source commit과 허용 관리자 JSON별 SHA-256 digest를 기록한 `dist/deployment-marker.json` v2도 생성합니다. CI는 기본 `noindex` 빌드와 별도로 실제 Production 환경변수 빌드를 만들고 robots·canonical·sitemap·JSON-LD·IndexNow 공개키를 검사한 뒤 Playwright와 Lighthouse도 실행합니다.
 
 공식 네이버 블로그 RSS와 YouTube Atom의 신규 항목은 매시간 17분 예약 실행과 필요 시 수동 실행이 가능한 별도 워크플로로 동기화합니다. YouTube는 Atom alternate URL을 기준으로 일반 영상과 Shorts를 구분하며, 로컬 dry-run은 공개 YouTube channelId를 설정한 뒤 실행하고 파일을 바꾸지 않습니다.
 
@@ -60,7 +62,7 @@ npm run sync:bank:dry-run
 
 공식 로고 원본은 `public/images/brand/leaders-city-happy-logo.png`, 화면용 최적화본은 `public/images/brand/leaders-city-happy-logo.webp`에 있습니다. 원본을 교체한 뒤 `node scripts/optimize-brand-logo.mjs`를 실행하면 화면용 WebP를 다시 만들 수 있습니다.
 
-고객 연락처·상담 내용·네이버 등 공개 광고에 없는 정확한 호수·내부 메모·비밀키는 저장하지 않습니다. 네이버 공개 카드의 동 번호와 광고 층수는 같은 매물번호의 외부 링크와 함께 표시합니다. 사진은 공개 권한과 개인정보를 확인하고 EXIF·GPS를 제거한 최적화본만 `public/images/`에 둡니다.
+고객 연락처·상담 내용·네이버 등 공개 광고에 없는 정확한 호수·내부 메모·비밀키는 서버나 저장소에 저장하지 않습니다. 관심 매물 기능만 공개 매물번호를 브라우저 `localStorage`에 저장하며 상담 조건과 자유 메모는 저장하지 않습니다. 네이버 공개 카드의 동 번호와 광고 층수는 같은 매물번호의 외부 링크와 함께 표시합니다. 사진은 공개 권한과 개인정보를 확인하고 EXIF·GPS를 제거한 최적화본만 `public/images/`에 둡니다.
 
 단지 전체 안내와 블록별 면적·공급·생활환경·시설 상태·FAQ는 분리해 관리합니다. `npm run check`는 4블록 1,328세대, 5블록 분양 1,423세대·공공임대 712세대와 전체 3,463세대 합계, 출처 메타데이터, 연결된 공개 콘텐츠 ID를 검증합니다. 주차대수·정확한 사용승인일·현재 시설 운영처럼 확인이 남은 값은 확정값으로 입력하지 않습니다.
 
@@ -97,8 +99,14 @@ GitHub 자동 배포 연결과 Production 설정은 `docs/operations/CLOUDFLARE_
 - `/admin/content/`에서 첫 화면 대표·사무소·리더스시티 설명을 수정할 수 있습니다.
 - `/admin/external-links/`에서 블로그·유튜브 링크, 요약, 공개 상태와 썸네일을 관리합니다. 링크 썸네일을 못 불러오면 직접 사진을 올릴 수 있습니다.
 - `/admin/complexes/`에서 대전 동구 지역·단지 설명과 출처·확인일을 관리합니다.
+- `/admin/deployment/`에서 이 브라우저의 마지막 GitHub 저장 버전과 Production resource digest를 비교해 `배포 중`, `공개 완료`, `최신 배포 포함`, `배포 지연`, `확인 불가`를 구분합니다. `확인 불가`는 GitHub 저장 실패로 표시하지 않습니다.
+- `/admin/history/`에서 허용 공개 JSON별 현재 `master` 변경 이력을 최대 10개씩 조회하고 과거·현재 diff를 확인합니다. 과거 JSON이 현재 전체 콘텐츠 검증을 통과하고 정확한 2차 문구와 최신 blob SHA가 일치할 때만 기존 이력을 지우지 않는 새 복원 커밋을 만듭니다.
+- `/admin/listings/`는 Bank 자동 동기화와 직접 등록 매물을 구분해 마지막 확인일·오래된 순을 표시합니다. 직접 등록 매물은 변경 미리보기 뒤 `확인 완료` 날짜만 새 Git 커밋으로 저장하고 `/admin/history/`에서 되돌릴 수 있습니다. 승인된 경고 일수가 없는 현재 정책은 `기준 미설정`이며, 날짜 경과만으로 공개 매물을 자동 종료하거나 숨기지 않습니다.
+- 네이버 매물·첫 화면·외부 콘텐츠·단지 저장은 공개 필드의 추가·수정·삭제·순서를 먼저 요약하고, 영향 화면과 서버 사전 검증 결과를 확인한 뒤에만 최종 GitHub 저장을 실행합니다. 변경이 없으면 API를 호출하지 않으며 입력 중 새로고침·탭 닫기에는 이탈 경고를 제공합니다.
 - 저장 기능은 `ADMIN_WRITE_ENABLED=true`, 32자 이상의 `ADMIN_CSRF_SECRET`, 저장소 한 개로 제한된 `GITHUB_CONTENTS_TOKEN`, `GITHUB_REPOSITORY`, `GITHUB_BRANCH`가 모두 있어야 활성화됩니다.
 - Worker는 `ADMIN_ALLOWED_ORIGINS`의 정확한 HTTPS origin, 요청 URL origin, JSON Content-Type·만료되는 CSRF 토큰·콘텐츠 스키마를 검증합니다. JSON 저장 시 허용된 전체 리소스를 하나의 Git branch-tip commit/tree에서 읽고, 단일 변경은 기존 `/api/admin/v1/content/:resource`, 복수 변경은 `/api/admin/v1/content`에서 모든 후보를 함께 교차 검증합니다. 요청된 모든 blob SHA가 일치할 때만 같은 base tree에 하나 이상의 blob을 넣은 단일 commit을 만든 뒤 `force: false`로 branch ref를 갱신합니다. 미설정 기본값은 `https://leaderscityhappy.com`이며, 추가 origin은 쉼표로 구분하되 wildcard·경로·쿼리·userinfo·HTTP는 허용하지 않습니다.
 - 이미지 파일은 브라우저에서 WebP·최대 1600px로 변환해 EXIF를 제거하고 `public/images/content/`의 허용 경로에만 저장합니다.
+- Worker version metadata binding은 관리자 화면에 현재 version ID와 생성 시각만 제공하며 Cloudflare API 토큰을 추가로 사용하지 않습니다.
+- 콘텐츠 복원과 Cloudflare 배포 롤백은 분리합니다. 복원 저장 뒤에는 `/admin/deployment/`에서 해당 resource digest의 Production 반영을 다시 확인합니다.
 
 로컬 Worker 변수 예시는 `.dev.vars.example`을 참고합니다. 실제 이메일, Audience와 Access 팀 정보는 `.dev.vars` 또는 Cloudflare Secret에만 입력하고 커밋하지 않습니다.

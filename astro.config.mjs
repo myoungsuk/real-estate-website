@@ -17,7 +17,10 @@ export default defineConfig({
   site,
   integrations: [
     sitemap({
-      filter: (page) => !new URL(page).pathname.startsWith("/admin/"),
+      filter: (page) => {
+        const pathname = new URL(page).pathname;
+        return !pathname.startsWith("/admin/") && pathname !== "/properties/compare/";
+      },
     }),
   ],
 });

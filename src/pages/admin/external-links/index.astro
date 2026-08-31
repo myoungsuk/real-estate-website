@@ -86,6 +86,7 @@ const youtubeContents = externalContents.filter((item) => item.type === "youtube
       writeAdminContent,
       type AdminResource,
     } from "../../../lib/admin-content-client";
+    import { guardAdminFormChanges, reviewAdminContentChange } from "../../../lib/admin-content-review";
     import type { ExternalContent } from "../../../lib/content";
 
     const form = document.querySelector<HTMLFormElement>("[data-external-form]");
@@ -108,6 +109,7 @@ const youtubeContents = externalContents.filter((item) => item.type === "youtube
     let resource: AdminResource<ExternalContent[]> | null = null;
     let previewDataUrl: string | null = null;
     let activeType: ExternalContent["type"] = new URLSearchParams(window.location.search).get("category") === "youtube" ? "youtube" : "blog";
+    const dirtyGuard = guardAdminFormChanges(form);
 
     const field = (name: string) => form?.elements.namedItem(name) as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | null;
     const categoryName = (type: ExternalContent["type"]) => type === "blog" ? "블로그" : "유튜브";
@@ -182,6 +184,7 @@ const youtubeContents = externalContents.filter((item) => item.type === "youtube
       showThumbnail(null);
       syncYoutubeFormatField();
       setAdminFormStatus(statusMessage, "링크와 공개 문구를 입력해 주세요.");
+      dirtyGuard.markSaved();
     };
 
     const setActiveCategory = (type: ExternalContent["type"], resetEditor = true) => {
@@ -209,11 +212,12 @@ const youtubeContents = externalContents.filter((item) => item.type === "youtube
       showThumbnail(item.thumbnail?.src ?? null);
       syncYoutubeFormatField();
       setAdminFormStatus(statusMessage, "수정할 내용을 확인해 주세요.");
+      dirtyGuard.markSaved();
     };
 
     window.addEventListener("admin-write-ready", (event) => {
       if (!(event as CustomEvent<{ writeEnabled: boolean }>).detail.writeEnabled) return;
-      void readAdminContent<ExternalContent[]>("external-links").then((current) => { resource = current; renderList(); setAdminFormStatus(statusMessage, "GitHub의 최신 콘텐츠를 불러왔습니다."); }).catch((error) => setAdminFormStatus(statusMessage, error instanceof Error ? error.message : "콘텐츠를 불러오지 못했습니다.", "error"));
+      void readAdminContent<ExternalContent[]>("external-links").then((current) => { resource = current; renderList(); dirtyGuard.markSaved(); setAdminFormStatus(statusMessage, "GitHub의 최신 콘텐츠를 불러왔습니다."); }).catch((error) => setAdminFormStatus(statusMessage, error instanceof Error ? error.message : "콘텐츠를 불러오지 못했습니다.", "error"));
     });
 
     list?.addEventListener("click", (event) => {
@@ -253,22 +257,37 @@ const youtubeContents = externalContents.filter((item) => item.type === "youtube
       if (!resource) return setAdminFormStatus(statusMessage, "최신 콘텐츠를 먼저 불러와 주세요.", "error");
       const submit = form.querySelector<HTMLButtonElement>("button[type='submit']");
       if (submit) submit.disabled = true;
-      setAdminFormStatus(statusMessage, "콘텐츠를 저장하고 있습니다.", "saving");
+      setAdminFormStatus(statusMessage, "변경 요약과 서버 검증을 준비하고 있습니다.", "saving");
       try {
         const originalId = field("originalId")?.value ?? "";
         const existing = resource.data.find((item) => item.id === originalId);
         let thumbnail = existing?.thumbnail ?? null;
         const file = (field("thumbnailFile") as HTMLInputElement)?.files?.[0];
-        if (file) thumbnail = { src: (await uploadAdminImage(field("type")!.value, await convertImageFileToWebp(file))).src, alt: field("thumbnailAlt")?.value.trim() ?? "" };
-        else if (previewDataUrl) thumbnail = { src: (await uploadAdminImage(field("type")!.value, await convertDataUrlToWebp(previewDataUrl))).src, alt: field("thumbnailAlt")?.value.trim() ?? "" };
+        if (file || previewDataUrl) thumbnail = { src: "/images/content/blog/pending-admin-review.webp", alt: field("thumbnailAlt")?.value.trim() ?? "" };
         else if (thumbnail && field("thumbnailAlt")?.value.trim()) thumbnail = { ...thumbnail, alt: field("thumbnailAlt")!.value.trim() };
         const type = field("type")!.value as ExternalContent["type"];
-        const nextItem: ExternalContent = { id: field("id")!.value.trim(), type, ...(type === "youtube" ? { youtubeFormat: field("youtubeFormat")!.value as ExternalContent["youtubeFormat"] } : {}), status: field("status")!.value as ExternalContent["status"], title: field("title")!.value.trim(), summary: field("summary")!.value.trim(), url: field("url")!.value.trim(), publishedAt: field("publishedAt")!.value || null, thumbnail };
-        const next = originalId ? resource.data.map((item) => item.id === originalId ? nextItem : item) : [...resource.data, nextItem];
+        const createNext = (nextThumbnail: ExternalContent["thumbnail"]) => {
+          const nextItem: ExternalContent = { id: field("id")!.value.trim(), type, ...(type === "youtube" ? { youtubeFormat: field("youtubeFormat")!.value as ExternalContent["youtubeFormat"] } : {}), status: field("status")!.value as ExternalContent["status"], title: field("title")!.value.trim(), summary: field("summary")!.value.trim(), url: field("url")!.value.trim(), publishedAt: field("publishedAt")!.value || null, thumbnail: nextThumbnail };
+          return originalId ? resource!.data.map((item) => item.id === originalId ? nextItem : item) : [...resource!.data, nextItem];
+        };
+        const reviewCandidate = createNext(thumbnail);
+        const confirmed = await reviewAdminContentChange({
+          changes: [{ resource: "external-links", sha: resource.sha, data: reviewCandidate }],
+          beforeByResource: { "external-links": resource.data },
+          impactPages: [type === "blog" ? "블로그 목록" : "유튜브 목록", "홈 외부 콘텐츠"],
+        });
+        if (!confirmed) {
+          setAdminFormStatus(statusMessage, "저장을 취소했습니다. 입력한 내용은 그대로 유지됩니다.");
+          return;
+        }
+        setAdminFormStatus(statusMessage, "사전 검증을 통과한 콘텐츠를 GitHub에 저장하고 있습니다.", "saving");
+        if (file) thumbnail = { src: (await uploadAdminImage(type, await convertImageFileToWebp(file))).src, alt: field("thumbnailAlt")?.value.trim() ?? "" };
+        else if (previewDataUrl) thumbnail = { src: (await uploadAdminImage(type, await convertDataUrlToWebp(previewDataUrl))).src, alt: field("thumbnailAlt")?.value.trim() ?? "" };
+        const next = createNext(thumbnail);
         const result = await writeAdminContent("external-links", resource.sha, next);
         resource = { resource: "external-links", sha: result.contentSha ?? resource.sha, data: next };
-        renderList(); resetForm();
-        setAdminFormStatus(statusMessage, "저장했습니다. GitHub 커밋이 생성되었습니다. 자동 배포 연결 후 홈페이지 카드에 반영됩니다.", "success");
+        renderList(); resetForm(); dirtyGuard.markSaved();
+        setAdminFormStatus(statusMessage, "GitHub 저장이 완료됐습니다. 배포 상태 메뉴에서 홈페이지 카드의 공개 반영을 확인해 주세요.", "success");
       } catch (error) {
         setAdminFormStatus(statusMessage, error instanceof Error ? error.message : "저장하지 못했습니다.", "error");
       } finally {
@@ -283,10 +302,19 @@ const youtubeContents = externalContents.filter((item) => item.type === "youtube
       deleteButton.disabled = true;
       try {
         const next = resource.data.filter((item) => item.id !== originalId);
+        const confirmed = await reviewAdminContentChange({
+          changes: [{ resource: "external-links", sha: resource.sha, data: next }],
+          beforeByResource: { "external-links": resource.data },
+          impactPages: ["블로그·유튜브 목록", "홈 외부 콘텐츠"],
+        });
+        if (!confirmed) {
+          setAdminFormStatus(statusMessage, "삭제를 취소했습니다. 콘텐츠 카드는 유지됩니다.");
+          return;
+        }
         const result = await writeAdminContent("external-links", resource.sha, next);
         resource = { resource: "external-links", sha: result.contentSha ?? resource.sha, data: next };
-        renderList(); resetForm();
-        setAdminFormStatus(statusMessage, "콘텐츠 카드를 삭제했습니다.", "success");
+        renderList(); resetForm(); dirtyGuard.markSaved();
+        setAdminFormStatus(statusMessage, "GitHub에서 콘텐츠 카드를 삭제했습니다. 배포 상태 메뉴에서 공개 반영을 확인해 주세요.", "success");
       } catch (error) {
         setAdminFormStatus(statusMessage, error instanceof Error ? error.message : "삭제하지 못했습니다.", "error");
       } finally {

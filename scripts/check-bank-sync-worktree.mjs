@@ -6,6 +6,7 @@ import { parseGitStatusPorcelain } from "./check-sync-worktree.mjs";
 
 const ALLOWED_PATHS = new Set([
   ".github/bank-listing-sync-state.json",
+  ".github/listing-review-state.json",
   "src/data/naver-listings.json",
 ]);
 

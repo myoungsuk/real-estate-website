@@ -43,7 +43,7 @@ export async function waitForProductionDeployment({
         lastObservation = `HTTP ${response.status}`;
       } else {
         const marker = await response.json();
-        const observed = marker?.schemaVersion === 1 ? marker?.scopes?.[scope] : undefined;
+        const observed = [1, 2].includes(marker?.schemaVersion) ? marker?.scopes?.[scope] : undefined;
         if (observed === expected) {
           logger.log(`Production 배포 marker 확인 완료: ${scope} ${expected}`);
           return marker;

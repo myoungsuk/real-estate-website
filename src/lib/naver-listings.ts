@@ -1,4 +1,5 @@
 import naverListingData from "../data/naver-listings.json";
+import { parseNaverListingAreaLabel, parseNaverListingPriceLabel } from "./naver-listing-filter.mjs";
 
 export type NaverListingTradeType = "sale" | "jeonse" | "monthly-rent";
 
@@ -28,17 +29,17 @@ export const naverListingsUpdatedAt = data.checkedAt;
 export const naverListings = [...data.items].sort((first, second) => second.registeredAt.localeCompare(first.registeredAt));
 export const naverPropertyTypes = [...new Set(naverListings.map((listing) => listing.propertyType))];
 
-export function getNaverListingPriceValue(priceLabel: string) {
-  const normalized = priceLabel.replaceAll(",", "").trim();
-  const [eokPart, remainder = ""] = normalized.split("억");
-  if (!normalized.includes("억")) return Number(normalized.replace(/[^0-9.]/g, "")) || 0;
-  const eok = Number(eokPart.replace(/[^0-9.]/g, "")) || 0;
-  const manWon = Number(remainder.replace(/[^0-9.]/g, "")) || 0;
-  return eok * 10_000 + manWon;
+export function getNaverListingPriceParts(priceLabel: string, tradeType: NaverListingTradeType) {
+  return parseNaverListingPriceLabel(priceLabel, tradeType);
+}
+
+export function getNaverListingPriceValue(priceLabel: string, tradeType: NaverListingTradeType = "sale") {
+  const price = getNaverListingPriceParts(priceLabel, tradeType);
+  return price.standard ?? price.deposit ?? null;
 }
 
 export function getNaverListingAreaValue(areaLabel: string | null) {
-  return Number(areaLabel?.match(/[0-9]+(?:\.[0-9]+)?/)?.[0] ?? 0);
+  return parseNaverListingAreaLabel(areaLabel);
 }
 
 export const naverTradeNames: Record<NaverListingTradeType, string> = {

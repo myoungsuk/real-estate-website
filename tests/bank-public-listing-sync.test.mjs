@@ -220,8 +220,10 @@ test("dry-run은 두 공개 페이지만 읽고 파일을 변경하지 않는다
   const content = { checkedAt: "2026-08-26", items: [publicListing(firstCandidate.naverId), publicListing("2999999999")] };
   await writeFile(join(root, "src", "data", "naver-listings.json"), `${JSON.stringify(content, null, 2)}\n`, "utf8");
   await writeFile(join(root, ".github", "bank-listing-sync-state.json"), `${JSON.stringify(emptyState(), null, 2)}\n`, "utf8");
+  await writeFile(join(root, ".github", "listing-review-state.json"), `${JSON.stringify({ schemaVersion: 1, updatedAt: "2026-08-26", items: {} }, null, 2)}\n`, "utf8");
   const beforeContent = await readFile(join(root, "src", "data", "naver-listings.json"), "utf8");
   const beforeState = await readFile(join(root, ".github", "bank-listing-sync-state.json"), "utf8");
+  const beforeReviewState = await readFile(join(root, ".github", "listing-review-state.json"), "utf8");
   const snapshot = await fetchBankPublicSnapshot({ fetcher: fixtureFetcher(), fetchAttempts: 1 });
   assert.equal(snapshot.total, 2);
   const result = await runBankListingSync({
@@ -235,17 +237,61 @@ test("dry-run은 두 공개 페이지만 읽고 파일을 변경하지 않는다
   assert.deepEqual({ public: result.publicCount, added: result.newCount, outside: result.outsideBankCount }, { public: 2, added: 1, outside: 1 });
   assert.equal(await readFile(join(root, "src", "data", "naver-listings.json"), "utf8"), beforeContent);
   assert.equal(await readFile(join(root, ".github", "bank-listing-sync-state.json"), "utf8"), beforeState);
+  assert.equal(await readFile(join(root, ".github", "listing-review-state.json"), "utf8"), beforeReviewState);
 });
 
-test("부동산뱅크 동기화 워크플로는 허용된 두 파일만 커밋한다", async () => {
+test("정상 Bank 동기화는 공개 목록을 자동 종료하지 않고 재확인 lastSeenAt만 원자적으로 갱신한다", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "bank-listing-review-test-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await mkdir(join(root, "src", "data"), { recursive: true });
+  await mkdir(join(root, ".github"), { recursive: true });
+  const manual = publicListing("2999999999", { title: "직접 등록 매물" });
+  const content = { checkedAt: "2026-08-26", items: [publicListing(firstCandidate.naverId), manual] };
+  const reviewState = {
+    schemaVersion: 1,
+    updatedAt: "2026-08-26",
+    items: {
+      [firstCandidate.naverId]: { source: "manual", lastSeenAt: null, lastReviewedAt: null },
+      [manual.id]: { source: "manual", lastSeenAt: null, lastReviewedAt: "2026-08-20" },
+    },
+  };
+  await writeFile(join(root, "src", "data", "naver-listings.json"), `${JSON.stringify(content, null, 2)}\n`, "utf8");
+  await writeFile(join(root, ".github", "bank-listing-sync-state.json"), `${JSON.stringify(emptyState(), null, 2)}\n`, "utf8");
+  await writeFile(join(root, ".github", "listing-review-state.json"), `${JSON.stringify(reviewState, null, 2)}\n`, "utf8");
+
+  const result = await runBankListingSync({
+    rootDir: root,
+    fetcher: fixtureFetcher(),
+    fetchAttempts: 1,
+    now: new Date("2026-08-27T01:00:00Z"),
+    logger: { log() {} },
+  });
+  const nextContent = JSON.parse(await readFile(join(root, "src", "data", "naver-listings.json"), "utf8"));
+  const nextReview = JSON.parse(await readFile(join(root, ".github", "listing-review-state.json"), "utf8"));
+  assert.equal(result.reviewStateChanged, true);
+  assert.ok(nextContent.items.some(({ id }) => id === manual.id));
+  assert.deepEqual(nextReview.items[firstCandidate.naverId], {
+    source: "bank",
+    lastSeenAt: "2026-08-27",
+    lastReviewedAt: null,
+  });
+  assert.equal(nextReview.items[secondCandidate.naverId].lastSeenAt, "2026-08-27");
+  assert.equal(nextReview.items[manual.id].lastReviewedAt, "2026-08-20");
+});
+
+test("부동산뱅크 동기화 워크플로는 공개 목록·Bank 상태·재확인 상태만 커밋한다", async () => {
   assert.deepEqual(classifyBankSyncChanges([]), { mode: "none", paths: [] });
   assert.deepEqual(classifyBankSyncChanges(["src/data/naver-listings.json"]), {
     mode: "content",
     paths: ["src/data/naver-listings.json"],
   });
   assert.throws(() => classifyBankSyncChanges(["src/data/office.json"]), /허용 목록 밖/u);
+  assert.deepEqual(classifyBankSyncChanges([".github/listing-review-state.json"]), {
+    mode: "content",
+    paths: [".github/listing-review-state.json"],
+  });
   const workflow = await readFile(new URL("../.github/workflows/sync-bank-listings.yml", import.meta.url), "utf8");
   assert.match(workflow, /cron: "10 15 \* \* \*"/u);
-  assert.match(workflow, /\.github\/bank-listing-sync-state\.json src\/data\/naver-listings\.json/u);
+  assert.match(workflow, /git add -- \.github\/bank-listing-sync-state\.json \.github\/listing-review-state\.json src\/data\/naver-listings\.json/u);
   assert.doesNotMatch(workflow, /new\.land\.naver|fin\.land\.naver|playwright|selenium/iu);
 });

@@ -11,9 +11,11 @@ import {
   parseBankPublicPage,
   planBankListingSync,
 } from "./sync/bank-listings.mjs";
+import { reconcileListingReviewState } from "../src/lib/listing-review.mjs";
 
 const CONTENT_PATH = join("src", "data", "naver-listings.json");
 const STATE_PATH = join(".github", "bank-listing-sync-state.json");
+const REVIEW_STATE_PATH = join(".github", "listing-review-state.json");
 
 async function readJson(path, label) {
   let raw;
@@ -120,6 +122,7 @@ async function appendGitHubSummary(result) {
     `- Outside Bank preserved: ${result.outsideBankCount}`,
     `- Content: ${result.contentChanged ? "changed" : "unchanged"}`,
     `- State: ${result.stateChanged ? "changed" : "unchanged"}`,
+    `- Review state: ${result.reviewStateChanged ? "changed" : "unchanged"}`,
   ];
   await writeFile(summaryPath, `${lines.join("\n")}\n`, { encoding: "utf8", flag: "a" });
 }
@@ -135,15 +138,26 @@ export async function runBankListingSync({
   const absoluteRoot = resolve(rootDir);
   const contentPath = join(absoluteRoot, CONTENT_PATH);
   const statePath = join(absoluteRoot, STATE_PATH);
-  const [{ value: current }, { value: state }, snapshot] = await Promise.all([
+  const reviewStatePath = join(absoluteRoot, REVIEW_STATE_PATH);
+  const [{ value: current }, { value: state }, { value: reviewState }, snapshot] = await Promise.all([
     readJson(contentPath, CONTENT_PATH),
     readJson(statePath, STATE_PATH),
+    readJson(reviewStatePath, REVIEW_STATE_PATH),
     fetchBankPublicSnapshot({ fetcher, fetchAttempts }),
   ]);
-  const plan = planBankListingSync(current, snapshot, state, seoulDate(now));
+  const checkedAt = seoulDate(now);
+  const plan = planBankListingSync(current, snapshot, state, checkedAt);
+  const nextReviewState = reconcileListingReviewState({
+    listings: plan.nextData.items,
+    bankState: plan.nextState,
+    currentState: reviewState,
+    checkedAt,
+  });
+  const reviewStateChanged = JSON.stringify(nextReviewState) !== JSON.stringify(reviewState);
   if (!dryRun) {
     if (plan.contentChanged) await writeTextAtomically(contentPath, `${JSON.stringify(plan.nextData, null, 2)}\n`);
     if (plan.stateChanged) await writeTextAtomically(statePath, `${JSON.stringify(plan.nextState, null, 2)}\n`);
+    if (reviewStateChanged) await writeTextAtomically(reviewStatePath, `${JSON.stringify(nextReviewState, null, 2)}\n`);
   }
 
   const result = {
@@ -155,6 +169,7 @@ export async function runBankListingSync({
     outsideBankCount: plan.outsideBankIds.length,
     contentChanged: plan.contentChanged,
     stateChanged: plan.stateChanged,
+    reviewStateChanged,
     dryRun,
     newItems: plan.newItems,
     changedItems: plan.changedItems,
@@ -167,7 +182,7 @@ export async function runBankListingSync({
   logger.log(`Removed: ${result.removedCount}`);
   logger.log(`Outside Bank preserved: ${result.outsideBankCount}`);
   if (dryRun) logger.log("No files changed");
-  else if (!result.contentChanged && !result.stateChanged) logger.log("No changes");
+  else if (!result.contentChanged && !result.stateChanged && !result.reviewStateChanged) logger.log("No changes");
   await appendGitHubSummary(result);
   return result;
 }

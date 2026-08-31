@@ -1,0 +1,160 @@
+<section class="admin-panel admin-deployment-status" id="deployment-status" aria-labelledby="admin-deployment-title" data-admin-deployment-status>
+  <div class="admin-panel__heading">
+    <div>
+      <p class="admin-eyebrow">PUBLICATION STATUS</p>
+      <h2 id="admin-deployment-title">최근 저장의 공개 반영 상태</h2>
+    </div>
+    <span class="admin-badge admin-badge--checking" data-deployment-badge>확인 중</span>
+  </div>
+
+  <p class="admin-deployment-status__message" data-deployment-message aria-live="polite">
+    이 브라우저에서 마지막으로 저장한 GitHub 버전을 확인하고 있습니다.
+  </p>
+
+  <ol class="admin-deployment-steps" aria-label="콘텐츠 공개 단계">
+    <li data-deployment-step="saved"><span>1</span><div><strong>GitHub 저장</strong><small>커밋 생성</small></div></li>
+    <li data-deployment-step="deploying"><span>2</span><div><strong>자동 배포</strong><small>Cloudflare 빌드</small></div></li>
+    <li data-deployment-step="published"><span>3</span><div><strong>공개 반영</strong><small>리소스 일치 확인</small></div></li>
+  </ol>
+
+  <dl class="admin-deployment-facts">
+    <div><dt>콘텐츠</dt><dd data-deployment-resource>확인 중</dd></div>
+    <div><dt>저장 버전</dt><dd data-deployment-saved>확인 중</dd></div>
+    <div><dt>공개 버전</dt><dd data-deployment-active>확인 중</dd></div>
+    <div><dt>Worker 버전</dt><dd data-deployment-worker>확인 중</dd></div>
+    <div><dt>마지막 확인</dt><dd data-deployment-checked>확인 중</dd></div>
+  </dl>
+
+  <div class="admin-deployment-actions">
+    <button class="admin-text-button" type="button" data-deployment-retry>지금 다시 확인</button>
+    <a class="admin-text-link" href="https://github.com/myoungsuk/real-estate-website/commits/master" target="_blank" rel="noopener noreferrer">GitHub 이력 <span aria-hidden="true">↗</span></a>
+    <a class="admin-text-link" href="https://dash.cloudflare.com/" target="_blank" rel="noopener noreferrer">Cloudflare 확인 <span aria-hidden="true">↗</span></a>
+  </div>
+</section>
+
+<script>
+  import {
+    readAdminDeploymentStatus,
+    readRememberedAdminDeployment,
+    type AdminDeploymentStatus,
+    type AdminDeploymentTarget,
+  } from "../../lib/admin-content-client";
+
+  const resourceLabels: Record<string, string> = {
+    listings: "자체 매물",
+    "naver-listings": "네이버 공개 매물",
+    office: "사무소 정보",
+    complexes: "지역·단지 설명",
+    "complexes-overview": "단지 전체 안내",
+    "external-links": "블로그·유튜브",
+    "home-content": "첫 화면·사무소",
+    faq: "FAQ",
+    reviews: "후기",
+  };
+
+  const statePresentation = {
+    deploying: { badge: "배포 중", className: "admin-badge--checking", message: "GitHub 저장은 완료됐고 Cloudflare 공개 반영을 기다리고 있습니다." },
+    published: { badge: "공개 완료", className: "admin-badge--ready", message: "저장한 콘텐츠와 현재 Production 리소스가 일치합니다." },
+    superseded: { badge: "최신 배포 포함", className: "admin-badge--ready", message: "더 최신 버전이 배포됐지만 저장한 콘텐츠는 Production에 포함되어 있습니다." },
+    delayed: { badge: "배포 지연", className: "admin-badge--warning", message: "GitHub 저장 후 10분 안에 공개 리소스가 일치하지 않았습니다. 배포 로그를 확인해 주세요." },
+    failed: { badge: "배포 실패", className: "admin-badge--danger", message: "GitHub 저장과 별개로 공개 배포가 실패했습니다." },
+    unknown: { badge: "확인 불가", className: "admin-badge--warning", message: "GitHub 저장 실패로 단정할 수 없습니다. 배포 marker 또는 네트워크 상태를 다시 확인해 주세요." },
+  } as const;
+
+  const formatTime = (value: string | null) => value
+    ? new Intl.DateTimeFormat("ko-KR", { dateStyle: "short", timeStyle: "medium", timeZone: "Asia/Seoul" }).format(new Date(value))
+    : "확인 불가";
+  const shortVersion = (value: string | null) => value ? value.slice(0, 10) : "확인 불가";
+
+  document.querySelectorAll<HTMLElement>("[data-admin-deployment-status]").forEach((panel) => {
+    const badge = panel.querySelector<HTMLElement>("[data-deployment-badge]");
+    const message = panel.querySelector<HTMLElement>("[data-deployment-message]");
+    const resource = panel.querySelector<HTMLElement>("[data-deployment-resource]");
+    const saved = panel.querySelector<HTMLElement>("[data-deployment-saved]");
+    const active = panel.querySelector<HTMLElement>("[data-deployment-active]");
+    const worker = panel.querySelector<HTMLElement>("[data-deployment-worker]");
+    const checked = panel.querySelector<HTMLElement>("[data-deployment-checked]");
+    const retry = panel.querySelector<HTMLButtonElement>("[data-deployment-retry]");
+    const steps = [...panel.querySelectorAll<HTMLElement>("[data-deployment-step]")];
+    if (!badge || !message || !resource || !saved || !active || !worker || !checked || !retry) return;
+
+    let target: AdminDeploymentTarget | null = readRememberedAdminDeployment();
+    let timer = 0;
+
+    const setSteps = (state: AdminDeploymentStatus["state"] | "idle") => {
+      const completed = state === "published" || state === "superseded" ? 3 : state === "deploying" || state === "delayed" || state === "failed" ? 2 : state === "unknown" ? 1 : 0;
+      steps.forEach((step, index) => {
+        step.classList.toggle("is-complete", index < completed);
+        step.classList.toggle("is-current", index === Math.min(completed, 2) && completed > 0 && completed < 3);
+      });
+    };
+
+    const renderIdle = () => {
+      badge.className = "admin-badge admin-badge--checking";
+      badge.textContent = "저장 내역 없음";
+      message.textContent = "이 브라우저에서 저장한 콘텐츠가 없습니다. 관리자 편집 화면에서 저장하면 공개 반영 상태를 여기서 확인합니다.";
+      resource.textContent = "없음";
+      saved.textContent = "없음";
+      active.textContent = "확인 전";
+      worker.textContent = "확인 전";
+      checked.textContent = "확인 전";
+      retry.disabled = true;
+      setSteps("idle");
+    };
+
+    const render = (status: AdminDeploymentStatus) => {
+      const presentation = statePresentation[status.state];
+      badge.className = `admin-badge ${presentation.className}`;
+      badge.textContent = presentation.badge;
+      message.textContent = presentation.message;
+      resource.textContent = resourceLabels[status.resource] ?? status.resource;
+      saved.textContent = shortVersion(status.savedCommit);
+      active.textContent = shortVersion(status.activeCommit);
+      worker.textContent = status.workerVersion ? shortVersion(status.workerVersion.id) : "확인 불가";
+      checked.textContent = formatTime(status.checkedAt);
+      retry.disabled = false;
+      setSteps(status.state);
+      if (status.state === "deploying" && status.pollAfterMs && !document.hidden) {
+        window.clearTimeout(timer);
+        timer = window.setTimeout(check, status.pollAfterMs);
+      }
+    };
+
+    const check = async () => {
+      window.clearTimeout(timer);
+      target = readRememberedAdminDeployment();
+      if (!target) {
+        renderIdle();
+        return;
+      }
+      retry.disabled = true;
+      badge.className = "admin-badge admin-badge--checking";
+      badge.textContent = "확인 중";
+      try {
+        render(await readAdminDeploymentStatus(target));
+      } catch {
+        render({
+          state: "unknown",
+          savedCommit: target.commit,
+          activeCommit: null,
+          branch: null,
+          sourceProvider: null,
+          resource: target.resource,
+          resourceMatched: false,
+          workerVersion: null,
+          checkedAt: new Date().toISOString(),
+          savedAt: target.savedAt,
+          pollAfterMs: null,
+          reason: "request-failed",
+        });
+      }
+    };
+
+    retry.addEventListener("click", check);
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) window.clearTimeout(timer);
+      else void check();
+    });
+    void check();
+  });
+</script>

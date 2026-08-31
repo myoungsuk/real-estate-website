@@ -2,6 +2,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { INDEXNOW_KEY } from "./indexnow.mjs";
+import { ADMIN_RESOURCE_PATHS } from "../src/lib/admin-resource-digest.mjs";
 
 const PRODUCTION_ORIGIN = "https://leaderscityhappy.com";
 
@@ -55,6 +56,7 @@ export async function assertProductionBuild({ distDir = "dist" } = {}) {
   assert(robots.includes(`Sitemap: ${PRODUCTION_ORIGIN}/sitemap-index.xml`), "robots.txt: Production sitemap URL이 다릅니다.");
   assert(sitemapIndex.includes(`${PRODUCTION_ORIGIN}/sitemap-0.xml`), "sitemap index가 Production origin을 사용하지 않습니다.");
   assert(!sitemap.includes("/admin/"), "sitemap에 관리자 URL이 포함되었습니다.");
+  assert(!sitemap.includes("/properties/compare/"), "sitemap에 검색 제외 비교 URL이 포함되었습니다.");
   assert(!sitemap.includes("http://leaderscityhappy.com"), "sitemap에 HTTP URL이 포함되었습니다.");
   assert(
     redirects.trim() === "/sitemap.xml /sitemap-index.xml 301",
@@ -63,7 +65,18 @@ export async function assertProductionBuild({ distDir = "dist" } = {}) {
   assert(indexNowKey.trim() === INDEXNOW_KEY, "Production IndexNow 공개 키 파일이 올바르지 않습니다.");
 
   const marker = JSON.parse(markerRaw);
-  assert(marker.schemaVersion === 1 && marker.algorithm === "sha256", "deployment marker 형식이 올바르지 않습니다.");
+  assert(marker.schemaVersion === 2 && marker.algorithm === "sha256", "deployment marker v2 형식이 올바르지 않습니다.");
+  assert(
+    ["workers-builds", "github-actions", "local"].includes(marker.source?.provider),
+    "deployment marker의 build 출처가 올바르지 않습니다.",
+  );
+  assert(
+    marker.source?.commit === null || /^[a-f0-9]{40}$/u.test(marker.source.commit),
+    "deployment marker의 source commit이 올바르지 않습니다.",
+  );
+  for (const resource of Object.keys(ADMIN_RESOURCE_PATHS)) {
+    assert(/^[a-f0-9]{64}$/u.test(marker.resources?.[resource] ?? ""), `deployment marker의 ${resource} digest가 올바르지 않습니다.`);
+  }
   for (const scope of ["search", "bank", "external", "automation"]) {
     assert(/^[a-f0-9]{64}$/u.test(marker.scopes?.[scope] ?? ""), `deployment marker의 ${scope} hash가 올바르지 않습니다.`);
   }
@@ -98,6 +111,15 @@ export async function assertProductionBuild({ distDir = "dist" } = {}) {
       continue;
     }
     if (path === "404.html") continue;
+    if (path === "properties/compare/index.html") {
+      assert(html.includes('name="robots" content="noindex,follow"'), `${path}: 비교 페이지 noindex,follow가 없습니다.`);
+      assert(
+        html.includes(`rel="canonical" href="${PRODUCTION_ORIGIN}/properties/"`),
+        `${path}: 비교 페이지 canonical이 매물 목록을 가리키지 않습니다.`,
+      );
+      assert(html.includes('"@type":"BreadcrumbList"'), `${path}: BreadcrumbList JSON-LD가 없습니다.`);
+      continue;
+    }
     assert(html.includes('name="robots" content="index,follow"'), `${path}: Production index,follow가 없습니다.`);
     assert(html.includes(`rel="canonical" href="${PRODUCTION_ORIGIN}/`), `${path}: Production canonical이 없거나 origin이 다릅니다.`);
     if (path !== "index.html") assert(html.includes('"@type":"BreadcrumbList"'), `${path}: BreadcrumbList JSON-LD가 없습니다.`);

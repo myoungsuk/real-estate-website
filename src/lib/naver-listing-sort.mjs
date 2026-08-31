@@ -26,7 +26,10 @@ export function compareNaverListingSortData(first, second, sortKey) {
   const rankDifference = compareOptionalNumbers(first.rank, second.rank, "asc");
 
   if (sortKey === "price" || sortKey === "price-desc") {
-    return compareOptionalNumbers(first.price, second.price, sortKey === "price-desc" ? "desc" : "asc") || rankDifference;
+    const direction = sortKey === "price-desc" ? "desc" : "asc";
+    return compareOptionalNumbers(first.price, second.price, direction)
+      || compareOptionalNumbers(first.monthlyRent, second.monthlyRent, direction)
+      || rankDifference;
   }
   if (sortKey === "latest") {
     return (second.registeredAt ?? "").localeCompare(first.registeredAt ?? "") || rankDifference;

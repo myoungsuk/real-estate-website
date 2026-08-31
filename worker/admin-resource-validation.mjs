@@ -13,18 +13,10 @@ import {
   validateOffice,
   validateReviews,
 } from "../scripts/content-validation.mjs";
+import { ADMIN_RESOURCE_PATHS } from "../src/lib/admin-resource-digest.mjs";
+import { validateListingReviewState } from "../src/lib/listing-review.mjs";
 
-export const ADMIN_RESOURCE_PATHS = Object.freeze({
-  listings: "src/data/listings.json",
-  "naver-listings": "src/data/naver-listings.json",
-  office: "src/data/office.json",
-  complexes: "src/data/complexes.json",
-  "complexes-overview": "src/data/complexes-overview.json",
-  "external-links": "src/data/external-links.json",
-  "home-content": "src/data/home-content.json",
-  faq: "src/data/faq.json",
-  reviews: "src/data/reviews.json",
-});
+export { ADMIN_RESOURCE_PATHS };
 
 export const ADMIN_RESOURCE_CONTENT_KEYS = Object.freeze({
   listings: "listings",
@@ -57,7 +49,28 @@ function validateSingleResource(resource, data) {
   }
 }
 
+function validateListingReviewResource(data, currentResources) {
+  const listingIds = Array.isArray(currentResources?.["naver-listings"]?.items)
+    ? currentResources["naver-listings"].items.map((item) => item?.id).filter((id) => typeof id === "string")
+    : Object.keys(data?.items ?? {});
+  const bankIds = Object.entries(data?.items ?? {})
+    .filter(([, item]) => item?.source === "bank")
+    .map(([id]) => id);
+  try {
+    validateListingReviewState(data, { listingIds, bankIds });
+    return [];
+  } catch (error) {
+    return [error instanceof Error ? error.message : "매물 재확인 상태가 올바르지 않습니다."];
+  }
+}
+
 export function validateAdminResource(resource, data, currentResources = null) {
+  if (resource === "listing-review-state") {
+    const errors = validateListingReviewResource(data, currentResources);
+    errors.push(...findBannedKeys(data, resource));
+    errors.push(...findSensitiveStrings(data, { path: resource, office: null }));
+    return [...new Set(errors)];
+  }
   const contentKey = ADMIN_RESOURCE_CONTENT_KEYS[resource];
   if (!contentKey) return ["허용되지 않은 콘텐츠 종류입니다."];
 

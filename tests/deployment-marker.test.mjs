@@ -4,16 +4,21 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
 import {
+  calculateAdminResourceDigests,
   calculateDeploymentScopeHash,
   createDeploymentMarker,
+  resolveDeploymentSource,
   writeDeploymentMarker,
 } from "../scripts/deployment-marker.mjs";
 import { waitForProductionDeployment } from "../scripts/verify-production-deployment.mjs";
+import { ADMIN_RESOURCE_PATHS } from "../src/lib/admin-resource-digest.mjs";
 
 async function createFixture() {
   const rootDir = await mkdtemp(join(tmpdir(), "deployment-marker-"));
   const files = {
     ".github/bank-listing-sync-state.json": "{\"bank\":1}\n",
+    ".github/listing-review-policy.json": "{\"policy\":1}\n",
+    ".github/listing-review-state.json": "{\"review\":1}\n",
     ".github/automation-health.json": "{\"health\":1}\n",
     "astro.config.mjs": "export default {};\n",
     "src/data/naver-listings.json": "{\"items\":[]}\n",
@@ -22,6 +27,9 @@ async function createFixture() {
     "public/images/blog/a.webp": "blog",
     "public/images/youtube/b.webp": "youtube",
   };
+  for (const [resource, path] of Object.entries(ADMIN_RESOURCE_PATHS)) {
+    files[path] ??= `${JSON.stringify({ resource })}\n`;
+  }
   for (const [path, content] of Object.entries(files)) {
     const absolutePath = join(rootDir, path);
     await mkdir(dirname(absolutePath), { recursive: true });
@@ -49,11 +57,37 @@ test("deployment marker writes all public verification scopes", async (context) 
   const rootDir = await createFixture();
   context.after(() => rm(rootDir, { recursive: true, force: true }));
   const marker = await writeDeploymentMarker({ rootDir });
-  assert.equal(marker.schemaVersion, 1);
+  assert.equal(marker.schemaVersion, 2);
+  assert.deepEqual(marker.source, { commit: null, branch: null, provider: "local" });
+  assert.deepEqual(marker.resources, await calculateAdminResourceDigests({ rootDir }));
+  for (const digest of Object.values(marker.resources)) assert.match(digest, /^[a-f0-9]{64}$/u);
   for (const scope of ["search", "bank", "external", "automation"]) {
     assert.match(marker.scopes[scope], /^[a-f0-9]{64}$/u);
     assert.equal(marker.scopes[scope], await calculateDeploymentScopeHash(scope, { rootDir }));
   }
+});
+
+test("deployment marker source prefers Workers Builds and validates commit metadata", () => {
+  assert.deepEqual(resolveDeploymentSource({
+    WORKERS_CI: "1",
+    WORKERS_CI_COMMIT_SHA: "a".repeat(40),
+    WORKERS_CI_BRANCH: "master",
+    GITHUB_ACTIONS: "true",
+    GITHUB_SHA: "b".repeat(40),
+  }), {
+    commit: "a".repeat(40),
+    branch: "master",
+    provider: "workers-builds",
+  });
+  assert.deepEqual(resolveDeploymentSource({
+    GITHUB_ACTIONS: "true",
+    GITHUB_SHA: "invalid",
+    GITHUB_REF_NAME: "master",
+  }), {
+    commit: null,
+    branch: "master",
+    provider: "github-actions",
+  });
 });
 
 test("production polling retries until the expected scope marker is visible", async () => {
@@ -68,7 +102,7 @@ test("production polling retries until the expected scope marker is visible", as
     logger: { log() {} },
     fetcher: async () => {
       calls += 1;
-      return new Response(JSON.stringify({ schemaVersion: 1, scopes: { bank: calls === 2 ? expected : "b".repeat(64) } }), {
+      return new Response(JSON.stringify({ schemaVersion: 2, scopes: { bank: calls === 2 ? expected : "b".repeat(64) } }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       });

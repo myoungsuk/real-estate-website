@@ -64,6 +64,7 @@ jobs:
           artifact="$RUNNER_TEMP/bank-sync-artifact"
           mkdir -p "$artifact/.github" "$artifact/src/data"
           cp .github/bank-listing-sync-state.json "$artifact/.github/bank-listing-sync-state.json"
+          cp .github/listing-review-state.json "$artifact/.github/listing-review-state.json"
           cp src/data/naver-listings.json "$artifact/src/data/naver-listings.json"
           echo "base_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           echo "expected_marker=$(node scripts/deployment-marker.mjs print bank)" >> "$GITHUB_OUTPUT"
@@ -111,6 +112,7 @@ jobs:
         run: |
           set -euo pipefail
           cp "$RUNNER_TEMP/bank-sync-artifact/.github/bank-listing-sync-state.json" .github/bank-listing-sync-state.json
+          cp "$RUNNER_TEMP/bank-sync-artifact/.github/listing-review-state.json" .github/listing-review-state.json
           cp "$RUNNER_TEMP/bank-sync-artifact/src/data/naver-listings.json" src/data/naver-listings.json
           node scripts/check-bank-sync-worktree.mjs
 
@@ -119,7 +121,7 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- .github/bank-listing-sync-state.json src/data/naver-listings.json
+          git add -- .github/bank-listing-sync-state.json .github/listing-review-state.json src/data/naver-listings.json
           git diff --cached --quiet && { echo "검증 산출물에 커밋할 변경이 없습니다." >&2; exit 1; }
           git commit -m "chore(content): sync Bank listings"
 

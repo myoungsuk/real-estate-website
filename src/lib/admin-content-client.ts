@@ -1,7 +1,7 @@
 interface ApiErrorBody {
   code?: string;
   message?: string;
-  details?: string[];
+  details?: Array<string | { message?: string }>;
 }
 
 interface ApiEnvelope<T> {
@@ -48,12 +48,131 @@ export interface AdminContentBatchResult {
   resources: Array<{
     resource: string;
     contentSha: string;
+    resourceDigest: string;
   }>;
   commitSha: string;
   baseCommitSha: string;
+  savedAt: string;
+}
+
+export interface AdminContentWriteResult {
+  resource: string;
+  commitSha: string | null;
+  contentSha: string | null;
+  resourceDigest: string | null;
+  baseCommitSha?: string;
+  savedAt: string;
+}
+
+export interface AdminDeploymentTarget {
+  commit: string;
+  resource: string;
+  digest: string;
+  savedAt: string;
+}
+
+export interface AdminDeploymentStatus {
+  state: "deploying" | "published" | "superseded" | "delayed" | "failed" | "unknown";
+  savedCommit: string;
+  activeCommit: string | null;
+  branch: string | null;
+  sourceProvider: "workers-builds" | "github-actions" | "local" | null;
+  resource: string;
+  resourceMatched: boolean;
+  workerVersion: { id: string; createdAt: string } | null;
+  checkedAt: string;
+  savedAt: string | null;
+  pollAfterMs: number | null;
+  reason: string | null;
+}
+
+export interface AdminContentHistoryEntry {
+  commitSha: string;
+  title: string;
+  committedAt: string;
+  author: string;
+  resourceBlobSha: string;
+  onCurrentBranch: true;
+  productionMatched: boolean | null;
+}
+
+export interface AdminContentHistoryPage {
+  resource: string;
+  entries: AdminContentHistoryEntry[];
+  nextCursor: string | null;
+}
+
+export interface AdminContentRevision<T = unknown> {
+  resource: string;
+  source: {
+    commitSha: string;
+    resourceBlobSha: string;
+    resourceDigest: string;
+    data: T;
+    productionMatched: boolean | null;
+  };
+  current: {
+    commitSha: string;
+    resourceBlobSha: string;
+    data: T;
+  };
+  validation: {
+    valid: boolean;
+    errors: string[];
+  };
+  confirmation: string;
+}
+
+export interface AdminContentRestoreResult {
+  resources: Array<{
+    resource: string;
+    contentSha: string;
+    resourceDigest: string;
+  }>;
+  commitSha: string;
+  baseCommitSha: string;
+  sourceCommit: string;
+  restoredResources: string[];
+  savedAt: string;
+}
+
+export interface AdminContentValidationResult {
+  valid: true;
+  snapshotCommit: string;
+  changedResources: string[];
+  warnings: string[];
 }
 
 let sessionPromise: Promise<AdminSession> | null = null;
+const deploymentStorageKey = "leaderscityhappy.admin.deployment.v1";
+
+function rememberAdminDeployment(target: AdminDeploymentTarget) {
+  try {
+    globalThis.localStorage?.setItem(deploymentStorageKey, JSON.stringify({ schemaVersion: 1, target }));
+  } catch {
+    // 배포 상태 보관 실패가 이미 완료된 GitHub 저장 결과를 바꾸지 않게 한다.
+  }
+}
+
+export function readRememberedAdminDeployment(): AdminDeploymentTarget | null {
+  try {
+    const parsed = JSON.parse(globalThis.localStorage?.getItem(deploymentStorageKey) ?? "null") as {
+      schemaVersion?: number;
+      target?: Partial<AdminDeploymentTarget>;
+    } | null;
+    const target = parsed?.schemaVersion === 1 ? parsed.target : null;
+    if (
+      !target
+      || !/^[a-f0-9]{40}$/u.test(target.commit ?? "")
+      || !/^[a-z-]+$/u.test(target.resource ?? "")
+      || !/^[a-f0-9]{64}$/u.test(target.digest ?? "")
+      || !Number.isFinite(Date.parse(target.savedAt ?? ""))
+    ) return null;
+    return target as AdminDeploymentTarget;
+  } catch {
+    return null;
+  }
+}
 
 async function readEnvelope<T>(response: Response) {
   const type = (response.headers.get("Content-Type") ?? "").split(";", 1)[0].trim().toLowerCase();
@@ -73,7 +192,8 @@ async function readEnvelope<T>(response: Response) {
     throw new AdminApiError("관리자 API 응답을 읽지 못했습니다.", { status: response.status });
   }
   if (!response.ok || !body.ok || !body.data) {
-    const details = body.error?.details?.length ? `\n${body.error.details.join("\n")}` : "";
+    const detailMessages = body.error?.details?.map((detail) => typeof detail === "string" ? detail : detail.message ?? "").filter(Boolean) ?? [];
+    const details = detailMessages.length > 0 ? `\n${detailMessages.join("\n")}` : "";
     throw new AdminApiError(
       `${body.error?.message ?? "관리자 요청을 처리하지 못했습니다."}${details}`,
       { code: body.error?.code ?? null, status: response.status },
@@ -126,12 +246,7 @@ export async function readAdminContent<T>(resource: string) {
 }
 
 export async function writeAdminContent<T>(resource: string, sha: string, data: T) {
-  return withWritableSession<{
-    resource: string;
-    commitSha: string | null;
-    contentSha: string | null;
-    baseCommitSha?: string;
-  }>(
+  const result = await withWritableSession<AdminContentWriteResult>(
     "관리자 저장 연결이 아직 활성화되지 않았습니다.",
     (csrfToken) => fetch(`/api/admin/v1/content/${resource}`, {
       method: "PUT",
@@ -144,13 +259,116 @@ export async function writeAdminContent<T>(resource: string, sha: string, data: 
       body: JSON.stringify({ sha, data }),
     }),
   );
+  if (result.commitSha && result.resourceDigest) {
+    rememberAdminDeployment({
+      commit: result.commitSha,
+      resource,
+      digest: result.resourceDigest,
+      savedAt: result.savedAt,
+    });
+  }
+  return result;
 }
 
 export async function writeAdminContentBatch(changes: readonly AdminContentBatchChange[]) {
-  return withWritableSession<AdminContentBatchResult>(
+  const result = await withWritableSession<AdminContentBatchResult>(
     "관리자 저장 연결이 아직 활성화되지 않았습니다.",
     (csrfToken) => fetch("/api/admin/v1/content", {
       method: "PUT",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "X-Admin-CSRF": csrfToken,
+      },
+      credentials: "same-origin",
+      body: JSON.stringify({ changes }),
+    }),
+  );
+  const latest = result.resources.at(-1);
+  if (latest?.resourceDigest && result.savedAt) {
+    rememberAdminDeployment({
+      commit: result.commitSha,
+      resource: latest.resource,
+      digest: latest.resourceDigest,
+      savedAt: result.savedAt,
+    });
+  }
+  return result;
+}
+
+export async function readAdminDeploymentStatus(target: AdminDeploymentTarget) {
+  const query = new URLSearchParams({
+    commit: target.commit,
+    resource: target.resource,
+    digest: target.digest,
+    savedAt: target.savedAt,
+  });
+  const response = await fetch(`/api/admin/v1/deployment-status?${query}`, {
+    headers: { Accept: "application/json", "Cache-Control": "no-store" },
+    credentials: "same-origin",
+  });
+  return readEnvelope<AdminDeploymentStatus>(response);
+}
+
+export async function readAdminContentHistory(resource: string, cursor: string | null = null) {
+  const query = new URLSearchParams({ limit: "10" });
+  if (cursor) query.set("cursor", cursor);
+  const response = await fetch(`/api/admin/v1/content-history/${encodeURIComponent(resource)}?${query}`, {
+    headers: { Accept: "application/json", "Cache-Control": "no-store" },
+    credentials: "same-origin",
+  });
+  return readEnvelope<AdminContentHistoryPage>(response);
+}
+
+export async function readAdminContentRevision<T>(resource: string, commitSha: string) {
+  const response = await fetch(
+    `/api/admin/v1/content-history/${encodeURIComponent(resource)}/${encodeURIComponent(commitSha)}`,
+    {
+      headers: { Accept: "application/json", "Cache-Control": "no-store" },
+      credentials: "same-origin",
+    },
+  );
+  return readEnvelope<AdminContentRevision<T>>(response);
+}
+
+export async function restoreAdminContent<T>(revision: AdminContentRevision<T>, confirmation: string) {
+  const result = await withWritableSession<AdminContentRestoreResult>(
+    "관리자 복원 연결이 아직 활성화되지 않았습니다.",
+    (csrfToken) => fetch("/api/admin/v1/content/restore", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "X-Admin-CSRF": csrfToken,
+      },
+      credentials: "same-origin",
+      body: JSON.stringify({
+        sourceCommit: revision.source.commitSha,
+        resources: [{
+          resource: revision.resource,
+          expectedCurrentSha: revision.current.resourceBlobSha,
+        }],
+        confirmation,
+      }),
+    }),
+  );
+  const latest = result.resources.at(-1);
+  if (latest?.resourceDigest) {
+    rememberAdminDeployment({
+      commit: result.commitSha,
+      resource: latest.resource,
+      digest: latest.resourceDigest,
+      savedAt: result.savedAt,
+    });
+  }
+  return result;
+}
+
+export async function validateAdminContent(changes: readonly AdminContentBatchChange[]) {
+  return withWritableSession<AdminContentValidationResult>(
+    "관리자 사전 검증 연결이 아직 활성화되지 않았습니다.",
+    (csrfToken) => fetch("/api/admin/v1/content/validate", {
+      method: "POST",
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",

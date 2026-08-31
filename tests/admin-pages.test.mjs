@@ -124,7 +124,9 @@ test("관리자 편집 화면은 부동산뱅크 가져오기와 네이버 매�
   assert.doesNotMatch(listingEditor, /window\.confirm/);
   assert.match(listingEditor, /createBankListingImport/);
   assert.match(listingEditor, /createManualNaverListing/);
-  assert.match(listingEditor, /writeAdminContent\("naver-listings"/);
+  assert.match(listingEditor, /writeAdminContentBatch/);
+  assert.match(listingEditor, /resource: "listing-review-state"/);
+  assert.match(listingEditor, /resource: "naver-listings"/);
   assert.match(listingEditor, /data-manual-delete/);
   assert.match(listingEditor, /data-bank-apply/);
   assert.doesNotMatch(listingEditor, /thumbnailFile/);
@@ -145,6 +147,70 @@ test("관리자 편집 화면은 부동산뱅크 가져오기와 네이버 매�
   assert.match(complexEditor, /name="amenityGroups"/);
   assert.match(complexEditor, /name="relatedContentIds"/);
   assert.match(complexEditor, /name="sources"/);
+});
+
+test("관리자 배포 상태 화면은 GitHub 저장과 Production digest 확인을 분리한다", async () => {
+  const [layout, page, component, client, styles, config] = await Promise.all([
+    readSource("src/layouts/AdminLayout.astro"),
+    readSource("src/pages/admin/deployment/index.astro"),
+    readSource("src/components/admin/AdminDeploymentStatus.astro"),
+    readSource("src/lib/admin-content-client.ts"),
+    readSource("src/styles/admin.css"),
+    readSource("wrangler.jsonc"),
+  ]);
+  assert.match(layout, /href: "\/admin\/deployment\/"/u);
+  assert.match(page, /저장과 공개 반영을 따로 확인/u);
+  assert.match(component, /GitHub 저장/u);
+  assert.match(component, /Cloudflare 빌드/u);
+  assert.match(component, /resourceMatched/u);
+  assert.match(component, /5_000|pollAfterMs/u);
+  assert.match(client, /\/api\/admin\/v1\/deployment-status/u);
+  assert.match(client, /leaderscityhappy\.admin\.deployment\.v1/u);
+  assert.match(styles, /\.admin-deployment-steps/u);
+  assert.match(config, /"version_metadata"[\s\S]*"CF_VERSION_METADATA"/u);
+});
+
+test("관리자 변경 이력 화면은 diff와 정확한 2차 문구 뒤 새 commit 복원만 요청한다", async () => {
+  const [layout, page, component, client, styles] = await Promise.all([
+    readSource("src/layouts/AdminLayout.astro"),
+    readSource("src/pages/admin/history/index.astro"),
+    readSource("src/components/admin/AdminContentHistory.astro"),
+    readSource("src/lib/admin-content-client.ts"),
+    readSource("src/styles/admin.css"),
+  ]);
+  assert.match(layout, /href: "\/admin\/history\/"/u);
+  assert.match(page, /과거 내용을 확인하고 안전하게 복원/u);
+  assert.match(page, /Git 복원과 Cloudflare 롤백은 다른 작업/u);
+  assert.match(component, /readAdminContentHistory/u);
+  assert.match(component, /readAdminContentRevision/u);
+  assert.match(component, /createAdminContentDiff/u);
+  assert.match(component, /confirmationInput\.value !== selectedRevision\.confirmation/u);
+  assert.match(component, /restoreAdminContent/u);
+  assert.doesNotMatch(component, /window\.confirm|force:\s*true/u);
+  assert.match(client, /\/api\/admin\/v1\/content-history/u);
+  assert.match(client, /\/api\/admin\/v1\/content\/restore/u);
+  assert.match(styles, /\.admin-history-list/u);
+  assert.match(styles, /\.admin-history-confirmation/u);
+});
+
+test("관리자 저장 화면은 공통 변경 요약·사전 검증과 이탈 경고를 사용한다", async () => {
+  const [listingEditor, homeEditor, externalEditor, complexEditor, review, styles] = await Promise.all([
+    readSource("src/pages/admin/listings/editor.astro"),
+    readSource("src/pages/admin/content/index.astro"),
+    readSource("src/pages/admin/external-links/index.astro"),
+    readSource("src/pages/admin/complexes/index.astro"),
+    readSource("src/lib/admin-content-review.ts"),
+    readSource("src/styles/admin.css"),
+  ]);
+  for (const source of [listingEditor, homeEditor, externalEditor, complexEditor]) {
+    assert.match(source, /reviewAdminContentChange/u);
+    assert.match(source, /guardAdminFormChanges/u);
+  }
+  assert.match(review, /\/api\/admin\/v1\/content\/validate|validateAdminContent/u);
+  assert.match(review, /beforeunload/u);
+  assert.match(review, /저장 전 변경 내용 확인/u);
+  assert.match(styles, /\.admin-review-dialog::backdrop/u);
+  assert.match(styles, /\.admin-review-actions/u);
 });
 
 test("외부 콘텐츠는 블로그와 유튜브를 나누고 일반 영상을 기본으로 Shorts를 전환한다", async () => {
@@ -199,20 +265,39 @@ test("외부 콘텐츠는 블로그와 유튜브를 나누고 일반 영상을 �
   assert.match(home, /publishedYoutubeVideoContents\.slice\(0, 6\)/);
 });
 
-test("네이버 매물 관리 화면은 검색·유형 필터와 접근 가능한 결과 수를 제공한다", async () => {
-  const [listings, adminStyles] = await Promise.all([readSource("src/pages/admin/listings/index.astro"), readSource("src/styles/admin.css")]);
+test("네이버 매물 관리 화면은 검색·유형·재확인 필터와 기준 미설정 안전 상태를 제공한다", async () => {
+  const [listings, adminStyles, policy] = await Promise.all([
+    readSource("src/pages/admin/listings/index.astro"),
+    readSource("src/styles/admin.css"),
+    readSource(".github/listing-review-policy.json"),
+  ]);
   assert.match(listings, /data-admin-listing-query/);
   assert.match(listings, /data-admin-listing-type/);
+  assert.match(listings, /data-admin-listing-review/);
+  assert.match(listings, /data-admin-listing-sort/);
+  assert.match(listings, /Bank 자동 동기화/u);
+  assert.match(listings, /날짜 경과만으로 자동 종료하거나 숨기지 않습니다/u);
+  assert.match(listings, /data-admin-listing-review-date/u);
+  assert.match(listings, /data-listing-review-confirm/u);
+  assert.match(listings, /data-listing-review-select/u);
+  assert.match(listings, /data-listing-review-selected/u);
+  assert.match(listings, /reviewedManualIds: ids/u);
+  assert.match(listings, /reviewAdminContentChange/u);
+  assert.match(listings, /writeAdminContent\("listing-review-state"/u);
   assert.match(listings, /aria-live="polite" data-admin-listing-count/);
   assert.match(listings, /history\.replaceState/);
+  assert.deepEqual(JSON.parse(policy), { schemaVersion: 1, bankWarningDays: null, manualWarningDays: null });
+  assert.match(adminStyles, /\.admin-listing-review-summary/u);
   assert.match(adminStyles, /\.admin-empty-state\[hidden\][\s\S]*display: none !important/);
 });
 
-test("공개 매물 화면은 현재 네이버 개별 매물을 사진 없이 페이지·정렬해 표시한다", async () => {
-  const [home, pager, properties, card, styles, rawData] = await Promise.all([
+test("공개 매물 화면은 조건·관심·비교 기능과 기존 네이버 링크·정렬을 함께 제공한다", async () => {
+  const [home, pager, properties, compare, inquiry, card, styles, rawData] = await Promise.all([
     readSource("src/pages/index.astro"),
     readSource("src/components/NaverListingPager.astro"),
     readSource("src/pages/properties/index.astro"),
+    readSource("src/pages/properties/compare/index.astro"),
+    readSource("src/components/InquiryComposer.astro"),
     readSource("src/components/NaverListingCard.astro"),
     readSource("src/styles/global.css"),
     readSource("src/data/naver-listings.json"),
@@ -236,8 +321,12 @@ test("공개 매물 화면은 현재 네이버 개별 매물을 사진 없이 �
   assert.doesNotMatch(pager, /랭킹순/);
   assert.match(properties, /naverListings\.map/);
   assert.match(properties, /name="complex"/);
-  assert.match(properties, /params\.get\("complex"\)/);
-  assert.match(properties, /card\.dataset\.listingTitle\?\.startsWith\(complexName\)/);
+  assert.match(properties, /name="minPrice"/);
+  assert.match(properties, /name="minArea"/);
+  assert.match(properties, /normalizeListingExplorerQuery/);
+  assert.match(properties, /buildListingExplorerSearchParams/);
+  assert.match(properties, /data-favorite-view="favorites"/);
+  assert.match(properties, /data-compare-tray/);
   assert.doesNotMatch(properties, /랭킹순/);
   assert.doesNotMatch(properties, /기본순|최근 확인순/);
   assert.match(properties, /<option value="latest">최근 등록순<\/option>/);
@@ -247,12 +336,20 @@ test("공개 매물 화면은 현재 네이버 개별 매물을 사진 없이 �
   assert.match(properties, /면적 큰순/);
   assert.match(properties, /class="listing-update"/);
   assert.match(properties, /naverListingsUpdatedAt/);
-  assert.match(properties, /sort\.value !== "latest"/);
+  assert.match(compare, /noindexFollow/);
+  assert.match(compare, /canonicalPath="\/properties\/"/);
+  assert.match(compare, /normalizeCompareIds/);
+  assert.match(inquiry, /buildInquiryMessage/);
+  assert.doesNotMatch(inquiry, /fetch\(|\?body=/);
   assert.match(card, /target="_blank"/);
   assert.match(card, /listing\.floorLabel/);
   assert.match(card, /등록 \{registeredAtLabel\}/);
   assert.doesNotMatch(card, /확인<\/time>/);
   assert.match(card, /data-registered-at/);
+  assert.match(card, /data-listing-id=\{listing\.id\}/);
+  assert.match(card, /data-complex=\{complexSlug\}/);
+  assert.match(card, /data-favorite-button/);
+  assert.match(card, /data-compare-button/);
   assert.doesNotMatch(card, /listing-card__visual/);
   assert.match(styles, /\.empty-state\[hidden\][^}]*display: none !important/);
 });

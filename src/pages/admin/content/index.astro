@@ -75,11 +75,13 @@ import { homeContent } from "../../../lib/content";
       writeAdminContent,
       type AdminResource,
     } from "../../../lib/admin-content-client";
+    import { guardAdminFormChanges, reviewAdminContentChange } from "../../../lib/admin-content-review";
     import type { HomeContent } from "../../../lib/content";
 
     const form = document.querySelector<HTMLFormElement>("[data-home-content-form]");
     const status = document.querySelector<HTMLElement>("[data-home-content-status]");
     let resource: AdminResource<HomeContent> | null = null;
+    const dirtyGuard = guardAdminFormChanges(form);
 
     const field = (name: string) => form?.elements.namedItem(name) as HTMLInputElement | HTMLTextAreaElement | null;
     const setValues = (data: HomeContent) => {
@@ -103,6 +105,15 @@ import { homeContent } from "../../../lib/content";
       });
       Object.entries(values).forEach(([name, value]) => { const input = field(name); if (input) input.value = value; });
     };
+    const createCandidate = (portraitSrc: string, officeImageSrc: string) => {
+      if (!resource) return null;
+      const value = (name: string) => field(name)?.value.trim() ?? "";
+      return {
+        broker: { eyebrow: value("brokerEyebrow"), headline: value("brokerHeadline"), lead: value("brokerLead"), portrait: { src: portraitSrc, alt: value("brokerAlt") } },
+        office: { eyebrow: value("officeEyebrow"), title: value("officeTitle"), description: value("officeDescription"), image: { src: officeImageSrc, alt: value("officeAlt") }, badges: value("officeBadges").split("\n").map((item) => item.trim()).filter(Boolean) },
+        areaGuide: { eyebrow: value("areaEyebrow"), title: value("areaTitle"), description: value("areaDescription"), cards: resource.data.areaGuide.cards.map((_, index) => ({ title: value(`areaCardTitle${index}`), description: value(`areaCardDescription${index}`) })) },
+      } satisfies HomeContent;
+    };
 
     window.addEventListener("admin-write-ready", (event) => {
       const session = (event as CustomEvent<{ writeEnabled: boolean }>).detail;
@@ -110,6 +121,7 @@ import { homeContent } from "../../../lib/content";
       void readAdminContent<HomeContent>("home-content").then((current) => {
         resource = current;
         setValues(current.data);
+        dirtyGuard.markSaved();
         setAdminFormStatus(status, "GitHub의 최신 내용을 불러왔습니다.");
       }).catch((error) => setAdminFormStatus(status, error instanceof Error ? error.message : "최신 내용을 불러오지 못했습니다.", "error"));
     });
@@ -119,25 +131,37 @@ import { homeContent } from "../../../lib/content";
       if (!resource) return setAdminFormStatus(status, "최신 내용을 먼저 불러와 주세요.", "error");
       const submit = form.querySelector<HTMLButtonElement>("button[type='submit']");
       if (submit) submit.disabled = true;
-      setAdminFormStatus(status, "사진과 문구를 저장하고 있습니다.", "saving");
+      setAdminFormStatus(status, "변경 내용을 만들고 서버 검증을 준비하고 있습니다.", "saving");
       try {
-        let portraitSrc = resource.data.broker.portrait.src;
-        let officeImageSrc = resource.data.office.image.src;
         const portraitFile = (field("brokerImage") as HTMLInputElement)?.files?.[0];
         const officeFile = (field("officeImage") as HTMLInputElement)?.files?.[0];
+        const reviewCandidate = createCandidate(
+          portraitFile ? "/images/content/office/pending-admin-review.webp" : resource.data.broker.portrait.src,
+          officeFile ? "/images/content/office/pending-admin-review.webp" : resource.data.office.image.src,
+        );
+        if (!reviewCandidate) throw new Error("최신 내용을 먼저 불러와 주세요.");
+        const confirmed = await reviewAdminContentChange({
+          changes: [{ resource: "home-content", sha: resource.sha, data: reviewCandidate }],
+          beforeByResource: { "home-content": resource.data },
+          impactPages: ["홈 첫 화면", "대표 소개", "리더스시티 안내"],
+        });
+        if (!confirmed) {
+          setAdminFormStatus(status, "저장을 취소했습니다. 입력한 내용은 그대로 유지됩니다.");
+          return;
+        }
+        setAdminFormStatus(status, "검증된 사진과 문구를 GitHub에 저장하고 있습니다.", "saving");
+        let portraitSrc = resource.data.broker.portrait.src;
+        let officeImageSrc = resource.data.office.image.src;
         if (portraitFile) portraitSrc = (await uploadAdminImage("office", await convertImageFileToWebp(portraitFile))).src;
         if (officeFile) officeImageSrc = (await uploadAdminImage("office", await convertImageFileToWebp(officeFile))).src;
-        const value = (name: string) => field(name)?.value.trim() ?? "";
-        const next: HomeContent = {
-          broker: { eyebrow: value("brokerEyebrow"), headline: value("brokerHeadline"), lead: value("brokerLead"), portrait: { src: portraitSrc, alt: value("brokerAlt") } },
-          office: { eyebrow: value("officeEyebrow"), title: value("officeTitle"), description: value("officeDescription"), image: { src: officeImageSrc, alt: value("officeAlt") }, badges: value("officeBadges").split("\n").map((item) => item.trim()).filter(Boolean) },
-          areaGuide: { eyebrow: value("areaEyebrow"), title: value("areaTitle"), description: value("areaDescription"), cards: resource.data.areaGuide.cards.map((_, index) => ({ title: value(`areaCardTitle${index}`), description: value(`areaCardDescription${index}`) })) },
-        };
+        const next = createCandidate(portraitSrc, officeImageSrc);
+        if (!next) throw new Error("최신 내용을 먼저 불러와 주세요.");
         const result = await writeAdminContent("home-content", resource.sha, next);
         resource = { resource: "home-content", sha: result.contentSha ?? resource.sha, data: next };
         form.reset();
         setValues(next);
-        setAdminFormStatus(status, "저장했습니다. GitHub 커밋이 생성되었습니다. 자동 배포 연결 후 공개 화면에 반영됩니다.", "success");
+        dirtyGuard.markSaved();
+        setAdminFormStatus(status, "GitHub 저장이 완료됐습니다. 배포 상태 메뉴에서 공개 반영 완료를 별도로 확인해 주세요.", "success");
       } catch (error) {
         setAdminFormStatus(status, error instanceof Error ? error.message : "저장하지 못했습니다.", "error");
       } finally {

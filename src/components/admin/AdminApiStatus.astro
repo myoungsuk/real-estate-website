@@ -24,6 +24,10 @@
       <dt>쓰기 기능</dt>
       <dd data-api-write>비활성화</dd>
     </div>
+    <div>
+      <dt>Worker 버전</dt>
+      <dd data-api-worker>확인 중</dd>
+    </div>
   </dl>
 
   <button class="admin-text-button" type="button" data-api-retry hidden>다시 확인</button>
@@ -48,6 +52,7 @@
     apiRuntime: string;
     apiVersion: string;
     writeEnabled: boolean;
+    workerVersion: { id: string; createdAt: string } | null;
   }
 
   const panels = document.querySelectorAll<HTMLElement>("[data-admin-api-status]");
@@ -58,15 +63,17 @@
     const administrator = panel.querySelector<HTMLElement>("[data-api-administrator]");
     const authentication = panel.querySelector<HTMLElement>("[data-api-authentication]");
     const write = panel.querySelector<HTMLElement>("[data-api-write]");
+    const worker = panel.querySelector<HTMLElement>("[data-api-worker]");
     const retry = panel.querySelector<HTMLButtonElement>("[data-api-retry]");
 
-    if (!badge || !message || !administrator || !authentication || !write || !retry) return;
+    if (!badge || !message || !administrator || !authentication || !write || !worker || !retry) return;
 
     const setChecking = () => {
       badge.className = "admin-badge admin-badge--checking";
       badge.textContent = "확인 중";
       message.textContent = "Cloudflare Access 세션과 Worker 상태를 확인하고 있습니다.";
       administrator.textContent = "확인 중";
+      worker.textContent = "확인 중";
       retry.hidden = true;
     };
 
@@ -92,6 +99,7 @@
         administrator.textContent = session.data.administrator;
         authentication.textContent = "Cloudflare Access + Email OTP";
         write.textContent = session.data.writeEnabled ? "활성화" : "비활성화";
+        worker.textContent = system.data.workerVersion?.id.slice(0, 10) ?? "로컬·확인 불가";
       } catch (error) {
         badge.className = "admin-badge admin-badge--warning";
         badge.textContent = "설정 필요";
@@ -100,6 +108,7 @@
           : "관리 API 연결을 확인하지 못했습니다.";
         administrator.textContent = "확인 불가";
         write.textContent = "비활성화";
+        worker.textContent = "확인 불가";
         retry.hidden = false;
       }
     };

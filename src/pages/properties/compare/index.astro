@@ -1,0 +1,249 @@
+---
+import BaseLayout from "../../../layouts/BaseLayout.astro";
+import PageIntro from "../../../components/PageIntro.astro";
+import InquiryComposer from "../../../components/InquiryComposer.astro";
+import { naverListings, naverTradeNames } from "../../../lib/naver-listings";
+import { serializeJsonLd } from "../../../lib/json-ld.mjs";
+
+const title = "선택 매물 비교 | 리더스시티 행복한부동산";
+const description = "선택한 네이버 공개 매물 최대 3개의 가격, 면적, 층, 방향과 등록일을 한눈에 비교합니다.";
+const compareData = naverListings.map((listing) => ({
+  id: listing.id,
+  title: listing.title,
+  propertyType: listing.propertyType,
+  tradeType: listing.tradeType,
+  tradeLabel: naverTradeNames[listing.tradeType],
+  priceLabel: listing.priceLabel,
+  areaLabel: listing.areaLabel,
+  floorLabel: listing.floorLabel,
+  direction: listing.direction,
+  registeredAt: listing.registeredAt,
+  url: listing.url,
+}));
+const serializedCompareData = serializeJsonLd(compareData);
+---
+
+<BaseLayout
+  {title}
+  {description}
+  noindexFollow
+  canonicalPath="/properties/"
+  breadcrumbItems={[
+    { name: "홈", path: "/" },
+    { name: "매물", path: "/properties/" },
+    { name: "선택 매물 비교", path: "/properties/compare/" },
+  ]}
+>
+  <PageIntro eyebrow="COMPARE" title="선택 매물 비교" description="네이버에 공개된 정보만 나란히 보여드립니다. 현재 상태와 세부 조건은 상담 시 다시 확인해 주세요." />
+  <section class="section compare-section">
+    <div class="shell">
+      <script is:inline type="application/json" data-compare-data set:html={serializedCompareData} />
+      <p class="compare-summary" tabindex="-1" aria-live="polite" data-compare-summary>비교할 매물을 불러오는 중입니다.</p>
+
+      <div class="compare-empty empty-state" data-compare-empty hidden>
+        <span class="empty-state__number" aria-hidden="true">0</span>
+        <div><h2>선택된 공개 매물이 없습니다</h2><p>매물 목록에서 비교할 항목을 최대 3개까지 선택해 주세요.</p></div>
+        <a class="button button--primary" href="/properties/">매물 목록에서 선택</a>
+      </div>
+
+      <div class="compare-mobile" data-compare-mobile></div>
+      <div class="compare-table-wrap" data-compare-table-wrap hidden>
+        <table class="compare-table" data-compare-table>
+          <caption class="sr-only">선택한 네이버 공개 매물 비교</caption>
+        </table>
+      </div>
+
+      <div class="compare-page-actions" data-compare-actions hidden>
+        <a class="button button--secondary" href="/properties/">비교할 매물 다시 선택</a>
+        <a class="button button--primary" href="#inquiry-composer">선택 매물 문의 준비</a>
+      </div>
+
+      <InquiryComposer heading="비교한 매물을 상담 문장에 넣어 보세요" />
+    </div>
+  </section>
+</BaseLayout>
+
+<script>
+  import { normalizeCompareIds } from "../../../lib/listing-compare.mjs";
+
+  interface CompareListing {
+    id: string;
+    title: string;
+    propertyType: string;
+    tradeType: string;
+    tradeLabel: string;
+    priceLabel: string;
+    areaLabel: string | null;
+    floorLabel: string | null;
+    direction: string | null;
+    registeredAt: string;
+    url: string;
+  }
+
+  const dataNode = document.querySelector<HTMLScriptElement>("[data-compare-data]");
+  const summary = document.querySelector<HTMLElement>("[data-compare-summary]");
+  const empty = document.querySelector<HTMLElement>("[data-compare-empty]");
+  const mobile = document.querySelector<HTMLElement>("[data-compare-mobile]");
+  const tableWrap = document.querySelector<HTMLElement>("[data-compare-table-wrap]");
+  const table = document.querySelector<HTMLTableElement>("[data-compare-table]");
+  const actions = document.querySelector<HTMLElement>("[data-compare-actions]");
+
+  if (dataNode && summary && empty && mobile && tableWrap && table && actions) {
+    let listings: CompareListing[] = [];
+    try {
+      listings = JSON.parse(dataNode.textContent ?? "[]");
+    } catch {
+      listings = [];
+    }
+    const listingById = new Map(listings.map((listing) => [listing.id, listing]));
+    const validIds = new Set(listingById.keys());
+    let selectedIds = normalizeCompareIds(new URLSearchParams(location.search).get("ids"), validIds);
+
+    const textCell = (tag: "th" | "td", value: string, scope?: "row" | "col") => {
+      const cell = document.createElement(tag);
+      cell.textContent = value || "미표시";
+      if (scope && cell instanceof HTMLTableCellElement) cell.scope = scope;
+      return cell;
+    };
+
+    const removeListing = (id: string) => {
+      selectedIds = selectedIds.filter((selectedId) => selectedId !== id);
+      render(true);
+    };
+
+    const renderMobile = (selected: CompareListing[]) => {
+      mobile.replaceChildren(...selected.map((listing) => {
+        const article = document.createElement("article");
+        article.className = "compare-card";
+        article.dataset.compareCard = "";
+        article.dataset.compareSelected = "true";
+        article.dataset.listingId = listing.id;
+        article.dataset.trade = listing.tradeType;
+        article.dataset.priceLabel = listing.priceLabel;
+
+        const heading = document.createElement("h2");
+        heading.textContent = listing.title;
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.textContent = "비교에서 제거";
+        remove.addEventListener("click", () => removeListing(listing.id));
+        const header = document.createElement("div");
+        header.className = "compare-card__header";
+        header.append(heading, remove);
+
+        const values = [
+          ["매물번호", listing.id], ["거래유형", listing.tradeLabel], ["가격", listing.priceLabel],
+          ["면적", listing.areaLabel ?? "미표시"], ["층", listing.floorLabel ?? "미표시"],
+          ["방향", listing.direction ?? "미표시"], ["등록", listing.registeredAt.replaceAll("-", ".")],
+          ["매물유형", listing.propertyType],
+        ];
+        const facts = document.createElement("dl");
+        values.forEach(([label, value]) => {
+          const wrapper = document.createElement("div");
+          const term = document.createElement("dt");
+          const detail = document.createElement("dd");
+          term.textContent = label;
+          detail.textContent = value;
+          wrapper.append(term, detail);
+          facts.append(wrapper);
+        });
+        const link = document.createElement("a");
+        link.className = "button button--secondary";
+        link.href = listing.url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = "네이버에서 매물 보기";
+        article.append(header, facts, link);
+        return article;
+      }));
+    };
+
+    const renderTable = (selected: CompareListing[]) => {
+      const head = document.createElement("thead");
+      const headRow = document.createElement("tr");
+      headRow.append(textCell("th", "비교 항목", "col"), ...selected.map((listing) => textCell("th", listing.title, "col")));
+      head.append(headRow);
+      const body = document.createElement("tbody");
+      const rows = [
+        ["매물번호", (listing: CompareListing) => listing.id],
+        ["거래유형", (listing: CompareListing) => listing.tradeLabel],
+        ["가격", (listing: CompareListing) => listing.priceLabel],
+        ["면적", (listing: CompareListing) => listing.areaLabel ?? "미표시"],
+        ["층", (listing: CompareListing) => listing.floorLabel ?? "미표시"],
+        ["방향", (listing: CompareListing) => listing.direction ?? "미표시"],
+        ["등록", (listing: CompareListing) => listing.registeredAt.replaceAll("-", ".")],
+        ["매물유형", (listing: CompareListing) => listing.propertyType],
+      ] as const;
+      rows.forEach(([label, getter]) => {
+        const row = document.createElement("tr");
+        row.append(textCell("th", label, "row"), ...selected.map((listing) => textCell("td", getter(listing))));
+        body.append(row);
+      });
+      const detailRow = document.createElement("tr");
+      detailRow.append(textCell("th", "상세", "row"), ...selected.map((listing) => {
+        const cell = document.createElement("td");
+        const link = document.createElement("a");
+        link.href = listing.url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = "네이버에서 보기 ↗";
+        cell.append(link);
+        return cell;
+      }));
+      body.append(detailRow);
+      table.replaceChildren(head, body);
+    };
+
+    const render = (focusSummary = false) => {
+      const selected = selectedIds.map((id) => listingById.get(id)).filter((listing): listing is CompareListing => Boolean(listing));
+      empty.hidden = selected.length > 0;
+      mobile.hidden = selected.length === 0;
+      tableWrap.hidden = selected.length === 0;
+      actions.hidden = selected.length === 0;
+      summary.textContent = selected.length > 0
+        ? `선택한 공개 매물 ${selected.length}개를 비교합니다.`
+        : "비교할 매물을 선택해 주세요.";
+      renderMobile(selected);
+      renderTable(selected);
+
+      const next = new URLSearchParams();
+      if (selectedIds.length > 0) next.set("ids", selectedIds.join(","));
+      history.replaceState(null, "", `${location.pathname}${next.size ? `?${next}` : ""}`);
+      document.dispatchEvent(new CustomEvent("listing-selection-change"));
+      if (focusSummary) summary.focus();
+    };
+
+    render();
+  }
+</script>
+
+<style>
+  .compare-summary { margin: 0 0 22px; color: var(--navy-950); font-weight: 850; }
+  .compare-empty { margin-bottom: 32px; }
+  .compare-mobile { display: grid; gap: 16px; }
+  .compare-mobile[hidden],
+  .compare-table-wrap[hidden],
+  .compare-page-actions[hidden] { display: none; }
+  .compare-card { min-width: 0; padding: 20px; border: 1px solid var(--line); border-top: 4px solid var(--navy-800); border-radius: var(--radius); background: var(--white); }
+  .compare-card__header { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+  .compare-card h2 { font-size: 1.25rem; }
+  .compare-card button { min-width: 44px; min-height: 44px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 999px; color: var(--navy-950); background: var(--white); font: inherit; font-size: 0.78rem; font-weight: 800; cursor: pointer; }
+  .compare-card dl { display: grid; gap: 0; margin: 14px 0 18px; }
+  .compare-card dl div { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+  .compare-card dt { color: var(--muted); font-size: 0.8rem; font-weight: 800; }
+  .compare-card dd { min-width: 0; margin: 0; color: var(--navy-950); overflow-wrap: anywhere; }
+  .compare-table-wrap { display: none; max-width: 100%; overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--white); }
+  .compare-table { width: 100%; min-width: 780px; border-collapse: collapse; }
+  .compare-table th,
+  .compare-table td { padding: 15px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  .compare-table thead th { color: var(--white); background: var(--navy-950); }
+  .compare-table tbody th { position: sticky; left: 0; z-index: 1; width: 130px; color: var(--navy-950); background: var(--ivory); }
+  .compare-table td { min-width: 190px; }
+  .compare-table td a { color: var(--rose-dark); font-weight: 850; }
+  .compare-page-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
+
+  @media (min-width: 768px) {
+    .compare-mobile { display: none; }
+    .compare-table-wrap { display: block; }
+  }
+</style>

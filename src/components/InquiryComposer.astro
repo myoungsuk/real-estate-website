@@ -1,0 +1,233 @@
+---
+import { kakaoHref, office, smsHref } from "../lib/site";
+
+interface Props {
+  heading?: string;
+}
+
+const { heading = "문의 조건을 문장으로 정리해 보세요" } = Astro.props;
+---
+
+<section class="inquiry-composer" id="inquiry-composer" aria-labelledby="inquiry-composer-heading" data-inquiry-composer>
+  <div class="inquiry-composer__intro">
+    <p class="eyebrow">상담 조건 도우미</p>
+    <h2 id="inquiry-composer-heading">{heading}</h2>
+    <p>입력 내용은 서버에 저장하거나 전송하지 않습니다. 문장을 만든 뒤 직접 복사하고 문자 또는 카카오톡 앱을 열어 전송해 주세요.</p>
+  </div>
+  <form class="inquiry-composer__form" data-inquiry-form>
+    <div class="inquiry-composer__fields">
+      <div>
+        <label for="inquiry-trade">거래유형</label>
+        <select id="inquiry-trade" name="tradeType">
+          <option value="">선택 안 함</option>
+          <option value="sale">매매</option>
+          <option value="jeonse">전세</option>
+          <option value="monthly-rent">월세</option>
+        </select>
+      </div>
+      <div>
+        <label for="inquiry-location">희망 지역·단지</label>
+        <input id="inquiry-location" name="location" maxlength="80" placeholder="예: 리더스시티5블록" />
+      </div>
+      <div>
+        <label for="inquiry-budget">예산 범위</label>
+        <input id="inquiry-budget" name="budget" maxlength="80" placeholder="예: 5억원 이하" />
+      </div>
+      <div>
+        <label for="inquiry-area">희망 면적</label>
+        <input id="inquiry-area" name="area" maxlength="80" placeholder="예: 84㎡ 이상" />
+      </div>
+      <div>
+        <label for="inquiry-move-in">입주 희망 시기</label>
+        <input id="inquiry-move-in" name="moveIn" maxlength="80" placeholder="예: 2026년 10월경" />
+      </div>
+      <div class="inquiry-composer__wide">
+        <label for="inquiry-memo">추가 요청 <small>(선택, 최대 200자)</small></label>
+        <textarea id="inquiry-memo" name="memo" rows="4" maxlength="200" placeholder="민감정보나 정확한 동·호수는 적지 마세요."></textarea>
+      </div>
+    </div>
+    <div class="inquiry-composer__selected" aria-live="polite">
+      <strong>선택 매물</strong>
+      <p data-inquiry-selected>비교할 매물을 선택하면 최대 3개까지 문장에 포함됩니다.</p>
+    </div>
+    <button class="button button--primary" type="submit">문의 문장 만들기</button>
+    <div class="inquiry-composer__output" data-inquiry-output hidden>
+      <label for="inquiry-result">생성된 문의 문장</label>
+      <textarea id="inquiry-result" rows="13" readonly data-inquiry-result></textarea>
+      <p class="inquiry-composer__status" role="status" aria-live="polite" data-inquiry-status></p>
+      <div class="inquiry-composer__actions">
+        <button class="button button--secondary" type="button" data-inquiry-copy>문의 내용 복사</button>
+        <a class="button button--secondary" href={smsHref}>문자 앱 열기</a>
+        <a class="button button--kakao" href={kakaoHref} target="_blank" rel="noopener noreferrer">카카오톡 열기</a>
+      </div>
+      <p class="inquiry-composer__notice">앱을 연 뒤 복사한 내용을 붙여넣고 전송해 주세요. 현재 매물 상태는 상담 시 다시 확인합니다.</p>
+    </div>
+  </form>
+  <p class="inquiry-composer__privacy">이 기능은 {office.brandName} 서버, GitHub 또는 분석 로그에 상담 내용을 남기지 않습니다.</p>
+</section>
+
+<script>
+  import { buildInquiryMessage } from "../lib/inquiry-message.mjs";
+
+  const readSelectedListings = () => {
+    const selected = [
+      ...document.querySelectorAll<HTMLElement>(
+        '[data-naver-listing-card][data-compare-selected="true"], [data-compare-card][data-compare-selected="true"]',
+      ),
+    ];
+    const unique = new Map<string, { id: string; tradeType: string; priceLabel: string }>();
+    selected.forEach((item) => {
+      const id = item.dataset.listingId ?? "";
+      if (/^\d+$/.test(id) && !unique.has(id)) {
+        unique.set(id, {
+          id,
+          tradeType: item.dataset.trade ?? "",
+          priceLabel: item.dataset.priceLabel ?? "",
+        });
+      }
+    });
+    return [...unique.values()].slice(0, 3);
+  };
+
+  document.querySelectorAll<HTMLElement>("[data-inquiry-composer]").forEach((root) => {
+    const form = root.querySelector<HTMLFormElement>("[data-inquiry-form]");
+    const selectedText = root.querySelector<HTMLElement>("[data-inquiry-selected]");
+    const output = root.querySelector<HTMLElement>("[data-inquiry-output]");
+    const result = root.querySelector<HTMLTextAreaElement>("[data-inquiry-result]");
+    const status = root.querySelector<HTMLElement>("[data-inquiry-status]");
+    const copy = root.querySelector<HTMLButtonElement>("[data-inquiry-copy]");
+    if (!form || !selectedText || !output || !result || !status || !copy) return;
+
+    const updateSelectedText = () => {
+      const listings = readSelectedListings();
+      selectedText.textContent = listings.length > 0
+        ? `네이버 매물번호 ${listings.map((listing) => listing.id).join(", ")} — ${listings.length}개 선택`
+        : "비교할 매물을 선택하면 최대 3개까지 문장에 포함됩니다.";
+    };
+
+    document.addEventListener("listing-selection-change", updateSelectedText);
+    updateSelectedText();
+
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const data = new FormData(form);
+      result.value = buildInquiryMessage({
+        listings: readSelectedListings(),
+        tradeType: data.get("tradeType"),
+        location: data.get("location"),
+        budget: data.get("budget"),
+        area: data.get("area"),
+        moveIn: data.get("moveIn"),
+        memo: data.get("memo"),
+      });
+      output.hidden = false;
+      status.textContent = "문의 문장을 만들었습니다. 내용을 확인한 뒤 복사해 주세요.";
+      result.focus();
+    });
+
+    copy.addEventListener("click", async () => {
+      if (!result.value) {
+        status.textContent = "먼저 문의 문장을 만들어 주세요.";
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(result.value);
+        status.textContent = "문의 내용을 복사했습니다. 문자 또는 카카오톡에 붙여넣어 주세요.";
+      } catch {
+        result.focus();
+        result.select();
+        status.textContent = "자동 복사가 차단되었습니다. 선택된 내용을 직접 복사해 주세요.";
+      }
+    });
+  });
+</script>
+
+<style>
+  .inquiry-composer {
+    display: grid;
+    gap: 26px;
+    margin-top: 48px;
+    padding: clamp(24px, 5vw, 44px);
+    border: 1px solid var(--line);
+    border-radius: 24px;
+    background: var(--ivory);
+  }
+
+  .inquiry-composer__intro h2 {
+    max-width: 760px;
+    margin-bottom: 14px;
+    font-size: clamp(1.7rem, 4vw, 2.6rem);
+  }
+
+  .inquiry-composer__intro > p:last-child,
+  .inquiry-composer__privacy,
+  .inquiry-composer__notice {
+    margin-bottom: 0;
+    color: var(--muted);
+  }
+
+  .inquiry-composer__form,
+  .inquiry-composer__fields,
+  .inquiry-composer__fields > div,
+  .inquiry-composer__output {
+    display: grid;
+    gap: 12px;
+  }
+
+  .inquiry-composer__fields > div {
+    gap: 6px;
+  }
+
+  .inquiry-composer label,
+  .inquiry-composer__selected strong {
+    color: var(--navy-950);
+    font-size: 0.88rem;
+    font-weight: 800;
+  }
+
+  .inquiry-composer input,
+  .inquiry-composer select,
+  .inquiry-composer textarea {
+    width: 100%;
+    min-height: 48px;
+    padding: 12px 14px;
+    border: 1px solid #bcc2c4;
+    border-radius: 10px;
+    color: var(--ink);
+    background: var(--white);
+    font: inherit;
+  }
+
+  .inquiry-composer textarea {
+    resize: vertical;
+  }
+
+  .inquiry-composer__selected,
+  .inquiry-composer__output {
+    padding: 18px;
+    border-radius: 14px;
+    background: var(--white);
+  }
+
+  .inquiry-composer__selected p,
+  .inquiry-composer__status {
+    margin: 6px 0 0;
+    color: var(--muted);
+  }
+
+  .inquiry-composer__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  @media (min-width: 768px) {
+    .inquiry-composer__fields {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .inquiry-composer__wide {
+      grid-column: 1 / -1;
+    }
+  }
+</style>

@@ -1,4 +1,8 @@
 import { ADMIN_RESOURCE_PATHS, getAdminResourcePath } from "./admin-resource-validation.mjs";
+import {
+  calculateAdminResourceDigest,
+  normalizeAdminResourceJson,
+} from "../src/lib/admin-resource-digest.mjs";
 
 export class GithubContentError extends Error {
   constructor(code, message, status, upstreamStatus = null) {
@@ -15,6 +19,8 @@ const decoder = new TextDecoder();
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 const MAX_IMAGE_DIMENSION = 1600;
 const MAX_IMAGE_PIXELS = MAX_IMAGE_DIMENSION * MAX_IMAGE_DIMENSION;
+const MAX_HISTORY_LIMIT = 10;
+const COMMIT_SHA_PATTERN = /^[a-f0-9]{40}$/u;
 const mediaCategories = new Set(["listing", "blog", "youtube", "office", "area"]);
 
 function bytesToBase64(bytes) {
@@ -175,11 +181,15 @@ async function githubRequest(path, init, env, fetcher = fetch) {
     },
   });
   if (!response.ok) {
-    const status = response.status === 409 ? 409 : 502;
-    const code = status === 409 ? "GITHUB_CONFLICT" : "GITHUB_UNAVAILABLE";
-    const message = status === 409
+    const isConflict = response.status === 409;
+    const isRateLimited = response.status === 429;
+    const status = isConflict ? 409 : isRateLimited ? 503 : 502;
+    const code = isConflict ? "GITHUB_CONFLICT" : isRateLimited ? "GITHUB_RATE_LIMITED" : "GITHUB_UNAVAILABLE";
+    const message = isConflict
       ? "다른 변경이 먼저 저장되었습니다. 최신 내용을 다시 불러와 주세요."
-      : "GitHub 저장소와 통신하지 못했습니다.";
+      : isRateLimited
+        ? "GitHub 조회 요청이 잠시 제한되었습니다. 잠시 뒤 다시 시도해 주세요."
+        : "GitHub 저장소와 통신하지 못했습니다.";
     throw new GithubContentError(code, message, status, response.status);
   }
   return response.json();
@@ -194,12 +204,8 @@ function githubContentInvalid() {
   return new GithubContentError("GITHUB_CONTENT_INVALID", "저장소 콘텐츠를 읽지 못했습니다.", 502);
 }
 
-async function readAdminResourcesAtCurrentRef(resources, env, fetcher) {
-  const config = getGithubConfig(env);
-  const ref = await githubRequest(gitRefPath(config.branch), { method: "GET" }, env, fetcher);
-  const baseCommitSha = ref.object?.type === "commit" ? ref.object.sha : null;
-  if (typeof baseCommitSha !== "string" || baseCommitSha.length === 0) throw githubContentInvalid();
-
+async function readAdminResourcesAtCommit(resources, baseCommitSha, env, fetcher) {
+  if (!COMMIT_SHA_PATTERN.test(baseCommitSha ?? "")) throw githubContentInvalid();
   const commit = await githubRequest(
     `/git/commits/${encodeURIComponent(baseCommitSha)}`,
     { method: "GET" },
@@ -248,6 +254,140 @@ async function readAdminResourcesAtCurrentRef(resources, env, fetcher) {
     treeSha,
     resources: Object.fromEntries(loaded),
   };
+}
+
+async function readAdminResourcesAtCurrentRef(resources, env, fetcher) {
+  const config = getGithubConfig(env);
+  const ref = await githubRequest(gitRefPath(config.branch), { method: "GET" }, env, fetcher);
+  const baseCommitSha = ref.object?.type === "commit" ? ref.object.sha : null;
+  if (!COMMIT_SHA_PATTERN.test(baseCommitSha ?? "")) throw githubContentInvalid();
+  return readAdminResourcesAtCommit(resources, baseCommitSha, env, fetcher);
+}
+
+function normalizeHistoryLimit(value) {
+  if (value === undefined || value === null || value === "") return MAX_HISTORY_LIMIT;
+  const limit = Number(value);
+  if (!Number.isInteger(limit) || limit < 1 || limit > MAX_HISTORY_LIMIT) {
+    throw new GithubContentError("HISTORY_LIMIT_INVALID", `변경 이력은 1개부터 ${MAX_HISTORY_LIMIT}개까지 조회할 수 있습니다.`, 400);
+  }
+  return limit;
+}
+
+function encodeHistoryCursor(page) {
+  return btoa(String(page)).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/u, "");
+}
+
+function decodeHistoryCursor(value) {
+  if (value === undefined || value === null || value === "") return 1;
+  if (!/^[A-Za-z0-9_-]{1,16}$/u.test(value)) {
+    throw new GithubContentError("HISTORY_CURSOR_INVALID", "변경 이력 다음 페이지 정보가 올바르지 않습니다.", 400);
+  }
+  try {
+    const normalized = value.replaceAll("-", "+").replaceAll("_", "/");
+    const decoded = atob(`${normalized}${"=".repeat((4 - (normalized.length % 4)) % 4)}`);
+    const page = Number(decoded);
+    if (!Number.isInteger(page) || page < 2 || page > 10_000) throw new Error("invalid page");
+    return page;
+  } catch {
+    throw new GithubContentError("HISTORY_CURSOR_INVALID", "변경 이력 다음 페이지 정보가 올바르지 않습니다.", 400);
+  }
+}
+
+function sanitizeHistoryText(value, fallback, maxLength) {
+  if (typeof value !== "string") return fallback;
+  const firstLine = value.split(/\r?\n/u, 1)[0]
+    .replace(/[\u0000-\u001f\u007f]/gu, " ")
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/giu, "[이메일 가림]")
+    .replace(/01[016789][ -]?\d{3,4}[ -]?\d{4}/gu, "[연락처 가림]")
+    .replace(/\b[A-Za-z0-9_-]{48,}\b/gu, "[민감 문자열 가림]")
+    .trim();
+  return firstLine.slice(0, maxLength) || fallback;
+}
+
+async function assertCommitOnCurrentBranch(commitSha, env, fetcher) {
+  const config = getGithubConfig(env);
+  const comparison = await githubRequest(
+    `/compare/${encodeURIComponent(commitSha)}...${encodeURIComponent(config.branch)}`,
+    { method: "GET" },
+    env,
+    fetcher,
+  );
+  const mergeBaseSha = comparison.merge_base_commit?.sha;
+  if (!["ahead", "identical"].includes(comparison.status) || mergeBaseSha !== commitSha) {
+    throw new GithubContentError("HISTORY_COMMIT_DENIED", "현재 운영 branch의 변경 이력만 복원할 수 있습니다.", 400);
+  }
+}
+
+export async function readAdminResourceHistory(resource, options, env, fetcher = fetch) {
+  const filePath = getAdminResourcePath(resource);
+  if (!filePath) throw new GithubContentError("RESOURCE_NOT_ALLOWED", "허용되지 않은 콘텐츠 종류입니다.", 404);
+  const limit = normalizeHistoryLimit(options?.limit);
+  const page = decodeHistoryCursor(options?.cursor);
+  const config = getGithubConfig(env);
+  const query = new URLSearchParams({
+    sha: config.branch,
+    path: filePath,
+    per_page: String(limit + 1),
+    page: String(page),
+  });
+  const commits = await githubRequest(`/commits?${query}`, { method: "GET" }, env, fetcher);
+  if (!Array.isArray(commits)) throw githubContentInvalid();
+
+  const visible = commits.slice(0, limit);
+  const entries = await Promise.all(visible.map(async (item) => {
+    const commitSha = typeof item?.sha === "string" ? item.sha.toLowerCase() : "";
+    const treeSha = item?.commit?.tree?.sha;
+    if (!COMMIT_SHA_PATTERN.test(commitSha) || !COMMIT_SHA_PATTERN.test(treeSha ?? "")) throw githubContentInvalid();
+    const tree = await githubRequest(
+      `/git/trees/${encodeURIComponent(treeSha)}?recursive=1`,
+      { method: "GET" },
+      env,
+      fetcher,
+    );
+    if (!Array.isArray(tree.tree) || tree.truncated === true) throw githubContentInvalid();
+    const resourceEntry = tree.tree.find((entry) => entry.path === filePath && entry.type === "blob");
+    if (!COMMIT_SHA_PATTERN.test(resourceEntry?.sha ?? "")) throw githubContentInvalid();
+    const committedAt = item.commit?.committer?.date ?? item.commit?.author?.date;
+    if (!Number.isFinite(Date.parse(committedAt ?? ""))) throw githubContentInvalid();
+    return {
+      commitSha,
+      title: sanitizeHistoryText(item.commit?.message, "GitHub 콘텐츠 변경", 120),
+      committedAt: new Date(committedAt).toISOString(),
+      author: sanitizeHistoryText(item.commit?.author?.name, "관리자", 80),
+      resourceBlobSha: resourceEntry.sha,
+      onCurrentBranch: true,
+      productionMatched: null,
+    };
+  }));
+
+  return {
+    resource,
+    entries,
+    nextCursor: commits.length > limit ? encodeHistoryCursor(page + 1) : null,
+  };
+}
+
+export async function readAdminResourcesRevision(resources, commitSha, env, fetcher = fetch) {
+  if (!COMMIT_SHA_PATTERN.test(commitSha ?? "")) {
+    throw new GithubContentError("HISTORY_COMMIT_INVALID", "복원할 GitHub 버전이 올바르지 않습니다.", 400);
+  }
+  const requestedResources = Array.isArray(resources) ? resources : [];
+  const uniqueResources = [...new Set(requestedResources)];
+  if (uniqueResources.length === 0 || uniqueResources.length !== requestedResources.length) {
+    throw new GithubContentError("RESTORE_RESOURCES_INVALID", "복원할 콘텐츠 종류를 다시 확인해 주세요.", 400);
+  }
+  for (const resource of uniqueResources) {
+    if (!getAdminResourcePath(resource)) {
+      throw new GithubContentError("RESOURCE_NOT_ALLOWED", "허용되지 않은 콘텐츠 종류입니다.", 404);
+    }
+  }
+  await assertCommitOnCurrentBranch(commitSha, env, fetcher);
+  return readAdminResourcesAtCommit(uniqueResources, commitSha, env, fetcher);
+}
+
+export async function readAdminResourceRevision(resource, commitSha, env, fetcher = fetch) {
+  const revision = await readAdminResourcesRevision([resource], commitSha, env, fetcher);
+  return { ...revision.resources[resource], sourceCommit: revision.baseCommitSha };
 }
 
 export async function readAdminResourcesSnapshot(env, fetcher = fetch) {
@@ -318,9 +458,19 @@ export async function writeAdminResources(changes, env, options = {}) {
   }
 
   const config = getGithubConfig(env);
+  const requestedCommitMessage = typeof options === "function" ? null : options.commitMessage;
+  if (requestedCommitMessage !== undefined && (
+    typeof requestedCommitMessage !== "string"
+    || requestedCommitMessage.length === 0
+    || requestedCommitMessage.length > 200
+    || /[\u0000-\u001f\u007f]/u.test(requestedCommitMessage)
+  )) {
+    throw new GithubContentError("COMMIT_MESSAGE_INVALID", "GitHub 저장 제목이 올바르지 않습니다.", 400);
+  }
   const writtenResources = [];
   for (const change of normalizedChanges) {
-    const content = `${JSON.stringify(change.data, null, 2)}\n`;
+    const content = normalizeAdminResourceJson(change.data);
+    const resourceDigest = await calculateAdminResourceDigest(change.data);
     const blob = await githubRequest(
       "/git/blobs",
       {
@@ -339,6 +489,7 @@ export async function writeAdminResources(changes, env, options = {}) {
       resource: change.resource,
       path: change.filePath,
       contentSha: blob.sha,
+      resourceDigest,
     });
   }
 
@@ -368,9 +519,9 @@ export async function writeAdminResources(changes, env, options = {}) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        message: normalizedChanges.length === 1
+        message: requestedCommitMessage ?? (normalizedChanges.length === 1
           ? `관리자: ${normalizedChanges[0].resource} 콘텐츠 수정`
-          : `관리자: ${normalizedChanges.map(({ resource }) => resource).join(", ")} 콘텐츠 일괄 수정`,
+          : `관리자: ${normalizedChanges.map(({ resource }) => resource).join(", ")} 콘텐츠 일괄 수정`),
         tree: tree.sha,
         parents: [snapshot.baseCommitSha],
       }),
@@ -414,7 +565,7 @@ export async function writeAdminResources(changes, env, options = {}) {
   }
 
   return {
-    resources: writtenResources.map(({ resource, contentSha }) => ({ resource, contentSha })),
+    resources: writtenResources.map(({ resource, contentSha, resourceDigest }) => ({ resource, contentSha, resourceDigest })),
     commitSha: commit.sha,
     baseCommitSha: commit.sha,
   };
@@ -426,6 +577,7 @@ export async function writeAdminResource(resource, data, sha, env, options = {})
     resource,
     commitSha: result.commitSha,
     contentSha: result.resources[0].contentSha,
+    resourceDigest: result.resources[0].resourceDigest,
     baseCommitSha: result.baseCommitSha,
   };
 }
