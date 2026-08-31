@@ -78,7 +78,7 @@ test("deployment marker text hashes ignore Windows and Linux line-ending differe
 test("deployment marker writes all public verification scopes", async (context) => {
   const rootDir = await createFixture();
   context.after(() => rm(rootDir, { recursive: true, force: true }));
-  const marker = await writeDeploymentMarker({ rootDir });
+  const marker = await writeDeploymentMarker({ rootDir, environment: {} });
   assert.equal(marker.schemaVersion, 2);
   assert.deepEqual(marker.source, { commit: null, branch: null, provider: "local" });
   assert.deepEqual(marker.resources, await calculateAdminResourceDigests({ rootDir }));

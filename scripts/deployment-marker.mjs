@@ -144,8 +144,9 @@ export async function createDeploymentMarker({ rootDir = process.cwd(), environm
 export async function writeDeploymentMarker({
   rootDir = process.cwd(),
   outputPath = "dist/deployment-marker.json",
+  environment = process.env,
 } = {}) {
-  const marker = await createDeploymentMarker({ rootDir });
+  const marker = await createDeploymentMarker({ rootDir, environment });
   const absoluteOutputPath = resolve(rootDir, outputPath);
   await mkdir(dirname(absoluteOutputPath), { recursive: true });
   await writeFile(absoluteOutputPath, `${JSON.stringify(marker, null, 2)}\n`, "utf8");
