@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { lstat, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
-import { dirname, relative, resolve } from "node:path";
+import { dirname, extname, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
   ADMIN_RESOURCE_PATHS,
@@ -8,6 +8,20 @@ import {
 } from "../src/lib/admin-resource-digest.mjs";
 
 export const DEPLOYMENT_MARKER_SCHEMA_VERSION = 2;
+
+const TEXT_EXTENSIONS = new Set([
+  ".astro",
+  ".css",
+  ".html",
+  ".json",
+  ".jsonc",
+  ".md",
+  ".mjs",
+  ".ts",
+  ".txt",
+  ".yaml",
+  ".yml",
+]);
 
 export const deploymentMarkerScopes = Object.freeze({
   search: [
@@ -62,9 +76,12 @@ export async function calculateDeploymentScopeHash(scope, { rootDir = process.cw
     const absolutePath = resolve(absoluteRoot, filePath);
     if (relative(absoluteRoot, absolutePath).startsWith("..")) throw new Error(`배포 marker 경로가 저장소 밖을 가리킵니다: ${filePath}`);
     const content = await readFile(absolutePath);
+    const hashContent = TEXT_EXTENSIONS.has(extname(filePath).toLowerCase())
+      ? Buffer.from(content.toString("utf8").replace(/\r\n?/gu, "\n"), "utf8")
+      : content;
     hash.update(filePath, "utf8");
     hash.update("\0", "utf8");
-    hash.update(content);
+    hash.update(hashContent);
     hash.update("\0", "utf8");
   }
   return hash.digest("hex");
