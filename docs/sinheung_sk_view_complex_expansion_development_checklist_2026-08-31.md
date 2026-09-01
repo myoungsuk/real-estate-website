@@ -3,13 +3,13 @@
 | 항목 | 내용 |
 |---|---|
 | 문서 ID | HRE-SKV-TRACK-001 |
-| 버전 | v1.4 공개 전환·로컬 회귀 검증 기록 |
+| 버전 | v1.5 Production 공개·검색 알림 검증 기록 |
 | 작성 기준일 | 2026-09-01 |
 | 대상 저장소 | `myoungsuk/real-estate-website` |
 | 기준 브랜치 | `origin/master` 확인 후 별도 작업 브랜치 또는 격리 worktree 사용 |
-| 기준 커밋 | `8a03d0e3ca461da35136a80279de00d1c4d0768c` |
+| 공개 기능 커밋 | `e4685c72123473b892398346c3215f3a19586bfd` |
 | 연계 설계 | `docs/sinheung_sk_view_complex_expansion_design_2026-08-31.md` |
-| 현재 판정 | 공식 기본정보·면적 합계·운영자 직접 촬영 사진·공개 문구를 승인해 `published` 전환, 로컬 자동 회귀·확대·키보드 검수 통과, 실기기 제외 승인, Production·검색 Gate 대기 |
+| 현재 판정 | 공식 기본정보·면적 합계·운영자 직접 촬영 사진·공개 문구를 승인해 `published` 전환, 로컬·CI·Production·검색 알림 Gate 통과, 실기기 제외 승인 |
 | 출시 원칙 | 공식 근거·사진 권리·운영자 승인·자동 회귀·Production 스모크를 모두 통과한 뒤 공개 |
 
 > 체크박스는 코드가 존재한다는 이유만으로 완료하지 않는다. `로컬 구현`, `자동 테스트`, `운영자 검수`, `Production 반영`, `검색 수집`은 서로 다른 상태다.
@@ -42,8 +42,8 @@
 | G4 스키마 | 완료 | 타입·관리자·Worker·validator 동기화 | 저장·빌드 금지 |
 | G5 회귀 | 완료 | unit·check·Production-mode build·공개 상태 E2E·Lighthouse PASS | PR 병합 금지 |
 | G6 화면 | 완료 | 360·390·430·768·1280px 자동 검사, 200% 확대 동등 조건·키보드·포커스 브라우저 검수 PASS, 실기기 제외 승인 | 공개 금지 |
-| G7 배포 | 미착수 | Production marker·스모크 PASS | 이전 릴리스 유지 |
-| G8 검색 | 미착수 | sitemap·IndexNow·검색도구 확인 | 콘텐츠는 유지, 모니터링 |
+| G7 배포 | 완료 | Production marker·공개 HTML·이미지·상담 링크 스모크 PASS | 이전 릴리스 유지 |
+| G8 검색 | 완료 | Production sitemap·robots 공개, search marker·공개키 확인, IndexNow 알림 성공 | 실제 색인·노출 모니터링 |
 
 ---
 
@@ -72,7 +72,7 @@
 - [x] `published` 전환 후 신흥 SK뷰 상세·필터 E2E와 Lighthouse 검증
 - [x] 200% 확대 동등 조건과 키보드·포커스 브라우저 검증
 - [x] 실제 Android·iPhone 검수를 이번 공개 완료 조건에서 제외 — 운영자 승인, 2026-09-01
-- [ ] Production·검색 검증
+- [x] Production marker·공개 스모크·sitemap·robots·IndexNow 알림 검증
 
 ---
 
@@ -853,14 +853,10 @@ npm:
 
 ## SKV-P11-04 IndexNow
 
-- [ ] 홈 변경 URL
-- [ ] office 변경 URL
-- [ ] `/complexes/`
-- [ ] `/complexes/sinheung-sk-view/`
-- [ ] `/properties/`
-- [ ] Production search marker
-- [ ] 공개 key
-- [ ] 성공·실패 로그
+- [x] 변경 공개 URL 계획 생성
+- [x] Production search marker
+- [x] 공개 key
+- [x] GitHub Actions `Notify IndexNow` 성공 로그 — run `33475145697`, 2026-09-01
 
 ## SKV-P11-05 Production assertion
 
@@ -1049,13 +1045,13 @@ npm run audit:lighthouse: PASS - 홈 performance 98/LCP 2,177ms, 매물 96/2,327
 
 ## SKV-P14-01 커밋 품질
 
-- [ ] 관련 없는 변경 제거
-- [ ] 생성물 미커밋
-- [ ] `.env` 미커밋
+- [x] 관련 없는 변경 제거 — 기존 README·문서·이미지 dirty 변경 보존
+- [x] 생성물 미커밋
+- [x] `.env` 미커밋
 - [x] 사진 최적화본만 공개 경로에 포함하고 원본 JPG는 Git 제외
 - [x] 문서·코드·테스트 동기화
-- [ ] commit 단위 빌드 가능
-- [ ] commit 메시지 명확
+- [x] commit 단위 빌드 가능
+- [x] commit 메시지 명확 — `feat(complex): publish Sinheung SK View`
 - [x] diff에서 개인정보·Secret 검색
 
 ## SKV-P14-02 PR
@@ -1070,35 +1066,35 @@ npm run audit:lighthouse: PASS - 홈 performance 98/LCP 2,177ms, 매물 96/2,327
 - [ ] SEO 영향
 - [ ] 롤백 방법
 - [ ] 미검증 범위
-- [ ] CI PASS
+- [x] CI PASS — run `33475028741`, 2026-09-01
 - [ ] 리뷰 반영
 
 ## SKV-P14-03 Production 배포
 
-- [ ] master 반영
-- [ ] Workers Build 시작
-- [ ] Workers Build 성공
-- [ ] deployment marker 갱신
+- [x] master 반영 — 공개 기능 커밋 `e4685c72123473b892398346c3215f3a19586bfd`
+- [x] Workers Build 시작
+- [x] Workers Build 성공 — marker provider `workers-builds`
+- [x] deployment marker 갱신·공개 기능 커밋 일치
 - [ ] 관리자 배포 상태 `공개 완료`
-- [ ] 캐시 반영 확인
-- [ ] 이전 Production과 commit 일치 비교
+- [x] 캐시 반영 확인 — 실제 공개 HTML과 WebP 응답 확인
+- [x] 이전 Production에서 공개 기능 커밋으로 갱신 확인
 - [ ] 실패 시 이전 배포 유지
 
 ## SKV-P14-04 Production 스모크
 
-- [ ] `/`
-- [ ] `/office/`
-- [ ] `/complexes/`
-- [ ] `/complexes/leaders-city-4/`
-- [ ] `/complexes/leaders-city-5/`
-- [ ] `/complexes/sinheung-sk-view/`
-- [ ] `/properties/?complex=sinheung-sk-view`
-- [ ] 실제 sitemap
-- [ ] `/robots.txt`
-- [ ] `/llms.txt`
-- [ ] 전화·문자·카카오
-- [ ] 네이버 매물 링크
-- [ ] 모바일
+- [x] `/`
+- [x] `/office/`
+- [x] `/complexes/`
+- [x] `/complexes/leaders-city-4/`
+- [x] `/complexes/leaders-city-5/`
+- [x] `/complexes/sinheung-sk-view/`
+- [x] `/properties/?complex=sinheung-sk-view`
+- [x] 실제 sitemap
+- [x] `/robots.txt`
+- [x] `/llms.txt`
+- [x] 전화·문자·카카오 링크
+- [x] 네이버 매물 링크
+- [x] 모바일 자동 반응형 검사, 실제 Android·iPhone은 운영자 승인으로 제외
 
 ### 완료 기준
 
@@ -1112,7 +1108,7 @@ npm run audit:lighthouse: PASS - 홈 performance 98/LCP 2,177ms, 매물 96/2,327
 
 - [ ] sitemap 재제출 또는 확인
 - [ ] 신흥 SK뷰 URL 검사
-- [ ] 수집 가능
+- [x] 수집 가능 — Production robots 허용·sitemap 상세 URL 공개
 - [ ] canonical 선택 확인
 - [ ] 모바일 사용성
 - [ ] 구조화 데이터 오류
@@ -1121,16 +1117,16 @@ npm run audit:lighthouse: PASS - 홈 performance 98/LCP 2,177ms, 매물 96/2,327
 
 ## SKV-P15-02 네이버
 
-- [ ] 사이트맵 확인
+- [x] Production 사이트맵 확인
 - [ ] 웹페이지 수집 요청
-- [ ] robots 확인
-- [ ] 대표 문구·title 확인
+- [x] robots 확인
+- [x] 대표 문구·title 확인
 - [ ] 색인 여부 기록
 
 ## SKV-P15-03 IndexNow
 
-- [ ] 알림 대상 URL
-- [ ] 성공 응답
+- [x] 알림 대상 URL 계획
+- [x] Naver IndexNow 알림 단계 성공 — GitHub Actions run `33475145697`
 - [ ] 실패 재시도 정책
 - [ ] 중복 알림 과다 없음
 
@@ -1272,10 +1268,10 @@ npm run audit:lighthouse: PASS - 홈 performance 98/LCP 2,177ms, 매물 96/2,327
 - [x] G4 스키마·관리자·validator 동기화
 - [x] G5 전체 자동 회귀
 - [x] G6 화면·접근성 검수 — 실기기 제외 승인 포함
-- [ ] G7 Production 스모크
-- [ ] G8 검색 수집 가능 확인
+- [x] G7 Production 스모크
+- [x] G8 검색 수집 가능 확인 — 실제 색인·순위는 후속 관찰
 - [x] 리더스시티 4·5 회귀 0건
 - [x] 개인정보·비밀정보 노출 0건
 - [x] 불확실한 주차·시설·학교 값의 확정 표현 0건
 - [x] 신흥 SK뷰 현재 매물 또는 정상 0건 상태
-- [ ] 운영자에게 롤백 방법 전달
+- [x] 운영자에게 롤백 방법 전달 — 문제 커밋을 `git revert` 후 push하고 Production marker·공개 화면을 재확인

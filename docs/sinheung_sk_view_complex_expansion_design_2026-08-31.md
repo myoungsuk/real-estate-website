@@ -15,7 +15,7 @@
 
 > 이 문서는 신흥 SK뷰의 확정 사양을 대신하는 단지 조사서가 아니다. 화면·데이터·관리자·검증·배포 구조를 정의하는 구현 설계서다. 세대수, 동수, 사용승인일, 면적별 세대수, 주차대수, 시설 운영 여부 등 공개 수치는 아래의 정보 상태와 공개 Gate를 통과한 값만 `published` 데이터에 넣는다.
 
-> 2026-09-01 구현 결과: 공식 기본정보·면적·공급 합계, 운영자 직접 촬영 대표 사진과 공개 문구 승인을 반영해 신흥 SK뷰를 `published`로 전환했다. 로컬 Production-mode 빌드·E2E·Lighthouse와 200% 확대 동등 조건·키보드 검수는 통과했다. 실제 Android·iPhone 검수는 운영자 승인으로 제외했으며 Production 배포·검색 수집 검증은 남아 있다.
+> 2026-09-01 구현 결과: 공식 기본정보·면적·공급 합계, 운영자 직접 촬영 대표 사진과 공개 문구 승인을 반영해 신흥 SK뷰를 `published`로 전환했다. 로컬 Production-mode 빌드·E2E·Lighthouse와 200% 확대 동등 조건·키보드 검수를 통과했고, `master` 자동 배포·Production 스모크·sitemap 공개·IndexNow 알림 성공까지 확인했다. 실제 Android·iPhone 검수는 운영자 승인으로 이번 공개 완료 조건에서 제외했으며, 검색엔진의 실제 색인·노출은 운영 관찰 항목으로 남긴다.
 
 ---
 
@@ -1319,8 +1319,8 @@ Production에서는 기존 배포 marker와 Cloudflare 배포 상태를 확인�
 - [x] `npm run assert:production-build` PASS
 - [x] `npm run test:e2e` PASS
 - [x] `npm run audit:lighthouse` PASS
-- [ ] CI PASS
-- [ ] Production 스모크 PASS
+- [x] CI PASS — GitHub Actions `CI`, 2026-09-01
+- [x] Production 스모크 PASS — 공개 HTML·대표 이미지·sitemap·robots·상담 링크, 2026-09-01
 - [x] 운영자 최종 승인
 
 ---
