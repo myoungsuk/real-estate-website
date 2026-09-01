@@ -25,6 +25,29 @@ const unitCategories = [...new Set(complex.unitGroups.map((unit) => unit.categor
 const maxUnitHouseholds = Math.max(1, ...complex.unitGroups.map((unit) => unit.households));
 const amenitySource = complex.sources.find((source) => /관리시설/u.test(source.label));
 const sinheungLivingLabels = ["단지 규모", "사용승인", "주차", "면적 구성"];
+const amenityGalleryBySlug: Record<string, Array<{ src: string; alt: string; title: string; description: string }>> = {
+  "sinheung-sk-view": [
+    {
+      src: "/images/area/sinheung-sk-view-community-center.webp",
+      alt: "신흥 SK뷰 La VIEW Center 입구와 작은도서관·실내골프연습장 안내",
+      title: "La VIEW Center",
+      description: "작은도서관과 실내골프연습장 안내가 보이는 커뮤니티동 입구",
+    },
+    {
+      src: "/images/area/sinheung-sk-view-rest-garden.webp",
+      alt: "신흥 SK뷰 단지 중앙 정원의 수경시설과 휴게 공간",
+      title: "단지 중앙 정원",
+      description: "수경시설과 휴게 테이블이 어우러진 단지 조경 공간",
+    },
+    {
+      src: "/images/area/sinheung-sk-view-playground.webp",
+      alt: "신흥 SK뷰 펭귄 테마 어린이놀이터",
+      title: "테마 어린이놀이터",
+      description: "펭귄 조형물과 놀이시설이 있는 단지 내 어린이놀이터",
+    },
+  ],
+};
+const amenityGallery = amenityGalleryBySlug[complex.slug] ?? [];
 const verificationLabels = {
   official: "공식 확인",
   "operator-confirmed": "운영자 확인",
@@ -159,6 +182,20 @@ const verificationLabels = {
       <div class="section-heading">
         <div><p class="eyebrow">단지시설</p><h2 id="complex-amenities-heading">{complex.name} 단지시설</h2></div>
       </div>
+      {amenityGallery.length > 0 && (
+              <div class="complex-amenity-gallery" role="group" aria-label={`${complex.name} 단지시설 직접 촬영 사진`}>
+          {amenityGallery.map((image) => (
+            <figure>
+              <img src={image.src} alt={image.alt} width="960" height="640" loading="lazy" decoding="async" />
+              <figcaption>
+                <small>직접 촬영</small>
+                <strong>{image.title}</strong>
+                <span>{image.description}</span>
+              </figcaption>
+            </figure>
+          ))}
+        </div>
+      )}
       <div class="complex-amenity-grid">
         {complex.amenityGroups.map((group) => (
           <article class="complex-amenity-card">

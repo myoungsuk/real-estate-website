@@ -153,6 +153,11 @@ test("실제 신흥SK뷰 매물 2건을 연결하고 빈 배열·3건 미리보�
   assert.deepEqual(createComplexListingPreview([1, 2, 3, 4], 3), { items: [1, 2, 3], total: 4, hasMore: true });
   assert.match(detailTemplate, /현재 공개 목록에 \{complex\.name\} 매물이 없습니다/);
   assert.match(detailTemplate, /selectComplexListings\(naverListings, complex\.slug, matchPublishedComplexByListingTitle\)/);
+  assert.match(detailTemplate, /sinheung-sk-view-community-center\.webp/);
+  assert.match(detailTemplate, /sinheung-sk-view-rest-garden\.webp/);
+  assert.match(detailTemplate, /sinheung-sk-view-playground\.webp/);
+  assert.match(detailTemplate, /단지시설 직접 촬영 사진/);
+  assert.match(detailTemplate, /loading="lazy"/);
 });
 
 test("alias 충돌·공개 SEO 누락·비교 범위 오염을 검증 단계에서 차단한다", async () => {

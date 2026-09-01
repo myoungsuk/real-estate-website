@@ -466,6 +466,13 @@ h3 { font-size: 1.35rem; }
 .complex-living-grid article > p { color: #df9b9e; font-size: 0.68rem; font-weight: 850; letter-spacing: 0.12em; }
 .complex-living-grid h3 { position: relative; margin: 20px 0 14px; color: var(--white); }
 .complex-living-grid article > div { position: relative; color: #c9d6df; }
+.complex-amenity-gallery { display: grid; gap: 16px; margin-bottom: 18px; }
+.complex-amenity-gallery figure { margin: 0; overflow: hidden; border-radius: 20px 20px 6px 20px; color: var(--white); background: var(--navy-950); box-shadow: var(--shadow); }
+.complex-amenity-gallery img { width: 100%; height: auto; aspect-ratio: 3 / 2; object-fit: cover; }
+.complex-amenity-gallery figcaption { display: grid; gap: 5px; padding: 17px 19px 19px; }
+.complex-amenity-gallery small { color: #df9b9e; font-size: 0.68rem; font-weight: 850; letter-spacing: 0.1em; }
+.complex-amenity-gallery strong { font-size: 1.08rem; }
+.complex-amenity-gallery span { color: #c9d6df; font-size: 0.82rem; line-height: 1.65; }
 .complex-amenity-grid { display: grid; gap: 16px; }
 .complex-amenity-card { padding: clamp(22px, 4vw, 34px); border: 1px solid var(--line); border-radius: 20px; background: var(--white); }
 .complex-amenity-card__heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
@@ -720,6 +727,7 @@ h3 { font-size: 1.35rem; }
   .complex-supply-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .complex-unit-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .complex-living-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .complex-amenity-gallery { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .complex-checkpoint-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .complex-faq-layout { grid-template-columns: minmax(230px, 0.75fr) minmax(0, 1.25fr); align-items: start; }
   .complex-comparison__heading { grid-template-columns: 1fr auto; align-items: end; }
