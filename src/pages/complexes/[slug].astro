@@ -23,6 +23,8 @@ const relatedListingPreview = createComplexListingPreview(relatedListings);
 const visibleRelatedListings = relatedListingPreview.items;
 const unitCategories = [...new Set(complex.unitGroups.map((unit) => unit.category))];
 const maxUnitHouseholds = Math.max(1, ...complex.unitGroups.map((unit) => unit.households));
+const amenitySource = complex.sources.find((source) => /관리시설/u.test(source.label));
+const sinheungLivingLabels = ["단지 규모", "사용승인", "주차", "면적 구성"];
 const verificationLabels = {
   official: "공식 확인",
   "operator-confirmed": "운영자 확인",
@@ -76,8 +78,8 @@ const verificationLabels = {
     <div class="shell contact-panel">
       <div>
         <p class="eyebrow">현재 공개 매물</p>
-        <h2 id="complex-listing-summary-heading">{complex.name} 매물 {relatedListings.length}건을 확인했습니다</h2>
-        <p>매물 목록 업데이트 {naverListingsUpdatedAt.replaceAll("-", ".")} 기준이며 가격과 계약 조건은 상담 시점에 다시 확인합니다.</p>
+        <h2 id="complex-listing-summary-heading">현재 등록된 {complex.name} 매물 {relatedListings.length}건</h2>
+        <p>매물 목록 업데이트 {naverListingsUpdatedAt.replaceAll("-", ".")} 기준입니다. 가격·면적·층·방향을 바로 비교해 보세요.</p>
       </div>
       <div class="contact-panel__actions">
         <a class="button button--primary" href={`/properties/?complex=${complex.slug}`}>{complex.name} 현재 매물 보기</a>
@@ -89,7 +91,7 @@ const verificationLabels = {
   <section class="section section--soft" aria-labelledby="complex-facts-heading">
     <div class="shell">
       <div class="section-heading">
-        <div><p class="eyebrow">단지 기본정보</p><h2 id="complex-facts-heading">계약 전에 먼저 확인할 숫자</h2></div>
+        <div><p class="eyebrow">단지 기본정보</p><h2 id="complex-facts-heading">{complex.name} 한눈에 보기</h2></div>
         <p>공개자료 확인일 {complex.confirmedAt}</p>
       </div>
       <dl class="complex-fact-grid">
@@ -101,7 +103,7 @@ const verificationLabels = {
   <section class="section" aria-labelledby="complex-units-heading">
     <div class="shell">
       <div class="section-heading">
-        <div><p class="eyebrow">세대 구성</p><h2 id="complex-units-heading">전용면적과 공급 형태를 구분해 봅니다</h2></div>
+        <div><p class="eyebrow">세대 구성</p><h2 id="complex-units-heading">면적별 세대 구성</h2></div>
         <p>면적은 전용면적 ㎡를 기준으로 표시합니다.</p>
       </div>
       <div class="complex-supply-grid">
@@ -136,14 +138,14 @@ const verificationLabels = {
   <section class="section section--navy" aria-labelledby="complex-living-heading">
     <div class="shell">
       <div class="content-section-heading content-section-heading--light">
-        <p>교통 · 교육 · 생활 · 자연</p>
-        <h2 id="complex-living-heading">LIVING GUIDE</h2>
+        <p>단지와 주변 생활</p>
+        <h2 id="complex-living-heading">{complex.name} 핵심 포인트</h2>
       </div>
       <div class="complex-living-grid">
         {complex.livingSections.map((section, index) => (
           <article>
             <span>{String(index + 1).padStart(2, "0")}</span>
-            <p>{section.category.toUpperCase()}</p>
+            <p>{complex.slug === "sinheung-sk-view" ? sinheungLivingLabels[index] : section.category.toUpperCase()}</p>
             <h3>{section.title}</h3>
             <div>{section.description}</div>
           </article>
@@ -155,7 +157,7 @@ const verificationLabels = {
   <section class="section" aria-labelledby="complex-amenities-heading">
     <div class="shell">
       <div class="section-heading">
-        <div><p class="eyebrow">커뮤니티·단지시설</p><h2 id="complex-amenities-heading">자료 시점과 현재 상태를 구분합니다</h2></div>
+        <div><p class="eyebrow">단지시설</p><h2 id="complex-amenities-heading">{complex.name} 단지시설</h2></div>
       </div>
       <div class="complex-amenity-grid">
         {complex.amenityGroups.map((group) => (
@@ -169,13 +171,16 @@ const verificationLabels = {
           </article>
         ))}
       </div>
+      {amenitySource && (
+        <p class="section-more"><a class="button button--secondary" href={amenitySource.url} target="_blank" rel="noopener noreferrer">{amenitySource.publisher} 원문 보기</a></p>
+      )}
     </div>
   </section>
 
   <section class="section section--soft" aria-labelledby="complex-checkpoints-heading">
     <div class="shell">
       <div class="section-heading">
-        <div><p class="eyebrow">현장 체크리스트</p><h2 id="complex-checkpoints-heading">{complex.name}에서 집을 볼 때</h2></div>
+        <div><p class="eyebrow">매물 체크리스트</p><h2 id="complex-checkpoints-heading">{complex.name} 매물 볼 때 체크할 것</h2></div>
       </div>
       <ol class="complex-checkpoint-list">
         {complex.checkpoints.map((checkpoint) => (
@@ -189,8 +194,8 @@ const verificationLabels = {
     <div class="shell complex-faq-layout">
       <div>
         <p class="eyebrow">자주 묻는 질문</p>
-        <h2 id="complex-faq-heading">단지정보를 볼 때 자주 확인하는 내용</h2>
-        <p>개별 세대의 권리관계와 계약조건은 최신 서류와 현장 상태가 우선합니다.</p>
+        <h2 id="complex-faq-heading">{complex.name} 자주 묻는 질문</h2>
+        <p>현재 공개 매물 {relatedListings.length}건과 공식자료를 기준으로 정리했습니다.</p>
       </div>
       <div class="complex-faq-list">
         {complex.faqs.map((faq) => (
@@ -228,22 +233,24 @@ const verificationLabels = {
     </div>
   </section>
 
-  <section class="section section--soft" aria-labelledby="complex-related-heading">
-    <div class="shell">
-      <div class="section-heading">
-        <div><p class="eyebrow">관련 공개 콘텐츠</p><h2 id="complex-related-heading">{complex.name} 현장과 구조 더 보기</h2></div>
-        <p>매물·가격 콘텐츠는 게시일 당시 자료이며 거래완료 또는 현재 조건과 다를 수 있습니다.</p>
+  {relatedContents.length > 0 && (
+    <section class="section section--soft" aria-labelledby="complex-related-heading">
+      <div class="shell">
+        <div class="section-heading">
+          <div><p class="eyebrow">블로그·영상</p><h2 id="complex-related-heading">{complex.name} 더 자세히 보기</h2></div>
+          <p>단지 소개와 내부 영상, 실거래 비교 콘텐츠를 원문에서 확인할 수 있습니다.</p>
+        </div>
+        <ExternalContentList items={relatedContents} pageSize={3} />
       </div>
-      <ExternalContentList items={relatedContents} emptyLabel="연결할 공개 콘텐츠를 준비하고 있습니다." pageSize={3} />
-    </div>
-  </section>
+    </section>
+  )}
 
   <section class="section complex-sources-section">
     <div class="shell complex-sources">
       <div>
         <p class="eyebrow">자료 출처</p>
         <h2>확인한 공개자료</h2>
-        <p>단지 수치와 생활환경은 아래 자료를 기준으로 정리했습니다. 정확한 주차대수와 시설 운영 상태처럼 확인이 남은 값은 확정해 표시하지 않았습니다.</p>
+        <p>단지 규모, 사용승인일, 면적 구성, 주차와 시설 목록은 아래 공개자료에서 확인했습니다. 각 원문도 바로 열어볼 수 있습니다.</p>
       </div>
       <ul>
         {complex.sources.map((source) => (
@@ -258,5 +265,5 @@ const verificationLabels = {
     </div>
   </section>
 
-  <div id="contact"><ContactPanel title={`${complex.name} 조건을 직접 확인해 드립니다`} description="현재 공개 매물과 찾는 거래유형, 면적, 예산, 입주시기를 함께 확인해 안내합니다." /></div>
+  <div id="contact"><ContactPanel title={`${complex.name} 매물 상담`} description="원하는 거래유형, 예산, 면적과 입주시기를 알려주시면 현재 공개 매물부터 비교해 드립니다." /></div>
 </BaseLayout>

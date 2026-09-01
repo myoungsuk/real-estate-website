@@ -104,6 +104,17 @@ test("신흥 SK뷰 공개 데이터는 사진·공식 수치·strict schema Gate
   assert.equal(sinheung.unitGroups.reduce((sum, unit) => sum + unit.households, 0), 1588);
   assert.equal(sinheung.amenityGroups[0].verification, "official");
   assert.equal(sinheung.supplySummary.reduce((sum, item) => sum + Number(item.value.replace(/\D/gu, "")), 0), 1588);
+  assert.deepEqual(sinheung.livingSections.map((section) => section.title), [
+    "12개동 · 1,588세대",
+    "2022년 4월 28일",
+    "지하 1,957대",
+    "전 세대 85㎡ 이하 구간",
+  ]);
+  assert.deepEqual(sinheung.relatedContentIds, [
+    "youtube-hhmqrk5ih60",
+    "naver-blog-224218400489",
+    "youtube-3pccpq6ya0u",
+  ]);
   assert.deepEqual(sinheung.sources.map((source) => source.id), [
     "kapt-sinheung-sk-view-basic",
     "kapt-sinheung-sk-view-management",

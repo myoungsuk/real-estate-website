@@ -197,7 +197,12 @@ test("신흥 SK뷰 상세와 매물 필터가 연결되고 주요 화면 폭에�
   await expect(page).toHaveURL(/\/complexes\/sinheung-sk-view\/$/u);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("신흥 SK뷰");
   await expect(page.getByRole("img", { name: "대전 동구 신흥 SK뷰 야간 출입구와 아파트 전경" })).toBeVisible();
-  await expect(page.getByRole("heading", { level: 2, name: "신흥 SK뷰 매물 2건을 확인했습니다" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "현재 등록된 신흥 SK뷰 매물 2건" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "신흥 SK뷰 한눈에 보기" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "신흥 SK뷰 핵심 포인트" })).toBeVisible();
+  await expect(page.getByText("LIVING GUIDE", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "K-apt 공동주택관리정보시스템 원문 보기" })).toHaveAttribute("href", "https://www.k-apt.go.kr/kaptinfo/openKaptMng.do");
+  await expect(page.locator(".content-card")).toHaveCount(3);
   await expect(page.getByRole("link", { name: "신흥 SK뷰 조건 상담" }).first()).toHaveAttribute("href", "#contact");
   await page.getByRole("link", { name: "신흥 SK뷰 현재 매물 보기" }).click();
   await expect(page).toHaveURL(/\/properties\/\?complex=sinheung-sk-view$/u);
