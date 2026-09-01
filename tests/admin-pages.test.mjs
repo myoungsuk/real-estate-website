@@ -376,6 +376,10 @@ test("공개 헤더와 상담 화면은 전체 상호·분리된 콘텐츠·FAQ 
   assert.match(navigation, /href: "\/blog\/"/);
   assert.match(navigation, /href: "\/youtube\/"/);
   assert.match(navigation, /FAQ·상담/);
+  assert.match(
+    navigation,
+    /href: "\/office\/", label: "사무소 소개"[\s\S]*href: "\/complexes\/", label: "아파트 소개"[\s\S]*href: "\/properties\/", label: "매물"/,
+  );
   assert.match(faq, /data-consultation-form/);
   assert.match(faq, /홈페이지나 공개 게시판에 저장되지 않습니다/);
   assert.match(faq, /window\.location\.href/);
