@@ -10,7 +10,6 @@ export const INDEXNOW_KEY_LOCATION = `${INDEXNOW_ORIGIN}/${INDEXNOW_KEY}.txt`;
 const exactDataRoutes = new Map([
   ["src/data/home-content.json", ["/"]],
   ["src/data/office.json", ["/", "/office/", "/location/"]],
-  ["src/data/naver-listings.json", ["/", "/properties/"]],
   ["src/data/faq.json", ["/faq/"]],
   ["src/data/reviews.json", ["/reviews/"]],
   ["src/data/complexes-overview.json", ["/", "/complexes/"]],
@@ -87,6 +86,12 @@ export function planIndexNowUrls(changedFiles, sitemapUrls) {
     if (path === "src/data/complexes.json") {
       paths.add("/");
       paths.add("/complexes/");
+      complexPaths();
+      continue;
+    }
+    if (path === "src/data/naver-listings.json") {
+      paths.add("/");
+      paths.add("/properties/");
       complexPaths();
       continue;
     }

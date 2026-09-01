@@ -15,6 +15,7 @@ test-results/
 # Local review artifacts and source spreadsheets
 artifacts/
 docs/*.xls
+docs/images/readme/skview/*.jpg
 
 .DS_Store
 Thumbs.db

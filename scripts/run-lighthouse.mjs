@@ -8,7 +8,13 @@ import { chromium } from "@playwright/test";
 const host = "127.0.0.1";
 const port = 4322;
 const origin = `http://${host}:${port}`;
-const pages = ["/", "/properties/", "/complexes/"];
+const pages = [
+  "/",
+  "/properties/",
+  "/complexes/",
+  "/complexes/sinheung-sk-view/",
+  "/properties/?complex=sinheung-sk-view",
+];
 const categoryMinimum = 0.9;
 const lcpMaximumMs = 2_500;
 const tbtMaximumMs = 200;

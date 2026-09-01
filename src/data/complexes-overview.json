@@ -1,9 +1,18 @@
 {
-  "eyebrow": "LEADERS CITY GUIDE",
-  "title": "4블록과 5블록, 숫자보다 생활 기준으로 비교하세요",
-  "description": "천동 리더스시티는 4·5블록 합계 3,463세대 규모의 신축 생활권입니다. 세대수와 전용면적뿐 아니라 출퇴근 동선, 학교, 의료·생활시설, 동·층별 환경과 계약 형태까지 함께 확인해 보세요.",
-  "note": "아래 정보는 LH·대전광역시·K-apt 등 공개자료와 운영자가 직접 확인한 내용을 구분해 안내합니다. 실제 계약 전에는 최신 공적 자료와 현장 상태를 다시 확인합니다.",
-  "confirmedAt": "2026-08-26",
+  "eyebrow": "DAEJEON DONG-GU COMPLEX GUIDE",
+  "title": "천동·신흥 주요 단지, 생활 기준으로 비교하세요",
+  "description": "리더스시티 4·5블록과 신흥 SK뷰의 규모, 입주시기, 면적 구성, 생활환경과 현재 공개 매물을 확인 가능한 자료와 현장 기준으로 안내합니다.",
+  "note": "리더스시티 4·5블록과 신흥 SK뷰는 단지별 공식 공개자료와 확인일을 기준으로 안내합니다. 실제 계약 전에는 최신 공적 자료와 현장 상태를 다시 확인합니다.",
+  "confirmedAt": "2026-09-01",
+  "featuredComplexSlugs": [
+    "leaders-city-4",
+    "leaders-city-5",
+    "sinheung-sk-view"
+  ],
+  "comparisonComplexSlugs": [
+    "leaders-city-4",
+    "leaders-city-5"
+  ],
   "stats": [
     { "label": "전체 규모", "value": "3,463세대", "description": "4블록 1,328세대 + 5블록 2,135세대" },
     { "label": "전체 동수", "value": "26개동", "description": "4블록 10개동 + 5블록 16개동" },

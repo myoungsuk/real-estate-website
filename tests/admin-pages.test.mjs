@@ -57,14 +57,14 @@ test("메인페이지 선택 개선은 기존 데이터와 URL을 재사용한�
   ]);
   const homeContent = JSON.parse(rawHomeContent);
 
-  assert.equal(homeContent.broker.headline, "대전 동구 매물, 직접 확인하고 비교해서 안내합니다.");
-  assert.match(homeContent.broker.lead, /리더스시티 4·5블록[^]*매매·전세·월세/);
+  assert.equal(homeContent.broker.headline, "리더스시티와 신흥 SK뷰, 직접 확인하고 비교해서 안내합니다.");
+  assert.match(homeContent.broker.lead, /리더스시티 4·5블록과 신흥 SK뷰[^]*매매·전세·월세/);
   assert.match(home, /href="\/properties\/">현재 매물 \{naverListings\.length\}건 보기/);
   assert.match(home, /\/properties\/\?trade=sale/);
   assert.match(home, /\/properties\/\?trade=jeonse/);
   assert.match(home, /\/properties\/\?trade=monthly-rent/);
-  assert.match(home, /slug === "leaders-city-4"/);
-  assert.match(home, /slug === "leaders-city-5"/);
+  assert.match(home, /featuredComplexes/);
+  assert.doesNotMatch(home, /slug === "leaders-city-4"|slug === "leaders-city-5"/);
   assert.doesNotMatch(home, /office-specialist/);
   assert.match(home, /href="\/office\/">사무소 자세히 보기/);
   assert.match(home, /href="\/location\/">오시는 길/);
@@ -88,10 +88,10 @@ test("단지 목록 카드는 전체 링크와 hover·focus 피드백을 제공�
     readSource("src/styles/global.css"),
   ]);
 
-  assert.match(complexes, /<a class="complex-index-card" href=\{`\/complexes\/\$\{complex\.slug\}\/`\}>/);
+  assert.match(complexes, /<a class="complex-index-card" href=\{`\/complexes\/\$\{complex\.slug\}\/`\}/);
   assert.match(styles, /\.complex-index-card \{[^}]*width: 100%[^}]*min-width: 0/);
   assert.match(styles, /\.complex-index-card:hover \{[^}]*translateY\(-8px\)[^}]*box-shadow/);
-  assert.match(styles, /\.complex-index-card:hover > img \{[^}]*scale\(1\.045\)/);
+  assert.match(styles, /\.complex-index-card:hover > picture img \{[^}]*scale\(1\.045\)/);
   assert.match(styles, /\.complex-index-card:focus-visible \{[^}]*outline-offset: 6px[^}]*translateY\(-6px\)/);
   assert.match(styles, /\.complex-index-card:active \{[^}]*scale\(0\.99\)/);
 });
@@ -139,9 +139,20 @@ test("관리자 편집 화면은 부동산뱅크 가져오기와 네이버 매�
   assert.match(externalEditor, /data-external-search/);
   assert.match(complexEditor, /writeAdminContent\("complexes"/);
   assert.match(complexEditor, /uploadAdminImage\("area"/);
+  assert.match(complexEditor, /공개 전에는 검수한 `\/images\/area\/` 원본과 640·1200px 파생본/);
   assert.match(complexEditor, /name="facts"/);
   assert.match(complexEditor, /name="highlights"/);
   assert.match(complexEditor, /writeAdminContent\("complexes-overview"/);
+  assert.match(complexEditor, /name="aliases"/);
+  assert.match(complexEditor, /name="seoTitle"/);
+  assert.match(complexEditor, /name="seoDescription"/);
+  assert.match(complexEditor, /name="seoTitle" maxlength="70"/);
+  assert.match(complexEditor, /name="seoDescription" rows="3" maxlength="180"/);
+  assert.match(complexEditor, /name="unitDataNote"/);
+  assert.match(complexEditor, /준비 중 단지는 공개 상세·주요 단지 카드·매물 필터·sitemap에서 제외/);
+  assert.match(complexEditor, /name="featuredComplexSlugs"/);
+  assert.match(complexEditor, /name="comparisonComplexSlugs"/);
+  assert.match(complexEditor, /parseComplexComparisonRows/);
   assert.match(complexEditor, /name="unitGroups"/);
   assert.match(complexEditor, /name="livingSections"/);
   assert.match(complexEditor, /name="amenityGroups"/);

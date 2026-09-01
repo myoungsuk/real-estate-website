@@ -3,16 +3,19 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 import ExternalContentList from "../components/ExternalContentList.astro";
 import NaverListingPager from "../components/NaverListingPager.astro";
 import { homeContent, publishedBlogContents, publishedYoutubeVideoContents } from "../lib/content";
-import { getComplexFact, publishedComplexes } from "../lib/complexes";
+import { featuredComplexes, getComplexFact } from "../lib/complexes";
 import { naverListings, naverListingsUpdatedAt } from "../lib/naver-listings";
 import { getResponsivePublicImageSrcSet } from "../lib/responsive-images";
 import { formatOfficeHours, kakaoHref, office, phoneHref, smsHref } from "../lib/site";
 
-const title = "대전 동구 지역 전문 행복한부동산 | 매매·전세·월세";
-const description = "백진옥 대표가 대전 동구의 매매·전세·월세와 리더스시티 정보를 직접 확인해 안내하는 행복한부동산입니다.";
-const quickComplexes = publishedComplexes.filter(({ slug }) => slug === "leaders-city-4" || slug === "leaders-city-5");
+const title = "대전 동구 지역 전문 행복한부동산 | 리더스시티·신흥 SK뷰";
+const description = "리더스시티5블록 단지 내 행복한부동산입니다. 리더스시티 4·5블록과 신흥 SK뷰를 중심으로 천동·신흥동의 매매·전세·월세를 백진옥 대표 공인중개사가 직접 상담합니다.";
 const homeBlogContents = publishedBlogContents.slice(0, 9);
 const homeYoutubeContents = publishedYoutubeVideoContents.slice(0, 6);
+const getHomeComplexFact = (
+  complex: (typeof featuredComplexes)[number],
+  labels: string[],
+) => labels.map((label) => getComplexFact(complex, label)).find((value) => value !== "확인 중") ?? "확인 중";
 const siteUrl = Astro.site?.toString();
 const websiteId = siteUrl ? new URL("#website", siteUrl).toString() : undefined;
 const businessId = siteUrl ? new URL("#real-estate-agent", siteUrl).toString() : undefined;
@@ -95,7 +98,7 @@ const structuredData = {
         </dl>
       </div>
       <figure class="broker-hero__portrait">
-        <img src={homeContent.broker.portrait.src} alt={homeContent.broker.portrait.alt} width="900" height="900" fetchpriority="high" />
+        <img src={homeContent.broker.portrait.src} alt={homeContent.broker.portrait.alt} width="900" height="900" loading="eager" fetchpriority="high" decoding="async" />
         <figcaption><strong>{office.representative}</strong><span>대표 · 공인중개사</span></figcaption>
       </figure>
     </div>
@@ -117,9 +120,9 @@ const structuredData = {
           </div>
         </div>
         <div class="home-quick-nav__group">
-          <span>리더스시티</span>
+          <span>주요 단지</span>
           <div class="home-quick-nav__links home-quick-nav__links--complex">
-            {quickComplexes.map((complex) => <a href={`/complexes/${complex.slug}/`}>{complex.name.replace("리더스시티", "")} 바로 보기</a>)}
+            {featuredComplexes.map((complex) => <a href={`/complexes/${complex.slug}/`}>{complex.name}</a>)}
           </div>
         </div>
       </nav>
@@ -188,19 +191,19 @@ const structuredData = {
     </div>
     <div class="shell complex-comparison">
       <div class="complex-comparison__heading">
-        <div><p class="eyebrow">4·5블록 기본정보</p><h3>확인된 단지 규모를 먼저 비교하세요</h3></div>
-        <p>LH·사업주체 공개자료를 기준으로 2026년 8월 25일 확인했습니다.</p>
+        <div><p class="eyebrow">주요 단지 기본정보</p><h3>확인된 단지 규모를 먼저 살펴보세요</h3></div>
+        <p>단지별 공식 공개자료와 확인일을 기준으로 정리했습니다.</p>
       </div>
-      <div class="complex-comparison__scroll" tabindex="0" aria-label="리더스시티 4블록과 5블록 기본정보 비교표">
+      <div class="complex-comparison__scroll" tabindex="0" aria-label="천동·신흥 주요 단지 기본정보 표">
         <table>
           <thead><tr><th scope="col">단지</th><th scope="col">규모</th><th scope="col">입주</th><th scope="col">전용면적</th><th scope="col">상세</th></tr></thead>
           <tbody>
-            {publishedComplexes.map((complex) => (
+            {featuredComplexes.map((complex) => (
               <tr>
                 <th scope="row">{complex.name}</th>
                 <td>{getComplexFact(complex, "규모")}</td>
-                <td>{getComplexFact(complex, "입주")}</td>
-                <td>{getComplexFact(complex, "전용면적")}</td>
+                <td>{getHomeComplexFact(complex, ["입주", "사용승인"])}</td>
+                <td>{getHomeComplexFact(complex, ["전용면적", "전용면적 구간"])}</td>
                 <td><a href={`/complexes/${complex.slug}/`}>자세히 보기 →</a></td>
               </tr>
             ))}

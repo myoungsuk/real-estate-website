@@ -59,9 +59,10 @@
 | 네이버 등록 매물 | `src/data/naver-listings.json`의 개별 공개 매물 카드와 `src/data/office.json`의 중개사 매물 지도 링크 |
 | 실제 도메인 | https://leaderscityhappy.com |
 | 전문 지역 | 대전광역시 동구 전역(천동·신흥동과 리더스시티 포함) |
+| 주요 상담 단지 | 리더스시티 4·5블록, 신흥 SK뷰(상세 단지정보 공개) |
 | 운영 현황 | 허위매물 0건·중개사고 0건(공개 화면에는 내부 확인 기준 문구를 표시하지 않음) |
 
-대표 소개 문안, 대표 사진, 공식 로고, 이메일과 `etc/`에 제공된 4·5블록 단지 사진은 2026-08-25 운영자 제공 자료를 기준으로 공개한다. 공식 로고 원본은 `public/images/brand/leaders-city-happy-logo.png`, 화면용 최적화본은 같은 폴더의 WebP를 사용한다. 리더스시티 단지 수치는 LH·사업주체 공개자료와 확인일을 함께 기록한다. 상세 경력·약력, 매물과 후기는 운영자 승인 전 확정하지 않는다.
+대표 소개 문안, 대표 사진, 공식 로고, 이메일과 `etc/`에 제공된 4·5블록 단지 사진은 2026-08-25 운영자 제공 자료를 기준으로 공개한다. 신흥 SK뷰 대표 사진은 2026-09-01 운영자가 직접 촬영하고 공개를 승인한 사진을 사용하며, 현재 홈·사무소·상세 상담 문구도 같은 날 승인했다. 공식 로고 원본은 `public/images/brand/leaders-city-happy-logo.png`, 화면용 최적화본은 같은 폴더의 WebP를 사용한다. 단지 수치는 공식 공개자료와 확인일을 함께 기록한다. 상세 경력·약력, 매물과 후기는 운영자 승인 전 확정하지 않는다.
 
 ## 주요 디렉터리 구조
 
@@ -109,7 +110,7 @@ npm run sync:external:dry-run
 - `npm run build`: 검사 후 `dist/` 정적 산출물 생성
 - `npm run assert:production-build`: Production 환경변수로 만든 산출물의 robots·canonical·sitemap·JSON-LD·IndexNow 공개키·배포 marker 검사
 - `npm run test:e2e`: 먼저 생성된 `dist/`에서 홈 상담 링크, 가격·면적 필터, 관심 매물 유지, 최대 3개 비교, 비저장 문의 문장, 404, 360px 메뉴·가로 넘침을 Chromium으로 검사
-- `npm run audit:lighthouse`: 먼저 생성된 `dist/`의 홈·매물·단지 목록을 모바일 Lighthouse 90점, LCP·TBT·CLS 내부 기준으로 검사
+- `npm run audit:lighthouse`: 먼저 생성된 `dist/`의 홈·매물·단지 목록·신흥 SK뷰 상세·신흥 SK뷰 필터 결과를 모바일 Lighthouse 90점, LCP·TBT·CLS 내부 기준으로 검사
 - `npm run deploy`: 검사·빌드 후 Wrangler로 Cloudflare 배포
 - `npm run sync:bank:dry-run`: 허용된 부동산뱅크 공개 사무소 목록을 조회하고 예상 매물 변경을 파일 수정 없이 검증
 - `npm run sync:external:dry-run`: `YOUTUBE_CHANNEL_ID`로 공식 Naver RSS·YouTube Atom을 조회하고 예상 변경을 파일 수정 없이 검증
@@ -119,13 +120,14 @@ npm run sync:external:dry-run
 
 ## 핵심 모듈과 화면 흐름
 
-- `src/data/home-content.json` → `src/lib/content.ts` → 홈 대표·사무소·리더스시티 설명과 사진
+- `src/data/home-content.json` → `src/lib/content.ts` → 홈 대표·사무소·리더스시티·신흥 SK뷰 상담 범위 설명과 사진
 - `src/data/office.json` → `src/lib/site.ts` → 헤더·푸터·사무소·오시는 길·네이버 등록 매물 링크·구조화 데이터
 - `src/data/listings.json` → `src/lib/listings.ts` → 매물 목록 필터와 공개 상세 정적 생성
 - `src/data/naver-listings.json` → `src/lib/naver-listings.ts` → 사진 없는 네이버 공개 매물 카드·홈 6건 단위 페이징·거래/유형/단지/가격/면적 필터·최근 등록/가격 낮은·높은/면적 작은·큰 정렬·관심 매물·최대 3개 비교·비저장 문의 문장·외부 상세 링크. 부동산뱅크 `등록기간` 시작일은 `registeredAt`으로 저장하고 최근 등록순을 기본값으로 사용한다.
 - 부동산뱅크 공개 사무소 목록 → `scripts/sync-bank-listings.mjs` → EUC-KR 공개 HTML의 현재 페이지 전체 파싱·네이버 ID 기준 갱신·직전 부동산뱅크 기준선에서 사라진 항목 삭제·다른 공급처 항목 보존 → `naver-listings.json`. 정상 수집 뒤 `.github/listing-review-state.json`의 Bank `lastSeenAt`만 함께 갱신하며 경고 기준은 `.github/listing-review-policy.json`의 승인된 값만 사용한다. 기준이 `null`이면 경고 기능을 정상 비활성화하고 날짜 경과만으로 매물을 자동 종료·숨김 처리하지 않는다. 2026-08-26 1:1 문의의 본인 매물·하루 1회 허용 범위만 사용하며 로그인·상세·네이버 페이지는 조회하지 않는다.
-- `src/data/complexes-overview.json` → 리더스시티 4·5블록 전체 소개·숫자 카드·비교표·공통 현장 확인사항·관련 콘텐츠와 출처
-- `src/data/complexes.json` → 대전 동구 주요 단지의 사진·기본 사실·면적별 세대 구성·공급 구성·생활환경·시설 확인 상태·FAQ·관련 콘텐츠·복수 출처와 목록·상세 정적 생성
+- `src/data/complexes-overview.json` → 홈·목록의 `featuredComplexSlugs` 순서와 리더스시티 비교표의 `comparisonComplexSlugs` 범위를 분리하고, 리더스시티 4·5블록 숫자 카드·비교표·공통 현장 확인사항·관련 콘텐츠와 출처 제공
+- `src/data/complexes.json` → 대전 동구 주요 단지의 alias·SEO·단위 자료 안내·사진·기본 사실·면적별 세대 구성·공급 구성·생활환경·시설 확인 상태·FAQ·관련 콘텐츠·복수 출처와 목록·상세 정적 생성. 신흥 SK뷰는 공식 합계·운영자 직접 촬영 사진·공개 문구 승인을 반영해 `published`로 공개하며 상세·사이트맵·매물 단지 필터에 포함
+- `src/lib/complexes.ts`, `src/lib/complex-matching.mjs` → 공개 단지 순서 파생, NFKC·공백·구분기호 정규화와 긴 접두어 우선 매물 제목 매칭. 매칭되지 않은 매물은 숨기지 않음
 - 공식 Naver RSS·YouTube Atom → `scripts/sync-external-content.mjs` → `src/data/external-links.json` 신규 `published` 항목과 자체 WebP 썸네일. YouTube alternate URL의 `/shorts/`는 `youtubeFormat: short`, 그 밖의 개별 영상은 `video`로 분류하며 기존 항목은 append-only로 보존. 한 출처의 일시 장애는 3회 이내 재시도 후 경고와 함께 건너뛰고 정상 출처만 반영하며, 두 출처 모두 장애이거나 출처·채널·XML·ID 신뢰 검증이 실패하면 전체 실행을 중단
 - `src/data/external-links.json` → 자동화 전 공식 블로그 128건·일반 영상 40건과 2026-08-26 확인한 공식 Shorts 32건을 기준으로 누적되는 원문 링크·자체 썸네일·최신순 카드
 - `src/layouts/BaseLayout.astro` → 페이지별 title, description, canonical, robots, JSON-LD와 공개 하위 페이지 `BreadcrumbList`. 홈은 `WebSite`와 `RealEstateAgent`·`LocalBusiness`를 고정 `@id`로 연결한 단일 `@graph`를 제공
@@ -159,7 +161,7 @@ DB와 TR 흐름은 없다. 관리 API의 콘텐츠 쓰기는 `ADMIN_WRITE_ENABLE
 - 비밀번호, 토큰, API 키, 인증서, 운영 `.env`
 - 신분증·등록증 원본과 사진 원본 메타데이터
 
-`scripts/content-validation.mjs`의 금지 필드 검사를 약화하지 않는다. 단지 콘텐츠는 리더스시티 4·5블록 세대수 합계와 `external-links.json`의 공개 콘텐츠 연결도 빌드 전에 검증한다. 비공개 데이터가 필요해지면 JSON 필드를 추가하지 말고 DB·권한·암호화·보유기간을 별도로 설계하고 승인받는다.
+`scripts/content-validation.mjs`의 금지 필드 검사를 약화하지 않는다. 단지 콘텐츠는 리더스시티 4·5블록 세대수 합계와 `external-links.json`의 공개 콘텐츠 연결도 빌드 전에 검증한다. 공개 단지의 표시 범위와 비교 범위는 혼합하지 않으며 `featuredComplexSlugs`의 준비 중 단지는 공개 파생 목록에서 제외하고 `comparisonComplexSlugs`에는 공개 단지만 둔다. 비공개 데이터가 필요해지면 JSON 필드를 추가하지 말고 DB·권한·암호화·보유기간을 별도로 설계하고 승인받는다.
 
 ## 콘텐츠 규칙
 
@@ -176,7 +178,7 @@ DB와 TR 흐름은 없다. 관리 API의 콘텐츠 쓰기는 `ADMIN_WRITE_ENABLE
 - 외부 콘텐츠는 고유 ID·`draft|published`·게시일·자체 저장 썸네일을 사용하고, 네이버 블로그·유튜브 허용 도메인만 등록한다. YouTube 항목은 `youtubeFormat: video|short`를 반드시 기록한다.
 - 공식 RSS 동기화는 네이버 블로그 ID `p5468300`과 Repository Variable `YOUTUBE_CHANNEL_ID`의 고정 채널만 허용하고 신규 항목만 `published`로 추가한다. 기존 수동 수정값과 피드에 없는 항목은 덮어쓰거나 삭제하지 않는다.
 - 홈과 지역 콘텐츠는 최신순으로 정렬하고 블로그는 페이지당 9개를 표시한다. 홈의 유튜브는 일반 영상 최신 6개만 표시한다. `/youtube/`는 전체 혼합 필터 없이 일반 영상을 기본으로 `일반 영상·Shorts 보기`를 제공하고 선택 형식을 페이지당 6개씩 데스크톱 3열·태블릿 2열·모바일 1열로 표시한다. 필터를 바꾸면 1페이지로 돌아간다.
-- 홈의 대표·사무소·리더스시티 설명은 `home-content.json`에서 관리한다.
+- 홈의 대표·사무소·리더스시티·신흥 SK뷰 상담 범위 설명은 `home-content.json`에서 관리한다.
 
 ## 디자인·모바일·접근성
 

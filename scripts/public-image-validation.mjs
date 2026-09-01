@@ -18,6 +18,18 @@ function collectImageReferences(value, path = "root", references = []) {
   return references;
 }
 
+function collectPublishedComplexResponsiveReferences(content) {
+  if (!Array.isArray(content?.complexes)) return [];
+  return content.complexes.flatMap((complex, index) => {
+    const match = /^\/images\/area\/(.+)\.webp$/u.exec(complex?.status === "published" ? complex?.image?.src ?? "" : "");
+    if (!match) return [];
+    return [640, 1200].map((width) => ({
+      path: `root.complexes[${index}].image.src (${width}px 파생본)`,
+      src: `/images/area/${match[1]}-${width}.webp`,
+    }));
+  });
+}
+
 function isWithinRoot(path, root) {
   return path === root || path.startsWith(`${root}${sep}`);
 }
@@ -29,7 +41,10 @@ export async function validateReferencedPublicImages(content, {
 } = {}) {
   const errors = [];
   const root = resolve(publicRoot);
-  const references = collectImageReferences(content);
+  const references = [
+    ...collectImageReferences(content),
+    ...collectPublishedComplexResponsiveReferences(content),
+  ];
   const unique = new Map(references.map((reference) => [reference.src, reference]));
 
   for (const { path, src } of unique.values()) {

@@ -2,6 +2,7 @@ import {
   getNaverListingPublicTextErrors,
   getUnexpectedNaverListingKeys,
 } from "../src/lib/naver-listing-public-validation.mjs";
+import { normalizeComplexText } from "../src/lib/complex-matching.mjs";
 
 const allowedStatuses = new Set(["draft", "published", "contracted", "ended"]);
 const allowedTradeTypes = new Set(["sale", "jeonse", "monthly-rent"]);
@@ -9,6 +10,7 @@ const allowedComplexStatuses = new Set(["preparing", "published"]);
 const allowedComplexSourceKinds = new Set(["official", "public-data", "operator", "news"]);
 const allowedComplexAmenityVerifications = new Set(["official", "operator-confirmed", "historical-plan", "check-required"]);
 const allowedComplexLivingCategories = new Set(["transport", "education", "daily-life", "nature"]);
+const complexSeoMaximumLengths = Object.freeze({ title: 70, description: 180 });
 const allowedExternalContentTypes = new Set(["blog", "youtube"]);
 const allowedYoutubeContentFormats = new Set(["video", "short"]);
 const allowedExternalContentStatuses = new Set(["draft", "published"]);
@@ -131,6 +133,9 @@ const publicContentSchemas = Object.freeze({
     eyebrow: valueSchema,
     mark: valueSchema,
     name: valueSchema,
+    aliases: arraySchema(valueSchema),
+    seo: objectSchema({ title: valueSchema, description: valueSchema }),
+    unitDataNote: valueSchema,
     status: valueSchema,
     summary: valueSchema,
     introTitle: valueSchema,
@@ -164,6 +169,8 @@ const publicContentSchemas = Object.freeze({
     description: valueSchema,
     note: valueSchema,
     confirmedAt: valueSchema,
+    featuredComplexSlugs: arraySchema(valueSchema),
+    comparisonComplexSlugs: arraySchema(valueSchema),
     stats: arraySchema(objectSchema({ label: valueSchema, value: valueSchema, description: valueSchema })),
     reasons: arraySchema(textPairSchema),
     comparisonRows: arraySchema(objectSchema({ label: valueSchema, values: recordSchema(valueSchema) })),
@@ -621,12 +628,59 @@ export function validateComplexes(complexes, externalLinks) {
   }
 
   const slugs = new Set();
+  const candidateOwners = new Map();
   complexes.forEach((complex, index) => {
     const path = `complexes[${index}]`;
     if (!isKebabCase(complex.slug)) errors.push(`${path}.slug: 영문 kebab-case가 필요합니다.`);
     if (!isKebabCase(complex.areaSlug)) errors.push(`${path}.areaSlug: 영문 kebab-case가 필요합니다.`);
     for (const key of ["areaName", "eyebrow", "mark", "name", "summary"]) {
       if (!isNonEmptyString(complex[key])) errors.push(`${path}.${key}: 공개 정보가 필요합니다.`);
+    }
+    const canonicalCandidate = normalizeComplexText(complex.name);
+    const candidates = new Set();
+    if (!canonicalCandidate) errors.push(`${path}.name: 매칭 가능한 한글·영문·숫자가 필요합니다.`);
+    if (!Array.isArray(complex.aliases)) {
+      errors.push(`${path}.aliases: 배열이어야 합니다.`);
+    } else {
+      complex.aliases.forEach((alias, aliasIndex) => {
+        const aliasPath = `${path}.aliases[${aliasIndex}]`;
+        if (!isNonEmptyString(alias)) {
+          errors.push(`${aliasPath}: 비어 있지 않은 문자열이어야 합니다.`);
+          return;
+        }
+        const candidate = normalizeComplexText(alias);
+        if (!candidate) {
+          errors.push(`${aliasPath}: 매칭 가능한 한글·영문·숫자가 필요합니다.`);
+          return;
+        }
+        if (candidate.length < 2) {
+          errors.push(`${aliasPath}: 오탐 방지를 위해 정규화 기준 두 글자 이상이어야 합니다.`);
+          return;
+        }
+        if (candidate === canonicalCandidate) errors.push(`${aliasPath}: 표시명과 정규화 결과가 중복됩니다.`);
+        if (candidates.has(candidate)) errors.push(`${aliasPath}: 같은 단지 안에서 정규화 결과가 중복됩니다.`);
+        candidates.add(candidate);
+      });
+    }
+    if (canonicalCandidate) candidates.add(canonicalCandidate);
+    for (const candidate of candidates) {
+      const owner = candidateOwners.get(candidate);
+      if (owner && owner !== complex.slug) errors.push(`${path}.aliases: ${owner} 단지와 정규화 매칭 이름이 충돌합니다.`);
+      else candidateOwners.set(candidate, complex.slug);
+    }
+    if (!complex.seo || typeof complex.seo !== "object") {
+      errors.push(`${path}.seo: 제목과 설명 객체가 필요합니다.`);
+    } else {
+      for (const key of ["title", "description"]) {
+        if (typeof complex.seo[key] !== "string") errors.push(`${path}.seo.${key}: 문자열이어야 합니다.`);
+        else {
+          if (complex.status === "published" && !isNonEmptyString(complex.seo[key])) errors.push(`${path}.seo.${key}: 공개 단지는 SEO 문구가 필요합니다.`);
+          if (complex.seo[key].length > complexSeoMaximumLengths[key]) errors.push(`${path}.seo.${key}: 최대 ${complexSeoMaximumLengths[key]}자까지 입력할 수 있습니다.`);
+        }
+      }
+    }
+    if (complex.unitDataNote !== null && !isNonEmptyString(complex.unitDataNote)) {
+      errors.push(`${path}.unitDataNote: null 또는 비어 있지 않은 문자열이어야 합니다.`);
     }
     if (!allowedComplexStatuses.has(complex.status)) errors.push(`${path}.status: 허용되지 않은 상태입니다.`);
     if (!isNonEmptyString(complex.introTitle)) errors.push(`${path}.introTitle: 단지 소개 제목이 필요합니다.`);
@@ -635,6 +689,9 @@ export function validateComplexes(complexes, externalLinks) {
     }
     errors.push(...validateImage(complex.image, `${path}.image`, { required: complex.status === "published" }));
     const required = complex.status === "published";
+    if (required && !/^\/images\/area\/[a-z0-9-]+\.webp$/u.test(complex.image?.src ?? "")) {
+      errors.push(`${path}.image.src: 공개 단지 대표 사진은 검수된 /images/area/*.webp 원본과 반응형 파생본을 사용해야 합니다.`);
+    }
     errors.push(...validateTextPairs(complex.facts, `${path}.facts`, "label", "value", { required }));
     errors.push(...validateTextPairs(complex.highlights, `${path}.highlights`, "title", "description", { required }));
     errors.push(...validateTextPairs(complex.supplySummary, `${path}.supplySummary`, "label", "value", { required }));
@@ -694,11 +751,92 @@ export function validateComplexes(complexes, externalLinks) {
     if (saleTotal !== 1423) errors.push("complexes.leaders-city-5.unitGroups: 분양 세대수 합계는 1,423이어야 합니다.");
     if (rentalTotal + saleTotal !== 2135) errors.push("complexes.leaders-city-5.unitGroups: 전체 세대수 합계는 2,135여야 합니다.");
   }
+  const sinheungSkView = complexes.find((complex) => complex.slug === "sinheung-sk-view");
+  if (sinheungSkView?.status === "published") {
+    const unitTotal = Array.isArray(sinheungSkView.unitGroups)
+      ? sinheungSkView.unitGroups.reduce((sum, unit) => sum + (Number.isSafeInteger(unit.households) ? unit.households : 0), 0)
+      : 0;
+    const supplyTotal = Array.isArray(sinheungSkView.supplySummary)
+      ? sinheungSkView.supplySummary.reduce((sum, item) => sum + Number(String(item?.value ?? "").replace(/\D/gu, "")), 0)
+      : 0;
+    const supplyByLabel = new Map(
+      Array.isArray(sinheungSkView.supplySummary)
+        ? sinheungSkView.supplySummary.map((item) => [item?.label, Number(String(item?.value ?? "").replace(/\D/gu, ""))])
+        : [],
+    );
+    const unitsByArea = new Map(
+      Array.isArray(sinheungSkView.unitGroups)
+        ? sinheungSkView.unitGroups.map((unit) => [unit?.areaLabel, unit?.households])
+        : [],
+    );
+    if (unitTotal !== 1588) errors.push("complexes.sinheung-sk-view.unitGroups: 전체 세대수 합계는 1,588이어야 합니다.");
+    if (unitsByArea.get("60㎡ 이하") !== 897) errors.push("complexes.sinheung-sk-view.unitGroups: K-apt 공식 구간 60㎡ 이하 897세대가 필요합니다.");
+    if (unitsByArea.get("60㎡ 초과~85㎡ 이하") !== 691) errors.push("complexes.sinheung-sk-view.unitGroups: K-apt 공식 구간 60㎡ 초과~85㎡ 이하 691세대가 필요합니다.");
+    if (supplyTotal !== 1588) errors.push("complexes.sinheung-sk-view.supplySummary: 공급 구분 합계는 1,588이어야 합니다.");
+    if (supplyByLabel.get("분양") !== 1499) errors.push("complexes.sinheung-sk-view.supplySummary: 분양 세대수는 공식 확인값 1,499여야 합니다.");
+    if (supplyByLabel.get("임대") !== 89) errors.push("complexes.sinheung-sk-view.supplySummary: 임대 세대수는 공식 확인값 89여야 합니다.");
+
+    const facts = new Map(Array.isArray(sinheungSkView.facts) ? sinheungSkView.facts.map((fact) => [fact?.label, fact?.value]) : []);
+    if (!String(facts.get("주소") ?? "").includes("충무로 255")) errors.push("complexes.sinheung-sk-view.facts: 공식 확인 도로명주소 충무로 255가 필요합니다.");
+    if (!String(facts.get("지번") ?? "").includes("신흥동 161-33")) errors.push("complexes.sinheung-sk-view.facts: 공식 확인 지번 신흥동 161-33이 필요합니다.");
+    if (!String(facts.get("규모") ?? "").includes("12개동") || !String(facts.get("규모") ?? "").includes("1,588세대")) {
+      errors.push("complexes.sinheung-sk-view.facts: 공식 확인 규모 12개동·1,588세대가 필요합니다.");
+    }
+    if (!String(facts.get("사용승인") ?? "").includes("2022년 4월 28일")) errors.push("complexes.sinheung-sk-view.facts: 공식 확인 사용승인일 2022년 4월 28일이 필요합니다.");
+    if (!String(facts.get("전용면적 구간") ?? "").includes("897세대") || !String(facts.get("전용면적 구간") ?? "").includes("691세대")) {
+      errors.push("complexes.sinheung-sk-view.facts: 공식 확인 전용면적 구간 897세대·691세대가 필요합니다.");
+    }
+    if (facts.get("난방") !== "개별난방") errors.push("complexes.sinheung-sk-view.facts: K-apt 공식 난방방식 개별난방이 필요합니다.");
+    if (!String(facts.get("주차") ?? "").includes("지상 0대") || !String(facts.get("주차") ?? "").includes("지하 1,957대")) {
+      errors.push("complexes.sinheung-sk-view.facts: K-apt 공식 주차대수 지상 0대·지하 1,957대가 필요합니다.");
+    }
+    if (facts.get("승강기") !== "34대") errors.push("complexes.sinheung-sk-view.facts: K-apt 공식 승강기 34대가 필요합니다.");
+
+    const requiredSourceIds = ["kapt-sinheung-sk-view-basic", "kapt-sinheung-sk-view-management", "donggu-sinheung-3-status", "daejeon-2022-housing-move-in-plan"];
+    const sourceIds = new Set(Array.isArray(sinheungSkView.sources) ? sinheungSkView.sources.map((source) => source?.id) : []);
+    for (const sourceId of requiredSourceIds) {
+      if (!sourceIds.has(sourceId)) errors.push(`complexes.sinheung-sk-view.sources: 공개 전 공식 출처 ${sourceId}가 필요합니다.`);
+    }
+
+    const permanentText = [
+      sinheungSkView.summary,
+      ...(Array.isArray(sinheungSkView.introduction) ? sinheungSkView.introduction : []),
+      sinheungSkView.unitDataNote,
+      sinheungSkView.seo?.title,
+      sinheungSkView.seo?.description,
+    ].filter((value) => typeof value === "string").join(" ");
+    if (/(준비 중|안내할 예정|확보한 뒤 공개|확인한 뒤 공개)/u.test(permanentText)) {
+      errors.push("complexes.sinheung-sk-view: 공개 문구에 준비 상태 표현이 남아 있습니다.");
+    }
+  }
   return errors;
 }
 
 export function validateComplexOverview(overview, complexes, externalLinks) {
   const errors = [];
+  const registeredComplexes = Array.isArray(complexes)
+    ? new Map(complexes.filter((complex) => isKebabCase(complex?.slug)).map((complex) => [complex.slug, complex]))
+    : new Map();
+  const validateSlugList = (value, key, { minimum = 1, publishedOnly = false } = {}) => {
+    const path = `complexOverview.${key}`;
+    if (!Array.isArray(value) || value.length < minimum) {
+      errors.push(`${path}: ${minimum}개 이상의 단지 slug가 필요합니다.`);
+      return [];
+    }
+    const seen = new Set();
+    value.forEach((slug, index) => {
+      const itemPath = `${path}[${index}]`;
+      if (!isKebabCase(slug)) errors.push(`${itemPath}: 영문 kebab-case가 필요합니다.`);
+      if (seen.has(slug)) errors.push(`${itemPath}: 중복 slug입니다.`);
+      seen.add(slug);
+      const complex = registeredComplexes.get(slug);
+      if (!complex) errors.push(`${itemPath}: 등록되지 않은 단지 slug입니다.`);
+      else if (publishedOnly && complex.status !== "published") errors.push(`${itemPath}: 공개 상태 단지만 비교할 수 있습니다.`);
+    });
+    return value.filter((slug) => isKebabCase(slug));
+  };
+  validateSlugList(overview?.featuredComplexSlugs, "featuredComplexSlugs");
+  const comparisonSlugs = validateSlugList(overview?.comparisonComplexSlugs, "comparisonComplexSlugs", { minimum: 2, publishedOnly: true });
   for (const key of ["eyebrow", "title", "description", "note"]) {
     if (!isNonEmptyString(overview?.[key])) errors.push(`complexOverview.${key}: 공개 문구가 필요합니다.`);
   }
@@ -719,23 +857,21 @@ export function validateComplexOverview(overview, complexes, externalLinks) {
   if (!Array.isArray(overview?.comparisonRows) || overview.comparisonRows.length === 0) {
     errors.push("complexOverview.comparisonRows: 한 개 이상의 비교 항목이 필요합니다.");
   } else {
-    const allowedComparisonSlugs = Array.isArray(complexes)
-      ? new Set(complexes.map((complex) => complex.slug).filter(isKebabCase))
-      : null;
+    const comparisonSlugSet = new Set(comparisonSlugs);
     overview.comparisonRows.forEach((row, index) => {
       if (!isNonEmptyString(row?.label) || !row?.values || typeof row.values !== "object") {
         errors.push(`complexOverview.comparisonRows[${index}]: 비교 항목과 블록별 값이 필요합니다.`);
         return;
       }
-      if (allowedComparisonSlugs) {
-        for (const slug of Object.keys(row.values)) {
-          if (!allowedComparisonSlugs.has(slug)) {
-            errors.push(`complexOverview.comparisonRows[${index}].values.${slug}: 등록된 단지 slug만 허용합니다.`);
-          }
+      for (const slug of Object.keys(row.values)) {
+        if (!registeredComplexes.has(slug)) {
+          errors.push(`complexOverview.comparisonRows[${index}].values.${slug}: 등록된 단지 slug만 허용합니다.`);
+        } else if (!comparisonSlugSet.has(slug)) {
+          errors.push(`complexOverview.comparisonRows[${index}].values.${slug}: 비교 대상 단지 값만 허용합니다.`);
         }
       }
-      for (const complex of Array.isArray(complexes) ? complexes.filter((item) => item.status === "published") : []) {
-        if (!isNonEmptyString(row.values[complex.slug])) errors.push(`complexOverview.comparisonRows[${index}].values.${complex.slug}: 비교값이 필요합니다.`);
+      for (const slug of comparisonSlugs) {
+        if (!isNonEmptyString(row.values[slug])) errors.push(`complexOverview.comparisonRows[${index}].values.${slug}: 비교값이 필요합니다.`);
       }
     });
   }

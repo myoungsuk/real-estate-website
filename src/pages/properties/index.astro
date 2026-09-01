@@ -4,13 +4,12 @@ import PageIntro from "../../components/PageIntro.astro";
 import ContactPanel from "../../components/ContactPanel.astro";
 import InquiryComposer from "../../components/InquiryComposer.astro";
 import NaverListingCard from "../../components/NaverListingCard.astro";
-import { publishedComplexes } from "../../lib/complexes";
+import { matchPublishedComplexByListingTitle, publishedComplexes } from "../../lib/complexes";
 import { naverListings, naverListingsUpdatedAt, naverPropertyTypes } from "../../lib/naver-listings";
 import { office } from "../../lib/site";
 
 const title = "대전 동구 매매·전세·월세 매물 | 행복한부동산";
 const description = "대전 동구에서 직접 확인한 매매·전세·월세 매물을 가격과 면적 등 원하는 조건으로 비교합니다.";
-const getComplexSlug = (listingTitle: string) => publishedComplexes.find((complex) => listingTitle.startsWith(complex.name))?.slug ?? "";
 ---
 
 <BaseLayout {title} {description} breadcrumbItems={[{ name: "홈", path: "/" }, { name: "매물", path: "/properties/" }]}>
@@ -125,7 +124,7 @@ const getComplexSlug = (listingTitle: string) => publishedComplexes.find((comple
 
         <div class="listing-grid" data-listing-grid>
           {naverListings.map((listing, index) => (
-            <NaverListingCard {listing} rank={index} complexSlug={getComplexSlug(listing.title)} selectionControls />
+            <NaverListingCard {listing} rank={index} complexSlug={matchPublishedComplexByListingTitle(listing.title)?.slug ?? ""} selectionControls />
           ))}
         </div>
         <div class="empty-state" data-empty-state hidden>

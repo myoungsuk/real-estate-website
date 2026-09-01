@@ -3,8 +3,11 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
 import PageIntro from "../../components/PageIntro.astro";
 import ContactPanel from "../../components/ContactPanel.astro";
 import ExternalContentList from "../../components/ExternalContentList.astro";
+import NaverListingCard from "../../components/NaverListingCard.astro";
 import { getPublishedExternalContentsByIds } from "../../lib/content";
-import { publishedComplexes } from "../../lib/complexes";
+import { createComplexListingPreview, selectComplexListings } from "../../lib/complex-listings.mjs";
+import { matchPublishedComplexByListingTitle, publishedComplexes } from "../../lib/complexes";
+import { naverListings, naverListingsUpdatedAt } from "../../lib/naver-listings";
 import { getResponsivePublicImageSrcSet } from "../../lib/responsive-images";
 
 export function getStaticPaths() {
@@ -12,15 +15,14 @@ export function getStaticPaths() {
 }
 
 const { complex } = Astro.props;
-const title = complex.slug === "leaders-city-4"
-  ? "천동 리더스시티 4블록 단지정보·전용면적·생활환경 | 행복한부동산"
-  : "천동 리더스시티 5블록 단지정보·분양·공공임대 구성 | 행복한부동산";
-const description = complex.slug === "leaders-city-4"
-  ? "대전 동구 천동 리더스시티 4블록의 1,328세대 규모, 전용 59·74·84㎡ 구성, 입주 시기와 계약 전 확인사항을 안내합니다."
-  : "대전 동구 천동 리더스시티 5블록의 2,135세대 규모, 분양 1,423세대와 10년 공공임대 712세대 구성과 현장 확인사항을 안내합니다.";
+const title = complex.seo.title;
+const description = complex.seo.description;
 const relatedContents = getPublishedExternalContentsByIds(complex.relatedContentIds);
+const relatedListings = selectComplexListings(naverListings, complex.slug, matchPublishedComplexByListingTitle);
+const relatedListingPreview = createComplexListingPreview(relatedListings);
+const visibleRelatedListings = relatedListingPreview.items;
 const unitCategories = [...new Set(complex.unitGroups.map((unit) => unit.category))];
-const maxUnitHouseholds = Math.max(...complex.unitGroups.map((unit) => unit.households));
+const maxUnitHouseholds = Math.max(1, ...complex.unitGroups.map((unit) => unit.households));
 const verificationLabels = {
   official: "공식 확인",
   "operator-confirmed": "운영자 확인",
@@ -44,15 +46,20 @@ const verificationLabels = {
     <div class="shell complex-story">
       {complex.image && (
         <figure class="complex-story__image">
-          <img
-            src={complex.image.src}
-            srcset={getResponsivePublicImageSrcSet(complex.image.src)}
-            sizes="(min-width: 1180px) 550px, (min-width: 700px) 48vw, calc(100vw - 32px)"
-            alt={complex.image.alt}
-            width="2000"
-            height="2000"
-            decoding="async"
-          />
+          <picture>
+            <source media="(max-width: 699px)" srcset={complex.image.src.replace(/\.webp$/u, "-640.webp")} />
+            <img
+              src={complex.image.src}
+              srcset={getResponsivePublicImageSrcSet(complex.image.src)}
+              sizes="(min-width: 1180px) 550px, 48vw"
+              alt={complex.image.alt}
+              width="2000"
+              height="2000"
+              loading="eager"
+              fetchpriority="high"
+              decoding="sync"
+            />
+          </picture>
           <figcaption>{complex.name} 단지 전경</figcaption>
         </figure>
       )}
@@ -61,6 +68,20 @@ const verificationLabels = {
         <h2>{complex.introTitle}</h2>
         {complex.introduction.map((paragraph) => <p>{paragraph}</p>)}
         <a class="button button--secondary" href={`/properties/?complex=${complex.slug}`}>{complex.name} 매물 보기</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section--soft" aria-labelledby="complex-listing-summary-heading">
+    <div class="shell contact-panel">
+      <div>
+        <p class="eyebrow">현재 공개 매물</p>
+        <h2 id="complex-listing-summary-heading">{complex.name} 매물 {relatedListings.length}건을 확인했습니다</h2>
+        <p>매물 목록 업데이트 {naverListingsUpdatedAt.replaceAll("-", ".")} 기준이며 가격과 계약 조건은 상담 시점에 다시 확인합니다.</p>
+      </div>
+      <div class="contact-panel__actions">
+        <a class="button button--primary" href={`/properties/?complex=${complex.slug}`}>{complex.name} 현재 매물 보기</a>
+        <a class="button button--secondary" href="#contact">{complex.name} 조건 상담</a>
       </div>
     </div>
   </section>
@@ -108,7 +129,7 @@ const verificationLabels = {
           </section>
         ))}
       </div>
-      <p class="complex-data-note">같은 면적 안에서도 타입에 따라 방 배치, 수납, 주방과 거실의 연결 방식이 달라질 수 있습니다. 5블록 분양세대는 공식 고시의 면적 구간 기준이며 A·B 타입별 전체 수량으로 보지 않습니다.</p>
+      {complex.unitDataNote && <p class="complex-data-note">{complex.unitDataNote}</p>}
     </div>
   </section>
 
@@ -182,6 +203,31 @@ const verificationLabels = {
     </div>
   </section>
 
+  <section class="section section--soft" aria-labelledby="complex-current-listings-heading" aria-live="polite">
+    <div class="shell">
+      <div class="section-heading">
+        <div><p class="eyebrow">네이버 등록 매물</p><h2 id="complex-current-listings-heading">{complex.name} 현재 공개 매물</h2></div>
+        <p>매물 목록 업데이트 {naverListingsUpdatedAt.replaceAll("-", ".")}</p>
+      </div>
+      {visibleRelatedListings.length > 0 ? (
+        <>
+          <div class="listing-grid">
+            {visibleRelatedListings.map((listing, index) => <NaverListingCard {listing} rank={index} compact />)}
+          </div>
+          {relatedListingPreview.hasMore && (
+            <p class="section-more"><a class="button button--secondary" href={`/properties/?complex=${complex.slug}`}>전체 {relatedListingPreview.total}건 보기</a></p>
+          )}
+        </>
+      ) : (
+        <div class="empty-state">
+          <span class="empty-state__number" aria-hidden="true">0</span>
+          <div><h3>현재 공개 목록에 {complex.name} 매물이 없습니다</h3><p>찾는 거래유형, 면적, 예산과 입주시기를 알려주시면 현재 확인 가능한 조건부터 안내해 드립니다.</p></div>
+          <div class="empty-state__actions"><a class="button button--primary" href="#contact">{complex.name} 조건 상담</a></div>
+        </div>
+      )}
+    </div>
+  </section>
+
   <section class="section section--soft" aria-labelledby="complex-related-heading">
     <div class="shell">
       <div class="section-heading">
@@ -212,5 +258,5 @@ const verificationLabels = {
     </div>
   </section>
 
-  <ContactPanel title={`${complex.name} 조건을 직접 확인해 드립니다`} />
+  <div id="contact"><ContactPanel title={`${complex.name} 조건을 직접 확인해 드립니다`} description="현재 공개 매물과 찾는 거래유형, 면적, 예산, 입주시기를 함께 확인해 안내합니다." /></div>
 </BaseLayout>

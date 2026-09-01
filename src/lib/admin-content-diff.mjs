@@ -3,7 +3,7 @@ const RESOURCE_LABELS = Object.freeze({
   "home-content": "첫 화면 콘텐츠",
   "external-links": "외부 콘텐츠",
   complexes: "지역·단지",
-  "complexes-overview": "리더스시티 전체 안내",
+  "complexes-overview": "단지 전체 안내",
   listings: "매물",
   office: "사무소",
   faq: "자주 묻는 질문",
@@ -35,7 +35,13 @@ const FIELD_LABELS = Object.freeze({
   publishedAt: "공개일",
   confirmedAt: "확인일",
   name: "이름",
+  aliases: "다른 실제 명칭",
   slug: "주소 식별자",
+  seo: "검색 정보",
+  unitDataNote: "면적·세대수 자료 안내",
+  featuredComplexSlugs: "주요 단지 순서",
+  comparisonComplexSlugs: "비교 대상 순서",
+  comparisonRows: "단지 비교표",
   sources: "공개 출처",
   relatedContentIds: "연결 콘텐츠",
   question: "질문",
@@ -58,6 +64,8 @@ const EXACT_LABELS = Object.freeze({
   "home-content:areaGuide.title": "지역 안내 큰 제목",
   "home-content:areaGuide.description": "지역 안내 도입 설명",
   "naver-listings:items": "네이버 공개 매물",
+  "complexes:items[].seo.title": "지역·단지 · 검색 제목",
+  "complexes:items[].seo.description": "지역·단지 · 검색 설명",
 });
 
 const SENSITIVE_KEY_PATTERN = /(?:password|passwd|secret|token|authorization|cookie|accessjwt|privatekey|privateNote|internalNote|customer(?:Name|Phone|Email)?)/iu;

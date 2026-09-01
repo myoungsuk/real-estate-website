@@ -171,3 +171,49 @@ test("360px 매물 화면에서 조건 패널과 선택 기능이 가로 넘침 
   expect(overflow).toBeLessThanOrEqual(1);
   assertNoBrowserErrors();
 });
+
+test("신흥 SK뷰 상세와 매물 필터가 연결되고 주요 화면 폭에서 넘치지 않는다", async ({ page }) => {
+  const assertNoBrowserErrors = failOnBrowserErrors(page);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("/");
+
+  const homeComplexLinks = page.locator(".home-quick-nav__links--complex a");
+  await expect(homeComplexLinks).toHaveCount(3);
+  await expect(homeComplexLinks.nth(0)).toHaveText("리더스시티 4블록");
+  await expect(homeComplexLinks.nth(1)).toHaveText("리더스시티 5블록");
+  await expect(homeComplexLinks.nth(2)).toHaveText("신흥 SK뷰");
+  await expect(page.locator('a[href="/complexes/sinheung-sk-view/"]').first()).toBeVisible();
+  await expect(page.getByText("단지 상세정보는 사진과 공식 자료 검수 후 공개합니다.", { exact: true })).toHaveCount(0);
+  const sinheungHomeRow = page.locator('[aria-label="천동·신흥 주요 단지 기본정보 표"]')
+    .getByRole("row")
+    .filter({ hasText: "신흥 SK뷰" });
+  await expect(sinheungHomeRow).toContainText("2022년 4월 28일");
+  await expect(sinheungHomeRow).toContainText("60㎡ 이하 897세대 · 60㎡ 초과~85㎡ 이하 691세대");
+
+  await page.goto("/complexes/");
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("천동·신흥 주요 단지");
+  await expect(page.locator(".complex-index-card")).toHaveCount(3);
+  await page.locator('a[href="/complexes/sinheung-sk-view/"]').click();
+  await expect(page).toHaveURL(/\/complexes\/sinheung-sk-view\/$/u);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("신흥 SK뷰");
+  await expect(page.getByRole("img", { name: "대전 동구 신흥 SK뷰 야간 출입구와 아파트 전경" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "신흥 SK뷰 매물 2건을 확인했습니다" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "신흥 SK뷰 조건 상담" }).first()).toHaveAttribute("href", "#contact");
+  await page.getByRole("link", { name: "신흥 SK뷰 현재 매물 보기" }).click();
+  await expect(page).toHaveURL(/\/properties\/\?complex=sinheung-sk-view$/u);
+  await expect(page.locator("[data-listing-filter]").getByLabel("단지")).toHaveValue("sinheung-sk-view");
+  await expect(page.locator("[data-naver-listing-card]:visible")).toHaveCount(2);
+
+  await page.goto("/office/");
+  await expect(page.getByText("리더스시티 4·5블록 · 신흥 SK뷰", { exact: true })).toBeVisible();
+
+  for (const width of [360, 390, 430, 768, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const path of ["/", "/complexes/", "/complexes/sinheung-sk-view/", "/properties/?complex=sinheung-sk-view", "/office/"]) {
+      await page.goto(path);
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      expect(overflow, `${path} ${width}px 가로 넘침`).toBeLessThanOrEqual(1);
+    }
+  }
+  assertNoBrowserErrors();
+});

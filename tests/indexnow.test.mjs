@@ -22,7 +22,12 @@ const sitemapUrls = [
 test("IndexNow 계획은 데이터별 관련 URL만 선택한다", () => {
   assert.deepEqual(
     planIndexNowUrls(["src/data/naver-listings.json"], sitemapUrls),
-    ["https://leaderscityhappy.com/", "https://leaderscityhappy.com/properties/"],
+    [
+      "https://leaderscityhappy.com/",
+      "https://leaderscityhappy.com/complexes/",
+      "https://leaderscityhappy.com/complexes/leaders-city-4/",
+      "https://leaderscityhappy.com/properties/",
+    ],
   );
   assert.deepEqual(
     planIndexNowUrls(["src/data/complexes.json"], sitemapUrls),

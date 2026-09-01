@@ -63,8 +63,8 @@ test("단지 상세의 매물 링크는 공개 매물 화면의 단지 필터와
   assert.match(detail, /\/properties\/\?complex=\$\{complex\.slug\}/);
   assert.doesNotMatch(detail, /\/properties\/\?area=/);
   assert.match(properties, /name="complex"/);
-  assert.match(properties, /getComplexSlug/);
-  assert.match(properties, /complexSlug=\{getComplexSlug\(listing\.title\)\}/);
+  assert.match(properties, /matchPublishedComplexByListingTitle/);
+  assert.match(properties, /complexSlug=\{matchPublishedComplexByListingTitle\(listing\.title\)\?\.slug \?\? ""\}/);
   assert.match(properties, /buildListingExplorerSearchParams/);
   assert.match(card, /data-listing-title=\{listing\.title\}/);
   assert.match(card, /data-complex=\{complexSlug\}/);
@@ -118,4 +118,8 @@ test("반응형 지역 이미지, Astro 캐시 경로, 404 noindex와 sitemap �
     assert.ok(small.size < medium.size);
     assert.ok(medium.size < original.size);
   }
+  assert.equal(
+    getResponsivePublicImageSrcSet("/images/area/sinheung-sk-view.webp"),
+    "/images/area/sinheung-sk-view-640.webp 640w, /images/area/sinheung-sk-view-1200.webp 1200w, /images/area/sinheung-sk-view.webp 2000w",
+  );
 });

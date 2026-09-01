@@ -2,6 +2,7 @@ const responsivePublicImageWidths: Readonly<Record<string, number>> = {
   "/images/area/leaders-city-4-landscape.webp": 2000,
   "/images/area/leaders-city-5-entrance.webp": 2000,
   "/images/area/leaders-city-5-landscape.webp": 2000,
+  "/images/area/sinheung-sk-view.webp": 2000,
 };
 
 export function getResponsivePublicImageSrcSet(src: string) {

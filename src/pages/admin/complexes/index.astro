@@ -19,16 +19,18 @@ import { complexes } from "../../../lib/complexes";
 
   <form class="admin-panel admin-editor-form admin-overview-form" data-complex-overview-form>
     <div class="admin-panel__heading">
-      <div><p class="admin-eyebrow">전체 안내 편집</p><h2>4·5블록 비교·공통 콘텐츠</h2></div>
+      <div><p class="admin-eyebrow">전체 안내 편집</p><h2>주요 단지 비교·공통 콘텐츠</h2></div>
     </div>
     <div class="admin-form-grid admin-form-grid--single">
       <div class="admin-field"><label for="complex-overview-eyebrow">영역 표시</label><input id="complex-overview-eyebrow" name="eyebrow" required data-write-control disabled /></div>
       <div class="admin-field"><label for="complex-overview-title">전체 안내 제목</label><input id="complex-overview-title" name="title" required data-write-control disabled /></div>
       <div class="admin-field"><label for="complex-overview-description">전체 안내 설명</label><textarea id="complex-overview-description" name="description" rows="4" required data-write-control disabled></textarea></div>
       <div class="admin-field"><label for="complex-overview-note">자료 확인 안내</label><textarea id="complex-overview-note" name="note" rows="3" required data-write-control disabled></textarea></div>
+      <div class="admin-field"><label for="complex-overview-featured">주요 단지 순서</label><textarea id="complex-overview-featured" name="featuredComplexSlugs" rows="4" data-write-control disabled></textarea><small>홈과 단지 목록에 표시할 단지 slug를 한 줄에 하나씩 입력합니다. 준비 중 단지는 공개 화면에서 자동 제외됩니다.</small></div>
+      <div class="admin-field"><label for="complex-overview-comparison-slugs">비교 대상 순서</label><textarea id="complex-overview-comparison-slugs" name="comparisonComplexSlugs" rows="3" data-write-control disabled></textarea><small>비교표 열 순서대로 공개 단지 slug를 한 줄에 하나씩 입력합니다.</small></div>
       <div class="admin-field"><label for="complex-overview-stats">숫자 카드</label><textarea id="complex-overview-stats" name="stats" rows="7" data-write-control disabled></textarea><small>항목 | 값 | 설명 형식으로 한 줄에 한 개씩 입력합니다.</small></div>
       <div class="admin-field"><label for="complex-overview-reasons">생활권 안내</label><textarea id="complex-overview-reasons" name="reasons" rows="7" data-write-control disabled></textarea><small>제목 | 설명 형식으로 입력합니다.</small></div>
-      <div class="admin-field"><label for="complex-overview-comparison">4·5블록 비교표</label><textarea id="complex-overview-comparison" name="comparisonRows" rows="10" data-write-control disabled></textarea><small>항목 | 4블록 값 | 5블록 값 형식으로 입력합니다.</small></div>
+      <div class="admin-field"><label for="complex-overview-comparison">단지 비교표</label><textarea id="complex-overview-comparison" name="comparisonRows" rows="10" data-write-control disabled></textarea><small data-comparison-format>비교 대상 순서에 맞춰 `항목 | 첫 번째 값 | 두 번째 값` 형식으로 입력합니다.</small></div>
       <div class="admin-field"><label for="complex-overview-checkpoints">공통 현장 확인사항</label><textarea id="complex-overview-checkpoints" name="sharedCheckpoints" rows="7" data-write-control disabled></textarea><small>제목 | 설명 형식으로 입력합니다.</small></div>
       <div class="admin-field"><label for="complex-overview-related">관련 콘텐츠 ID</label><textarea id="complex-overview-related" name="relatedContentIds" rows="5" data-write-control disabled></textarea><small>external-links.json의 공개 ID를 한 줄에 하나씩 입력합니다.</small></div>
       <div class="admin-field"><label for="complex-overview-sources">전체 정보 출처</label><textarea id="complex-overview-sources" name="sources" rows="7" data-write-control disabled></textarea><small>ID | 발행처 | 표시 이름 | 종류 | 확인일 | HTTPS 주소 | 참고 형식입니다.</small></div>
@@ -50,17 +52,21 @@ import { complexes } from "../../../lib/complexes";
       <input type="hidden" name="originalSlug" />
       <div class="admin-form-grid admin-form-grid--single">
         <div class="admin-field"><label for="complex-name">단지명</label><input id="complex-name" name="name" required data-write-control disabled /></div>
+        <div class="admin-field"><label for="complex-aliases">다른 실제 명칭</label><textarea id="complex-aliases" name="aliases" rows="3" data-write-control disabled></textarea><small>실제 사용하는 다른 명칭만 한 줄에 하나씩 입력합니다. 공백 차이는 자동으로 처리합니다.</small></div>
         <div class="admin-field"><label for="complex-slug">주소용 영문 ID</label><input id="complex-slug" name="slug" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" placeholder="leaders-city-5" required data-write-control disabled /></div>
         <div class="admin-field"><label for="complex-area-name">동네 이름</label><input id="complex-area-name" name="areaName" placeholder="천동" required data-write-control disabled /></div>
         <div class="admin-field"><label for="complex-area-slug">동네 영문 ID</label><input id="complex-area-slug" name="areaSlug" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" placeholder="cheon-dong" required data-write-control disabled /></div>
         <div class="admin-field"><label for="complex-eyebrow">영역 표시</label><input id="complex-eyebrow" name="eyebrow" placeholder="LEADERS CITY" required data-write-control disabled /></div>
         <div class="admin-field"><label for="complex-mark">카드 표시 글자</label><input id="complex-mark" name="mark" maxlength="4" placeholder="5" required data-write-control disabled /></div>
-        <div class="admin-field"><label for="complex-status">공개 상태</label><select id="complex-status" name="status" data-write-control disabled><option value="preparing">준비 중</option><option value="published">공개</option></select></div>
+        <div class="admin-field"><label for="complex-status">공개 상태</label><select id="complex-status" name="status" data-write-control disabled><option value="preparing">준비 중</option><option value="published">공개</option></select><small>준비 중 단지는 공개 상세·주요 단지 카드·매물 필터·sitemap에서 제외됩니다. 공개 전환은 사진 파생본·필수 콘텐츠·출처·확인일·합계 검증을 모두 통과해야 합니다.</small></div>
+        <div class="admin-field"><label for="complex-seo-title">검색 제목</label><input id="complex-seo-title" name="seoTitle" maxlength="70" data-write-control disabled /><small>권장 30~60자, 최대 70자이며 공개 상태에서는 비어 있을 수 없습니다.</small></div>
+        <div class="admin-field"><label for="complex-seo-description">검색 설명</label><textarea id="complex-seo-description" name="seoDescription" rows="3" maxlength="180" data-write-control disabled></textarea><small>권장 70~160자, 최대 180자이며 현재 가격이나 매물 수를 고정 문구로 넣지 않습니다.</small></div>
+        <div class="admin-field"><label for="complex-unit-data-note">면적·세대수 자료 안내</label><textarea id="complex-unit-data-note" name="unitDataNote" rows="3" data-write-control disabled></textarea><small>표시할 문구가 없으면 비워 두며 저장 시 null로 처리합니다.</small></div>
         <div class="admin-field"><label for="complex-summary">목록 요약</label><textarea id="complex-summary" name="summary" rows="3" required data-write-control disabled></textarea></div>
         <div class="admin-field"><label for="complex-intro-title">소개 제목</label><input id="complex-intro-title" name="introTitle" required data-write-control disabled /></div>
         <div class="admin-field"><label for="complex-introduction">소개 문단</label><textarea id="complex-introduction" name="introduction" rows="6" required data-write-control disabled></textarea><small>문단 사이에 빈 줄을 하나 넣습니다.</small></div>
         <div class="admin-field"><label for="complex-image-alt">단지 사진 설명</label><input id="complex-image-alt" name="imageAlt" placeholder="예: 리더스시티5블록 정문과 단지 전경" data-write-control disabled /></div>
-        <div class="admin-field"><label for="complex-image">대표 사진 교체</label><input id="complex-image" name="imageFile" type="file" accept="image/jpeg,image/png,image/webp" data-write-control disabled /><small>원본은 WebP·최대 1600px로 최적화합니다.</small></div>
+        <div class="admin-field"><label for="complex-image">대표 사진 교체</label><input id="complex-image" name="imageFile" type="file" accept="image/jpeg,image/png,image/webp" data-write-control disabled /><small>관리자 업로드는 준비용 단일 WebP입니다. 공개 전에는 검수한 `/images/area/` 원본과 640·1200px 파생본을 저장소에 등록해야 합니다.</small></div>
         <div class="admin-field"><label for="complex-facts">핵심 수치</label><textarea id="complex-facts" name="facts" rows="6" placeholder="주소 | 대전광역시 동구 ...&#10;규모 | 총 1,328세대" data-write-control disabled></textarea><small>`항목 | 값` 형식으로 한 줄에 한 개씩 입력합니다.</small></div>
         <div class="admin-field"><label for="complex-highlights">생활권 장점</label><textarea id="complex-highlights" name="highlights" rows="7" placeholder="교통 연결 | 신흥역과 대전역을 ..." data-write-control disabled></textarea><small>`제목 | 설명` 형식으로 한 줄에 한 개씩 입력합니다.</small></div>
         <div class="admin-field"><label for="complex-sources">정보 출처</label><textarea id="complex-sources" name="sources" rows="7" data-write-control disabled></textarea><small>ID | 발행처 | 표시 이름 | 종류 | 확인일 | HTTPS 주소 | 참고 형식이며 공개 상태에서는 한 개 이상 필요합니다.</small></div>
@@ -78,6 +84,7 @@ import { complexes } from "../../../lib/complexes";
   </div>
 
   <script>
+    import { formatComplexComparisonRows, parseComplexComparisonRows, parseComplexSlugLines, splitAdminLines } from "../../../lib/admin-complexes.mjs";
     import { convertImageFileToWebp, readAdminContent, setAdminFormStatus, uploadAdminImage, writeAdminContent, type AdminResource } from "../../../lib/admin-content-client";
     import { guardAdminFormChanges, reviewAdminContentChange } from "../../../lib/admin-content-review";
     import type { ComplexContent, ComplexOverview, ComplexSource } from "../../../lib/complexes";
@@ -88,6 +95,7 @@ import { complexes } from "../../../lib/complexes";
     const count = document.querySelector<HTMLElement>("[data-complex-count]");
     const statusMessage = document.querySelector<HTMLElement>("[data-complex-status-message]");
     const overviewStatusMessage = document.querySelector<HTMLElement>("[data-complex-overview-status]");
+    const comparisonFormat = document.querySelector<HTMLElement>("[data-comparison-format]");
     const formTitle = document.querySelector<HTMLElement>("[data-complex-form-title]");
     let resource: AdminResource<ComplexContent[]> | null = null;
     let overviewResource: AdminResource<ComplexOverview> | null = null;
@@ -95,13 +103,22 @@ import { complexes } from "../../../lib/complexes";
     const overviewDirtyGuard = guardAdminFormChanges(overviewForm);
     const field = (name: string) => form?.elements.namedItem(name) as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null;
     const overviewField = (name: string) => overviewForm?.elements.namedItem(name) as HTMLInputElement | HTMLTextAreaElement | null;
-    const splitLines = (value: string) => value.split("\n").map((line) => line.trim()).filter(Boolean);
+    const splitLines = splitAdminLines;
     const splitParts = (line: string) => line.split("|").map((part) => part.trim());
     const formatSources = (sources: ComplexSource[]) => sources.map((source) => [source.id, source.publisher, source.label, source.kind, source.checkedAt, source.url, source.note ?? ""].join(" | ")).join("\n");
     const parseSources = (value: string) => splitLines(value).map((line) => {
       const [id = "", publisher = "", label = "", kind = "", checkedAt = "", url = "", ...note] = splitParts(line);
       return { id, publisher, label, kind: kind as ComplexSource["kind"], checkedAt, url, ...(note.join(" | ").trim() ? { note: note.join(" | ").trim() } : {}) };
     });
+
+    const updateComparisonFormat = () => {
+      if (!comparisonFormat) return;
+      const slugs = parseComplexSlugLines(overviewField("comparisonComplexSlugs")?.value ?? "");
+      const labels = slugs.map((slug) => resource?.data.find((complex) => complex.slug === slug)?.name ?? slug);
+      comparisonFormat.textContent = labels.length > 0
+        ? `항목 | ${labels.join(" 값 | ")} 값 형식으로 입력합니다.`
+        : "비교 대상 순서에 맞춰 항목과 값을 입력합니다.";
+    };
 
     const renderOverview = () => {
       if (!overviewResource) return;
@@ -111,15 +128,18 @@ import { complexes } from "../../../lib/complexes";
         title: overview.title,
         description: overview.description,
         note: overview.note,
+        featuredComplexSlugs: overview.featuredComplexSlugs.join("\n"),
+        comparisonComplexSlugs: overview.comparisonComplexSlugs.join("\n"),
         stats: overview.stats.map((item) => [item.label, item.value, item.description].join(" | ")).join("\n"),
         reasons: overview.reasons.map((item) => [item.title, item.description].join(" | ")).join("\n"),
-        comparisonRows: overview.comparisonRows.map((item) => [item.label, item.values["leaders-city-4"] ?? "", item.values["leaders-city-5"] ?? ""].join(" | ")).join("\n"),
+        comparisonRows: formatComplexComparisonRows(overview.comparisonRows, overview.comparisonComplexSlugs),
         sharedCheckpoints: overview.sharedCheckpoints.map((item) => [item.title, item.description].join(" | ")).join("\n"),
         relatedContentIds: overview.relatedContentIds.join("\n"),
         sources: formatSources(overview.sources),
         confirmedAt: overview.confirmedAt,
       };
       Object.entries(values).forEach(([name, value]) => { if (overviewField(name)) overviewField(name)!.value = value; });
+      updateComparisonFormat();
       overviewDirtyGuard.markSaved();
     };
 
@@ -147,7 +167,11 @@ import { complexes } from "../../../lib/complexes";
         eyebrow: complex.eyebrow,
         mark: complex.mark,
         name: complex.name,
+        aliases: complex.aliases.join("\n"),
         status: complex.status,
+        seoTitle: complex.seo.title,
+        seoDescription: complex.seo.description,
+        unitDataNote: complex.unitDataNote ?? "",
         summary: complex.summary,
         introTitle: complex.introTitle,
         introduction: complex.introduction.join("\n\n"),
@@ -197,18 +221,19 @@ import { complexes } from "../../../lib/complexes";
       try {
         const value = (name: string) => overviewField(name)?.value.trim() ?? "";
         const rows = (name: string) => splitLines(value(name)).map(splitParts);
+        const featuredComplexSlugs = parseComplexSlugLines(value("featuredComplexSlugs"));
+        const comparisonComplexSlugs = parseComplexSlugLines(value("comparisonComplexSlugs"));
         const next: ComplexOverview = {
           eyebrow: value("eyebrow"),
           title: value("title"),
           description: value("description"),
           note: value("note"),
           confirmedAt: value("confirmedAt"),
+          featuredComplexSlugs,
+          comparisonComplexSlugs,
           stats: rows("stats").map(([label = "", itemValue = "", ...description]) => ({ label, value: itemValue, description: description.join(" | ").trim() })),
           reasons: rows("reasons").map(([title = "", ...description]) => ({ title, description: description.join(" | ").trim() })),
-          comparisonRows: rows("comparisonRows").map(([label = "", leadersCity4 = "", ...leadersCity5]) => ({
-            label,
-            values: { "leaders-city-4": leadersCity4, "leaders-city-5": leadersCity5.join(" | ").trim() },
-          })),
+          comparisonRows: parseComplexComparisonRows(value("comparisonRows"), comparisonComplexSlugs),
           sharedCheckpoints: rows("sharedCheckpoints").map(([title = "", ...description]) => ({ title, description: description.join(" | ").trim() })),
           relatedContentIds: splitLines(value("relatedContentIds")),
           sources: parseSources(value("sources")),
@@ -216,7 +241,7 @@ import { complexes } from "../../../lib/complexes";
         const confirmed = await reviewAdminContentChange({
           changes: [{ resource: "complexes-overview", sha: overviewResource.sha, data: next }],
           beforeByResource: { "complexes-overview": overviewResource.data },
-          impactPages: ["리더스시티 전체 안내", "4·5블록 비교", "단지 목록"],
+          impactPages: ["홈 주요 단지", "단지 전체 안내", "단지 비교표", "단지 목록", "sitemap / IndexNow"],
         });
         if (!confirmed) {
           setAdminFormStatus(overviewStatusMessage, "저장을 취소했습니다. 입력한 내용은 그대로 유지됩니다.");
@@ -234,6 +259,7 @@ import { complexes } from "../../../lib/complexes";
         if (submit) submit.disabled = false;
       }
     });
+    overviewField("comparisonComplexSlugs")?.addEventListener("input", updateComparisonFormat);
     list?.addEventListener("click", (event) => { const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-complex-edit]"); if (button?.dataset.complexEdit) edit(button.dataset.complexEdit); });
     document.querySelector("[data-complex-new]")?.addEventListener("click", resetForm);
     form?.addEventListener("submit", async (event) => {
@@ -259,6 +285,12 @@ import { complexes } from "../../../lib/complexes";
           eyebrow: value("eyebrow"),
           mark: value("mark"),
           name: value("name"),
+          aliases: splitLines(value("aliases")),
+          seo: {
+            title: value("seoTitle"),
+            description: value("seoDescription"),
+          },
+          unitDataNote: value("unitDataNote") || null,
           status: value("status") as ComplexContent["status"],
           summary: value("summary"),
           introTitle: value("introTitle"),
@@ -298,7 +330,7 @@ import { complexes } from "../../../lib/complexes";
         const confirmed = await reviewAdminContentChange({
           changes: [{ resource: "complexes", sha: resource.sha, data: next }],
           beforeByResource: { complexes: resource.data },
-          impactPages: ["단지 목록", "단지 상세", "리더스시티 비교"],
+          impactPages: ["홈 주요 단지", "단지 목록", "단지 상세", "매물 단지 필터", "단지 비교표", "sitemap / IndexNow"],
         });
         if (!confirmed) {
           setAdminFormStatus(statusMessage, "저장을 취소했습니다. 입력한 내용은 그대로 유지됩니다.");
