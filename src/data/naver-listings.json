@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-09-02",
+  "checkedAt": "2026-09-04",
   "items": [
     {
       "id": "2645736151",
@@ -506,20 +506,6 @@
       "url": "https://fin.land.naver.com/articles/2641887520"
     },
     {
-      "id": "2641424495",
-      "title": "신흥SK뷰",
-      "propertyType": "아파트",
-      "tradeType": "sale",
-      "priceLabel": "4억 3,000",
-      "areaLabel": "80㎡ · 전용 59㎡",
-      "floorLabel": "고/33층",
-      "direction": "남동향",
-      "summary": "조합원 세대로 식장산 조망이 한눈에 펼쳐진 집입니다",
-      "registeredAt": "2026-08-03",
-      "source": "네이버페이 부동산",
-      "url": "https://fin.land.naver.com/articles/2641424495"
-    },
-    {
       "id": "2640120487",
       "title": "천동홍익 1동",
       "propertyType": "아파트",
@@ -700,6 +686,20 @@
       "registeredAt": "2026-09-01",
       "source": "네이버페이 부동산",
       "url": "https://fin.land.naver.com/articles/2647183282"
+    },
+    {
+      "id": "2647430516",
+      "title": "신흥SK뷰",
+      "propertyType": "아파트",
+      "tradeType": "sale",
+      "priceLabel": "4억 3,000",
+      "areaLabel": "80㎡ · 전용 59㎡",
+      "floorLabel": "고/33층",
+      "direction": "남동향",
+      "summary": "조합원 세대로 식장산 조망이 한눈에 펼쳐진 집입니다",
+      "registeredAt": "2026-09-03",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2647430516"
     }
   ]
 }
