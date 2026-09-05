@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-09-04",
+  "checkedAt": "2026-09-06",
   "items": [
     {
       "id": "2645736151",
@@ -272,7 +272,7 @@
       "title": "대전르에브스위첸2단지",
       "propertyType": "아파트분양권",
       "tradeType": "sale",
-      "priceLabel": "4억 1,390",
+      "priceLabel": "4억 890",
       "areaLabel": "80㎡ · 전용 59㎡",
       "floorLabel": "고/27층",
       "direction": "남동향",
@@ -434,76 +434,6 @@
       "registeredAt": "2026-08-08",
       "source": "네이버페이 부동산",
       "url": "https://fin.land.naver.com/articles/2642586993"
-    },
-    {
-      "id": "2642028518",
-      "title": "리더스시티 4블록",
-      "propertyType": "아파트",
-      "tradeType": "sale",
-      "priceLabel": "5억 5,000",
-      "areaLabel": "111㎡ · 전용 84㎡",
-      "floorLabel": "저/29층",
-      "direction": "남동향",
-      "summary": "안정적인 저층으로 풀옵션된 집이에요. 상가, 버스정류장...",
-      "registeredAt": "2026-08-06",
-      "source": "네이버페이 부동산",
-      "url": "https://fin.land.naver.com/articles/2642028518"
-    },
-    {
-      "id": "2642053993",
-      "title": "대전롯데캐슬더퍼스트",
-      "propertyType": "아파트분양권",
-      "tradeType": "sale",
-      "priceLabel": "4억 2,660",
-      "areaLabel": "82㎡ · 전용 59㎡",
-      "floorLabel": "중/33층",
-      "direction": "동향",
-      "summary": "앞에 가리는 것없는 탁트인 조망",
-      "registeredAt": "2026-08-06",
-      "source": "네이버페이 부동산",
-      "url": "https://fin.land.naver.com/articles/2642053993"
-    },
-    {
-      "id": "2642028597",
-      "title": "휴먼시아2단지",
-      "propertyType": "아파트",
-      "tradeType": "sale",
-      "priceLabel": "2억 8,000",
-      "areaLabel": "111㎡ · 전용 84㎡",
-      "floorLabel": "12/22층",
-      "direction": "남서향",
-      "summary": "주인거주 깨끗하게 관리된 집 조망 좋아요",
-      "registeredAt": "2026-08-06",
-      "source": "네이버페이 부동산",
-      "url": "https://fin.land.naver.com/articles/2642028597"
-    },
-    {
-      "id": "2641889130",
-      "title": "대전롯데캐슬더퍼스트",
-      "propertyType": "아파트분양권",
-      "tradeType": "sale",
-      "priceLabel": "4억 1,490",
-      "areaLabel": "81㎡ · 전용 59㎡",
-      "floorLabel": "3/25층",
-      "direction": "남향",
-      "summary": "단지조망 예쁜집 천변뷰 나와요",
-      "registeredAt": "2026-08-05",
-      "source": "네이버페이 부동산",
-      "url": "https://fin.land.naver.com/articles/2641889130"
-    },
-    {
-      "id": "2641887520",
-      "title": "신흥SK뷰",
-      "propertyType": "아파트",
-      "tradeType": "sale",
-      "priceLabel": "6억 3,000",
-      "areaLabel": "113㎡ · 전용 84㎡",
-      "floorLabel": "중/33층",
-      "direction": "남서향",
-      "summary": "옵션많은 조합원세대 매물 보문산 전망이 예쁜 집입니다",
-      "registeredAt": "2026-08-05",
-      "source": "네이버페이 부동산",
-      "url": "https://fin.land.naver.com/articles/2641887520"
     },
     {
       "id": "2640120487",
@@ -700,6 +630,20 @@
       "registeredAt": "2026-09-03",
       "source": "네이버페이 부동산",
       "url": "https://fin.land.naver.com/articles/2647430516"
+    },
+    {
+      "id": "2647917749",
+      "title": "신흥SK뷰",
+      "propertyType": "아파트",
+      "tradeType": "sale",
+      "priceLabel": "6억 3,000",
+      "areaLabel": "113㎡ · 전용 84㎡",
+      "floorLabel": "중/33층",
+      "direction": "남서향",
+      "summary": "옵션많은 조합원세대 매물 보문산 전망이 예쁜 집입니다",
+      "registeredAt": "2026-09-05",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2647917749"
     }
   ]
 }
