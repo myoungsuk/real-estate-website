@@ -188,9 +188,10 @@ export async function runExternalContentSync({
   const absoluteRoot = resolve(rootDir);
   const contentPath = join(absoluteRoot, EXTERNAL_LINKS_PATH);
   const healthPath = join(absoluteRoot, HEALTH_PATH);
-  const [{ raw: currentRaw, value: current }, { value: health }] = await Promise.all([
+  const [{ raw: currentRaw, value: current }, { value: health }, { value: office }] = await Promise.all([
     readJson(contentPath, EXTERNAL_LINKS_PATH),
     readJson(healthPath, HEALTH_PATH),
+    readJson(join(absoluteRoot, "src", "data", "office.json"), "src/data/office.json"),
   ]);
 
   const [blogSource, youtubeSource] = await Promise.all([
@@ -230,7 +231,7 @@ export async function runExternalContentSync({
   const newItems = prepared.map(({ item }) => item);
   const assets = prepared.map(({ asset }) => asset).filter(Boolean);
   const nextItems = newItems.length > 0 ? mergeExternalContentsPreservingOrder(current, newItems) : current;
-  validateMergedExternalContents(nextItems);
+  validateMergedExternalContents(nextItems, { office });
   const nextRaw = newItems.length > 0 ? `${JSON.stringify(nextItems, null, 2)}\n` : currentRaw;
   const contentChanged = nextRaw !== currentRaw;
 

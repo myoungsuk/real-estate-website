@@ -1,6 +1,6 @@
 import { XMLParser } from "fast-xml-parser";
 import { SyntaxValidator } from "fast-xml-validator";
-import { validateExternalLinks } from "../content-validation.mjs";
+import { findBannedKeys, findSensitiveStrings, findUnexpectedKeys, validateExternalLinks } from "../content-validation.mjs";
 import { ExternalSyncTrustError } from "./errors.mjs";
 
 export const NAVER_BLOG_ID = "p5468300";
@@ -381,8 +381,13 @@ export function mergeExternalContentsPreservingOrder(current, additions) {
   return merged;
 }
 
-export function validateMergedExternalContents(items) {
-  const errors = validateExternalLinks(items);
+export function validateMergedExternalContents(items, { office = null } = {}) {
+  const errors = [
+    ...validateExternalLinks(items),
+    ...findUnexpectedKeys("externalLinks", items),
+    ...findBannedKeys(items, "externalLinks"),
+    ...findSensitiveStrings(items, { path: "externalLinks", office }),
+  ];
   if (errors.length > 0) throw trustError(`동기화 결과 검증 실패:\n${errors.join("\n")}`);
 }
 

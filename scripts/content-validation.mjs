@@ -455,6 +455,13 @@ function getApprovedSensitiveValues(office) {
   return { mobileNumbers, emails, unitLabels };
 }
 
+function isUnsoldHousingCount(value, match) {
+  // 천 단위 표기와 바로 앞의 통계 문맥을 함께 확인하고, 다른 호수는 계속 검사한다.
+  return /^\d{1,3}(?:,\d{3})+\s*호$/u.test(match[0])
+    && /미분양\s+물량\s+(?:\d{4}년\s+\d{1,2}월\s+)?$/u.test(value.slice(0, match.index))
+    && !value.startsWith("실", match.index + match[0].length);
+}
+
 function findSensitiveStringsRecursive(value, path, errors, approved) {
   if (Array.isArray(value)) {
     value.forEach((item, index) => findSensitiveStringsRecursive(item, `${path}[${index}]`, errors, approved));
@@ -478,7 +485,8 @@ function findSensitiveStringsRecursive(value, path, errors, approved) {
       break;
     }
   }
-  for (const match of value.matchAll(/(?<!\d)\d{1,4}\s*호(?!선|점|기|차)/gu)) {
+  for (const match of value.matchAll(/(?<!\d)(?:\d{1,3}(?:,\d{3})+|\d{1,4})\s*호(?!선|점|기|차)/gu)) {
+    if (isUnsoldHousingCount(value, match)) continue;
     if (!approved.unitLabels.has(match[0].replace(/\s/gu, ""))) {
       errors.push(`${path}: 공개 승인되지 않은 정확한 호수 패턴이 있습니다.`);
       break;

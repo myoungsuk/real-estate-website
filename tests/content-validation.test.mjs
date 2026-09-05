@@ -86,6 +86,25 @@ test("전역 민감 문자열 검사는 승인된 사무소 공개값만 예외�
   assert.match(errors, /JWT/);
 });
 
+test("미분양 물량의 천 단위 수량은 허용하고 실제 호수와 다른 민감정보는 차단한다", () => {
+  for (const text of [
+    "대전 미분양 물량 2026년 7월 1,866호｜중구 쏠림이 핵심",
+    "미분양 물량 12,345호",
+  ]) {
+    assert.deepEqual(findSensitiveStrings({ text }), [], text);
+  }
+  for (const text of [
+    "1203호", "101동 1203호", "1,203호", "101동 1,203호",
+    "미분양 물량 1,866호, 매물 1203호", "미분양 물량 101동 1,203호",
+    "미분양 물량 1203호", "미분양 물량 1,23호", "미분양 물량 2026년 7월 1,866호실",
+  ]) {
+    assert.match(findSensitiveStrings({ text }).join("\n"), /정확한 호수/u, text);
+  }
+  assert.match(findSensitiveStrings({ text: "미분양 물량 1,866호 문의 010-1111-2222" }).join("\n"), /휴대전화번호/u);
+  assert.match(findSensitiveStrings({ text: "미분양 물량 1,866호 문의 customer@example.net" }).join("\n"), /이메일/u);
+  assert.deepEqual(findSensitiveStrings({ text: "1호선 2호점 3호기 4호차" }), []);
+});
+
 test("공개 날짜는 실제 달력 날짜이며 오늘보다 늦을 수 없다", () => {
   assert.match(validateListing({ ...base, confirmedAt: "2026-02-30" }).join("\n"), /confirmedAt/);
   assert.match(validateListing({ ...base, publishedAt: "2999-01-01" }).join("\n"), /publishedAt/);

@@ -16,6 +16,7 @@ import {
   parseYouTubeFeed,
   planNewExternalContent,
   shouldRefreshKeepalive,
+  validateMergedExternalContents,
 } from "../scripts/sync/external-content.mjs";
 
 const channelId = "UCuOZDnM5vxOZELDgu-y-hNg";
@@ -30,12 +31,12 @@ const [externalContentComponent, syncWorkflow] = await Promise.all([
   readFile(new URL("../.github/workflows/sync-external-content.yml", import.meta.url), "utf8"),
 ]);
 
-function fixtureFetcher({ imageFailure = false, naverStatus = 200, youtubeStatus = 200, youtubeXml = youtubeAtom } = {}) {
+function fixtureFetcher({ imageFailure = false, naverStatus = 200, youtubeStatus = 200, naverXml = naverRss, youtubeXml = youtubeAtom } = {}) {
   return async (value) => {
     const url = String(value);
     if (url === "https://rss.blog.naver.com/p5468300.xml") {
       if (naverStatus !== 200) return new Response("naver unavailable", { status: naverStatus });
-      return new Response(naverRss, { headers: { "Content-Type": "application/rss+xml; charset=utf-8" } });
+      return new Response(naverXml, { headers: { "Content-Type": "application/rss+xml; charset=utf-8" } });
     }
     if (url === `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`) {
       if (youtubeStatus !== 200) return new Response("youtube unavailable", { status: youtubeStatus });
@@ -55,6 +56,9 @@ async function makeSyncRoot(t, { current = [], lastKeepaliveAt = "2026-08-26" } 
   await mkdir(join(root, "src", "data"), { recursive: true });
   await mkdir(join(root, ".github"), { recursive: true });
   await writeFile(join(root, "src", "data", "external-links.json"), `${JSON.stringify(current, null, 2)}\n`, "utf8");
+  await writeFile(join(root, "src", "data", "office.json"), JSON.stringify({
+    mobile: "010-2790-8675", email: "office@example.com", address: "근린생활시설 105호",
+  }), "utf8");
   await writeFile(join(root, ".github", "automation-health.json"), `${JSON.stringify({ lastKeepaliveAt }, null, 2)}\n`, "utf8");
   return root;
 }
@@ -168,6 +172,59 @@ test("dry-run은 신규 항목과 썸네일을 검증해도 파일을 변경하�
   assert.deepEqual({ blog: result.blogNew, youtube: result.youtubeNew, assets: result.assetCount }, { blog: 1, youtube: 1, assets: 2 });
   assert.equal(await readFile(contentPath, "utf8"), before);
   await assert.rejects(() => readdir(join(root, "public")), /ENOENT/u);
+});
+
+test("동기화 결과는 공개 스키마와 금지 필드·민감 문자열을 함께 검증한다", () => {
+  const item = buildExternalContentItem(parseNaverBlogFeed(naverRss)[0], null);
+  const office = { mobile: "010-2790-8675", email: "office@example.com", address: "근린생활시설 105호" };
+  assert.doesNotThrow(() => validateMergedExternalContents([
+    { ...item, summary: "문의 010-2790-8675 office@example.com 105호" },
+  ], { office }));
+  for (const candidate of [
+    { ...item, title: "101동 1203호" },
+    { ...item, summary: "문의 010-1111-2222" },
+    { ...item, thumbnail: { src: "/images/blog/test.webp", alt: "customer@example.net" } },
+    { ...item, privateNote: "내부 메모" },
+    { ...item, thumbnail: { src: "/images/blog/test.webp", alt: "사진", extra: "추가 필드" } },
+  ]) {
+    assert.throws(() => validateMergedExternalContents([candidate], { office }), /동기화 결과 검증 실패/u);
+  }
+});
+
+test("미분양 통계 RSS는 저장하고 민감정보 RSS는 콘텐츠·썸네일 저장 전에 거부한다", async (t) => {
+  for (const [title, allowed] of [
+    ["대전 미분양 물량 2026년 7월 1,866호｜중구 쏠림이 핵심", true],
+    ["공식 문의 010-2790-8675 office@example.com 105호", true],
+    ["미분양 물량 1,866호, 101동 1203호", false],
+    ["미분양 물량 1,866호 문의 010-1111-2222", false],
+  ]) {
+    await t.test(title, async (t) => {
+      const root = await makeSyncRoot(t);
+      const contentPath = join(root, "src", "data", "external-links.json");
+      const healthPath = join(root, ".github", "automation-health.json");
+      const before = await readFile(contentPath, "utf8");
+      const healthBefore = await readFile(healthPath, "utf8");
+      const sync = () => runExternalContentSync({
+        rootDir: root,
+        fetcher: fixtureFetcher({ naverXml: naverRss.replace("새 블로그 글 & 확인사항", title) }),
+        fetchAttempts: 1,
+        youtubeChannelId: channelId,
+        logger: { log() {}, warn() {} },
+      });
+      if (allowed) {
+        assert.equal((await sync()).blogNew, 1);
+        const saved = JSON.parse(await readFile(contentPath, "utf8")).find((item) => item.type === "blog");
+        assert.equal(saved.title, title);
+        assert.ok(saved.summary.includes(title));
+        assert.ok(saved.thumbnail.alt.includes(title));
+      } else {
+        await assert.rejects(sync, /동기화 결과 검증 실패/u);
+        assert.equal(await readFile(contentPath, "utf8"), before);
+        await assert.rejects(() => readdir(join(root, "public")), /ENOENT/u);
+      }
+      assert.equal(await readFile(healthPath, "utf8"), healthBefore);
+    });
+  }
 });
 
 test("YouTube Atom 404는 세 번 재시도한 뒤 일시 장애로 분류한다", async () => {
