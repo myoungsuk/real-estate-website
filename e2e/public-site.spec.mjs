@@ -175,6 +175,9 @@ test("360px 매물 화면에서 조건 패널과 선택 기능이 가로 넘침 
 test("신흥 SK뷰 상세와 매물 필터가 연결되고 주요 화면 폭에서 넘치지 않는다", async ({ page }) => {
   const assertNoBrowserErrors = failOnBrowserErrors(page);
   await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("/properties/");
+  const sinheungListingIds = await page.locator('[data-naver-listing-card][data-complex="sinheung-sk-view"]')
+    .evaluateAll((cards) => cards.map((card) => card.getAttribute("data-listing-id")).sort());
   await page.goto("/");
 
   const homeComplexLinks = page.locator(".home-quick-nav__links--complex a");
@@ -197,7 +200,11 @@ test("신흥 SK뷰 상세와 매물 필터가 연결되고 주요 화면 폭에�
   await expect(page).toHaveURL(/\/complexes\/sinheung-sk-view\/$/u);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("신흥 SK뷰");
   await expect(page.getByRole("img", { name: "대전 동구 신흥 SK뷰 야간 출입구와 아파트 전경" })).toBeVisible();
-  await expect(page.getByRole("heading", { level: 2, name: "현재 등록된 신흥 SK뷰 매물 2건" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: `현재 등록된 신흥 SK뷰 매물 ${sinheungListingIds.length}건` })).toBeVisible();
+  await expect(page.locator("[data-naver-listing-card]")).toHaveCount(Math.min(sinheungListingIds.length, 3));
+  if (sinheungListingIds.length === 0) {
+    await expect(page.getByRole("heading", { name: "현재 공개 목록에 신흥 SK뷰 매물이 없습니다" })).toBeVisible();
+  }
   await expect(page.getByRole("heading", { level: 2, name: "신흥 SK뷰 한눈에 보기" })).toBeVisible();
   await expect(page.getByRole("heading", { level: 2, name: "신흥 SK뷰 핵심 포인트" })).toBeVisible();
   await expect(page.getByText("LIVING GUIDE", { exact: true })).toHaveCount(0);
@@ -212,7 +219,10 @@ test("신흥 SK뷰 상세와 매물 필터가 연결되고 주요 화면 폭에�
   await page.getByRole("link", { name: "신흥 SK뷰 현재 매물 보기" }).click();
   await expect(page).toHaveURL(/\/properties\/\?complex=sinheung-sk-view$/u);
   await expect(page.locator("[data-listing-filter]").getByLabel("단지")).toHaveValue("sinheung-sk-view");
-  await expect(page.locator("[data-naver-listing-card]:visible")).toHaveCount(2);
+  await expect(page.locator("[data-naver-listing-card]:visible")).toHaveCount(sinheungListingIds.length);
+  await expect(page.locator("[data-result-count]")).toHaveText(`네이버 등록 매물 ${sinheungListingIds.length}건`);
+  expect(await page.locator("[data-naver-listing-card]:visible")
+    .evaluateAll((cards) => cards.map((card) => card.getAttribute("data-listing-id")).sort())).toEqual(sinheungListingIds);
 
   await page.goto("/office/");
   await expect(page.getByText("리더스시티 4·5블록 · 신흥 SK뷰", { exact: true })).toBeVisible();

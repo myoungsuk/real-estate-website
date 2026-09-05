@@ -129,26 +129,28 @@ test("신흥 SK뷰 공개 데이터는 사진·공식 수치·strict schema Gate
   assert.deepEqual(validateComplexes(publicationCandidate, externalLinks), []);
 });
 
-test("실제 신흥SK뷰 매물 2건을 연결하고 빈 배열·3건 미리보기를 안전하게 처리한다", async () => {
-  const [complexes, listingData, detailTemplate] = await Promise.all([
+test("고정 매물 fixture로 단지 연결과 매물 추가·삭제·빈 배열·3건 미리보기를 검증한다", async () => {
+  const [complexes, detailTemplate] = await Promise.all([
     readJson("../src/data/complexes.json"),
-    readJson("../src/data/naver-listings.json"),
     readFile(new URL("../src/pages/complexes/[slug].astro", import.meta.url), "utf8"),
   ]);
   const matcher = (title) => matchComplexByListingTitle(title, complexes);
-  const related = selectComplexListings(listingData.items, "sinheung-sk-view", matcher);
-  const counts = Object.fromEntries(complexes.map((complex) => [
-    complex.slug,
-    selectComplexListings(listingData.items, complex.slug, matcher).length,
-  ]));
-  const unmatchedKnownTitles = listingData.items
-    .filter((listing) => /리더스시티|신흥.*뷰/iu.test(listing.title) && !matcher(listing.title))
-    .map((listing) => listing.title);
+  const listings = [
+    { id: "leaders-4", title: "리더스시티 4블록 401동" },
+    { id: "leaders-5", title: "리더스시티5블록 501동" },
+    { id: "sinheung-1", title: "신흥SK뷰" },
+    { id: "sinheung-2", title: "신흥에스케이뷰 101동" },
+    { id: "unmatched", title: "다른 단지" },
+  ];
+  const selectedIds = (items, slug) => selectComplexListings(items, slug, matcher).map((listing) => listing.id);
 
-  assert.equal(related.length, 2);
-  assert.ok(related.every((listing) => listing.title === "신흥SK뷰"));
-  assert.deepEqual(counts, { "leaders-city-4": 11, "leaders-city-5": 6, "sinheung-sk-view": 2 });
-  assert.deepEqual(unmatchedKnownTitles, []);
+  assert.deepEqual(selectedIds(listings, "leaders-city-4"), ["leaders-4"]);
+  assert.deepEqual(selectedIds(listings, "leaders-city-5"), ["leaders-5"]);
+  assert.deepEqual(selectedIds(listings, "sinheung-sk-view"), ["sinheung-1", "sinheung-2"]);
+  assert.deepEqual(selectedIds(listings.filter((listing) => listing.id !== "leaders-4"), "leaders-city-4"), []);
+  assert.deepEqual(selectedIds(listings.filter((listing) => listing.id !== "sinheung-1"), "sinheung-sk-view"), ["sinheung-2"]);
+  assert.deepEqual(selectedIds([...listings, { id: "sinheung-3", title: "신흥 SK뷰 102동" }], "sinheung-sk-view"), ["sinheung-1", "sinheung-2", "sinheung-3"]);
+  assert.deepEqual(selectedIds([], "sinheung-sk-view"), []);
   assert.deepEqual(createComplexListingPreview([], 3), { items: [], total: 0, hasMore: false });
   assert.deepEqual(createComplexListingPreview([1, 2, 3, 4], 3), { items: [1, 2, 3], total: 4, hasMore: true });
   assert.match(detailTemplate, /현재 공개 목록에 \{complex\.name\} 매물이 없습니다/);
@@ -158,6 +160,17 @@ test("실제 신흥SK뷰 매물 2건을 연결하고 빈 배열·3건 미리보�
   assert.match(detailTemplate, /sinheung-sk-view-playground\.webp/);
   assert.match(detailTemplate, /단지시설 직접 촬영 사진/);
   assert.match(detailTemplate, /loading="lazy"/);
+});
+
+test("현재 운영 매물의 알려진 단지명은 매물 건수와 무관하게 연결된다", async () => {
+  const [complexes, listingData] = await Promise.all([
+    readJson("../src/data/complexes.json"),
+    readJson("../src/data/naver-listings.json"),
+  ]);
+  const unmatchedKnownTitles = listingData.items
+    .filter((listing) => /리더스시티|신흥.*뷰/iu.test(listing.title) && !matchComplexByListingTitle(listing.title, complexes))
+    .map((listing) => listing.title);
+  assert.deepEqual(unmatchedKnownTitles, []);
 });
 
 test("alias 충돌·공개 SEO 누락·비교 범위 오염을 검증 단계에서 차단한다", async () => {
