@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-09-06",
+  "checkedAt": "2026-09-08",
   "items": [
     {
       "id": "2645736151",
@@ -408,34 +408,6 @@
       "url": "https://fin.land.naver.com/articles/2642686555"
     },
     {
-      "id": "2642581090",
-      "title": "리더스시티 4블록",
-      "propertyType": "아파트",
-      "tradeType": "sale",
-      "priceLabel": "4억 9,000",
-      "areaLabel": "99㎡ · 전용 74㎡",
-      "floorLabel": "고/29층",
-      "direction": "남동향",
-      "summary": "초등학교 전망이 탁 트였어요. 시스템에어컨5대외 옵션 설치",
-      "registeredAt": "2026-08-08",
-      "source": "네이버페이 부동산",
-      "url": "https://fin.land.naver.com/articles/2642581090"
-    },
-    {
-      "id": "2642586993",
-      "title": "대전롯데캐슬더퍼스트",
-      "propertyType": "아파트분양권",
-      "tradeType": "sale",
-      "priceLabel": "4억 3,790",
-      "areaLabel": "81㎡ · 전용 59㎡",
-      "floorLabel": "고/25층",
-      "direction": "남향",
-      "summary": "59A 천변뷰 나와요",
-      "registeredAt": "2026-08-08",
-      "source": "네이버페이 부동산",
-      "url": "https://fin.land.naver.com/articles/2642586993"
-    },
-    {
       "id": "2640120487",
       "title": "천동홍익 1동",
       "propertyType": "아파트",
@@ -562,20 +534,6 @@
       "url": "https://fin.land.naver.com/articles/2646435529"
     },
     {
-      "id": "2646432132",
-      "title": "리더스시티 4블록",
-      "propertyType": "아파트",
-      "tradeType": "sale",
-      "priceLabel": "4억 7,500",
-      "areaLabel": "99㎡ · 전용 74㎡",
-      "floorLabel": "20/29층",
-      "direction": "남동향",
-      "summary": "남동향 전망좋은집 시스템에어컨 5대, 중문등 설치",
-      "registeredAt": "2026-08-28",
-      "source": "네이버페이 부동산",
-      "url": "https://fin.land.naver.com/articles/2646432132"
-    },
-    {
       "id": "2646809841",
       "title": "리더스시티 4블록",
       "propertyType": "아파트",
@@ -644,6 +602,76 @@
       "registeredAt": "2026-09-05",
       "source": "네이버페이 부동산",
       "url": "https://fin.land.naver.com/articles/2647917749"
+    },
+    {
+      "id": "2648202872",
+      "title": "대전롯데캐슬더퍼스트",
+      "propertyType": "아파트분양권",
+      "tradeType": "sale",
+      "priceLabel": "4억 1,490",
+      "areaLabel": "81㎡ · 전용 59㎡",
+      "floorLabel": "3/25층",
+      "direction": "남향",
+      "summary": "단지조망 예쁜집 천변뷰 나와요",
+      "registeredAt": "2026-09-07",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2648202872"
+    },
+    {
+      "id": "2648209517",
+      "title": "리더스시티 4블록",
+      "propertyType": "아파트",
+      "tradeType": "sale",
+      "priceLabel": "5억 5,000",
+      "areaLabel": "111㎡ · 전용 84㎡",
+      "floorLabel": "저/29층",
+      "direction": "남동향",
+      "summary": "안정적인 저층으로 풀옵션된 집이에요. 상가, 버스정류장...",
+      "registeredAt": "2026-09-07",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2648209517"
+    },
+    {
+      "id": "2648213889",
+      "title": "휴먼시아2단지",
+      "propertyType": "아파트",
+      "tradeType": "sale",
+      "priceLabel": "2억 6,800",
+      "areaLabel": "111㎡ · 전용 84㎡",
+      "floorLabel": "12/22층",
+      "direction": "남서향",
+      "summary": "주인거주 깨끗하게 관리된 집 조망 좋아요",
+      "registeredAt": "2026-09-07",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2648213889"
+    },
+    {
+      "id": "2648204828",
+      "title": "대전롯데캐슬더퍼스트",
+      "propertyType": "아파트분양권",
+      "tradeType": "sale",
+      "priceLabel": "4억 2,660",
+      "areaLabel": "82㎡ · 전용 59㎡",
+      "floorLabel": "중/33층",
+      "direction": "동향",
+      "summary": "앞에 가리는 것없는 탁트인 조망",
+      "registeredAt": "2026-09-07",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2648204828"
+    },
+    {
+      "id": "2648201398",
+      "title": "리더스시티 4블록",
+      "propertyType": "아파트",
+      "tradeType": "sale",
+      "priceLabel": "4억 7,500",
+      "areaLabel": "99㎡ · 전용 74㎡",
+      "floorLabel": "20/29층",
+      "direction": "남동향",
+      "summary": "남동향 전망좋은집 시스템에어컨 5대, 중문등 설치",
+      "registeredAt": "2026-09-07",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2648201398"
     }
   ]
 }
