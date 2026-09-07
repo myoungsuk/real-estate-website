@@ -12,6 +12,18 @@
 
 ## 사전 확인
 
+### 2026-09-07 색인 제외 알림 점검
+
+- 운영 사이트의 sitemap에 포함된 공개 URL 15개를 Googlebot User-Agent로 직접 조회했고, 모두 HTTP 200·`index,follow`·자기 URL canonical을 반환했다. `X-Robots-Tag` 색인 차단은 없고 `robots.txt`도 공개 경로를 허용한다.
+- `http://leaderscityhappy.com/`, `http://www.leaderscityhappy.com/`, `https://www.leaderscityhappy.com/`는 모두 대표 주소 `https://leaderscityhappy.com/`로 한 번에 301 이동한다. Search Console의 `리디렉션이 포함된 페이지` 3건은 정상적인 주소 통합이며 리디렉션을 제거하지 않는다.
+- `/properties/compare/`는 공개 매물 ID로 구성되는 비교 화면이므로 의도한 `noindex,follow`·`/properties/` canonical을 유지하고 sitemap에 넣지 않는다. 이 URL의 `NOINDEX` 제외도 수정 대상이 아니다.
+- `/location/`, `/reviews/`는 사용자 제공 Search Console 상세에서 `발견됨 - 현재 색인이 생성되지 않음`, 최종 크롤링 `해당사항 없음`으로 확인했다. 두 URL의 접근·색인 허용·canonical·sitemap은 정상이다. Google의 URL 검사에서 실제 URL 테스트 후 `색인 생성 요청`을 사용할 수 있으며, 요청 완료와 실제 색인은 별도로 확인한다.
+- `/reviews/`는 승인 후기가 없는 준비 상태다. 색인을 위해 후기를 만들어 넣지 않으며 승인 콘텐츠가 확보되면 갱신한다. 이번 점검에서 Search Console 계정 내 색인 요청은 실행하지 않았다.
+
+Google 공식 안내: [페이지 색인 생성 보고서](https://support.google.com/webmasters/answer/7440203?hl=ko). 의도한 리디렉션·noindex는 유지하며, 모든 발견 URL이 색인될 필요는 없다.
+
+### 공개 설정
+
 - Production `PUBLIC_SITE_URL`이 실제 도메인과 일치
 - Production `PUBLIC_ALLOW_INDEXING=true`
 - `/robots.txt`가 `Allow: /`와 실제 사이트맵 주소를 반환

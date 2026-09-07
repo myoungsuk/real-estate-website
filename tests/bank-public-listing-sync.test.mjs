@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { classifyBankSyncChanges } from "../scripts/check-bank-sync-worktree.mjs";
 import { fetchBankPublicSnapshot, runBankListingSync } from "../scripts/sync-bank-listings.mjs";
+import { validateListingReviewState } from "../src/lib/listing-review.mjs";
 import {
   BANK_OFFICE_PATH,
   mergeBankPublicPages,
@@ -233,6 +234,7 @@ test("dry-run은 두 공개 페이지만 읽고 파일을 변경하지 않는다
     fetchAttempts: 1,
     now: new Date("2026-08-26T16:00:00Z"),
     logger: { log() {} },
+    summaryPath: null,
   });
   assert.deepEqual({ public: result.publicCount, added: result.newCount, outside: result.outsideBankCount }, { public: 2, added: 1, outside: 1 });
   assert.equal(await readFile(join(root, "src", "data", "naver-listings.json"), "utf8"), beforeContent);
@@ -240,7 +242,7 @@ test("dry-run은 두 공개 페이지만 읽고 파일을 변경하지 않는다
   assert.equal(await readFile(join(root, ".github", "listing-review-state.json"), "utf8"), beforeReviewState);
 });
 
-test("정상 Bank 동기화는 공개 목록을 자동 종료하지 않고 재확인 lastSeenAt만 원자적으로 갱신한다", async (t) => {
+test("Bank 동기화는 다음 날 내용이 같아도 재확인일만 갱신하고 같은 날 재실행은 멱등적이다", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "bank-listing-review-test-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   await mkdir(join(root, "src", "data"), { recursive: true });
@@ -259,12 +261,14 @@ test("정상 Bank 동기화는 공개 목록을 자동 종료하지 않고 재�
   await writeFile(join(root, ".github", "bank-listing-sync-state.json"), `${JSON.stringify(emptyState(), null, 2)}\n`, "utf8");
   await writeFile(join(root, ".github", "listing-review-state.json"), `${JSON.stringify(reviewState, null, 2)}\n`, "utf8");
 
+  const summaryPath = join(root, "summary.md");
   const result = await runBankListingSync({
     rootDir: root,
     fetcher: fixtureFetcher(),
     fetchAttempts: 1,
-    now: new Date("2026-08-27T01:00:00Z"),
+    now: new Date("2026-08-26T15:10:00Z"),
     logger: { log() {} },
+    summaryPath,
   });
   const nextContent = JSON.parse(await readFile(join(root, "src", "data", "naver-listings.json"), "utf8"));
   const nextReview = JSON.parse(await readFile(join(root, ".github", "listing-review-state.json"), "utf8"));
@@ -277,6 +281,47 @@ test("정상 Bank 동기화는 공개 목록을 자동 종료하지 않고 재�
   });
   assert.equal(nextReview.items[secondCandidate.naverId].lastSeenAt, "2026-08-27");
   assert.equal(nextReview.items[manual.id].lastReviewedAt, "2026-08-20");
+
+  const contentPath = join(root, "src", "data", "naver-listings.json");
+  const bankStatePath = join(root, ".github", "bank-listing-sync-state.json");
+  const reviewPath = join(root, ".github", "listing-review-state.json");
+  const beforeContent = await readFile(contentPath, "utf8");
+  const beforeBankState = await readFile(bankStatePath, "utf8");
+  const beforeSummary = await readFile(summaryPath, "utf8");
+  assert.match(beforeSummary, /- Public listings: 2/u);
+
+  const rerun = (now) => runBankListingSync({
+    rootDir: root,
+    fetcher: fixtureFetcher(),
+    fetchAttempts: 1,
+    now: new Date(now),
+    logger: { log() {} },
+    summaryPath: null,
+  });
+  const sameDay = await rerun("2026-08-27T01:00:00Z");
+  assert.equal(sameDay.contentChanged, false);
+  assert.equal(sameDay.stateChanged, false);
+  assert.equal(sameDay.reviewStateChanged, false);
+  assert.deepEqual(JSON.parse(await readFile(reviewPath, "utf8")), nextReview);
+
+  const nextDay = await rerun("2026-08-27T15:10:00Z");
+  assert.equal(nextDay.contentChanged, false);
+  assert.equal(nextDay.stateChanged, false);
+  assert.equal(nextDay.reviewStateChanged, true);
+  assert.equal(await readFile(contentPath, "utf8"), beforeContent);
+  assert.equal(await readFile(bankStatePath, "utf8"), beforeBankState);
+  const nextDayReview = JSON.parse(await readFile(reviewPath, "utf8"));
+  assert.equal(nextContent.checkedAt, "2026-08-27");
+  assert.equal(nextDayReview.updatedAt, "2026-08-28");
+  for (const { naverId } of JSON.parse(beforeBankState).items) {
+    assert.equal(nextDayReview.items[naverId].lastSeenAt, "2026-08-28");
+  }
+  assert.deepEqual(nextDayReview.items[manual.id], nextReview.items[manual.id]);
+  validateListingReviewState(nextDayReview, {
+    listingIds: new Set(nextContent.items.map(({ id }) => id)),
+    bankIds: new Set(JSON.parse(beforeBankState).items.map(({ naverId }) => naverId)),
+  });
+  assert.equal(await readFile(summaryPath, "utf8"), beforeSummary);
 });
 
 test("부동산뱅크 동기화 워크플로는 공개 목록·Bank 상태·재확인 상태만 커밋한다", async () => {

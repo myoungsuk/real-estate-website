@@ -108,8 +108,7 @@ export async function fetchBankPublicSnapshot({ fetcher = globalThis.fetch, fetc
   return mergeBankPublicPages(pages);
 }
 
-async function appendGitHubSummary(result) {
-  const summaryPath = process.env.GITHUB_STEP_SUMMARY;
+async function appendGitHubSummary(result, summaryPath) {
   if (!summaryPath) return;
   const lines = [
     "## 부동산뱅크 공개 매물 동기화",
@@ -134,6 +133,7 @@ export async function runBankListingSync({
   fetchAttempts = 2,
   now = new Date(),
   logger = console,
+  summaryPath = process.env.GITHUB_STEP_SUMMARY,
 } = {}) {
   const absoluteRoot = resolve(rootDir);
   const contentPath = join(absoluteRoot, CONTENT_PATH);
@@ -183,7 +183,7 @@ export async function runBankListingSync({
   logger.log(`Outside Bank preserved: ${result.outsideBankCount}`);
   if (dryRun) logger.log("No files changed");
   else if (!result.contentChanged && !result.stateChanged && !result.reviewStateChanged) logger.log("No changes");
-  await appendGitHubSummary(result);
+  await appendGitHubSummary(result, summaryPath);
   return result;
 }
 

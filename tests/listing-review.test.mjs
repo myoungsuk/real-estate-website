@@ -141,7 +141,7 @@ test("저장소의 재확인 상태는 현재 공개 목록과 Bank ID를 정확
   const listingIds = new Set(listings.items.map(({ id }) => id));
   const bankIds = new Set(bankState.items.map(({ naverId }) => naverId));
   validateListingReviewPolicy(policy);
+  // 내용이 그대로인 날에도 재확인일은 갱신되므로 목록 갱신일과 같을 필요가 없다.
   validateListingReviewState(reviewState, { listingIds, bankIds });
-  assert.equal(reviewState.updatedAt, listings.checkedAt);
   assert.deepEqual(policy, { schemaVersion: 1, bankWarningDays: null, manualWarningDays: null });
 });
