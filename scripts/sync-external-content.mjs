@@ -143,8 +143,7 @@ function currentDate(now) {
   return now.toISOString().slice(0, 10);
 }
 
-async function appendGitHubSummary(result) {
-  const summaryPath = process.env.GITHUB_STEP_SUMMARY;
+async function appendGitHubSummary(result, summaryPath) {
   if (!summaryPath) return;
   const lines = [
     "## 외부 콘텐츠 동기화",
@@ -182,6 +181,7 @@ export async function runExternalContentSync({
   blogId = NAVER_BLOG_ID,
   fetchAttempts = 3,
   logger = console,
+  summaryPath = process.env.GITHUB_STEP_SUMMARY,
 } = {}) {
   assertNaverBlogId(blogId);
   assertYouTubeChannelId(youtubeChannelId, YOUTUBE_CHANNEL_ID);
@@ -269,7 +269,7 @@ export async function runExternalContentSync({
   for (const warning of warnings) logger.warn(`${process.env.GITHUB_ACTIONS === "true" ? "::warning::" : "Warning: "}${warning}`);
   if (dryRun) logger.log("No files changed");
   else if (!contentChanged && !keepaliveChanged) logger.log("No changes");
-  await appendGitHubSummary(result);
+  await appendGitHubSummary(result, summaryPath);
   return result;
 }
 

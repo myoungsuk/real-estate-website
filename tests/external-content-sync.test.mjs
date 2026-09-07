@@ -162,6 +162,7 @@ test("dry-run은 신규 항목과 썸네일을 검증해도 파일을 변경하�
   const before = await readFile(contentPath, "utf8");
   const result = await runExternalContentSync({
     rootDir: root,
+    summaryPath: null,
     dryRun: true,
     fetcher: fixtureFetcher(),
     fetchAttempts: 1,
@@ -206,6 +207,7 @@ test("미분양 통계 RSS는 저장하고 민감정보 RSS는 콘텐츠·썸네
       const healthBefore = await readFile(healthPath, "utf8");
       const sync = () => runExternalContentSync({
         rootDir: root,
+        summaryPath: null,
         fetcher: fixtureFetcher({ naverXml: naverRss.replace("새 블로그 글 & 확인사항", title) }),
         fetchAttempts: 1,
         youtubeChannelId: channelId,
@@ -254,6 +256,7 @@ test("YouTube가 일시 장애이면 네이버만 반영하고 복구 실행에�
   const root = await makeSyncRoot(t);
   const first = await runExternalContentSync({
     rootDir: root,
+    summaryPath: null,
     fetcher: fixtureFetcher({ youtubeStatus: 404 }),
     fetchAttempts: 1,
     youtubeChannelId: channelId,
@@ -266,6 +269,7 @@ test("YouTube가 일시 장애이면 네이버만 반영하고 복구 실행에�
 
   const recovered = await runExternalContentSync({
     rootDir: root,
+    summaryPath: null,
     fetcher: fixtureFetcher(),
     fetchAttempts: 1,
     youtubeChannelId: channelId,
@@ -283,6 +287,7 @@ test("네이버가 일시 장애이면 YouTube만 반영한다", async (t) => {
   const root = await makeSyncRoot(t);
   const result = await runExternalContentSync({
     rootDir: root,
+    summaryPath: null,
     fetcher: fixtureFetcher({ naverStatus: 503 }),
     fetchAttempts: 1,
     youtubeChannelId: channelId,
@@ -299,6 +304,7 @@ test("두 출처가 모두 일시 장애이면 실패하고 기존 파일을 보
   const before = await readFile(contentPath, "utf8");
   await assert.rejects(() => runExternalContentSync({
     rootDir: root,
+    summaryPath: null,
     fetcher: fixtureFetcher({ naverStatus: 503, youtubeStatus: 404 }),
     fetchAttempts: 1,
     youtubeChannelId: channelId,
@@ -312,6 +318,7 @@ test("재시도 대상이 아닌 HTTP 오류는 다른 출처가 정상이어도
   const root = await makeSyncRoot(t);
   await assert.rejects(() => runExternalContentSync({
     rootDir: root,
+    summaryPath: null,
     fetcher: fixtureFetcher({ youtubeStatus: 403 }),
     fetchAttempts: 3,
     youtubeChannelId: channelId,
@@ -326,6 +333,7 @@ test("비정상적으로 큰 피드 응답은 일시 장애로 건너뛰지 않�
   const baseFetcher = fixtureFetcher();
   await assert.rejects(() => runExternalContentSync({
     rootDir: root,
+    summaryPath: null,
     fetcher: async (value, options) => {
       if (String(value).startsWith("https://www.youtube.com/feeds/videos.xml")) {
         return new Response("", {
@@ -349,6 +357,7 @@ test("실행 결과는 원자적으로 저장되고 같은 입력의 두 번째 
   const root = await makeSyncRoot(t);
   const options = {
     rootDir: root,
+    summaryPath: null,
     fetcher: fixtureFetcher(),
     fetchAttempts: 1,
     youtubeChannelId: channelId,
@@ -370,6 +379,7 @@ test("썸네일 단독 실패는 경고와 thumbnail:null로 격리한다", asyn
   const root = await makeSyncRoot(t);
   const result = await runExternalContentSync({
     rootDir: root,
+    summaryPath: null,
     dryRun: true,
     fetcher: fixtureFetcher({ imageFailure: true }),
     fetchAttempts: 1,
@@ -387,6 +397,7 @@ test("채널 신뢰 경계 실패 시 기존 JSON과 이미지를 변경하지 �
   const wrongFeed = youtubeAtom.replaceAll(channelId, "UC0000000000000000000000");
   await assert.rejects(() => runExternalContentSync({
     rootDir: root,
+    summaryPath: null,
     fetcher: fixtureFetcher({ youtubeXml: wrongFeed }),
     fetchAttempts: 1,
     youtubeChannelId: channelId,
@@ -445,6 +456,7 @@ test("기존 썸네일 경로는 다시 다운로드하거나 JSON에 반영하�
   };
   await assert.rejects(() => runExternalContentSync({
     rootDir: root,
+    summaryPath: null,
     fetcher,
     fetchAttempts: 1,
     youtubeChannelId: channelId,
@@ -473,6 +485,7 @@ test("무변경 실행은 45일 전에는 파일을 보존하고 경계일에는
   const healthBefore = await readFile(healthPath, "utf8");
   const options = {
     rootDir: root,
+    summaryPath: null,
     fetcher: fixtureFetcher(),
     fetchAttempts: 1,
     youtubeChannelId: channelId,
