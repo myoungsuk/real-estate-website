@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-09-08",
+  "checkedAt": "2026-09-09",
   "items": [
     {
       "id": "2645736151",
@@ -672,6 +672,34 @@
       "registeredAt": "2026-09-07",
       "source": "네이버페이 부동산",
       "url": "https://fin.land.naver.com/articles/2648201398"
+    },
+    {
+      "id": "2648435463",
+      "title": "대전롯데캐슬더퍼스트",
+      "propertyType": "아파트분양권",
+      "tradeType": "sale",
+      "priceLabel": "4억 3,790",
+      "areaLabel": "81㎡ · 전용 59㎡",
+      "floorLabel": "고/25층",
+      "direction": "남향",
+      "summary": "59A 천변뷰 나와요",
+      "registeredAt": "2026-09-08",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2648435463"
+    },
+    {
+      "id": "2648434808",
+      "title": "리더스시티 4블록",
+      "propertyType": "아파트",
+      "tradeType": "sale",
+      "priceLabel": "4억 9,000",
+      "areaLabel": "99㎡ · 전용 74㎡",
+      "floorLabel": "고/29층",
+      "direction": "남동향",
+      "summary": "초등학교 전망이 탁 트였어요. 시스템에어컨5대외 옵션 설치",
+      "registeredAt": "2026-09-08",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2648434808"
     }
   ]
 }
