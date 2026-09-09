@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-09-09",
+  "checkedAt": "2026-09-10",
   "items": [
     {
       "id": "2645736151",
@@ -364,48 +364,6 @@
       "registeredAt": "2026-08-11",
       "source": "네이버페이 부동산",
       "url": "https://fin.land.naver.com/articles/2643134517"
-    },
-    {
-      "id": "2642688332",
-      "title": "대전롯데캐슬더퍼스트",
-      "propertyType": "아파트분양권",
-      "tradeType": "sale",
-      "priceLabel": "4억 4,275",
-      "areaLabel": "82㎡ · 전용 59㎡",
-      "floorLabel": "19/32층",
-      "direction": "남향",
-      "summary": "인기동 천변뷰 멋진 집",
-      "registeredAt": "2026-08-10",
-      "source": "네이버페이 부동산",
-      "url": "https://fin.land.naver.com/articles/2642688332"
-    },
-    {
-      "id": "2642689065",
-      "title": "펜타뷰",
-      "propertyType": "아파트",
-      "tradeType": "sale",
-      "priceLabel": "5억 1,000",
-      "areaLabel": "153㎡ · 전용 118㎡",
-      "floorLabel": "7/27층",
-      "direction": "남향",
-      "summary": "남향으로 주인거주 관리 잘 된 집입니다.",
-      "registeredAt": "2026-08-10",
-      "source": "네이버페이 부동산",
-      "url": "https://fin.land.naver.com/articles/2642689065"
-    },
-    {
-      "id": "2642686555",
-      "title": "단독",
-      "propertyType": "단독/다가구",
-      "tradeType": "sale",
-      "priceLabel": "3억 5,000",
-      "areaLabel": "대지 330㎡ · 연면적 125㎡",
-      "floorLabel": "1층",
-      "direction": "남향",
-      "summary": "대전에서 가까워 주말 주택으로 사용가능. 관리 잘 되어 있어요",
-      "registeredAt": "2026-08-10",
-      "source": "네이버페이 부동산",
-      "url": "https://fin.land.naver.com/articles/2642686555"
     },
     {
       "id": "2640120487",
