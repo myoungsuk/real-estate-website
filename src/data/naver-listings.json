@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-09-11",
+  "checkedAt": "2026-09-12",
   "items": [
     {
       "id": "2645736151",
@@ -338,20 +338,6 @@
       "url": "https://fin.land.naver.com/articles/2640120487"
     },
     {
-      "id": "2646192371",
-      "title": "리더스시티 4블록",
-      "propertyType": "아파트",
-      "tradeType": "sale",
-      "priceLabel": "3억 8,000",
-      "areaLabel": "80㎡ · 전용 59㎡",
-      "floorLabel": "중/29층",
-      "direction": "남동향",
-      "summary": "작은방 양창으로 개방감 좋은집. 빠른 입주 가능",
-      "registeredAt": "2026-08-27",
-      "source": "네이버페이 부동산",
-      "url": "https://fin.land.naver.com/articles/2646192371"
-    },
-    {
       "id": "2646032733",
       "title": "아침LH",
       "propertyType": "아파트",
@@ -644,6 +630,48 @@
       "registeredAt": "2026-09-10",
       "source": "네이버페이 부동산",
       "url": "https://fin.land.naver.com/articles/2648932448"
+    },
+    {
+      "id": "2649104649",
+      "title": "펜타뷰",
+      "propertyType": "아파트",
+      "tradeType": "sale",
+      "priceLabel": "5억 1,000",
+      "areaLabel": "153㎡ · 전용 118㎡",
+      "floorLabel": "7/27층",
+      "direction": "남향",
+      "summary": "남향으로 주인거주 관리 잘 된 집입니다.",
+      "registeredAt": "2026-09-11",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2649104649"
+    },
+    {
+      "id": "2649104370",
+      "title": "대전롯데캐슬더퍼스트",
+      "propertyType": "아파트분양권",
+      "tradeType": "sale",
+      "priceLabel": "4억 4,275",
+      "areaLabel": "82㎡ · 전용 59㎡",
+      "floorLabel": "19/32층",
+      "direction": "남향",
+      "summary": "인기동 천변뷰 멋진 집",
+      "registeredAt": "2026-09-11",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2649104370"
+    },
+    {
+      "id": "2649103767",
+      "title": "단독",
+      "propertyType": "단독/다가구",
+      "tradeType": "sale",
+      "priceLabel": "3억 5,000",
+      "areaLabel": "대지 330㎡ · 연면적 125㎡",
+      "floorLabel": "1층",
+      "direction": "남향",
+      "summary": "대전에서 가까워 주말 주택으로 사용가능. 관리 잘 되어 있어요",
+      "registeredAt": "2026-09-11",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2649103767"
     }
   ]
 }
