@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-09-12",
+  "checkedAt": "2026-09-13",
   "items": [
     {
       "id": "2645736151",
@@ -308,20 +308,6 @@
       "registeredAt": "2026-08-18",
       "source": "네이버페이 부동산",
       "url": "https://fin.land.naver.com/articles/2644206988"
-    },
-    {
-      "id": "2643427468",
-      "title": "아침LH",
-      "propertyType": "아파트",
-      "tradeType": "sale",
-      "priceLabel": "4억 3,000",
-      "areaLabel": "154㎡ · 전용 118㎡",
-      "floorLabel": "18/22층",
-      "direction": "남동향",
-      "summary": "단지내 최저가 넓은 확장형으로 집상태 좋아요",
-      "registeredAt": "2026-08-13",
-      "source": "네이버페이 부동산",
-      "url": "https://fin.land.naver.com/articles/2643427468"
     },
     {
       "id": "2640120487",
@@ -672,6 +658,20 @@
       "registeredAt": "2026-09-11",
       "source": "네이버페이 부동산",
       "url": "https://fin.land.naver.com/articles/2649103767"
+    },
+    {
+      "id": "2649356928",
+      "title": "리더스시티 5블록",
+      "propertyType": "아파트",
+      "tradeType": "sale",
+      "priceLabel": "5억 8,500",
+      "areaLabel": "113㎡ · 전용 84㎡",
+      "floorLabel": "중/29층",
+      "direction": "남동향",
+      "summary": "로얄동 로얄층 풀인테리어 되어 있어요",
+      "registeredAt": "2026-09-12",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2649356928"
     }
   ]
 }
