@@ -1,5 +1,19 @@
 [
   {
+    "id": "youtube-djrqdhkeoso",
+    "type": "youtube",
+    "youtubeFormat": "short",
+    "status": "published",
+    "title": "천동 리더스시티 5블록 월요장터로 장보러 오세요~#shorts #천동리더스시티#천동리더스시티5블록#리더스시티5블록",
+    "summary": "공식 YouTube 채널에서 “천동 리더스시티 5블록 월요장터로 장보러 오세요~#shorts #천동리더스시티#천동리더스시티5블록#리더스시티5블록” Shorts를 확인해 보세요.",
+    "url": "https://www.youtube.com/watch?v=DjRqdhkEoso",
+    "publishedAt": "2026-09-14",
+    "thumbnail": {
+      "src": "/images/youtube/DjRqdhkEoso.webp",
+      "alt": "천동 리더스시티 5블록 월요장터로 장보러 오세요~#shorts #천동리더스시티#천동리더스시티5블록#리더스시티5블록 YouTube Shorts 썸네일"
+    }
+  },
+  {
     "id": "naver-blog-224409175904",
     "type": "blog",
     "status": "published",
