@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-09-18",
+  "checkedAt": "2026-09-19",
   "items": [
     {
       "id": "2645736151",
@@ -574,6 +574,62 @@
       "registeredAt": "2026-09-14",
       "source": "네이버페이 부동산",
       "url": "https://fin.land.naver.com/articles/2649533194"
+    },
+    {
+      "id": "2650443096",
+      "title": "리더스시티 5블록",
+      "propertyType": "아파트",
+      "tradeType": "sale",
+      "priceLabel": "4억 2,000",
+      "areaLabel": "81㎡ · 전용 59㎡",
+      "floorLabel": "중/29층",
+      "direction": "남서향",
+      "summary": "시스템에어컨4대, 바닥타일, 복합환풍기,중문, 간접조명등...",
+      "registeredAt": "2026-09-18",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2650443096"
+    },
+    {
+      "id": "2650443701",
+      "title": "대전롯데캐슬더퍼스트",
+      "propertyType": "아파트분양권",
+      "tradeType": "sale",
+      "priceLabel": "4억 2,290",
+      "areaLabel": "81㎡ · 전용 59㎡",
+      "floorLabel": "저/33층",
+      "direction": "남동향",
+      "summary": "마피500 조망좋고 생활편리한동",
+      "registeredAt": "2026-09-18",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2650443701"
+    },
+    {
+      "id": "2650444061",
+      "title": "대전르에브스위첸2단지",
+      "propertyType": "아파트분양권",
+      "tradeType": "sale",
+      "priceLabel": "4억 890",
+      "areaLabel": "80㎡ · 전용 59㎡",
+      "floorLabel": "고/27층",
+      "direction": "남동향",
+      "summary": "조합원 매물로 저렴한 가격입니다",
+      "registeredAt": "2026-09-18",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2650444061"
+    },
+    {
+      "id": "2650442644",
+      "title": "리더스시티 5블록",
+      "propertyType": "아파트",
+      "tradeType": "sale",
+      "priceLabel": "5억 5,000",
+      "areaLabel": "100㎡ · 전용 74㎡",
+      "floorLabel": "중/29층",
+      "direction": "남동향",
+      "summary": "풀인테리어된집 앞동으로 전망좋아요",
+      "registeredAt": "2026-09-18",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2650442644"
     }
   ]
 }
