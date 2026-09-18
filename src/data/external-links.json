@@ -1,5 +1,19 @@
 [
   {
+    "id": "youtube-qrumfzg21fk",
+    "type": "youtube",
+    "youtubeFormat": "short",
+    "status": "published",
+    "title": "아파트 매매 계약이 처음이라 막막하신가요? #shorts #천동리더스시티#리더스시티행복한부동산",
+    "summary": "공식 YouTube 채널에서 “아파트 매매 계약이 처음이라 막막하신가요? #shorts #천동리더스시티#리더스시티행복한부동산” Shorts를 확인해 보세요.",
+    "url": "https://www.youtube.com/watch?v=QrUmfZg21fk",
+    "publishedAt": "2026-09-18",
+    "thumbnail": {
+      "src": "/images/youtube/QrUmfZg21fk.webp",
+      "alt": "아파트 매매 계약이 처음이라 막막하신가요? #shorts #천동리더스시티#리더스시티행복한부동산 YouTube Shorts 썸네일"
+    }
+  },
+  {
     "id": "naver-blog-224412572189",
     "type": "blog",
     "status": "published",
