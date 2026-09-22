@@ -1,7 +1,7 @@
 {
   "version": 1,
   "officePath": "/r/info/503143",
-  "updatedAt": "2026-09-22",
+  "updatedAt": "2026-09-23",
   "items": [
     {
       "naverId": "2645400189",
@@ -82,10 +82,6 @@
     {
       "naverId": "2648209517",
       "bankId": "143871160"
-    },
-    {
-      "naverId": "2648213889",
-      "bankId": "143873501"
     },
     {
       "naverId": "2648434808",
