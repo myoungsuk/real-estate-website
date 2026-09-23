@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-09-23",
+  "checkedAt": "2026-09-24",
   "items": [
     {
       "id": "2645736151",
@@ -126,48 +126,6 @@
       "registeredAt": "2026-08-25",
       "source": "네이버페이 부동산",
       "url": "https://fin.land.naver.com/articles/2645754923"
-    },
-    {
-      "id": "2645495120",
-      "title": "휴먼시아2단지",
-      "propertyType": "아파트",
-      "tradeType": "sale",
-      "priceLabel": "2억 7,000",
-      "areaLabel": "111㎡ · 전용 84㎡",
-      "floorLabel": "5/25층",
-      "direction": "남향",
-      "summary": "저층이지만 해잘들고 전망좋은 집입니다",
-      "registeredAt": "2026-08-24",
-      "source": "네이버페이 부동산",
-      "url": "https://fin.land.naver.com/articles/2645495120"
-    },
-    {
-      "id": "2645400881",
-      "title": "e편한세상서대전역센트로",
-      "propertyType": "아파트분양권",
-      "tradeType": "jeonse",
-      "priceLabel": "4억",
-      "areaLabel": "110㎡ · 전용 84㎡",
-      "floorLabel": "16/20층",
-      "direction": "남서향",
-      "summary": "시스템에어컨4대외 옵션 설치 앞동으로 조망 좋아요",
-      "registeredAt": "2026-08-24",
-      "source": "네이버페이 부동산",
-      "url": "https://fin.land.naver.com/articles/2645400881"
-    },
-    {
-      "id": "2645400189",
-      "title": "리더스시티 4블록",
-      "propertyType": "아파트",
-      "tradeType": "sale",
-      "priceLabel": "5억 2,000",
-      "areaLabel": "111㎡ · 전용 84㎡",
-      "floorLabel": "4/29층",
-      "direction": "남서향",
-      "summary": "시스템에어컨, 중문등 풀옵선 설치 10월 입주협의 가능",
-      "registeredAt": "2026-08-24",
-      "source": "네이버페이 부동산",
-      "url": "https://fin.land.naver.com/articles/2645400189"
     },
     {
       "id": "2640120487",
@@ -686,6 +644,20 @@
       "registeredAt": "2026-09-21",
       "source": "네이버페이 부동산",
       "url": "https://fin.land.naver.com/articles/2650993881"
+    },
+    {
+      "id": "2651443771",
+      "title": "리더스시티 4블록",
+      "propertyType": "아파트",
+      "tradeType": "sale",
+      "priceLabel": "5억 2,000",
+      "areaLabel": "111㎡ · 전용 84㎡",
+      "floorLabel": "4/29층",
+      "direction": "남서향",
+      "summary": "시스템에어컨, 중문등 풀옵선 설치 10월 입주협의 가능",
+      "registeredAt": "2026-09-23",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2651443771"
     }
   ]
 }
