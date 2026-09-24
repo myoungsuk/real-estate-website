@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-09-24",
+  "checkedAt": "2026-09-25",
   "items": [
     {
       "id": "2645736151",
@@ -112,20 +112,6 @@
       "registeredAt": "2026-07-27",
       "source": "네이버페이 부동산",
       "url": "https://fin.land.naver.com/articles/2640120697"
-    },
-    {
-      "id": "2645754923",
-      "title": "대전르에브스위첸1단지",
-      "propertyType": "아파트분양권",
-      "tradeType": "sale",
-      "priceLabel": "4억 5,780",
-      "areaLabel": "84㎡ · 전용 59㎡",
-      "floorLabel": "14/26층",
-      "direction": "남서향",
-      "summary": "초등학교 가깝고 조망 좋은 집",
-      "registeredAt": "2026-08-25",
-      "source": "네이버페이 부동산",
-      "url": "https://fin.land.naver.com/articles/2645754923"
     },
     {
       "id": "2640120487",
