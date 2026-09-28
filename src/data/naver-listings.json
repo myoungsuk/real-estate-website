@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-09-28",
+  "checkedAt": "2026-09-29",
   "items": [
     {
       "id": "2645736151",
@@ -546,6 +546,118 @@
       "registeredAt": "2026-09-23",
       "source": "네이버페이 부동산",
       "url": "https://fin.land.naver.com/articles/2651443771"
+    },
+    {
+      "id": "2651873483",
+      "title": "리더스시티 5블록",
+      "propertyType": "아파트",
+      "tradeType": "sale",
+      "priceLabel": "3억 7,000",
+      "areaLabel": "81㎡ · 전용 59㎡",
+      "floorLabel": "저/29층",
+      "direction": "남서향",
+      "summary": "27년1월 중순 협의입주 시스템에어컨외 옵션 다수 설치",
+      "registeredAt": "2026-09-28",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2651873483"
+    },
+    {
+      "id": "2651898846",
+      "title": "대전르에브스위첸1단지",
+      "propertyType": "아파트분양권",
+      "tradeType": "sale",
+      "priceLabel": "4억 5,780",
+      "areaLabel": "84㎡ · 전용 59㎡",
+      "floorLabel": "14/26층",
+      "direction": "남서향",
+      "summary": "초등학교 가깝고 조망 좋은 집",
+      "registeredAt": "2026-09-28",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2651898846"
+    },
+    {
+      "id": "2651902090",
+      "title": "휴먼시아2단지",
+      "propertyType": "아파트",
+      "tradeType": "sale",
+      "priceLabel": "2억 7,000",
+      "areaLabel": "111㎡ · 전용 84㎡",
+      "floorLabel": "5/25층",
+      "direction": "남향",
+      "summary": "저층이지만 해잘들고 전망좋은 집입니다",
+      "registeredAt": "2026-09-28",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2651902090"
+    },
+    {
+      "id": "2651888267",
+      "title": "대전르에브스위첸1단지",
+      "propertyType": "아파트분양권",
+      "tradeType": "sale",
+      "priceLabel": "4억 4,360",
+      "areaLabel": "84㎡ · 전용 59㎡",
+      "floorLabel": "저/29층",
+      "direction": "남서향",
+      "summary": "근린생활시설가깝고 단지조망 예쁜집입니다",
+      "registeredAt": "2026-09-28",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2651888267"
+    },
+    {
+      "id": "2651890026",
+      "title": "아침LH",
+      "propertyType": "아파트",
+      "tradeType": "sale",
+      "priceLabel": "3억 8,500",
+      "areaLabel": "112㎡ · 전용 84㎡",
+      "floorLabel": "12/25층",
+      "direction": "남동향",
+      "summary": "로얄동 즉시입주가능 전망좋아요",
+      "registeredAt": "2026-09-28",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2651890026"
+    },
+    {
+      "id": "2651880982",
+      "title": "리더스시티 4블록",
+      "propertyType": "아파트",
+      "tradeType": "sale",
+      "priceLabel": "5억 6,000",
+      "areaLabel": "111㎡ · 전용 84㎡",
+      "floorLabel": "19/29층",
+      "direction": "남동향",
+      "summary": "시스템에어컨6대설치 11월 초순 입주협의",
+      "registeredAt": "2026-09-28",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2651880982"
+    },
+    {
+      "id": "2651884839",
+      "title": "리더스시티 4블록",
+      "propertyType": "아파트",
+      "tradeType": "sale",
+      "priceLabel": "5억 500",
+      "areaLabel": "99㎡ · 전용 74㎡",
+      "floorLabel": "19/29층",
+      "direction": "남동향",
+      "summary": "천동초등학교 전망 시스템에어컨외 옵션 다수 설치",
+      "registeredAt": "2026-09-28",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2651884839"
+    },
+    {
+      "id": "2651905173",
+      "title": "e편한세상서대전역센트로",
+      "propertyType": "아파트분양권",
+      "tradeType": "jeonse",
+      "priceLabel": "4억",
+      "areaLabel": "110㎡ · 전용 84㎡",
+      "floorLabel": "16/20층",
+      "direction": "남서향",
+      "summary": "시스템에어컨4대외 옵션 설치 앞동으로 조망 좋아요",
+      "registeredAt": "2026-09-28",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2651905173"
     }
   ]
 }
