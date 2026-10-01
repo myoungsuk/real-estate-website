@@ -29,7 +29,7 @@ Worker는 GitHub `myoungsuk/real-estate-website`의 `master`에 연결되어 있
 
 부동산뱅크 동기화는 매일 00:10 KST, 공식 RSS 동기화는 매시간 17분에 예약 실행한다. 두 워크플로 모두 네트워크 조회·의존성 설치·테스트·빌드는 `contents: read` 검증 job에서 수행하고, 허용 파일만 담은 artifact를 별도 `contents: write` 배포 job이 적용한다. 모든 공식 GitHub Action은 검증한 commit SHA로 고정하고 checkout 자격 증명은 저장하지 않는다. 쓰기 토큰은 검증 스크립트가 아니라 최종 `git push` 단계에만 전달한다. 배포 job은 push 직전 `master`가 검증한 기준 SHA와 같은지 다시 확인해 동시 변경을 덮어쓰지 않는다.
 
-`GITHUB_TOKEN` push는 GitHub의 기존 push 기반 CI를 다시 실행하지 않으므로 동기화 워크플로 자체의 테스트·검사·Production-mode 빌드 성공 로그를 확인한다. push 뒤에는 새 빌드의 `/deployment-marker.json`에서 해당 콘텐츠 범위의 SHA-256 값이 검증 job의 예상값과 일치할 때까지 약 10분간 확인하며, 배포가 시작되지 않거나 잘못된 버전이 계속 제공되면 Action을 실패로 표시한다. 이 표시는 자동 롤백은 아니므로 실패 알림을 확인한 운영자가 Cloudflare 빌드 로그와 공개 화면을 점검한다.
+`GITHUB_TOKEN` push는 GitHub의 기존 push 기반 CI를 다시 실행하지 않으므로 동기화 워크플로 자체의 테스트·검사·Production-mode 빌드 성공 로그를 확인한다. push 뒤에는 새 빌드의 `/deployment-marker.json`에서 해당 콘텐츠 범위의 SHA-256 값이 검증 job의 예상값과 일치할 때까지 10초 간격으로 최대 30분간 확인하며, 배포가 시작되지 않거나 잘못된 버전이 계속 제공되면 Action을 실패로 표시한다. 이 표시는 자동 롤백은 아니므로 실패 알림을 확인한 운영자가 Cloudflare 빌드 로그와 공개 화면을 점검한다.
 
 `wrangler.jsonc`는 `./dist` 정적 자산과 `worker/index.mjs` 관리 API를 같은 Worker로 배포합니다. `leaderscityhappy.com`은 Worker Custom Domain으로 선언하며 `/api/admin`과 `/api/admin/*`만 Worker를 먼저 실행하므로 공개 경로는 정적 자산으로 제공합니다. `CF_VERSION_METADATA` binding은 인증된 관리자에게 현재 Worker version ID·생성 시각만 제공합니다. Production 빌드는 `PUBLIC_SITE_URL=https://leaderscityhappy.com`과 `PUBLIC_ALLOW_INDEXING=true`를 반드시 함께 설정합니다.
 

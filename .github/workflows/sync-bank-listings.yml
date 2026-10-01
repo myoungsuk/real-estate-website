@@ -83,7 +83,7 @@ jobs:
     needs: validate
     if: needs.validate.outputs.mode == 'content'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 45
     permissions:
       contents: write
     steps:

@@ -49,7 +49,7 @@ npm run sync:bank
 
 2026-09-07 예약 실행 #13은 수집 성공 뒤 테스트가 위 두 날짜의 일치를 잘못 요구해 중단됐다. 해당 조건을 제거하고 내용이 같은 다음 날·서울 날짜 경계·같은 날 재실행을 고정 fixture로 검증한다. 테스트 실행은 `summaryPath: null` 또는 임시 파일을 사용해 Actions의 실제 수집 요약에 가짜 테스트 건수를 추가하지 않는다.
 
-워크플로는 동기화 후 `npm test`, `npm run check`, 기본 빌드와 Production-mode SEO 빌드 검사를 모두 통과해야 커밋한다. checkout 자격 증명을 저장하지 않고 공식 Action은 검증한 commit SHA로 고정한다. 배포 직전 `master`가 검증 기준 SHA와 다르면 덮어쓰지 않고 실패한다. push 뒤에는 약 10분 동안 `https://leaderscityhappy.com/deployment-marker.json`의 `bank` marker가 예상값과 같은지 확인하며, 배포가 시작되지 않거나 다른 버전이 제공되면 Action을 실패로 표시한다.
+워크플로는 동기화 후 `npm test`, `npm run check`, 기본 빌드와 Production-mode SEO 빌드 검사를 모두 통과해야 커밋한다. checkout 자격 증명을 저장하지 않고 공식 Action은 검증한 commit SHA로 고정한다. 배포 직전 `master`가 검증 기준 SHA와 다르면 덮어쓰지 않고 실패한다. push 뒤에는 10초 간격으로 최대 30분 동안 `https://leaderscityhappy.com/deployment-marker.json`의 `bank` marker가 예상값과 같은지 확인하며, 배포가 시작되지 않거나 다른 버전이 제공되면 Action을 실패로 표시한다.
 
 단지별 운영 매물 건수는 동기화 때 증가·감소하거나 0건이 될 수 있으므로 테스트의 고정 기대값으로 사용하지 않는다. 단지 연결은 고정 fixture의 ID·추가·삭제·빈 목록으로 검증하고, 실제 운영 목록은 알려진 단지명의 매칭 누락을 검사한다. 화면 검증은 현재 목록의 단지별 ID와 상세 건수·최대 3건 미리보기·필터 결과를 대조한다.
 

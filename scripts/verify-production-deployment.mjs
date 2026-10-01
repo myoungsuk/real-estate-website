@@ -17,7 +17,7 @@ export async function waitForProductionDeployment({
   scope,
   expected,
   markerUrl = DEFAULT_MARKER_URL,
-  attempts = 40,
+  attempts = 180,
   intervalMs = 10_000,
   fetcher = globalThis.fetch,
   sleep = (milliseconds) => new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds)),
@@ -73,7 +73,7 @@ function parseArguments(values) {
     scope: options.scope,
     expected: options.expected,
     markerUrl: options.url ?? DEFAULT_MARKER_URL,
-    attempts: options.attempts === undefined ? 40 : Number(options.attempts),
+    attempts: options.attempts === undefined ? 180 : Number(options.attempts),
     intervalMs: options["interval-ms"] === undefined ? 10_000 : Number(options["interval-ms"]),
   };
 }
