@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-10-01",
+  "checkedAt": "2026-10-02",
   "items": [
     {
       "id": "2645736151",
@@ -126,34 +126,6 @@
       "registeredAt": "2026-07-27",
       "source": "네이버페이 부동산",
       "url": "https://fin.land.naver.com/articles/2640120487"
-    },
-    {
-      "id": "2646982238",
-      "title": "리더스시티 4블록",
-      "propertyType": "아파트",
-      "tradeType": "sale",
-      "priceLabel": "5억 1,000",
-      "areaLabel": "99㎡ · 전용 74㎡",
-      "floorLabel": "고/29층",
-      "direction": "남동향",
-      "summary": "앞동으로 전망 탁트인 집 11월 말 입주 시스템에어컨외 옵션다수",
-      "registeredAt": "2026-09-01",
-      "source": "네이버페이 부동산",
-      "url": "https://fin.land.naver.com/articles/2646982238"
-    },
-    {
-      "id": "2647183282",
-      "title": "대전롯데캐슬더퍼스트",
-      "propertyType": "아파트분양권",
-      "tradeType": "sale",
-      "priceLabel": "4억 3,270",
-      "areaLabel": "81㎡ · 전용 59㎡",
-      "floorLabel": "중/28층",
-      "direction": "남향",
-      "summary": "무피 천변뷰 나오는 59A타입",
-      "registeredAt": "2026-09-01",
-      "source": "네이버페이 부동산",
-      "url": "https://fin.land.naver.com/articles/2647183282"
     },
     {
       "id": "2647430516",
@@ -644,6 +616,20 @@
       "registeredAt": "2026-09-29",
       "source": "네이버페이 부동산",
       "url": "https://fin.land.naver.com/articles/2652318828"
+    },
+    {
+      "id": "2652668884",
+      "title": "리더스시티 4블록",
+      "propertyType": "아파트",
+      "tradeType": "sale",
+      "priceLabel": "5억 4,000",
+      "areaLabel": "111㎡ · 전용 84㎡",
+      "floorLabel": "13/29층",
+      "direction": "남동향",
+      "summary": "전망 탁트인집 시스템에어컨 4대 설치",
+      "registeredAt": "2026-10-01",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2652668884"
     }
   ]
 }
