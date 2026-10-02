@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-10-02",
+  "checkedAt": "2026-10-03",
   "items": [
     {
       "id": "2645736151",
@@ -590,20 +590,6 @@
       "url": "https://fin.land.naver.com/articles/2651905173"
     },
     {
-      "id": "2652318474",
-      "title": "리더스시티 5블록",
-      "propertyType": "아파트",
-      "tradeType": "sale",
-      "priceLabel": "3억 8,000",
-      "areaLabel": "81㎡ · 전용 59㎡",
-      "floorLabel": "8/29층",
-      "direction": "남서향",
-      "summary": "풀옵션 되어 있는 집, 거실, 주방 조망 예뻐요",
-      "registeredAt": "2026-09-29",
-      "source": "네이버페이 부동산",
-      "url": "https://fin.land.naver.com/articles/2652318474"
-    },
-    {
       "id": "2652318828",
       "title": "리더스시티 5블록",
       "propertyType": "아파트",
@@ -630,6 +616,48 @@
       "registeredAt": "2026-10-01",
       "source": "네이버페이 부동산",
       "url": "https://fin.land.naver.com/articles/2652668884"
+    },
+    {
+      "id": "2652945856",
+      "title": "대전롯데캐슬더퍼스트",
+      "propertyType": "아파트분양권",
+      "tradeType": "sale",
+      "priceLabel": "4억 3,270",
+      "areaLabel": "81㎡ · 전용 59㎡",
+      "floorLabel": "중/28층",
+      "direction": "남향",
+      "summary": "무피 천변뷰 나오는 59A타입",
+      "registeredAt": "2026-10-02",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2652945856"
+    },
+    {
+      "id": "2652946589",
+      "title": "리더스시티 5블록",
+      "propertyType": "아파트",
+      "tradeType": "sale",
+      "priceLabel": "3억 8,000",
+      "areaLabel": "81㎡ · 전용 59㎡",
+      "floorLabel": "8/29층",
+      "direction": "남서향",
+      "summary": "풀옵션 되어 있는 집, 거실, 주방 조망 예뻐요",
+      "registeredAt": "2026-10-02",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2652946589"
+    },
+    {
+      "id": "2652946166",
+      "title": "리더스시티 4블록",
+      "propertyType": "아파트",
+      "tradeType": "sale",
+      "priceLabel": "5억 1,000",
+      "areaLabel": "99㎡ · 전용 74㎡",
+      "floorLabel": "고/29층",
+      "direction": "남동향",
+      "summary": "앞동으로 전망 탁트인 집 11월 말 입주 시스템에어컨외 옵션다수",
+      "registeredAt": "2026-10-02",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2652946166"
     }
   ]
 }
