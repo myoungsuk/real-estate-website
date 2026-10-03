@@ -1,5 +1,19 @@
 [
   {
+    "id": "youtube-cgtgek3rqxs",
+    "type": "youtube",
+    "youtubeFormat": "video",
+    "status": "published",
+    "title": "대전 천동 리더스시티 앞 신축상가 해성프라자 분양.임대",
+    "summary": "공식 YouTube 채널에서 “대전 천동 리더스시티 앞 신축상가 해성프라자 분양.임대” 영상을 확인해 보세요.",
+    "url": "https://www.youtube.com/watch?v=CGtgeK3Rqxs",
+    "publishedAt": "2026-10-03",
+    "thumbnail": {
+      "src": "/images/youtube/CGtgeK3Rqxs.webp",
+      "alt": "대전 천동 리더스시티 앞 신축상가 해성프라자 분양.임대 유튜브 영상 썸네일"
+    }
+  },
+  {
     "id": "naver-blog-224428433272",
     "type": "blog",
     "status": "published",
