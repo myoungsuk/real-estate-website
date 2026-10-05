@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-10-04",
+  "checkedAt": "2026-10-06",
   "items": [
     {
       "id": "2645736151",
@@ -126,20 +126,6 @@
       "registeredAt": "2026-07-27",
       "source": "네이버페이 부동산",
       "url": "https://fin.land.naver.com/articles/2640120487"
-    },
-    {
-      "id": "2647917749",
-      "title": "신흥SK뷰",
-      "propertyType": "아파트",
-      "tradeType": "sale",
-      "priceLabel": "6억 3,000",
-      "areaLabel": "113㎡ · 전용 84㎡",
-      "floorLabel": "중/33층",
-      "direction": "남서향",
-      "summary": "옵션많은 조합원세대 매물 보문산 전망이 예쁜 집입니다",
-      "registeredAt": "2026-09-05",
-      "source": "네이버페이 부동산",
-      "url": "https://fin.land.naver.com/articles/2647917749"
     },
     {
       "id": "2648202872",
