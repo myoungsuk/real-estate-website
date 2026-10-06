@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-10-06",
+  "checkedAt": "2026-10-07",
   "items": [
     {
       "id": "2645736151",
@@ -630,6 +630,48 @@
       "registeredAt": "2026-10-02",
       "source": "네이버페이 부동산",
       "url": "https://fin.land.naver.com/articles/2652946166"
+    },
+    {
+      "id": "2653230407",
+      "title": "리더스시티 5블록",
+      "propertyType": "아파트",
+      "tradeType": "sale",
+      "priceLabel": "3억 8,000",
+      "areaLabel": "81㎡ · 전용 59㎡",
+      "floorLabel": "저/29층",
+      "direction": "남동향",
+      "summary": "소나무가 보이는 예쁜 단지뷰 부출입구 동으로 생활편리한 동",
+      "registeredAt": "2026-10-06",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2653230407"
+    },
+    {
+      "id": "2653542645",
+      "title": "신흥SK뷰",
+      "propertyType": "아파트",
+      "tradeType": "sale",
+      "priceLabel": "6억 3,000",
+      "areaLabel": "113㎡ · 전용 84㎡",
+      "floorLabel": "중/33층",
+      "direction": "남서향",
+      "summary": "옵션많은 조합원세대 매물 보문산 전망이 예쁜 집입니다",
+      "registeredAt": "2026-10-06",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2653542645"
+    },
+    {
+      "id": "2653542929",
+      "title": "신흥SK뷰",
+      "propertyType": "아파트",
+      "tradeType": "sale",
+      "priceLabel": "4억 3,000",
+      "areaLabel": "80㎡ · 전용 59㎡",
+      "floorLabel": "고/33층",
+      "direction": "남동향",
+      "summary": "조합원 세대로 식장산 조망이 한눈에 펼쳐진 집입니다",
+      "registeredAt": "2026-10-06",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2653542929"
     }
   ]
 }
