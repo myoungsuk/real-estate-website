@@ -1,5 +1,19 @@
 [
   {
+    "id": "youtube-9wgceh8kxpo",
+    "type": "youtube",
+    "youtubeFormat": "video",
+    "status": "published",
+    "title": "대전 천동 리더스시티 5블록 매매 3억 8천만원",
+    "summary": "공식 YouTube 채널에서 “대전 천동 리더스시티 5블록 매매 3억 8천만원” 영상을 확인해 보세요.",
+    "url": "https://www.youtube.com/watch?v=9wgcEh8kxpo",
+    "publishedAt": "2026-10-06",
+    "thumbnail": {
+      "src": "/images/youtube/9wgcEh8kxpo.webp",
+      "alt": "대전 천동 리더스시티 5블록 매매 3억 8천만원 유튜브 영상 썸네일"
+    }
+  },
+  {
     "id": "youtube-z0tykibl2ag",
     "type": "youtube",
     "youtubeFormat": "short",
