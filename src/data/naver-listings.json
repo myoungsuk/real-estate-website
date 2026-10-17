@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-10-17",
+  "checkedAt": "2026-10-18",
   "items": [
     {
       "id": "2645736151",
@@ -436,20 +436,6 @@
       "url": "https://fin.land.naver.com/articles/2652945856"
     },
     {
-      "id": "2652946589",
-      "title": "리더스시티 5블록",
-      "propertyType": "아파트",
-      "tradeType": "sale",
-      "priceLabel": "3억 8,000",
-      "areaLabel": "81㎡ · 전용 59㎡",
-      "floorLabel": "8/29층",
-      "direction": "남서향",
-      "summary": "풀옵션 되어 있는 집, 거실, 주방 조망 예뻐요",
-      "registeredAt": "2026-10-02",
-      "source": "네이버페이 부동산",
-      "url": "https://fin.land.naver.com/articles/2652946589"
-    },
-    {
       "id": "2652946166",
       "title": "리더스시티 4블록",
       "propertyType": "아파트",
@@ -658,6 +644,20 @@
       "registeredAt": "2026-10-16",
       "source": "네이버페이 부동산",
       "url": "https://fin.land.naver.com/articles/2655816905"
+    },
+    {
+      "id": "2656032956",
+      "title": "리더스시티 5블록",
+      "propertyType": "아파트",
+      "tradeType": "sale",
+      "priceLabel": "3억 8,000",
+      "areaLabel": "81㎡ · 전용 59㎡",
+      "floorLabel": "8/29층",
+      "direction": "남서향",
+      "summary": "풀옵션 되어 있는 집, 거실, 주방 조망 예뻐요",
+      "registeredAt": "2026-10-17",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2656032956"
     }
   ]
 }
