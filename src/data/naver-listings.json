@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-10-23",
+  "checkedAt": "2026-10-24",
   "items": [
     {
       "id": "2645736151",
@@ -450,20 +450,6 @@
       "url": "https://fin.land.naver.com/articles/2655049456"
     },
     {
-      "id": "2655816905",
-      "title": "리더스시티 4블록",
-      "propertyType": "아파트",
-      "tradeType": "sale",
-      "priceLabel": "5억 2,000",
-      "areaLabel": "111㎡ · 전용 84㎡",
-      "floorLabel": "4/29층",
-      "direction": "남서향",
-      "summary": "시스템에어컨, 중문등 풀옵선 입주협의 가능",
-      "registeredAt": "2026-10-16",
-      "source": "네이버페이 부동산",
-      "url": "https://fin.land.naver.com/articles/2655816905"
-    },
-    {
       "id": "2656032956",
       "title": "리더스시티 5블록",
       "propertyType": "아파트",
@@ -524,7 +510,7 @@
       "title": "대전롯데캐슬더퍼스트",
       "propertyType": "아파트분양권",
       "tradeType": "sale",
-      "priceLabel": "4억 2,125",
+      "priceLabel": "4억 825",
       "areaLabel": "81㎡ · 전용 59㎡",
       "floorLabel": "6/33층",
       "direction": "남동향",
@@ -700,6 +686,20 @@
       "registeredAt": "2026-10-22",
       "source": "네이버페이 부동산",
       "url": "https://fin.land.naver.com/articles/2656951691"
+    },
+    {
+      "id": "2657219851",
+      "title": "리더스시티 4블록",
+      "propertyType": "아파트",
+      "tradeType": "sale",
+      "priceLabel": "5억 2,000",
+      "areaLabel": "111㎡ · 전용 84㎡",
+      "floorLabel": "4/29층",
+      "direction": "남서향",
+      "summary": "시스템에어컨, 중문등 풀옵선 입주협의 가능",
+      "registeredAt": "2026-10-23",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2657219851"
     }
   ]
 }
