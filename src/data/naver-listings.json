@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-10-24",
+  "checkedAt": "2026-10-28",
   "items": [
     {
       "id": "2645736151",
@@ -308,20 +308,6 @@
       "registeredAt": "2026-10-06",
       "source": "네이버페이 부동산",
       "url": "https://fin.land.naver.com/articles/2653542929"
-    },
-    {
-      "id": "2654072626",
-      "title": "리더스시티 4블록",
-      "propertyType": "아파트",
-      "tradeType": "sale",
-      "priceLabel": "4억 7,500",
-      "areaLabel": "99㎡ · 전용 74㎡",
-      "floorLabel": "20/29층",
-      "direction": "남동향",
-      "summary": "남동향 전망좋은집 시스템에어컨 5대, 중문등 설치",
-      "registeredAt": "2026-10-08",
-      "source": "네이버페이 부동산",
-      "url": "https://fin.land.naver.com/articles/2654072626"
     },
     {
       "id": "2654071727",
