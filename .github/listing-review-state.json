@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-28",
+  "updatedAt": "2026-10-29",
   "items": {
     "2640120487": {
       "source": "manual",
@@ -47,204 +47,164 @@
       "lastSeenAt": null,
       "lastReviewedAt": null
     },
-    "2651873483": {
-      "source": "bank",
-      "lastSeenAt": "2026-10-28",
-      "lastReviewedAt": null
-    },
-    "2651880982": {
-      "source": "bank",
-      "lastSeenAt": "2026-10-28",
-      "lastReviewedAt": null
-    },
-    "2651884839": {
-      "source": "bank",
-      "lastSeenAt": "2026-10-28",
-      "lastReviewedAt": null
-    },
-    "2651888267": {
-      "source": "bank",
-      "lastSeenAt": "2026-10-28",
-      "lastReviewedAt": null
-    },
-    "2651890026": {
-      "source": "bank",
-      "lastSeenAt": "2026-10-28",
-      "lastReviewedAt": null
-    },
-    "2651898846": {
-      "source": "bank",
-      "lastSeenAt": "2026-10-28",
-      "lastReviewedAt": null
-    },
-    "2651902090": {
-      "source": "bank",
-      "lastSeenAt": "2026-10-28",
-      "lastReviewedAt": null
-    },
-    "2651905173": {
-      "source": "bank",
-      "lastSeenAt": "2026-10-28",
-      "lastReviewedAt": null
-    },
     "2652668884": {
       "source": "bank",
-      "lastSeenAt": "2026-10-28",
+      "lastSeenAt": "2026-10-29",
       "lastReviewedAt": null
     },
     "2652945856": {
       "source": "bank",
-      "lastSeenAt": "2026-10-28",
+      "lastSeenAt": "2026-10-29",
       "lastReviewedAt": null
     },
     "2652946166": {
       "source": "bank",
-      "lastSeenAt": "2026-10-28",
+      "lastSeenAt": "2026-10-29",
       "lastReviewedAt": null
     },
     "2653230407": {
       "source": "bank",
-      "lastSeenAt": "2026-10-28",
+      "lastSeenAt": "2026-10-29",
       "lastReviewedAt": null
     },
     "2653542929": {
       "source": "bank",
-      "lastSeenAt": "2026-10-28",
+      "lastSeenAt": "2026-10-29",
       "lastReviewedAt": null
     },
     "2654069899": {
       "source": "bank",
-      "lastSeenAt": "2026-10-28",
+      "lastSeenAt": "2026-10-29",
       "lastReviewedAt": null
     },
     "2654070402": {
       "source": "bank",
-      "lastSeenAt": "2026-10-28",
+      "lastSeenAt": "2026-10-29",
       "lastReviewedAt": null
     },
     "2654071727": {
       "source": "bank",
-      "lastSeenAt": "2026-10-28",
+      "lastSeenAt": "2026-10-29",
       "lastReviewedAt": null
     },
     "2654361455": {
       "source": "bank",
-      "lastSeenAt": "2026-10-28",
+      "lastSeenAt": "2026-10-29",
       "lastReviewedAt": null
     },
     "2654361905": {
       "source": "bank",
-      "lastSeenAt": "2026-10-28",
+      "lastSeenAt": "2026-10-29",
       "lastReviewedAt": null
     },
     "2655048970": {
       "source": "bank",
-      "lastSeenAt": "2026-10-28",
+      "lastSeenAt": "2026-10-29",
       "lastReviewedAt": null
     },
     "2655049264": {
       "source": "bank",
-      "lastSeenAt": "2026-10-28",
+      "lastSeenAt": "2026-10-29",
       "lastReviewedAt": null
     },
     "2655049456": {
       "source": "bank",
-      "lastSeenAt": "2026-10-28",
+      "lastSeenAt": "2026-10-29",
       "lastReviewedAt": null
     },
     "2655049979": {
       "source": "bank",
-      "lastSeenAt": "2026-10-28",
+      "lastSeenAt": "2026-10-29",
       "lastReviewedAt": null
     },
     "2656032956": {
       "source": "bank",
-      "lastSeenAt": "2026-10-28",
+      "lastSeenAt": "2026-10-29",
       "lastReviewedAt": null
     },
     "2656200451": {
       "source": "bank",
-      "lastSeenAt": "2026-10-28",
+      "lastSeenAt": "2026-10-29",
       "lastReviewedAt": null
     },
     "2656201000": {
       "source": "bank",
-      "lastSeenAt": "2026-10-28",
+      "lastSeenAt": "2026-10-29",
       "lastReviewedAt": null
     },
     "2656201514": {
       "source": "bank",
-      "lastSeenAt": "2026-10-28",
+      "lastSeenAt": "2026-10-29",
       "lastReviewedAt": null
     },
     "2656202117": {
       "source": "bank",
-      "lastSeenAt": "2026-10-28",
+      "lastSeenAt": "2026-10-29",
       "lastReviewedAt": null
     },
     "2656203433": {
       "source": "bank",
-      "lastSeenAt": "2026-10-28",
+      "lastSeenAt": "2026-10-29",
       "lastReviewedAt": null
     },
     "2656346738": {
       "source": "bank",
-      "lastSeenAt": "2026-10-28",
+      "lastSeenAt": "2026-10-29",
       "lastReviewedAt": null
     },
     "2656719798": {
       "source": "bank",
-      "lastSeenAt": "2026-10-28",
+      "lastSeenAt": "2026-10-29",
       "lastReviewedAt": null
     },
     "2656719934": {
       "source": "bank",
-      "lastSeenAt": "2026-10-28",
+      "lastSeenAt": "2026-10-29",
       "lastReviewedAt": null
     },
     "2656730016": {
       "source": "bank",
-      "lastSeenAt": "2026-10-28",
+      "lastSeenAt": "2026-10-29",
       "lastReviewedAt": null
     },
     "2656950560": {
       "source": "bank",
-      "lastSeenAt": "2026-10-28",
+      "lastSeenAt": "2026-10-29",
       "lastReviewedAt": null
     },
     "2656951077": {
       "source": "bank",
-      "lastSeenAt": "2026-10-28",
+      "lastSeenAt": "2026-10-29",
       "lastReviewedAt": null
     },
     "2656951321": {
       "source": "bank",
-      "lastSeenAt": "2026-10-28",
+      "lastSeenAt": "2026-10-29",
       "lastReviewedAt": null
     },
     "2656951691": {
       "source": "bank",
-      "lastSeenAt": "2026-10-28",
+      "lastSeenAt": "2026-10-29",
       "lastReviewedAt": null
     },
     "2656952429": {
       "source": "bank",
-      "lastSeenAt": "2026-10-28",
+      "lastSeenAt": "2026-10-29",
       "lastReviewedAt": null
     },
     "2656952847": {
       "source": "bank",
-      "lastSeenAt": "2026-10-28",
+      "lastSeenAt": "2026-10-29",
       "lastReviewedAt": null
     },
     "2656953047": {
       "source": "bank",
-      "lastSeenAt": "2026-10-28",
+      "lastSeenAt": "2026-10-29",
       "lastReviewedAt": null
     },
     "2657219851": {
       "source": "bank",
-      "lastSeenAt": "2026-10-28",
+      "lastSeenAt": "2026-10-29",
       "lastReviewedAt": null
     }
   }
