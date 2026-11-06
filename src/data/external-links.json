@@ -1,5 +1,19 @@
 [
   {
+    "id": "youtube-z8lvcoo8lag",
+    "type": "youtube",
+    "youtubeFormat": "video",
+    "status": "published",
+    "title": "대전 천동 리더스시티 5블록 84B 매매 / 5억 3천만원 / 신축2년차 관리최상",
+    "summary": "공식 YouTube 채널에서 “대전 천동 리더스시티 5블록 84B 매매 / 5억 3천만원 / 신축2년차 관리최상” 영상을 확인해 보세요.",
+    "url": "https://www.youtube.com/watch?v=z8LVCoO8lAg",
+    "publishedAt": "2026-11-06",
+    "thumbnail": {
+      "src": "/images/youtube/z8LVCoO8lAg.webp",
+      "alt": "대전 천동 리더스시티 5블록 84B 매매 / 5억 3천만원 / 신축2년차 관리최상 유튜브 영상 썸네일"
+    }
+  },
+  {
     "id": "naver-blog-224451381449",
     "type": "blog",
     "status": "published",
