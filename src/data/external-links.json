@@ -1,5 +1,47 @@
 [
   {
+    "id": "youtube-cpap-bdw3bi",
+    "type": "youtube",
+    "youtubeFormat": "short",
+    "status": "published",
+    "title": "천동 리더스시티 4블록 74B매매/ 신축아파트 / 즉시입주가능 #SHORTS #천동리더스시티#리더스시티행복한부동산",
+    "summary": "공식 YouTube 채널에서 “천동 리더스시티 4블록 74B매매/ 신축아파트 / 즉시입주가능 #SHORTS #천동리더스시티#리더스시티행복한부동산” Shorts를 확인해 보세요.",
+    "url": "https://www.youtube.com/watch?v=CPaP_bdW3bI",
+    "publishedAt": "2026-11-11",
+    "thumbnail": {
+      "src": "/images/youtube/CPaP_bdW3bI.webp",
+      "alt": "천동 리더스시티 4블록 74B매매/ 신축아파트 / 즉시입주가능 #SHORTS #천동리더스시티#리더스시티행복한부동산 YouTube Shorts 썸네일"
+    }
+  },
+  {
+    "id": "youtube-j11keecukag",
+    "type": "youtube",
+    "youtubeFormat": "short",
+    "status": "published",
+    "title": "에어컨 5대가 공짜 4억대 몸만 오세요 /천동 리더스시티 4블록 74B 타입매매#shorts #천동리더스시티 #천동부동산 #대전천동리더스시티",
+    "summary": "공식 YouTube 채널에서 “에어컨 5대가 공짜 4억대 몸만 오세요 /천동 리더스시티 4블록 74B 타입매매#shorts #천동리더스시티 #천동부동산 #대전천동리더스시티” Shorts를 확인해 보세요.",
+    "url": "https://www.youtube.com/watch?v=j11KEEcuKAg",
+    "publishedAt": "2026-11-11",
+    "thumbnail": {
+      "src": "/images/youtube/j11KEEcuKAg.webp",
+      "alt": "에어컨 5대가 공짜 4억대 몸만 오세요 /천동 리더스시티 4블록 74B 타입매매#shorts #천동리더스시티 #천동부동산 #대전천동리더스시티 YouTube Shorts 썸네일"
+    }
+  },
+  {
+    "id": "youtube-ldrxhxv9dmq",
+    "type": "youtube",
+    "youtubeFormat": "video",
+    "status": "published",
+    "title": "대전 천동 리더스시티 4블록 74B 매매｜4억 5천만 원, 공실 즉시입주 가능한 402동 중층",
+    "summary": "공식 YouTube 채널에서 “대전 천동 리더스시티 4블록 74B 매매｜4억 5천만 원, 공실 즉시입주 가능한 402동 중층” 영상을 확인해 보세요.",
+    "url": "https://www.youtube.com/watch?v=ldRxhxv9dmQ",
+    "publishedAt": "2026-11-11",
+    "thumbnail": {
+      "src": "/images/youtube/ldRxhxv9dmQ.webp",
+      "alt": "대전 천동 리더스시티 4블록 74B 매매｜4억 5천만 원, 공실 즉시입주 가능한 402동 중층 유튜브 영상 썸네일"
+    }
+  },
+  {
     "id": "naver-blog-224470491907",
     "type": "blog",
     "status": "published",
