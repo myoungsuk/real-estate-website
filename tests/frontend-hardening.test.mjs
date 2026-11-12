@@ -123,3 +123,16 @@ test("반응형 지역 이미지, Astro 캐시 경로, 404 noindex와 sitemap �
     "/images/area/sinheung-sk-view-640.webp 640w, /images/area/sinheung-sk-view-1200.webp 1200w, /images/area/sinheung-sk-view.webp 2000w",
   );
 });
+
+test("Cloudflare Web Analytics 자동 삽입 beacon만 추가 허용하고 측정값은 같은 원점으로 보낸다", async () => {
+  const [headers, privacy] = await Promise.all([
+    readSource("public/_headers"),
+    readSource("src/pages/privacy.astro"),
+  ]);
+  const csp = /Content-Security-Policy: ([^\r\n]+)/u.exec(headers)?.[1] ?? "";
+  const directive = (name) => csp.split(";").map((part) => part.trim()).find((part) => part.startsWith(`${name} `));
+  assert.equal(directive("script-src"), "script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com");
+  assert.equal(directive("connect-src"), "connect-src 'self'");
+  assert.match(privacy, /Cloudflare Web Analytics/);
+  assert.match(privacy, /쿠키나 브라우저 저장소를 사용하지 않고/);
+});
