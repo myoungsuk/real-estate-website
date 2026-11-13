@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-11-13",
+  "checkedAt": "2026-11-14",
   "items": [
     {
       "id": "2645736151",
@@ -492,20 +492,6 @@
       "url": "https://fin.land.naver.com/articles/2659861822"
     },
     {
-      "id": "2660051167",
-      "title": "신흥SK뷰",
-      "propertyType": "아파트",
-      "tradeType": "sale",
-      "priceLabel": "4억 3,000",
-      "areaLabel": "80㎡ · 전용 59㎡",
-      "floorLabel": "고/33층",
-      "direction": "남동향",
-      "summary": "조합원 세대로 식장산 조망이 한눈에 펼쳐진 집입니다",
-      "registeredAt": "2026-11-06",
-      "source": "네이버페이 부동산",
-      "url": "https://fin.land.naver.com/articles/2660051167"
-    },
-    {
       "id": "2660050566",
       "title": "리더스시티 5블록",
       "propertyType": "아파트",
@@ -602,6 +588,62 @@
       "registeredAt": "2026-11-10",
       "source": "네이버페이 부동산",
       "url": "https://fin.land.naver.com/articles/2660826177"
+    },
+    {
+      "id": "2661530839",
+      "title": "리더스시티 5블록",
+      "propertyType": "아파트",
+      "tradeType": "sale",
+      "priceLabel": "5억 8,500",
+      "areaLabel": "113㎡ · 전용 84㎡",
+      "floorLabel": "17/29층",
+      "direction": "남동향",
+      "summary": "로얄동 로얄층 풀인테리어 되어 있어요",
+      "registeredAt": "2026-11-13",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2661530839"
+    },
+    {
+      "id": "2661675641",
+      "title": "신흥SK뷰",
+      "propertyType": "아파트",
+      "tradeType": "sale",
+      "priceLabel": "4억 3,000",
+      "areaLabel": "80㎡ · 전용 59㎡",
+      "floorLabel": "고/33층",
+      "direction": "남동향",
+      "summary": "조합원 세대로 식장산 조망이 한눈에 펼쳐진 집입니다",
+      "registeredAt": "2026-11-13",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2661675641"
+    },
+    {
+      "id": "2661536401",
+      "title": "펜타뷰",
+      "propertyType": "아파트",
+      "tradeType": "sale",
+      "priceLabel": "5억 1,000",
+      "areaLabel": "153㎡ · 전용 118㎡",
+      "floorLabel": "7/27층",
+      "direction": "남향",
+      "summary": "남향으로 주인거주 관리 잘 된 집입니다.",
+      "registeredAt": "2026-11-13",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2661536401"
+    },
+    {
+      "id": "2661535738",
+      "title": "단독",
+      "propertyType": "단독/다가구",
+      "tradeType": "sale",
+      "priceLabel": "3억 5,000",
+      "areaLabel": "대지 330㎡ · 연면적 125㎡",
+      "floorLabel": "1층",
+      "direction": "남향",
+      "summary": "대전에서 가까워 주말 주택으로 사용가능. 관리 잘 되어 있어요",
+      "registeredAt": "2026-11-13",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2661535738"
     }
   ]
 }
