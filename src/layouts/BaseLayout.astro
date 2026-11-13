@@ -3,6 +3,7 @@ import SiteHeader from "../components/SiteHeader.astro";
 import SiteFooter from "../components/SiteFooter.astro";
 import MobileContactBar from "../components/MobileContactBar.astro";
 import { createBreadcrumbList, serializeJsonLd } from "../lib/json-ld.mjs";
+import { GOOGLE_TAG_ID, createGoogleTagLoader } from "../lib/google-tag.mjs";
 import globalStyles from "../styles/global.css?inline";
 import globalStylesheet from "../styles/global.css?url";
 
@@ -38,6 +39,7 @@ const {
 const canonical = Astro.site && (!noindex || canonicalPath) ? new URL(canonicalPath ?? Astro.url.pathname, Astro.site) : undefined;
 const shareImage = Astro.site ? new URL(shareImagePath, Astro.site) : undefined;
 const allowIndexing = import.meta.env.PUBLIC_ALLOW_INDEXING === "true";
+const googleTagLoader = allowIndexing && Astro.site ? createGoogleTagLoader(GOOGLE_TAG_ID, new URL(Astro.site).hostname) : null;
 const breadcrumbStructuredData = breadcrumbItems
   ? createBreadcrumbList(breadcrumbItems.map((item) => ({
       name: item.name,
@@ -79,6 +81,7 @@ const serializedStructuredData = structuredDataItems.length > 0
     {canonical && <link rel="canonical" href={canonical.toString()} />}
     <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48 64x64" />
     <title>{title}</title>
+    {googleTagLoader && <script is:inline set:html={googleTagLoader} />}
     {serializedStructuredData && (
       <script is:inline type="application/ld+json" set:html={serializedStructuredData} />
     )}

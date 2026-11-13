@@ -1,7 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile, stat } from "node:fs/promises";
+import vm from "node:vm";
 import { getResponsivePublicImageSrcSet } from "../src/lib/responsive-images.ts";
+import { GOOGLE_TAG_ID, createGoogleTagLoader } from "../src/lib/google-tag.mjs";
 
 const root = new URL("../", import.meta.url);
 const readSource = (relativePath) => readFile(new URL(relativePath, root), "utf8");
@@ -124,15 +126,68 @@ test("반응형 지역 이미지, Astro 캐시 경로, 404 noindex와 sitemap �
   );
 });
 
-test("Cloudflare Web Analytics 자동 삽입 beacon만 추가 허용하고 측정값은 같은 원점으로 보낸다", async () => {
+test("CSP는 Cloudflare Web Analytics와 Google 태그 공식 도메인만 추가 허용한다", async () => {
   const [headers, privacy] = await Promise.all([
     readSource("public/_headers"),
     readSource("src/pages/privacy.astro"),
   ]);
   const csp = /Content-Security-Policy: ([^\r\n]+)/u.exec(headers)?.[1] ?? "";
   const directive = (name) => csp.split(";").map((part) => part.trim()).find((part) => part.startsWith(`${name} `));
-  assert.equal(directive("script-src"), "script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com");
-  assert.equal(directive("connect-src"), "connect-src 'self'");
+  assert.equal(
+    directive("script-src"),
+    "script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com https://www.googletagmanager.com https://www.googleadservices.com https://www.google.com",
+  );
+  assert.equal(
+    directive("connect-src"),
+    "connect-src 'self' https://www.googletagmanager.com https://*.google-analytics.com https://*.google.com https://*.google.co.kr https://*.g.doubleclick.net https://pagead2.googlesyndication.com https://www.googleadservices.com https://ad.doubleclick.net",
+  );
+  assert.equal(
+    directive("img-src"),
+    "img-src 'self' data: https://www.googletagmanager.com https://*.google-analytics.com https://*.google.com https://*.google.co.kr https://*.g.doubleclick.net https://www.googleadservices.com https://pagead2.googlesyndication.com",
+  );
+  assert.equal(directive("frame-src"), "frame-src https://www.youtube-nocookie.com https://www.googletagmanager.com");
+  assert.equal(directive("frame-ancestors"), "frame-ancestors 'none'");
   assert.match(privacy, /Cloudflare Web Analytics/);
   assert.match(privacy, /쿠키나 브라우저 저장소를 사용하지 않고/);
+  assert.match(privacy, /Google 애널리틱스와 Google 광고\(행태정보\)/);
+  assert.match(privacy, /거부 방법/);
+  assert.doesNotMatch(privacy, /분석 쿠키도 사용하지 않습니다/);
+});
+
+test("Google 태그는 공개 레이아웃의 Production 빌드와 운영 도메인에서만 실행된다", async () => {
+  const [baseLayout, adminLayout] = await Promise.all([
+    readSource("src/layouts/BaseLayout.astro"),
+    readSource("src/layouts/AdminLayout.astro"),
+  ]);
+  assert.equal(GOOGLE_TAG_ID, "G-DFMC9Y1MG2");
+  assert.match(baseLayout, /allowIndexing && Astro\.site \? createGoogleTagLoader\(GOOGLE_TAG_ID, new URL\(Astro\.site\)\.hostname\)/);
+  assert.match(baseLayout, /<script is:inline set:html=\{googleTagLoader\} \/>/);
+  assert.doesNotMatch(adminLayout, /google-tag|googletagmanager|gtag/i);
+  assert.throws(() => createGoogleTagLoader("GTM-ABC123", "leaderscityhappy.com"));
+  assert.throws(() => createGoogleTagLoader(GOOGLE_TAG_ID, "leaderscityhappy.com\";alert(1);//"));
+
+  const run = (hostname) => {
+    const appended = [];
+    const context = {
+      location: { hostname },
+      window: {},
+      document: { createElement: () => ({}), head: { appendChild: (element) => appended.push(element) } },
+      Date,
+      encodeURIComponent,
+    };
+    vm.runInNewContext(createGoogleTagLoader(GOOGLE_TAG_ID, "leaderscityhappy.com"), context);
+    return { appended, dataLayer: context.window.dataLayer };
+  };
+  for (const hostname of ["localhost", "127.0.0.1", "fix-cloudflare-web-analytics.real-estate-website-dnv.pages.dev", "www.leaderscityhappy.com"]) {
+    const result = run(hostname);
+    assert.equal(result.appended.length, 0, hostname);
+    assert.equal(result.dataLayer, undefined, hostname);
+  }
+  const production = run("leaderscityhappy.com");
+  assert.equal(production.appended.length, 1);
+  assert.equal(production.appended[0].async, true);
+  assert.equal(production.appended[0].src, "https://www.googletagmanager.com/gtag/js?id=G-DFMC9Y1MG2");
+  assert.equal(production.dataLayer.length, 2);
+  assert.equal(production.dataLayer[1][0], "config");
+  assert.equal(production.dataLayer[1][1], "G-DFMC9Y1MG2");
 });
