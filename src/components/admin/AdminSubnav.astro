@@ -1,0 +1,101 @@
+---
+// 화면 왼쪽 보조 목록(제목·찾기 칸·목록·아래쪽 단추). 찾기 칸은 이 목록의 메뉴 이름만 거르며 입력값을 저장하거나 보내지 않는다.
+import AdminIcon, { type AdminIconName } from "./AdminIcon.astro";
+
+interface SubnavItem {
+  href: string;
+  label: string;
+  icon: AdminIconName;
+  tone?: string;
+  note?: string;
+}
+
+interface SubnavGroup {
+  label?: string;
+  items: SubnavItem[];
+}
+
+interface Props {
+  title: string;
+  icon: AdminIconName;
+  tone?: string;
+  searchLabel: string;
+  groups: SubnavGroup[];
+}
+
+const { title, icon, tone = "navy", searchLabel, groups } = Astro.props;
+const pathname = Astro.url.pathname;
+const searchId = `admin-subnav-search-${title.replace(/\s+/gu, "-")}`;
+---
+
+<div class="admin-subnav" data-admin-subnav>
+  <div class="admin-subnav__title">
+    <span class="admin-subnav__icon" data-tone={tone}>
+      <AdminIcon name={icon} size={17} />
+    </span>
+    <strong>{title}</strong>
+  </div>
+
+  <div class="admin-subnav__search">
+    <label class="sr-only" for={searchId}>{searchLabel}</label>
+    <AdminIcon name="search" size={17} />
+    <input id={searchId} type="search" placeholder={searchLabel} autocomplete="off" spellcheck="false" data-admin-subnav-search />
+  </div>
+
+  <nav class="admin-subnav__nav" aria-label={`${title} 목록`}>
+    {groups.map((group) => (
+      <div class="admin-subnav__group" data-admin-subnav-group>
+        {group.label && <p class="admin-subnav__group-label">{group.label}</p>}
+        <ul>
+          {group.items.map((item) => (
+            <li data-admin-subnav-item data-label={item.label}>
+              <a href={item.href} aria-current={pathname === item.href ? "page" : undefined}>
+                <span class="admin-subnav__item-icon" data-tone={item.tone ?? tone}>
+                  <AdminIcon name={item.icon} size={15} />
+                </span>
+                <span class="admin-subnav__item-label">{item.label}</span>
+                {item.note && <small>{item.note}</small>}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+    ))}
+    <p class="admin-subnav__empty" role="status" data-admin-subnav-empty hidden>찾는 메뉴가 없습니다.</p>
+  </nav>
+
+  <div class="admin-subnav__footer">
+    <slot name="footer" />
+  </div>
+</div>
+
+<script>
+  document.querySelectorAll<HTMLElement>("[data-admin-subnav]").forEach((subnav) => {
+    const search = subnav.querySelector<HTMLInputElement>("[data-admin-subnav-search]");
+    const empty = subnav.querySelector<HTMLElement>("[data-admin-subnav-empty]");
+    if (!search || !empty) return;
+    const normalize = (value: string) => value.normalize("NFKC").replace(/[\s·]/gu, "").toLowerCase();
+
+    const filter = () => {
+      const query = normalize(search.value);
+      let shown = 0;
+      subnav.querySelectorAll<HTMLElement>("[data-admin-subnav-group]").forEach((group) => {
+        let groupShown = 0;
+        group.querySelectorAll<HTMLElement>("[data-admin-subnav-item]").forEach((item) => {
+          const match = query === "" || normalize(item.dataset.label ?? "").includes(query);
+          item.hidden = !match;
+          if (match) groupShown += 1;
+        });
+        group.hidden = groupShown === 0;
+        shown += groupShown;
+      });
+      empty.hidden = shown > 0;
+    };
+
+    search.addEventListener("input", filter);
+    window.addEventListener("pageshow", () => {
+      search.value = "";
+      filter();
+    });
+  });
+</script>

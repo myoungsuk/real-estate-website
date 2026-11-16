@@ -1,5 +1,7 @@
 ---
 import AdminApiStatus from "../../components/admin/AdminApiStatus.astro";
+import AdminIcon from "../../components/admin/AdminIcon.astro";
+import AdminSubnav from "../../components/admin/AdminSubnav.astro";
 import AdminLayout from "../../layouts/AdminLayout.astro";
 import { naverListings, naverListingsUpdatedAt } from "../../lib/naver-listings";
 import { buildListingReviewQueue } from "../../lib/listing-review.mjs";
@@ -23,12 +25,44 @@ const reviewQueue = buildListingReviewQueue(
   reviewPolicy,
   `${todayParts.year}-${todayParts.month}-${todayParts.day}`,
 );
+
+const subnavGroups = [
+  {
+    label: "바로가기",
+    items: [
+      { href: "/admin/", label: "운영 현황", icon: "dashboard" as const, tone: "blue" },
+      { href: "/admin/listings/", label: "네이버 매물 관리", icon: "building" as const, tone: "teal" },
+      { href: "/admin/listings/editor/", label: "매물 등록·동기화", icon: "building" as const, tone: "teal" },
+      { href: "/admin/work/", label: "업무 도구", icon: "tools" as const, tone: "rose" },
+    ],
+  },
+  {
+    label: "확인",
+    items: [
+      { href: "/admin/deployment/", label: "배포 상태", icon: "cloud" as const, tone: "navy" },
+      { href: "/admin/history/", label: "변경 이력·복원", icon: "history" as const, tone: "gold" },
+    ],
+  },
+];
 ---
 
 <AdminLayout
   title="관리자 대시보드 | 행복한부동산"
   description="행복한부동산 콘텐츠와 배포 상태를 확인하는 관리자 대시보드입니다."
 >
+  <AdminSubnav slot="aside" title="대시보드" icon="dashboard" tone="navy" searchLabel="메뉴 찾기" groups={subnavGroups}>
+    <Fragment slot="footer">
+      <p class="admin-subnav__note">
+        <AdminIcon name="shield" size={15} />
+        Access 보호 영역입니다. 저장은 별도 GitHub 연결이 필요합니다.
+      </p>
+      <a class="admin-subnav__footer-link" href="/">
+        공개 홈페이지
+        <AdminIcon name="external" size={15} />
+      </a>
+    </Fragment>
+  </AdminSubnav>
+
   <div class="admin-page-header">
     <div>
       <p class="admin-eyebrow">ADMIN CONSOLE</p>
