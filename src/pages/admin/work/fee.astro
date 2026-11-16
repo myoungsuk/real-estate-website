@@ -1,0 +1,411 @@
+---
+import WorkLegalBasis from "../../../components/admin/WorkLegalBasis.astro";
+import WorkToolNav from "../../../components/admin/WorkToolNav.astro";
+import legalRules from "../../../data/work/legal-rules.json";
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import { FEE_DEAL_TYPES, PROPERTY_KINDS } from "../../../lib/work/brokerage-fee.mjs";
+
+const amountFields = [
+  { key: "price", label: "매매가(원)", placeholder: "예: 180000000" },
+  { key: "exchangeA", label: "교환 물건 1 가액(원)", placeholder: "예: 300000000" },
+  { key: "exchangeB", label: "교환 물건 2 가액(원)", placeholder: "예: 350000000" },
+  { key: "deposit", label: "보증금(원)", placeholder: "예: 100000000" },
+  { key: "rent", label: "월세(원)", placeholder: "예: 300000" },
+];
+---
+
+<AdminLayout
+  title="중개보수 계산 | 행복한부동산 관리자"
+  description="거래 조건으로 법정 상한 중개보수와 협의 요율 금액을 계산하는 관리자 업무 도구입니다."
+>
+  <div class="admin-page-header admin-page-header--compact">
+    <div>
+      <p class="admin-eyebrow">WORK TOOLS · FEE</p>
+      <h1>중개보수 계산</h1>
+      <p>물건·거래 종류를 고르고 금액을 넣으면 한쪽 의뢰인 기준 상한 보수가 바로 나옵니다. 1원 미만은 버립니다.</p>
+    </div>
+    <span class="admin-stage-badge">저장하지 않음</span>
+  </div>
+
+  <WorkToolNav />
+
+  <div class="work-tool work-layout" data-fee-tool>
+    <section class="admin-panel" aria-labelledby="fee-input-title">
+      <div class="admin-panel__heading">
+        <div>
+          <p class="admin-eyebrow">1단계</p>
+          <h2 id="fee-input-title">거래 조건</h2>
+        </div>
+      </div>
+
+      <fieldset class="work-choice-group">
+        <legend>물건 종류</legend>
+        <div class="work-choices">
+          {Object.entries(PROPERTY_KINDS).map(([value, label]) => (
+            <label class="work-choice">
+              <input type="radio" name="fee-property-kind" value={value} autocomplete="off" />
+              <span>{label}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+      <fieldset class="work-choice-group">
+        <legend>거래 종류</legend>
+        <div class="work-choices">
+          {Object.entries(FEE_DEAL_TYPES).map(([value, label]) => (
+            <label class="work-choice">
+              <input type="radio" name="fee-deal-type" value={value} autocomplete="off" />
+              <span>{label}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+      <div class="admin-form-grid">
+        <div class="admin-field">
+          <label for="fee-contract-date">계약일</label>
+          <input id="fee-contract-date" type="date" autocomplete="off" data-fee-contract-date />
+          <small>기본값은 오늘입니다. 계약일로 요율 기준을 고릅니다.</small>
+        </div>
+        {amountFields.map((field) => (
+          <div class="admin-field" data-fee-field={field.key}>
+            <label for={`fee-${field.key}`}>{field.label}</label>
+            <input
+              id={`fee-${field.key}`}
+              type="text"
+              inputmode="numeric"
+              autocomplete="off"
+              placeholder={field.placeholder}
+              data-fee-amount={field.key}
+            />
+            <small class="work-amount-hint" aria-live="polite" data-fee-hint={field.key}></small>
+          </div>
+        ))}
+      </div>
+
+      <fieldset class="work-choice-group" data-fee-section="officetel">
+        <legend>오피스텔 조건(둘 다 맞아야 오피스텔 요율)</legend>
+        <div class="work-checks">
+          <label class="work-check">
+            <input type="checkbox" autocomplete="off" data-fee-officetel="exclusiveAreaAtMost85" />
+            <span>전용면적 85㎡ 이하</span>
+          </label>
+          <label class="work-check">
+            <input type="checkbox" autocomplete="off" data-fee-officetel="kitchenToiletBath" />
+            <span>전용 입식 부엌·수세식 화장실·목욕시설을 갖춤</span>
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset class="work-choice-group" data-fee-section="mixed">
+        <legend>주택 면적 비율</legend>
+        <div class="work-choices">
+          <label class="work-choice">
+            <input type="radio" name="fee-housing-ratio" value="atLeastHalf" autocomplete="off" />
+            <span>주택 면적이 2분의 1 이상</span>
+          </label>
+          <label class="work-choice">
+            <input type="radio" name="fee-housing-ratio" value="lessThanHalf" autocomplete="off" />
+            <span>주택 면적이 2분의 1 미만</span>
+          </label>
+        </div>
+      </fieldset>
+
+      <div class="admin-field" data-fee-section="other-rate">
+        <label for="fee-office-rate">사무소 게시 상한요율(%)</label>
+        <input id="fee-office-rate" type="text" inputmode="decimal" autocomplete="off" data-fee-office-rate />
+        <small>그 밖의 건축물·토지로 계산될 때 씁니다. 사무소 요율표에 게시한 값을 넣고, 0.90%를 넘을 수 없습니다.</small>
+      </div>
+
+      <p class="work-help">물건이 대전 밖에 있어도 중개사무소 소재지(대전광역시) 조례의 요율표를 씁니다(공인중개사법 시행규칙 제20조 제3항). 대전 밖 사무소 기준 계산은 지원하지 않습니다.</p>
+    </section>
+
+    <section class="admin-panel work-result" aria-labelledby="fee-result-title">
+      <div class="admin-panel__heading">
+        <div>
+          <p class="admin-eyebrow">2단계</p>
+          <h2 id="fee-result-title">계산 결과</h2>
+        </div>
+      </div>
+
+      <p class="work-message" role="status" aria-live="polite" data-fee-message></p>
+
+      <div data-fee-result hidden>
+        <dl class="work-facts">
+          <div><dt>거래금액</dt><dd data-fee-out="amount"></dd></div>
+          <div data-fee-out-row="explanation"><dt>계산 근거</dt><dd data-fee-out="explanation"></dd></div>
+          <div><dt>적용 기준</dt><dd data-fee-out="table"></dd></div>
+          <div><dt>상한요율</dt><dd data-fee-out="rate"></dd></div>
+          <div><dt>상한 보수</dt><dd data-fee-out="max"></dd></div>
+          <div data-fee-out-row="agreed"><dt>협의 요율 금액</dt><dd data-fee-out="agreed"></dd></div>
+          <div data-fee-out-row="vat"><dt>부가세(10%) 별도</dt><dd data-fee-out="vat"></dd></div>
+        </dl>
+        <div class="work-total">
+          <span data-fee-out="total-label">합계(한쪽 의뢰인 기준)</span>
+          <strong data-fee-out="total"></strong>
+        </div>
+        <ul class="work-notes" data-fee-notes></ul>
+      </div>
+
+      <div class="work-subsection">
+        <h3>3단계 · 협의 요율과 부가세</h3>
+        <div class="admin-form-grid">
+          <div class="admin-field">
+            <label for="fee-agreed-rate">협의 요율(%, 선택)</label>
+            <input id="fee-agreed-rate" type="text" inputmode="decimal" autocomplete="off" placeholder="예: 0.30" data-fee-agreed-rate />
+            <small>0.01% 단위. 상한요율을 넘으면 계산하지 않습니다.</small>
+          </div>
+          <label class="work-check work-check--boxed">
+            <input type="checkbox" autocomplete="off" data-fee-vat />
+            <span>부가세 10% 별도 표시(일반과세자)</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="work-actions">
+        <button class="admin-primary-button" type="button" data-fee-copy disabled>결과 복사</button>
+      </div>
+      <p class="admin-form-status" role="status" aria-live="polite" data-fee-copy-status></p>
+      <textarea class="work-copy-fallback" rows="10" readonly aria-label="복사할 결과 문장" data-fee-copy-fallback hidden></textarea>
+    </section>
+  </div>
+
+  <WorkLegalBasis ruleIds={legalRules.brokerageFeeRules.map((rule) => rule.id)} />
+
+  <script>
+    import legalRules from "../../../data/work/legal-rules.json";
+    import {
+      DEFAULT_OFFICE_OTHER_RATE_BP,
+      DEFAULT_VAT_DISPLAY,
+      calculateBrokerageFee,
+      formatFeeResultText,
+    } from "../../../lib/work/brokerage-fee.mjs";
+    import { todayInKorea } from "../../../lib/work/legal-dates.mjs";
+    import {
+      WorkInputError,
+      formatKoreanWon,
+      formatRateBp,
+      formatWon,
+      parseRatePercentInput,
+      parseWonInput,
+    } from "../../../lib/work/work-format.mjs";
+
+    type AmountKey = "price" | "exchangeA" | "exchangeB" | "deposit" | "rent";
+
+    const root = document.querySelector<HTMLElement>("[data-fee-tool]");
+
+    if (root) {
+      const contractDate = root.querySelector<HTMLInputElement>("[data-fee-contract-date]");
+      const officeRate = root.querySelector<HTMLInputElement>("[data-fee-office-rate]");
+      const agreedRate = root.querySelector<HTMLInputElement>("[data-fee-agreed-rate]");
+      const vat = root.querySelector<HTMLInputElement>("[data-fee-vat]");
+      const message = root.querySelector<HTMLElement>("[data-fee-message]");
+      const result = root.querySelector<HTMLElement>("[data-fee-result]");
+      const notes = root.querySelector<HTMLUListElement>("[data-fee-notes]");
+      const copyButton = root.querySelector<HTMLButtonElement>("[data-fee-copy]");
+      const copyStatus = root.querySelector<HTMLElement>("[data-fee-copy-status]");
+      const copyFallback = root.querySelector<HTMLTextAreaElement>("[data-fee-copy-fallback]");
+      const amountKeys: AmountKey[] = ["price", "exchangeA", "exchangeB", "deposit", "rent"];
+      const amountLabels: Record<AmountKey, string> = {
+        price: "매매가",
+        exchangeA: "교환 물건 1 가액",
+        exchangeB: "교환 물건 2 가액",
+        deposit: "보증금",
+        rent: "월세",
+      };
+      let latestText = "";
+
+      if (contractDate && officeRate && agreedRate && vat && message && result && notes && copyButton && copyStatus && copyFallback) {
+        const amountInput = (key: AmountKey) => root.querySelector<HTMLInputElement>(`[data-fee-amount="${key}"]`);
+        const amountHint = (key: AmountKey) => root.querySelector<HTMLElement>(`[data-fee-hint="${key}"]`);
+        const fieldWrap = (key: AmountKey) => root.querySelector<HTMLElement>(`[data-fee-field="${key}"]`);
+        const section = (name: string) => root.querySelector<HTMLElement>(`[data-fee-section="${name}"]`);
+        const out = (name: string) => root.querySelector<HTMLElement>(`[data-fee-out="${name}"]`);
+        const outRow = (name: string) => root.querySelector<HTMLElement>(`[data-fee-out-row="${name}"]`);
+        const checkedValue = (name: string) =>
+          root.querySelector<HTMLInputElement>(`input[name="${name}"]:checked`)?.value ?? "";
+
+        const visibleAmountKeys = (dealType: string): AmountKey[] => {
+          if (dealType === "sale" || dealType === "sale_and_lease") return ["price"];
+          if (dealType === "exchange") return ["exchangeA", "exchangeB"];
+          if (dealType === "jeonse") return ["deposit"];
+          if (dealType === "monthly_rent") return ["deposit", "rent"];
+          return [];
+        };
+
+        const setText = (name: string, text: string) => {
+          const element = out(name);
+          if (element) element.textContent = text;
+        };
+
+        const showMessage = (text: string, state: "idle" | "error") => {
+          message.textContent = text;
+          message.dataset.state = state;
+          result.hidden = true;
+          latestText = "";
+          copyButton.disabled = true;
+        };
+
+        const updateVisibility = (propertyKind: string, dealType: string) => {
+          const visible = new Set(visibleAmountKeys(dealType));
+          amountKeys.forEach((key) => {
+            const wrap = fieldWrap(key);
+            if (wrap) wrap.hidden = !visible.has(key);
+          });
+          const officetel = section("officetel");
+          const mixed = section("mixed");
+          const other = section("other-rate");
+          if (officetel) officetel.hidden = propertyKind !== "officetel";
+          if (mixed) mixed.hidden = propertyKind !== "mixed";
+          if (other) other.hidden = !["officetel", "mixed", "other"].includes(propertyKind);
+          return visible;
+        };
+
+        const readAmount = (key: AmountKey, allowZero = false) => {
+          const input = amountInput(key);
+          const hint = amountHint(key);
+          try {
+            const value = parseWonInput(input?.value, { allowZero, label: amountLabels[key] });
+            if (hint) {
+              hint.textContent = value === null ? "" : formatKoreanWon(value);
+              hint.dataset.state = "ok";
+            }
+            return { value, error: null as string | null };
+          } catch (error) {
+            const text = error instanceof WorkInputError ? error.message : "금액을 확인해 주세요.";
+            if (hint) {
+              hint.textContent = text;
+              hint.dataset.state = "error";
+            }
+            return { value: null, error: text };
+          }
+        };
+
+        const update = () => {
+          copyStatus.textContent = "";
+          copyFallback.hidden = true;
+          const propertyKind = checkedValue("fee-property-kind");
+          const dealType = checkedValue("fee-deal-type");
+          const visible = updateVisibility(propertyKind, dealType);
+          amountKeys.filter((key) => !visible.has(key)).forEach((key) => {
+            const hint = amountHint(key);
+            if (hint) hint.textContent = "";
+          });
+
+          const amounts: Partial<Record<AmountKey, number | null>> = {};
+          let firstError: string | null = null;
+          for (const key of visible) {
+            const read = readAmount(key, dealType === "monthly_rent" && key === "deposit");
+            amounts[key] = read.value;
+            firstError ??= read.error;
+          }
+
+          if (!propertyKind || !dealType) return showMessage("물건 종류와 거래 종류를 고르세요.", "idle");
+          if (firstError) return showMessage(firstError, "error");
+          if ([...visible].some((key) => amounts[key] === null)) {
+            return showMessage("금액을 입력하면 결과가 바로 나옵니다.", "idle");
+          }
+
+          let officeRateBp: number | null;
+          let agreedRateBp: number | null;
+          try {
+            officeRateBp = parseRatePercentInput(officeRate.value, { label: "사무소 게시 상한요율" });
+            agreedRateBp = parseRatePercentInput(agreedRate.value, { label: "협의 요율" });
+          } catch (error) {
+            return showMessage(error instanceof WorkInputError ? error.message : "요율을 확인해 주세요.", "error");
+          }
+
+          const ratio = checkedValue("fee-housing-ratio");
+          if (propertyKind === "mixed" && ratio === "") {
+            return showMessage("주택 면적이 건물 면적의 2분의 1 이상인지 고르세요.", "idle");
+          }
+          const calculation = calculateBrokerageFee({
+            propertyKind,
+            dealType,
+            contractDate: contractDate.value,
+            priceWon: amounts.price,
+            exchangeValuesWon: [amounts.exchangeA, amounts.exchangeB],
+            depositWon: amounts.deposit,
+            monthlyRentWon: amounts.rent,
+            housingAreaAtLeastHalf: ratio === "" ? undefined : ratio === "atLeastHalf",
+            officetelConditions: Object.fromEntries(
+              [...root.querySelectorAll<HTMLInputElement>("[data-fee-officetel]")].map((box) => [box.dataset.feeOfficetel, box.checked]),
+            ),
+            officeOtherRateBp: officeRateBp ?? DEFAULT_OFFICE_OTHER_RATE_BP,
+            agreedRateBp,
+            vatDisplay: vat.checked,
+          }, legalRules);
+
+          if (!calculation.ok) return showMessage(calculation.error.message, "error");
+
+          message.textContent = "";
+          message.dataset.state = "idle";
+          setText("amount", formatKoreanWon(calculation.amountWon));
+          setText("explanation", calculation.amountExplanation ?? "");
+          const explanationRow = outRow("explanation");
+          if (explanationRow) explanationRow.hidden = !calculation.amountExplanation;
+          setText("table", `${calculation.tableLabel} · ${calculation.bracketLabel}`);
+          setText("rate", `${calculation.rateLimitLabel} ${formatRateBp(calculation.rateBp)}${calculation.capWon === null ? "" : ` · 한도액 ${formatWon(calculation.capWon)}`}`);
+          setText("max", `${formatWon(calculation.maxFeeWon)}${calculation.capApplied ? " (한도액 적용)" : ""}`);
+          const agreedRow = outRow("agreed");
+          if (agreedRow) agreedRow.hidden = !calculation.agreed;
+          setText("agreed", calculation.agreed ? `${formatRateBp(calculation.agreed.rateBp)} → ${formatWon(calculation.agreed.feeWon)}` : "");
+          const vatRow = outRow("vat");
+          if (vatRow) vatRow.hidden = calculation.vatWon === null;
+          setText("vat", calculation.vatWon === null ? "" : formatWon(calculation.vatWon));
+          setText("total-label", calculation.vatWon === null ? "보수(한쪽 의뢰인 기준)" : "합계(부가세 포함, 한쪽 의뢰인 기준)");
+          setText("total", formatWon(calculation.totalWon));
+          notes.replaceChildren(...calculation.notes.map((note: string) => {
+            const item = document.createElement("li");
+            item.textContent = note;
+            return item;
+          }));
+          result.hidden = false;
+          latestText = formatFeeResultText(calculation);
+          copyButton.disabled = false;
+        };
+
+        const reset = () => {
+          root.querySelectorAll<HTMLInputElement>("input[type='radio'], input[type='checkbox']").forEach((input) => {
+            input.checked = false;
+          });
+          root.querySelectorAll<HTMLInputElement>("[data-fee-amount]").forEach((input) => {
+            input.value = "";
+          });
+          const firstProperty = root.querySelector<HTMLInputElement>('input[name="fee-property-kind"][value="housing"]');
+          const firstDeal = root.querySelector<HTMLInputElement>('input[name="fee-deal-type"][value="sale"]');
+          if (firstProperty) firstProperty.checked = true;
+          if (firstDeal) firstDeal.checked = true;
+          contractDate.value = todayInKorea();
+          officeRate.value = formatRateBp(DEFAULT_OFFICE_OTHER_RATE_BP).replace("%", "");
+          agreedRate.value = "";
+          vat.checked = DEFAULT_VAT_DISPLAY;
+          update();
+        };
+
+        root.addEventListener("input", update);
+        root.addEventListener("change", update);
+        copyButton.addEventListener("click", async () => {
+          if (!latestText) return;
+          try {
+            await navigator.clipboard.writeText(latestText);
+            copyStatus.textContent = "✓ 결과를 복사했습니다.";
+            copyStatus.dataset.state = "success";
+          } catch {
+            copyFallback.value = latestText;
+            copyFallback.hidden = false;
+            copyFallback.focus();
+            copyFallback.select();
+            copyStatus.textContent = "자동 복사가 막혔습니다. 아래 선택된 문장을 직접 복사해 주세요.";
+            copyStatus.dataset.state = "error";
+          }
+        });
+        window.addEventListener("pageshow", (event) => {
+          if (event.persisted) reset();
+        });
+        reset();
+      }
+    }
+  </script>
+</AdminLayout>

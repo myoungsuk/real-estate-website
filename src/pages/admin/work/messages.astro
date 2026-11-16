@@ -1,0 +1,261 @@
+---
+import WorkToolNav from "../../../components/admin/WorkToolNav.astro";
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import { MESSAGE_DEAL_TYPES, MESSAGE_TEMPLATES, MESSAGE_VARIANTS } from "../../../lib/work/message-templates.mjs";
+---
+
+<AdminLayout
+  title="안내 문자 만들기 | 행복한부동산 관리자"
+  description="가계약·약정금 입금·계약일 안내 문장을 만드는 관리자 업무 도구입니다."
+>
+  <div class="admin-page-header admin-page-header--compact">
+    <div>
+      <p class="admin-eyebrow">WORK TOOLS · MESSAGE</p>
+      <h1>안내 문자 만들기</h1>
+      <p>빈 칸은 대괄호 자리표시로 남습니다. 복사하거나 문자 앱을 연 뒤 손님 번호를 직접 골라 보내세요.</p>
+    </div>
+    <span class="admin-stage-badge">저장하지 않음</span>
+  </div>
+
+  <WorkToolNav />
+
+  <p class="admin-inline-notice">
+    <span aria-hidden="true">!</span>
+    <span>손님 이름·전화번호·주민등록번호·계좌 비밀번호는 넣지 마세요. 계좌 정보는 이 화면에서만 쓰고 저장하지 않습니다.</span>
+  </p>
+
+  <div class="work-tool work-layout" data-message-tool>
+    <section class="admin-panel" aria-labelledby="message-input-title">
+      <div class="admin-panel__heading">
+        <div>
+          <p class="admin-eyebrow">1단계</p>
+          <h2 id="message-input-title">문자 종류와 내용</h2>
+        </div>
+      </div>
+
+      <fieldset class="work-choice-group">
+        <legend>문자 종류</legend>
+        <div class="work-choices">
+          {Object.entries(MESSAGE_TEMPLATES).map(([value, template]) => (
+            <label class="work-choice">
+              <input type="radio" name="message-template" value={value} autocomplete="off" />
+              <span>{template.label}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+      <fieldset class="work-choice-group">
+        <legend>형태</legend>
+        <div class="work-choices">
+          {Object.entries(MESSAGE_VARIANTS).map(([value, label]) => (
+            <label class="work-choice">
+              <input type="radio" name="message-variant" value={value} autocomplete="off" />
+              <span>{label}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+      <fieldset class="admin-subform">
+        <legend>물건·거래</legend>
+        <div class="admin-form-grid">
+          <div class="admin-field">
+            <label for="message-property">물건 표시</label>
+            <input id="message-property" type="text" maxlength="40" autocomplete="off" placeholder="예: 가상단지 101동" data-message-field="property" />
+            <small>단지·동까지만 적고 호수는 적지 마세요.</small>
+          </div>
+          <div class="admin-field">
+            <label for="message-deal-type">거래 종류</label>
+            <select id="message-deal-type" autocomplete="off" data-message-field="dealType">
+              <option value="">선택 안 함</option>
+              {Object.entries(MESSAGE_DEAL_TYPES).map(([value, label]) => <option value={value}>{label}</option>)}
+            </select>
+          </div>
+          <div class="admin-field">
+            <label for="message-amount" data-message-amount-label>거래 금액(원)</label>
+            <input id="message-amount" type="text" inputmode="numeric" autocomplete="off" placeholder="예: 320000000" data-message-field="amountWon" />
+            <small class="work-amount-hint" aria-live="polite" data-message-hint="amountWon"></small>
+          </div>
+          <div class="admin-field" data-message-group="rent">
+            <label for="message-rent">월세(원)</label>
+            <input id="message-rent" type="text" inputmode="numeric" autocomplete="off" placeholder="예: 500000" data-message-field="monthlyRentWon" />
+            <small class="work-amount-hint" aria-live="polite" data-message-hint="monthlyRentWon"></small>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset class="admin-subform" data-message-group="deposit">
+        <legend>입금 안내</legend>
+        <div class="admin-form-grid">
+          <div class="admin-field">
+            <label for="message-deposit" data-message-deposit-label>가계약금(원)</label>
+            <input id="message-deposit" type="text" inputmode="numeric" autocomplete="off" placeholder="예: 10000000" data-message-field="depositAmountWon" />
+            <small class="work-amount-hint" aria-live="polite" data-message-hint="depositAmountWon"></small>
+          </div>
+          <div class="admin-field">
+            <label for="message-deadline">입금 기한</label>
+            <input id="message-deadline" type="text" maxlength="40" autocomplete="off" placeholder="예: 11월 17일 오후 6시" data-message-field="depositDeadline" />
+          </div>
+          <div class="admin-field">
+            <label for="message-bank">은행</label>
+            <input id="message-bank" type="text" maxlength="20" autocomplete="off" placeholder="예: 가상은행" data-message-field="bank" />
+          </div>
+          <div class="admin-field">
+            <label for="message-account">계좌번호</label>
+            <input id="message-account" type="text" inputmode="numeric" maxlength="30" autocomplete="off" placeholder="숫자와 -만" data-message-field="accountNumber" />
+          </div>
+          <div class="admin-field">
+            <label for="message-holder">예금주</label>
+            <input id="message-holder" type="text" maxlength="20" autocomplete="off" placeholder="등기부상 소유자와 같은지 확인" data-message-field="accountHolder" />
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset class="admin-subform">
+        <legend>일정·메모</legend>
+        <div class="admin-form-grid">
+          <div class="admin-field">
+            <label for="message-contract-date" data-message-date-label>계약 예정일</label>
+            <input id="message-contract-date" type="date" autocomplete="off" data-message-field="contractDate" />
+          </div>
+          <div class="admin-field admin-field--wide">
+            <label for="message-memo">특약 메모(선택, 최대 300자)</label>
+            <textarea id="message-memo" rows="3" maxlength="300" autocomplete="off" placeholder="비우면 문장에서 빠집니다." data-message-field="specialMemo"></textarea>
+          </div>
+        </div>
+      </fieldset>
+    </section>
+
+    <section class="admin-panel work-result" aria-labelledby="message-preview-title">
+      <div class="admin-panel__heading">
+        <div>
+          <p class="admin-eyebrow">2단계</p>
+          <h2 id="message-preview-title">미리보기</h2>
+        </div>
+      </div>
+      <div class="admin-field">
+        <label for="message-preview">보낼 문장</label>
+        <textarea id="message-preview" class="work-preview" rows="16" readonly data-message-preview></textarea>
+        <small aria-live="polite" data-message-count></small>
+      </div>
+      <div class="work-actions">
+        <button class="admin-primary-button" type="button" data-message-copy>문장 복사</button>
+        <a class="admin-secondary-button work-link-button" href="sms:" data-message-sms="query">문자 앱 열기</a>
+        <a class="admin-secondary-button work-link-button" href="sms:" data-message-sms="ampersand">문자 앱 열기(iPhone에서 본문이 비면)</a>
+      </div>
+      <p class="admin-form-status" role="status" aria-live="polite" data-message-status></p>
+      <p class="work-help">문자 앱은 받는 사람이 빈 채로 열립니다. 길이 제한은 통신사마다 달라 막지 않습니다.</p>
+    </section>
+  </div>
+
+  <script>
+    import office from "../../../data/office.json";
+    import { MESSAGE_TEMPLATES, buildSmsHref, buildWorkMessage } from "../../../lib/work/message-templates.mjs";
+    import { WorkInputError, formatKoreanWon, groupDigits, parseWonInput } from "../../../lib/work/work-format.mjs";
+
+    const amountFields = ["amountWon", "monthlyRentWon", "depositAmountWon"] as const;
+    type AmountField = (typeof amountFields)[number];
+    const root = document.querySelector<HTMLElement>("[data-message-tool]");
+
+    if (root) {
+      const preview = root.querySelector<HTMLTextAreaElement>("[data-message-preview]");
+      const count = root.querySelector<HTMLElement>("[data-message-count]");
+      const copyButton = root.querySelector<HTMLButtonElement>("[data-message-copy]");
+      const status = root.querySelector<HTMLElement>("[data-message-status]");
+      const depositLabel = root.querySelector<HTMLElement>("[data-message-deposit-label]");
+      const dateLabel = root.querySelector<HTMLElement>("[data-message-date-label]");
+      const amountLabel = root.querySelector<HTMLElement>("[data-message-amount-label]");
+      const depositGroup = root.querySelector<HTMLElement>('[data-message-group="deposit"]');
+      const rentGroup = root.querySelector<HTMLElement>('[data-message-group="rent"]');
+      const smsLinks = [...root.querySelectorAll<HTMLAnchorElement>("[data-message-sms]")];
+
+      if (preview && count && copyButton && status && depositLabel && dateLabel && amountLabel && depositGroup && rentGroup) {
+        const field = (name: string) =>
+          root.querySelector<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(`[data-message-field="${name}"]`);
+        const checkedValue = (name: string) =>
+          root.querySelector<HTMLInputElement>(`input[name="${name}"]:checked`)?.value ?? "";
+
+        const readAmount = (name: AmountField) => {
+          const hint = root.querySelector<HTMLElement>(`[data-message-hint="${name}"]`);
+          try {
+            const value = parseWonInput(field(name)?.value, { label: "금액" });
+            if (hint) {
+              hint.textContent = value === null ? "" : formatKoreanWon(value);
+              hint.dataset.state = "ok";
+            }
+            return value;
+          } catch (error) {
+            if (hint) {
+              hint.textContent = error instanceof WorkInputError ? `${error.message} 문장에는 빈 칸으로 남습니다.` : "금액을 확인해 주세요.";
+              hint.dataset.state = "error";
+            }
+            return null;
+          }
+        };
+
+        const update = () => {
+          status.textContent = "";
+          const templateId = checkedValue("message-template") as keyof typeof MESSAGE_TEMPLATES;
+          const template = MESSAGE_TEMPLATES[templateId] ?? MESSAGE_TEMPLATES.provisional;
+          const variant = checkedValue("message-variant") || "basic";
+          const dealType = field("dealType")?.value ?? "";
+          depositGroup.hidden = !template.usesAccount;
+          rentGroup.hidden = dealType !== "monthly_rent";
+          depositLabel.textContent = `${template.depositLabel ?? "가계약금"}(원)`;
+          dateLabel.textContent = templateId === "provisional" ? "본계약 예정일" : "계약 예정일";
+          amountLabel.textContent = dealType === "sale" || dealType === "" ? "거래 금액(원)" : "보증금(원)";
+
+          const values = {
+            property: field("property")?.value ?? "",
+            dealType,
+            amountWon: readAmount("amountWon"),
+            monthlyRentWon: dealType === "monthly_rent" ? readAmount("monthlyRentWon") : null,
+            depositAmountWon: template.usesAccount ? readAmount("depositAmountWon") : null,
+            depositDeadline: template.usesAccount ? field("depositDeadline")?.value ?? "" : "",
+            bank: template.usesAccount ? field("bank")?.value ?? "" : "",
+            accountNumber: template.usesAccount ? field("accountNumber")?.value ?? "" : "",
+            accountHolder: template.usesAccount ? field("accountHolder")?.value ?? "" : "",
+            contractDate: field("contractDate")?.value ?? "",
+            specialMemo: field("specialMemo")?.value ?? "",
+          };
+          const message = buildWorkMessage({ templateId: templateId in MESSAGE_TEMPLATES ? templateId : "provisional", variant, values, office });
+          preview.value = message.text;
+          count.textContent = `${groupDigits(message.characterCount)}자 · 약 ${groupDigits(message.byteEstimate)}바이트(한글 2바이트 기준)`;
+          smsLinks.forEach((link) => {
+            link.href = buildSmsHref(message.text, link.dataset.messageSms === "ampersand" ? "ampersand" : "query");
+          });
+        };
+
+        const reset = () => {
+          root.querySelectorAll<HTMLInputElement>("input[type='radio']").forEach((input) => {
+            input.checked = input.value === "provisional" || input.value === "basic";
+          });
+          root.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("[data-message-field]").forEach((input) => {
+            input.value = "";
+          });
+          update();
+        };
+
+        root.addEventListener("input", update);
+        root.addEventListener("change", update);
+        copyButton.addEventListener("click", async () => {
+          try {
+            await navigator.clipboard.writeText(preview.value);
+            status.textContent = "✓ 문장을 복사했습니다. 문자·카카오톡에 붙여 넣으세요.";
+            status.dataset.state = "success";
+          } catch {
+            preview.focus();
+            preview.select();
+            status.textContent = "자동 복사가 막혔습니다. 선택된 문장을 직접 복사해 주세요.";
+            status.dataset.state = "error";
+          }
+        });
+        window.addEventListener("pageshow", (event) => {
+          if (event.persisted) reset();
+        });
+        reset();
+      }
+    }
+  </script>
+</AdminLayout>

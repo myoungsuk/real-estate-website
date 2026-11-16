@@ -1,0 +1,105 @@
+{
+  "schemaVersion": 1,
+  "checkedAt": "2026-11-16",
+  "brokerageFeeRules": [
+    {
+      "id": "kr-housing-2021-10-19-daejeon-2022-05-16",
+      "appliesFrom": "2022-05-16",
+      "appliesTo": "contractDate",
+      "region": "daejeon",
+      "sources": [
+        { "title": "공인중개사법 시행규칙 제20조, 별표 1, 별표 2", "version": "국토교통부령 제1611호, 2026. 8. 11., 시행 2026. 8. 28." },
+        { "title": "대전광역시 주택의 중개보수 등에 관한 조례 제2조", "version": "대전광역시조례 제6262호, 2024. 5. 17." }
+      ],
+      "housing": {
+        "sale": [
+          { "minWon": 0, "maxWonExclusive": 50000000, "rateBp": 60, "capWon": 250000 },
+          { "minWon": 50000000, "maxWonExclusive": 200000000, "rateBp": 50, "capWon": 800000 },
+          { "minWon": 200000000, "maxWonExclusive": 900000000, "rateBp": 40, "capWon": null },
+          { "minWon": 900000000, "maxWonExclusive": 1200000000, "rateBp": 50, "capWon": null },
+          { "minWon": 1200000000, "maxWonExclusive": 1500000000, "rateBp": 60, "capWon": null },
+          { "minWon": 1500000000, "maxWonExclusive": null, "rateBp": 70, "capWon": null }
+        ],
+        "lease": [
+          { "minWon": 0, "maxWonExclusive": 50000000, "rateBp": 50, "capWon": 200000 },
+          { "minWon": 50000000, "maxWonExclusive": 100000000, "rateBp": 40, "capWon": 300000 },
+          { "minWon": 100000000, "maxWonExclusive": 600000000, "rateBp": 30, "capWon": null },
+          { "minWon": 600000000, "maxWonExclusive": 1200000000, "rateBp": 40, "capWon": null },
+          { "minWon": 1200000000, "maxWonExclusive": 1500000000, "rateBp": 50, "capWon": null },
+          { "minWon": 1500000000, "maxWonExclusive": null, "rateBp": 60, "capWon": null }
+        ]
+      },
+      "officetel": {
+        "conditions": ["exclusiveAreaAtMost85", "kitchenToiletBath"],
+        "saleRateBp": 50,
+        "leaseRateBp": 40
+      },
+      "otherMaxRateBp": 90,
+      "monthlyRentConversion": { "multiplier": 100, "lowMultiplier": 70, "lowThresholdWon": 50000000 }
+    }
+  ],
+  "deadlineRules": [
+    {
+      "id": "kr-transaction-report-30d",
+      "kind": "transactionReport",
+      "days": 30,
+      "label": "거래신고",
+      "calendarTitle": "거래신고 기한",
+      "legalText": "법정 기한: 계약일부터 30일 이내(부동산 거래신고 등에 관한 법률 제3조 제1항). 개업공인중개사가 거래계약서를 작성·교부한 경우 그 중개사가 신고하고(같은 조 제3항, 공동 중개면 함께 신고), 그 밖에는 거래당사자가 공동으로 신고한다(한쪽이 국가 등이면 국가 등이 신고).",
+      "sources": [
+        { "title": "부동산 거래신고 등에 관한 법률 제3조 제1항·제3항", "version": "법률 제20194호, 2024. 2. 6., 시행 2024. 5. 17." }
+      ]
+    },
+    {
+      "id": "kr-funding-plan-delivery-25d",
+      "kind": "fundingPlanDelivery",
+      "days": 25,
+      "label": "자금조달계획서 등 전달(법인·매수인 외의 사람이 신고하는 경우)",
+      "calendarTitle": "자금조달계획서 전달 기한",
+      "legalText": "법정 기한: 계약일부터 25일 이내(부동산 거래신고 등에 관한 법률 시행규칙 제2조 제10항). 중개사 등 법인 또는 매수인 외의 사람이 법인신고서등(법인 신고서·자금조달·입주계획서 등)을 제출하는 경우 법인 또는 매수인이 신고하려는 사람에게 제공하고, 이 기간 안에 제공하지 않으면 법인 또는 매수인이 따로 제출한다.",
+      "sources": [
+        { "title": "부동산 거래신고 등에 관한 법률 시행규칙 제2조 제9항·제10항", "version": "국토교통부령 제1557호, 2026. 2. 6., 시행 2026. 2. 10." }
+      ]
+    },
+    {
+      "id": "kr-funding-plan-separate-30d",
+      "kind": "fundingPlanSeparate",
+      "days": 30,
+      "label": "자금조달계획서 별도 제출",
+      "calendarTitle": "자금조달계획서 제출 기한",
+      "legalText": "법정 기한: 계약일부터 30일 이내(부동산 거래신고 등에 관한 법률 시행규칙 제2조 제9항). 법인 또는 매수인이 법인신고서등을 거래계약 신고서와 나누어 따로 제출하기를 원하는 경우에 쓴다.",
+      "sources": [
+        { "title": "부동산 거래신고 등에 관한 법률 시행규칙 제2조 제9항", "version": "국토교통부령 제1557호, 2026. 2. 6., 시행 2026. 2. 10." }
+      ]
+    },
+    {
+      "id": "kr-housing-lease-report-30d",
+      "kind": "leaseReport",
+      "days": 30,
+      "label": "당사자 신고 기한(위임받아 대행 가능)",
+      "calendarTitle": "임대차 신고 기한",
+      "legalText": "법정 기한: 계약일부터 30일 이내. 임대차계약당사자가 공동으로 신고하고, 한쪽이 국가 등이면 국가 등이 신고한다(부동산 거래신고 등에 관한 법률 제6조의2 제1항). 신고 의무자가 임대차계약당사자로 정해져 있어 중개사에게는 신고 의무가 없다(같은 항). 당사자의 위임을 받은 사람은 신고서 작성·제출을 대행할 수 있다(같은 법 시행규칙 제6조의5).",
+      "sources": [
+        { "title": "부동산 거래신고 등에 관한 법률 제6조의2, 제6조의5", "version": "법률 제20194호, 2024. 2. 6., 시행 2024. 5. 17." },
+        { "title": "부동산 거래신고 등에 관한 법률 시행규칙 제6조의5", "version": "국토교통부령 제1557호, 2026. 2. 6., 시행 2026. 2. 10." }
+      ]
+    }
+  ],
+  "screeningRules": {
+    "id": "kr-screening-2026-10-01",
+    "sources": [
+      { "title": "부동산 거래신고 등에 관한 법률 시행령 별표 1", "version": "대통령령 제36740호, 2026. 9. 30., 시행 2026. 10. 1." },
+      { "title": "부동산 거래신고 등에 관한 법률 시행령 제4조의3", "version": "대통령령 제36740호, 2026. 9. 30., 시행 2026. 10. 1." }
+    ],
+    "fundingPlan": {
+      "housingPriceAtLeastWon": 600000000,
+      "landCapitalAreaAtLeastWon": 100000000,
+      "landOtherAtLeastWon": 600000000,
+      "landShareOtherAtLeastWon": 600000000
+    },
+    "leaseReport": {
+      "depositOverWon": 60000000,
+      "monthlyRentOverWon": 300000
+    }
+  }
+}

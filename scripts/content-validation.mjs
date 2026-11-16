@@ -1042,3 +1042,181 @@ export function validateContent({ office, listings, naverListings, complexes, co
   errors.push(...findSensitiveStrings(content, { office }));
   return [...new Set(errors)];
 }
+
+// 업무 도구 단계 0 법령 데이터(src/data/work/legal-rules.json). 공개 법령 정보만 담는다.
+const legalRuleSourceSchema = objectSchema({ title: valueSchema, version: valueSchema });
+const legalRuleBracketSchema = objectSchema({
+  minWon: valueSchema,
+  maxWonExclusive: valueSchema,
+  rateBp: valueSchema,
+  capWon: valueSchema,
+});
+const legalRulesSchema = objectSchema({
+  schemaVersion: valueSchema,
+  checkedAt: valueSchema,
+  brokerageFeeRules: arraySchema(objectSchema({
+    id: valueSchema,
+    appliesFrom: valueSchema,
+    appliesTo: valueSchema,
+    region: valueSchema,
+    sources: arraySchema(legalRuleSourceSchema),
+    housing: objectSchema({ sale: arraySchema(legalRuleBracketSchema), lease: arraySchema(legalRuleBracketSchema) }),
+    officetel: objectSchema({ conditions: arraySchema(valueSchema), saleRateBp: valueSchema, leaseRateBp: valueSchema }),
+    otherMaxRateBp: valueSchema,
+    monthlyRentConversion: objectSchema({ multiplier: valueSchema, lowMultiplier: valueSchema, lowThresholdWon: valueSchema }),
+  })),
+  deadlineRules: arraySchema(objectSchema({
+    id: valueSchema,
+    kind: valueSchema,
+    days: valueSchema,
+    label: valueSchema,
+    calendarTitle: valueSchema,
+    legalText: valueSchema,
+    sources: arraySchema(legalRuleSourceSchema),
+  })),
+  screeningRules: objectSchema({
+    id: valueSchema,
+    sources: arraySchema(legalRuleSourceSchema),
+    fundingPlan: objectSchema({
+      housingPriceAtLeastWon: valueSchema,
+      landCapitalAreaAtLeastWon: valueSchema,
+      landOtherAtLeastWon: valueSchema,
+      landShareOtherAtLeastWon: valueSchema,
+    }),
+    leaseReport: objectSchema({ depositOverWon: valueSchema, monthlyRentOverWon: valueSchema }),
+  }),
+});
+const requiredDeadlineKinds = Object.freeze(["transactionReport", "fundingPlanDelivery", "fundingPlanSeparate", "leaseReport"]);
+const requiredOfficetelConditions = Object.freeze(["exclusiveAreaAtMost85", "kitchenToiletBath"]);
+// 법령 판 표기만 허용한다. 예: "국토교통부령 제1611호, 2026. 8. 11., 시행 2026. 8. 28."
+const legalVersionPattern = /^(?:법률|대통령령|국토교통부령|대전광역시조례) 제\d{1,6}호, \d{4}\. \d{1,2}\. \d{1,2}\.(?:, 시행 \d{4}\. \d{1,2}\. \d{1,2}\.)?$/u;
+
+function isPositiveRateBp(value) {
+  return Number.isSafeInteger(value) && value > 0 && value <= 10000;
+}
+
+function validateLegalRuleSources(sources, path) {
+  if (!Array.isArray(sources) || sources.length === 0) return [`${path}: 한 개 이상의 법령 출처가 필요합니다.`];
+  const errors = [];
+  sources.forEach((source, index) => {
+    if (!isNonEmptyString(source?.title)) errors.push(`${path}[${index}].title: 법령 이름과 조문이 필요합니다.`);
+    if (typeof source?.version !== "string" || !legalVersionPattern.test(source.version)) {
+      errors.push(`${path}[${index}].version: "국토교통부령 제1611호, 2026. 8. 11., 시행 2026. 8. 28." 형식의 법령 판 표기가 필요합니다.`);
+    }
+  });
+  return errors;
+}
+
+function validateFeeBrackets(brackets, path) {
+  if (!Array.isArray(brackets) || brackets.length === 0) return [`${path}: 요율 구간이 필요합니다.`];
+  const errors = [];
+  let expectedMin = 0;
+  brackets.forEach((bracket, index) => {
+    const bracketPath = `${path}[${index}]`;
+    const isLast = index === brackets.length - 1;
+    if (bracket?.minWon !== expectedMin) errors.push(`${bracketPath}.minWon: 앞 구간과 빈틈·겹침 없이 ${expectedMin}에서 시작해야 합니다.`);
+    if (isLast) {
+      if (bracket?.maxWonExclusive !== null) errors.push(`${bracketPath}.maxWonExclusive: 마지막 구간만 null이어야 합니다.`);
+    } else if (!isPositiveSafeInteger(bracket?.maxWonExclusive) || bracket.maxWonExclusive <= bracket.minWon) {
+      errors.push(`${bracketPath}.maxWonExclusive: minWon보다 큰 원 단위 정수여야 합니다.`);
+    }
+    if (!isPositiveRateBp(bracket?.rateBp)) errors.push(`${bracketPath}.rateBp: 1 ~ 10000 사이 정수(bp)여야 합니다.`);
+    if (bracket?.capWon !== null && !isPositiveSafeInteger(bracket?.capWon)) errors.push(`${bracketPath}.capWon: null 또는 원 단위 양의 정수여야 합니다.`);
+    expectedMin = bracket?.maxWonExclusive;
+  });
+  return errors;
+}
+
+function withoutLegalVersions(value) {
+  if (Array.isArray(value)) return value.map(withoutLegalVersions);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(Object.entries(value).map(([key, child]) => {
+    if (key === "sources" && Array.isArray(child)) return [key, child.map((source) => ({ ...source, version: "" }))];
+    return [key, withoutLegalVersions(child)];
+  }));
+}
+
+export function validateLegalRules(legalRules) {
+  const path = "legalRules";
+  if (!legalRules || typeof legalRules !== "object" || Array.isArray(legalRules)) return [`${path}: 객체여야 합니다.`];
+  const errors = [];
+  if (legalRules.schemaVersion !== 1) errors.push(`${path}.schemaVersion: 1이어야 합니다.`);
+  if (!isIsoDateOrNull(legalRules.checkedAt) || legalRules.checkedAt === null) {
+    errors.push(`${path}.checkedAt: 오늘 이하의 실제 YYYY-MM-DD 확인일이 필요합니다.`);
+  }
+
+  const feeRules = legalRules.brokerageFeeRules;
+  if (!Array.isArray(feeRules) || feeRules.length === 0) {
+    errors.push(`${path}.brokerageFeeRules: 한 개 이상의 중개보수 규칙이 필요합니다.`);
+  } else {
+    const ids = new Set();
+    const appliesFromDates = new Set();
+    feeRules.forEach((rule, index) => {
+      const rulePath = `${path}.brokerageFeeRules[${index}]`;
+      if (!isKebabCase(rule?.id)) errors.push(`${rulePath}.id: 영문 kebab-case가 필요합니다.`);
+      if (ids.has(rule?.id)) errors.push(`${rulePath}.id: 중복 규칙 ID입니다.`);
+      ids.add(rule?.id);
+      if (!isValidCalendarDate(rule?.appliesFrom)) errors.push(`${rulePath}.appliesFrom: 실제 YYYY-MM-DD 날짜가 필요합니다.`);
+      if (appliesFromDates.has(rule?.appliesFrom)) errors.push(`${rulePath}.appliesFrom: 같은 시작일 규칙이 이미 있습니다.`);
+      appliesFromDates.add(rule?.appliesFrom);
+      if (rule?.appliesTo !== "contractDate") errors.push(`${rulePath}.appliesTo: contractDate여야 합니다.`);
+      if (rule?.region !== "daejeon") errors.push(`${rulePath}.region: daejeon이어야 합니다.`);
+      errors.push(...validateLegalRuleSources(rule?.sources, `${rulePath}.sources`));
+      errors.push(...validateFeeBrackets(rule?.housing?.sale, `${rulePath}.housing.sale`));
+      errors.push(...validateFeeBrackets(rule?.housing?.lease, `${rulePath}.housing.lease`));
+      const conditions = rule?.officetel?.conditions;
+      if (!Array.isArray(conditions) || conditions.length !== requiredOfficetelConditions.length
+        || !requiredOfficetelConditions.every((condition) => conditions.includes(condition))) {
+        errors.push(`${rulePath}.officetel.conditions: ${requiredOfficetelConditions.join(", ")} 두 조건이 필요합니다.`);
+      }
+      for (const key of ["saleRateBp", "leaseRateBp"]) {
+        if (!isPositiveRateBp(rule?.officetel?.[key])) errors.push(`${rulePath}.officetel.${key}: 1 ~ 10000 사이 정수(bp)여야 합니다.`);
+      }
+      if (!isPositiveRateBp(rule?.otherMaxRateBp)) errors.push(`${rulePath}.otherMaxRateBp: 1 ~ 10000 사이 정수(bp)여야 합니다.`);
+      const conversion = rule?.monthlyRentConversion;
+      for (const key of ["multiplier", "lowMultiplier", "lowThresholdWon"]) {
+        if (!isPositiveSafeInteger(conversion?.[key])) errors.push(`${rulePath}.monthlyRentConversion.${key}: 양의 정수여야 합니다.`);
+      }
+    });
+  }
+
+  const deadlineRules = legalRules.deadlineRules;
+  if (!Array.isArray(deadlineRules)) {
+    errors.push(`${path}.deadlineRules: 배열이어야 합니다.`);
+  } else {
+    const kinds = deadlineRules.map((rule) => rule?.kind);
+    for (const kind of requiredDeadlineKinds) {
+      if (kinds.filter((item) => item === kind).length !== 1) errors.push(`${path}.deadlineRules: ${kind} 규칙이 정확히 1개 필요합니다.`);
+    }
+    deadlineRules.forEach((rule, index) => {
+      const rulePath = `${path}.deadlineRules[${index}]`;
+      if (!isKebabCase(rule?.id)) errors.push(`${rulePath}.id: 영문 kebab-case가 필요합니다.`);
+      if (!requiredDeadlineKinds.includes(rule?.kind)) errors.push(`${rulePath}.kind: 허용되지 않은 기한 종류입니다.`);
+      if (!Number.isSafeInteger(rule?.days) || rule.days < 1 || rule.days > 365) errors.push(`${rulePath}.days: 1 ~ 365 사이 정수여야 합니다.`);
+      for (const key of ["label", "calendarTitle", "legalText"]) {
+        if (!isNonEmptyString(rule?.[key])) errors.push(`${rulePath}.${key}: 비어 있지 않은 문자열이어야 합니다.`);
+      }
+      errors.push(...validateLegalRuleSources(rule?.sources, `${rulePath}.sources`));
+    });
+  }
+
+  const screening = legalRules.screeningRules;
+  if (!screening || typeof screening !== "object") {
+    errors.push(`${path}.screeningRules: 객체여야 합니다.`);
+  } else {
+    if (!isKebabCase(screening.id)) errors.push(`${path}.screeningRules.id: 영문 kebab-case가 필요합니다.`);
+    errors.push(...validateLegalRuleSources(screening.sources, `${path}.screeningRules.sources`));
+    for (const key of ["housingPriceAtLeastWon", "landCapitalAreaAtLeastWon", "landOtherAtLeastWon", "landShareOtherAtLeastWon"]) {
+      if (!isPositiveSafeInteger(screening.fundingPlan?.[key])) errors.push(`${path}.screeningRules.fundingPlan.${key}: 원 단위 양의 정수여야 합니다.`);
+    }
+    for (const key of ["depositOverWon", "monthlyRentOverWon"]) {
+      if (!isPositiveSafeInteger(screening.leaseReport?.[key])) errors.push(`${path}.screeningRules.leaseReport.${key}: 원 단위 양의 정수여야 합니다.`);
+    }
+  }
+
+  errors.push(...findUnexpectedKeysWithSchema(legalRules, legalRulesSchema, path, []));
+  errors.push(...findBannedKeys(legalRules, path));
+  // 법령 판 표기("제1611호" 등)는 위 형식 검사로 따로 막으므로, 그 값만 빼고 민감 문자열 검사를 그대로 적용한다.
+  errors.push(...findSensitiveStrings(withoutLegalVersions(legalRules), { path }));
+  return [...new Set(errors)];
+}
