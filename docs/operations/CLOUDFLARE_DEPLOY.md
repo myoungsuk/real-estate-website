@@ -15,6 +15,8 @@
 - Email 입력과 `Send login code` 화면 노출을 확인했고, 운영자가 허용 이메일 1개의 실제 OTP 수신과 관리자 진입 성공을 확인했다. 다른 허용 이메일과 비허용 이메일의 실제 로그인 시험은 운영자 결정으로 추후 확인한다.
 - 기존 Pages 프로젝트 `real-estate-website`는 운영 도메인 연결만 해제했으며 `https://real-estate-website-dnv.pages.dev`는 롤백 확인용으로 유지한다.
 - 2026-11-16 Pages 프로젝트의 분기 제어에서 "분기 미리 보기"를 "프로덕션이 아닌 모든 분기"에서 "없음(자동 분기 배포 사용 중지)"으로 바꿨다. Production 분기 `master`와 자동 프로덕션 배포는 그대로 두어 롤백용 사본은 계속 갱신된다. 이미 만들어진 미리보기 배포는 삭제하지 않았다.
+- 2026-11-16 운영자 승인으로 Pages 사본 전체(본 주소 `real-estate-website-dnv.pages.dev`와 미리보기 주소 `*.real-estate-website-dnv.pages.dev`)를 Cloudflare Access 로그인 뒤에만 열리게 했다. Pages 설정의 프리뷰 액세스 제한은 미리보기 주소만 막으므로, Cloudflare Pages 공식 문서(Known issues의 `*.pages.dev` Access 절차)대로 처리했다. 먼저 프리뷰 액세스 제한을 켜서 자동 생성된 Access 애플리케이션의 하위 도메인 `*`를 지워 본 주소용 애플리케이션 `Pages 롤백 사본`으로 바꿨다. 그다음 프리뷰 액세스 제한을 다시 켜 미리보기용 애플리케이션 `real-estate-website - Cloudflare Pages`를 다시 만들었다. 두 애플리케이션 모두 운영 관리자 애플리케이션과 같은 재사용 정책 `관리자 이메일 2명 허용`(허용 이메일 2개 + Login method `One-time PIN`)만 쓰고, 로그인 방법은 One-time PIN 하나와 즉시 인증이다. 자동으로 붙던 Cloudflare 계정 구성원 허용 정책은 뺐다. 비로그인 확인 결과 사본의 `/`·`/admin/`·`/properties/`와 미리보기 별칭은 Access 로그인으로 `302` 이동하고, 운영 도메인과 보조 Worker 주소의 응답은 바뀌지 않았다. Access는 방문 요청만 막으므로 Pages 빌드·배포는 계속된다.
+- Pages 사본 차단 되돌리기: Zero Trust의 Access 애플리케이션 목록에서 `Pages 롤백 사본`과 `real-estate-website - Cloudflare Pages` 두 개를 지우고 Pages 설정의 프리뷰 액세스 제한을 끄면 사본이 다시 공개된다. 운영 관리자 애플리케이션과 재사용 정책은 지우지 않는다. 이 정책은 운영 애플리케이션도 쓰므로, 정책을 고치면 운영과 사본에 함께 적용된다.
 
 ## GitHub 자동 배포
 
