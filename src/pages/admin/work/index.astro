@@ -1,68 +1,249 @@
 ---
-import WorkToolNav from "../../../components/admin/WorkToolNav.astro";
+import AdminIcon from "../../../components/admin/AdminIcon.astro";
+import AdminSubnav from "../../../components/admin/AdminSubnav.astro";
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 
 const tools = [
   {
     href: "/admin/work/fee/",
-    eyebrow: "중개보수",
+    icon: "fee",
+    tone: "navy",
     title: "중개보수 계산",
-    description: "물건·거래 종류와 금액을 넣으면 법정 상한 보수, 협의 요율 금액, 부가세를 한쪽 의뢰인 기준으로 보여 줍니다.",
-    action: "중개보수 계산하기",
+    description: "법정 상한 보수, 협의 요율 금액, 부가세를 한쪽 의뢰인 기준으로 계산합니다.",
   },
   {
     href: "/admin/work/messages/",
-    eyebrow: "안내 문자",
-    title: "안내 문자 만들기",
-    description: "가계약·약정금 입금·계약일 안내 문장을 만들고 복사하거나 문자 앱으로 엽니다. 빈 칸은 자리표시로 남습니다.",
-    action: "안내 문자 만들기",
+    icon: "message",
+    tone: "rose",
+    title: "안내 문자",
+    description: "가계약·약정금 입금·계약일 안내 문장을 만들고 복사하거나 문자 앱으로 엽니다.",
   },
   {
     href: "/admin/work/schedule/",
-    eyebrow: "계약 일정",
-    title: "계약 일정 계산",
-    description: "계약일 기준 거래신고·자금조달계획서·임대차 신고 기한을 계산하고 휴대폰 캘린더용 .ics 파일로 내려받습니다.",
-    action: "계약 일정 계산하기",
+    icon: "schedule",
+    tone: "gold",
+    title: "계약 일정",
+    description: "거래신고·자금조달계획서·임대차 신고 기한을 계산하고 .ics 파일로 내려받습니다.",
+  },
+] as const;
+
+const subnavGroups = [
+  {
+    items: [
+      { href: "/admin/work/", label: "업무 도구 처음", icon: "home" as const, tone: "blue" },
+      ...tools.map((tool) => ({ href: tool.href, label: tool.title, icon: tool.icon, tone: tool.tone })),
+    ],
   },
 ];
+
+const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
 ---
 
 <AdminLayout
   title="업무 도구 | 행복한부동산 관리자"
   description="중개보수 계산, 안내 문자, 계약 일정 계산을 모은 관리자 업무 도구입니다."
 >
-  <div class="admin-page-header admin-page-header--compact">
-    <div>
-      <p class="admin-eyebrow">WORK TOOLS</p>
-      <h1>업무 도구</h1>
-      <p>상담과 계약 준비에 쓰는 계산·문구 도구입니다. 입력값은 이 화면에서만 쓰고 저장하거나 서버로 보내지 않습니다.</p>
-    </div>
-    <span class="admin-stage-badge">단계 0 · 저장하지 않는 도구</span>
-  </div>
+  <AdminSubnav slot="aside" title="업무 도구" icon="tools" tone="rose" searchLabel="도구 이름 찾기" groups={subnavGroups}>
+    <Fragment slot="footer">
+      <p class="admin-subnav__note">
+        <AdminIcon name="shield" size={15} />
+        입력값은 저장하거나 보내지 않습니다.
+      </p>
+    </Fragment>
+  </AdminSubnav>
 
-  <WorkToolNav />
+  <div class="work-ui work-home">
+    <header class="work-home__header">
+      <div>
+        <p class="work-home__meta">
+          단계 0 · 저장하지 않는 도구 <span aria-hidden="true">·</span> <span data-work-today>오늘</span>
+        </p>
+        <h1>업무 도구</h1>
+        <p class="work-home__lead">상담과 계약 준비에 쓰는 계산·문구 도구입니다.</p>
+      </div>
+      <ul class="work-home__quick" aria-label="자주 쓰는 도구">
+        {tools.map((tool) => (
+          <li>
+            <a class="work-home__quick-link" href={tool.href}>
+              <span class="work-round-icon" data-tone={tool.tone}>
+                <AdminIcon name={tool.icon} size={15} />
+              </span>
+              {tool.title}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </header>
 
-  <p class="admin-inline-notice">
-    <span aria-hidden="true">!</span>
-    <span>손님 이름·전화번호·주민등록번호는 넣지 마세요. 새로 고치거나 화면을 닫으면 입력값이 모두 사라집니다.</span>
-  </p>
+    <p class="work-home__notice">
+      <AdminIcon name="shield" size={18} />
+      <span>손님 이름·전화번호·주민등록번호는 넣지 마세요. 새로 고치거나 화면을 닫으면 입력값이 모두 사라집니다.</span>
+    </p>
 
-  <div class="work-tool-grid">
-    {tools.map((tool, index) => (
-      <section class="admin-panel admin-next-action" aria-labelledby={`work-tool-${index}`}>
-        <div class="admin-panel__heading">
-          <div>
-            <p class="admin-eyebrow">{tool.eyebrow}</p>
-            <h2 id={`work-tool-${index}`}>{tool.title}</h2>
+    <div class="work-home__grid">
+      <section class="work-card work-calendar" aria-labelledby="work-calendar-title" data-work-calendar>
+        <div class="work-card__head">
+          <span class="work-round-icon" data-tone="gold">
+            <AdminIcon name="schedule" size={15} />
+          </span>
+          <h2 id="work-calendar-title" data-work-calendar-title>이번 달</h2>
+          <div class="work-calendar__nav">
+            <button type="button" data-work-calendar-move="-1">
+              <AdminIcon name="chevron-left" size={18} />
+              <span class="sr-only">이전 달</span>
+            </button>
+            <button type="button" data-work-calendar-move="1">
+              <AdminIcon name="chevron-right" size={18} />
+              <span class="sr-only">다음 달</span>
+            </button>
           </div>
-          <span class="admin-panel__number" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
         </div>
-        <p>{tool.description}</p>
-        <a class="admin-action-link" href={tool.href}>
-          {tool.action}
-          <span aria-hidden="true">→</span>
-        </a>
+        <table class="work-calendar__table">
+          <caption class="sr-only" data-work-calendar-caption>이번 달 달력</caption>
+          <thead>
+            <tr>{weekdays.map((day) => <th scope="col">{day}</th>)}</tr>
+          </thead>
+          <tbody data-work-calendar-body></tbody>
+        </table>
+        <div class="work-calendar__today">
+          <h3>
+            <AdminIcon name="clock" size={17} />
+            오늘 일정 <small data-work-today-long></small>
+          </h3>
+          <p class="work-card__empty">일정 저장은 단계 2부터 쓸 수 있습니다. 지금은 계약 일정 화면에서 기한을 바로 계산하세요.</p>
+          <a class="work-card__link" href="/admin/work/schedule/">
+            계약 일정 계산하기
+            <AdminIcon name="chevron-right" size={16} />
+          </a>
+        </div>
       </section>
-    ))}
+
+      <div class="work-home__side">
+        <section class="work-card" aria-labelledby="work-todo-title">
+          <div class="work-card__head">
+            <span class="work-round-icon" data-tone="rose">
+              <AdminIcon name="check" size={15} />
+            </span>
+            <h2 id="work-todo-title">오늘 할 일</h2>
+          </div>
+          <p class="work-card__empty">할 일 저장은 단계 2부터 쓸 수 있습니다.</p>
+        </section>
+
+        <section class="work-card" aria-labelledby="work-deadline-title">
+          <div class="work-card__head">
+            <span class="work-round-icon" data-tone="navy">
+              <AdminIcon name="clock" size={15} />
+            </span>
+            <h2 id="work-deadline-title">다가오는 기한</h2>
+          </div>
+          <p class="work-card__empty">계약별 기한 모아 보기는 단계 2부터 표시됩니다.</p>
+          <a class="work-card__link" href="/admin/work/schedule/">
+            계약 일정 계산하기
+            <AdminIcon name="chevron-right" size={16} />
+          </a>
+        </section>
+      </div>
+    </div>
+
+    <section class="work-home__tools" aria-labelledby="work-tools-title">
+      <h2 id="work-tools-title">도구 바로가기</h2>
+      <ul>
+        {tools.map((tool) => (
+          <li>
+            <a class="work-tool-row" href={tool.href}>
+              <span class="work-round-icon work-round-icon--large" data-tone={tool.tone}>
+                <AdminIcon name={tool.icon} size={20} />
+              </span>
+              <span class="work-tool-row__text">
+                <strong>{tool.title}</strong>
+                <span>{tool.description}</span>
+              </span>
+              <AdminIcon name="chevron-right" size={18} />
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
   </div>
+
+  <script>
+    import { todayInKorea } from "../../../lib/work/legal-dates.mjs";
+
+    // 이번 달 달력. 오늘 날짜만 표시하고 저장된 일정은 없다(단계 0은 저장하지 않음).
+    const calendar = document.querySelector<HTMLElement>("[data-work-calendar]");
+    const body = calendar?.querySelector<HTMLElement>("[data-work-calendar-body]");
+    const title = calendar?.querySelector<HTMLElement>("[data-work-calendar-title]");
+    const caption = calendar?.querySelector<HTMLElement>("[data-work-calendar-caption]");
+
+    if (calendar && body && title && caption) {
+      const [todayYear, todayMonth, todayDay] = todayInKorea().split("-").map(Number);
+      const weekdayNames = ["일", "월", "화", "수", "목", "금", "토"];
+      const todayWeekday = weekdayNames[new Date(Date.UTC(todayYear, todayMonth - 1, todayDay)).getUTCDay()];
+      document.querySelectorAll<HTMLElement>("[data-work-today]").forEach((element) => {
+        element.textContent = `${todayYear}.${String(todayMonth).padStart(2, "0")}.${String(todayDay).padStart(2, "0")}(${todayWeekday})`;
+      });
+      document.querySelectorAll<HTMLElement>("[data-work-today-long]").forEach((element) => {
+        element.textContent = `${todayMonth}월 ${todayDay}일 ${todayWeekday}요일`;
+      });
+
+      let year = todayYear;
+      let month = todayMonth;
+
+      const render = () => {
+        const firstWeekday = new Date(Date.UTC(year, month - 1, 1)).getUTCDay();
+        const days = new Date(Date.UTC(year, month, 0)).getUTCDate();
+        title.innerHTML = "";
+        const monthText = document.createElement("span");
+        monthText.textContent = `${month}월`;
+        const yearText = document.createElement("small");
+        yearText.textContent = `${year}년`;
+        title.append(monthText, " ", yearText);
+        caption.textContent = `${year}년 ${month}월 달력`;
+
+        const rows: HTMLTableRowElement[] = [];
+        let row = document.createElement("tr");
+        for (let blank = 0; blank < firstWeekday; blank += 1) row.append(document.createElement("td"));
+        for (let day = 1; day <= days; day += 1) {
+          const cell = document.createElement("td");
+          const mark = document.createElement("span");
+          mark.className = "work-calendar__day";
+          mark.textContent = String(day);
+          if (year === todayYear && month === todayMonth && day === todayDay) {
+            mark.classList.add("is-today");
+            mark.setAttribute("aria-current", "date");
+            const hidden = document.createElement("span");
+            hidden.className = "sr-only";
+            hidden.textContent = " 오늘";
+            mark.append(hidden);
+          }
+          cell.append(mark);
+          row.append(cell);
+          if (row.children.length === 7) {
+            rows.push(row);
+            row = document.createElement("tr");
+          }
+        }
+        if (row.children.length > 0) {
+          while (row.children.length < 7) row.append(document.createElement("td"));
+          rows.push(row);
+        }
+        body.replaceChildren(...rows);
+      };
+
+      calendar.querySelectorAll<HTMLButtonElement>("[data-work-calendar-move]").forEach((button) => {
+        button.addEventListener("click", () => {
+          month += Number(button.dataset.workCalendarMove);
+          if (month < 1) {
+            month = 12;
+            year -= 1;
+          } else if (month > 12) {
+            month = 1;
+            year += 1;
+          }
+          render();
+        });
+      });
+      render();
+    }
+  </script>
 </AdminLayout>

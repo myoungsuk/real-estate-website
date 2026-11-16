@@ -1,4 +1,5 @@
 ---
+import AdminIcon from "../../../components/admin/AdminIcon.astro";
 import WorkLegalBasis from "../../../components/admin/WorkLegalBasis.astro";
 import WorkToolNav from "../../../components/admin/WorkToolNav.astro";
 import legalRules from "../../../data/work/legal-rules.json";
@@ -18,160 +19,172 @@ const amountFields = [
   title="중개보수 계산 | 행복한부동산 관리자"
   description="거래 조건으로 법정 상한 중개보수와 협의 요율 금액을 계산하는 관리자 업무 도구입니다."
 >
-  <div class="admin-page-header admin-page-header--compact">
-    <div>
-      <p class="admin-eyebrow">WORK TOOLS · FEE</p>
+  <div class="work-ui work-doc">
+    <header class="work-doc__header">
+      <span class="work-round-icon work-round-icon--title" data-tone="navy">
+        <AdminIcon name="fee" size={22} />
+      </span>
       <h1>중개보수 계산</h1>
-      <p>물건·거래 종류를 고르고 금액을 넣으면 한쪽 의뢰인 기준 상한 보수가 바로 나옵니다. 1원 미만은 버립니다.</p>
+      <span class="admin-stage-badge">저장하지 않음</span>
+    </header>
+
+    <WorkToolNav />
+
+    <p class="work-doc__lead">물건·거래 종류를 고르고 금액을 넣으면 한쪽 의뢰인 기준 상한 보수가 바로 나옵니다. 1원 미만은 버립니다.</p>
+
+    <div class="work-tool work-doc__layout" data-fee-tool>
+      <section class="work-form" aria-labelledby="fee-input-title">
+        <h2 id="fee-input-title" class="sr-only">거래 조건</h2>
+
+        <div class="work-form__section">
+          <h3>물건</h3>
+          <div class="work-row" role="radiogroup" aria-labelledby="fee-property-label">
+            <span class="work-row__label" id="fee-property-label">물건 종류</span>
+            <div class="work-segment">
+              {Object.entries(PROPERTY_KINDS).map(([value, label]) => (
+                <label class="work-choice">
+                  <input type="radio" name="fee-property-kind" value={value} autocomplete="off" />
+                  <span>{label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div class="work-row" role="radiogroup" aria-labelledby="fee-deal-label">
+            <span class="work-row__label" id="fee-deal-label">거래 종류</span>
+            <div class="work-segment">
+              {Object.entries(FEE_DEAL_TYPES).map(([value, label]) => (
+                <label class="work-choice">
+                  <input type="radio" name="fee-deal-type" value={value} autocomplete="off" />
+                  <span>{label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div class="work-row" role="group" aria-labelledby="fee-officetel-label" data-fee-section="officetel">
+            <span class="work-row__label" id="fee-officetel-label">오피스텔 조건</span>
+            <div class="work-row__control">
+              <div class="work-checks">
+                <label class="work-check">
+                  <input type="checkbox" autocomplete="off" data-fee-officetel="exclusiveAreaAtMost85" />
+                  <span>전용면적 85㎡ 이하</span>
+                </label>
+                <label class="work-check">
+                  <input type="checkbox" autocomplete="off" data-fee-officetel="kitchenToiletBath" />
+                  <span>전용 입식 부엌·수세식 화장실·목욕시설을 갖춤</span>
+                </label>
+              </div>
+              <small>둘 다 맞아야 오피스텔 요율을 씁니다.</small>
+            </div>
+          </div>
+
+          <div class="work-row" role="radiogroup" aria-labelledby="fee-ratio-label" data-fee-section="mixed">
+            <span class="work-row__label" id="fee-ratio-label">주택 면적 비율</span>
+            <div class="work-segment">
+              <label class="work-choice">
+                <input type="radio" name="fee-housing-ratio" value="atLeastHalf" autocomplete="off" />
+                <span>주택 면적이 2분의 1 이상</span>
+              </label>
+              <label class="work-choice">
+                <input type="radio" name="fee-housing-ratio" value="lessThanHalf" autocomplete="off" />
+                <span>주택 면적이 2분의 1 미만</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="work-form__section">
+          <h3>금액</h3>
+          <div class="work-row">
+            <label class="work-row__label" for="fee-contract-date">계약일</label>
+            <div class="work-row__control">
+              <input id="fee-contract-date" type="date" autocomplete="off" data-fee-contract-date />
+              <small>기본값은 오늘입니다. 계약일로 요율 기준을 고릅니다.</small>
+            </div>
+          </div>
+          {amountFields.map((field) => (
+            <div class="work-row" data-fee-field={field.key}>
+              <label class="work-row__label" for={`fee-${field.key}`}>{field.label}</label>
+              <div class="work-row__control">
+                <input
+                  id={`fee-${field.key}`}
+                  type="text"
+                  inputmode="numeric"
+                  autocomplete="off"
+                  placeholder={field.placeholder}
+                  data-fee-amount={field.key}
+                />
+                <small class="work-amount-hint" aria-live="polite" data-fee-hint={field.key}></small>
+              </div>
+            </div>
+          ))}
+          <div class="work-row" data-fee-section="other-rate">
+            <label class="work-row__label" for="fee-office-rate">사무소 게시 상한요율(%)</label>
+            <div class="work-row__control">
+              <input id="fee-office-rate" type="text" inputmode="decimal" autocomplete="off" data-fee-office-rate />
+              <small>그 밖의 건축물·토지로 계산될 때 씁니다. 사무소 요율표에 게시한 값을 넣고, 0.90%를 넘을 수 없습니다.</small>
+            </div>
+          </div>
+          <p class="work-help">물건이 대전 밖에 있어도 중개사무소 소재지(대전광역시) 조례의 요율표를 씁니다(공인중개사법 시행규칙 제20조 제3항). 대전 밖 사무소 기준 계산은 지원하지 않습니다.</p>
+        </div>
+
+        <div class="work-form__section">
+          <h3>협의 요율과 부가세(선택)</h3>
+          <div class="work-row">
+            <label class="work-row__label" for="fee-agreed-rate">협의 요율(%)</label>
+            <div class="work-row__control">
+              <input id="fee-agreed-rate" type="text" inputmode="decimal" autocomplete="off" placeholder="예: 0.30" data-fee-agreed-rate />
+              <small>0.01% 단위. 상한요율을 넘으면 계산하지 않습니다.</small>
+            </div>
+          </div>
+          <div class="work-row" role="group" aria-labelledby="fee-vat-label">
+            <span class="work-row__label" id="fee-vat-label">부가세</span>
+            <div class="work-row__control">
+              <label class="work-check">
+                <input type="checkbox" autocomplete="off" data-fee-vat />
+                <span>부가세 10% 별도 표시(일반과세자)</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="work-output" aria-labelledby="fee-result-title">
+        <h2 id="fee-result-title">계산 결과</h2>
+        <div data-fee-result hidden>
+          <dl class="work-facts">
+            <div><dt>거래금액</dt><dd data-fee-out="amount"></dd></div>
+            <div data-fee-out-row="explanation"><dt>계산 근거</dt><dd data-fee-out="explanation"></dd></div>
+            <div><dt>적용 기준</dt><dd data-fee-out="table"></dd></div>
+            <div><dt>상한요율</dt><dd data-fee-out="rate"></dd></div>
+            <div><dt>상한 보수</dt><dd data-fee-out="max"></dd></div>
+            <div data-fee-out-row="agreed"><dt>협의 요율 금액</dt><dd data-fee-out="agreed"></dd></div>
+            <div data-fee-out-row="vat"><dt>부가세(10%) 별도</dt><dd data-fee-out="vat"></dd></div>
+          </dl>
+          <div class="work-total">
+            <span data-fee-out="total-label">합계(한쪽 의뢰인 기준)</span>
+            <strong data-fee-out="total"></strong>
+          </div>
+          <ul class="work-notes" data-fee-notes></ul>
+        </div>
+        <div class="work-output__empty">
+          <span class="work-round-icon work-round-icon--hero" data-tone="blue">
+            <AdminIcon name="fee" size={28} />
+          </span>
+          <p class="work-message" role="status" aria-live="polite" data-fee-message></p>
+        </div>
+      </section>
+
+      <div class="work-doc__action">
+        <button class="work-primary-button" type="button" data-fee-copy disabled>계산 결과 복사</button>
+        <p class="admin-form-status" role="status" aria-live="polite" data-fee-copy-status></p>
+        <textarea class="work-copy-fallback" rows="10" readonly aria-label="복사할 결과 문장" data-fee-copy-fallback hidden></textarea>
+      </div>
     </div>
-    <span class="admin-stage-badge">저장하지 않음</span>
+
+    <WorkLegalBasis ruleIds={legalRules.brokerageFeeRules.map((rule) => rule.id)} />
   </div>
-
-  <WorkToolNav />
-
-  <div class="work-tool work-layout" data-fee-tool>
-    <section class="admin-panel" aria-labelledby="fee-input-title">
-      <div class="admin-panel__heading">
-        <div>
-          <p class="admin-eyebrow">1단계</p>
-          <h2 id="fee-input-title">거래 조건</h2>
-        </div>
-      </div>
-
-      <fieldset class="work-choice-group">
-        <legend>물건 종류</legend>
-        <div class="work-choices">
-          {Object.entries(PROPERTY_KINDS).map(([value, label]) => (
-            <label class="work-choice">
-              <input type="radio" name="fee-property-kind" value={value} autocomplete="off" />
-              <span>{label}</span>
-            </label>
-          ))}
-        </div>
-      </fieldset>
-
-      <fieldset class="work-choice-group">
-        <legend>거래 종류</legend>
-        <div class="work-choices">
-          {Object.entries(FEE_DEAL_TYPES).map(([value, label]) => (
-            <label class="work-choice">
-              <input type="radio" name="fee-deal-type" value={value} autocomplete="off" />
-              <span>{label}</span>
-            </label>
-          ))}
-        </div>
-      </fieldset>
-
-      <div class="admin-form-grid">
-        <div class="admin-field">
-          <label for="fee-contract-date">계약일</label>
-          <input id="fee-contract-date" type="date" autocomplete="off" data-fee-contract-date />
-          <small>기본값은 오늘입니다. 계약일로 요율 기준을 고릅니다.</small>
-        </div>
-        {amountFields.map((field) => (
-          <div class="admin-field" data-fee-field={field.key}>
-            <label for={`fee-${field.key}`}>{field.label}</label>
-            <input
-              id={`fee-${field.key}`}
-              type="text"
-              inputmode="numeric"
-              autocomplete="off"
-              placeholder={field.placeholder}
-              data-fee-amount={field.key}
-            />
-            <small class="work-amount-hint" aria-live="polite" data-fee-hint={field.key}></small>
-          </div>
-        ))}
-      </div>
-
-      <fieldset class="work-choice-group" data-fee-section="officetel">
-        <legend>오피스텔 조건(둘 다 맞아야 오피스텔 요율)</legend>
-        <div class="work-checks">
-          <label class="work-check">
-            <input type="checkbox" autocomplete="off" data-fee-officetel="exclusiveAreaAtMost85" />
-            <span>전용면적 85㎡ 이하</span>
-          </label>
-          <label class="work-check">
-            <input type="checkbox" autocomplete="off" data-fee-officetel="kitchenToiletBath" />
-            <span>전용 입식 부엌·수세식 화장실·목욕시설을 갖춤</span>
-          </label>
-        </div>
-      </fieldset>
-
-      <fieldset class="work-choice-group" data-fee-section="mixed">
-        <legend>주택 면적 비율</legend>
-        <div class="work-choices">
-          <label class="work-choice">
-            <input type="radio" name="fee-housing-ratio" value="atLeastHalf" autocomplete="off" />
-            <span>주택 면적이 2분의 1 이상</span>
-          </label>
-          <label class="work-choice">
-            <input type="radio" name="fee-housing-ratio" value="lessThanHalf" autocomplete="off" />
-            <span>주택 면적이 2분의 1 미만</span>
-          </label>
-        </div>
-      </fieldset>
-
-      <div class="admin-field" data-fee-section="other-rate">
-        <label for="fee-office-rate">사무소 게시 상한요율(%)</label>
-        <input id="fee-office-rate" type="text" inputmode="decimal" autocomplete="off" data-fee-office-rate />
-        <small>그 밖의 건축물·토지로 계산될 때 씁니다. 사무소 요율표에 게시한 값을 넣고, 0.90%를 넘을 수 없습니다.</small>
-      </div>
-
-      <p class="work-help">물건이 대전 밖에 있어도 중개사무소 소재지(대전광역시) 조례의 요율표를 씁니다(공인중개사법 시행규칙 제20조 제3항). 대전 밖 사무소 기준 계산은 지원하지 않습니다.</p>
-    </section>
-
-    <section class="admin-panel work-result" aria-labelledby="fee-result-title">
-      <div class="admin-panel__heading">
-        <div>
-          <p class="admin-eyebrow">2단계</p>
-          <h2 id="fee-result-title">계산 결과</h2>
-        </div>
-      </div>
-
-      <p class="work-message" role="status" aria-live="polite" data-fee-message></p>
-
-      <div data-fee-result hidden>
-        <dl class="work-facts">
-          <div><dt>거래금액</dt><dd data-fee-out="amount"></dd></div>
-          <div data-fee-out-row="explanation"><dt>계산 근거</dt><dd data-fee-out="explanation"></dd></div>
-          <div><dt>적용 기준</dt><dd data-fee-out="table"></dd></div>
-          <div><dt>상한요율</dt><dd data-fee-out="rate"></dd></div>
-          <div><dt>상한 보수</dt><dd data-fee-out="max"></dd></div>
-          <div data-fee-out-row="agreed"><dt>협의 요율 금액</dt><dd data-fee-out="agreed"></dd></div>
-          <div data-fee-out-row="vat"><dt>부가세(10%) 별도</dt><dd data-fee-out="vat"></dd></div>
-        </dl>
-        <div class="work-total">
-          <span data-fee-out="total-label">합계(한쪽 의뢰인 기준)</span>
-          <strong data-fee-out="total"></strong>
-        </div>
-        <ul class="work-notes" data-fee-notes></ul>
-      </div>
-
-      <div class="work-subsection">
-        <h3>3단계 · 협의 요율과 부가세</h3>
-        <div class="admin-form-grid">
-          <div class="admin-field">
-            <label for="fee-agreed-rate">협의 요율(%, 선택)</label>
-            <input id="fee-agreed-rate" type="text" inputmode="decimal" autocomplete="off" placeholder="예: 0.30" data-fee-agreed-rate />
-            <small>0.01% 단위. 상한요율을 넘으면 계산하지 않습니다.</small>
-          </div>
-          <label class="work-check work-check--boxed">
-            <input type="checkbox" autocomplete="off" data-fee-vat />
-            <span>부가세 10% 별도 표시(일반과세자)</span>
-          </label>
-        </div>
-      </div>
-
-      <div class="work-actions">
-        <button class="admin-primary-button" type="button" data-fee-copy disabled>결과 복사</button>
-      </div>
-      <p class="admin-form-status" role="status" aria-live="polite" data-fee-copy-status></p>
-      <textarea class="work-copy-fallback" rows="10" readonly aria-label="복사할 결과 문장" data-fee-copy-fallback hidden></textarea>
-    </section>
-  </div>
-
-  <WorkLegalBasis ruleIds={legalRules.brokerageFeeRules.map((rule) => rule.id)} />
 
   <script>
     import legalRules from "../../../data/work/legal-rules.json";

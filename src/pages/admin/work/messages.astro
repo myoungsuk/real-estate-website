@@ -1,4 +1,5 @@
 ---
+import AdminIcon from "../../../components/admin/AdminIcon.astro";
 import WorkToolNav from "../../../components/admin/WorkToolNav.astro";
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 import { MESSAGE_DEAL_TYPES, MESSAGE_TEMPLATES, MESSAGE_VARIANTS } from "../../../lib/work/message-templates.mjs";
@@ -8,145 +9,157 @@ import { MESSAGE_DEAL_TYPES, MESSAGE_TEMPLATES, MESSAGE_VARIANTS } from "../../.
   title="안내 문자 만들기 | 행복한부동산 관리자"
   description="가계약·약정금 입금·계약일 안내 문장을 만드는 관리자 업무 도구입니다."
 >
-  <div class="admin-page-header admin-page-header--compact">
-    <div>
-      <p class="admin-eyebrow">WORK TOOLS · MESSAGE</p>
+  <div class="work-ui work-doc">
+    <header class="work-doc__header">
+      <span class="work-round-icon work-round-icon--title" data-tone="rose">
+        <AdminIcon name="message" size={22} />
+      </span>
       <h1>안내 문자 만들기</h1>
-      <p>빈 칸은 대괄호 자리표시로 남습니다. 복사하거나 문자 앱을 연 뒤 손님 번호를 직접 골라 보내세요.</p>
-    </div>
-    <span class="admin-stage-badge">저장하지 않음</span>
-  </div>
+      <span class="admin-stage-badge">저장하지 않음</span>
+    </header>
 
-  <WorkToolNav />
+    <WorkToolNav />
 
-  <p class="admin-inline-notice">
-    <span aria-hidden="true">!</span>
-    <span>손님 이름·전화번호·주민등록번호·계좌 비밀번호는 넣지 마세요. 계좌 정보는 이 화면에서만 쓰고 저장하지 않습니다.</span>
-  </p>
+    <p class="work-doc__lead">빈 칸은 대괄호 자리표시로 남습니다. 복사하거나 문자 앱을 연 뒤 손님 번호를 직접 골라 보내세요.</p>
+    <p class="work-doc__notice">
+      <AdminIcon name="shield" size={18} />
+      <span>손님 이름·전화번호·주민등록번호·계좌 비밀번호는 넣지 마세요. 계좌 정보는 이 화면에서만 쓰고 저장하지 않습니다.</span>
+    </p>
 
-  <div class="work-tool work-layout" data-message-tool>
-    <section class="admin-panel" aria-labelledby="message-input-title">
-      <div class="admin-panel__heading">
-        <div>
-          <p class="admin-eyebrow">1단계</p>
-          <h2 id="message-input-title">문자 종류와 내용</h2>
-        </div>
-      </div>
+    <div class="work-tool work-doc__layout" data-message-tool>
+      <section class="work-form" aria-labelledby="message-input-title">
+        <h2 id="message-input-title" class="sr-only">문자 종류와 내용</h2>
 
-      <fieldset class="work-choice-group">
-        <legend>문자 종류</legend>
-        <div class="work-choices">
-          {Object.entries(MESSAGE_TEMPLATES).map(([value, template]) => (
-            <label class="work-choice">
-              <input type="radio" name="message-template" value={value} autocomplete="off" />
-              <span>{template.label}</span>
-            </label>
-          ))}
-        </div>
-      </fieldset>
-
-      <fieldset class="work-choice-group">
-        <legend>형태</legend>
-        <div class="work-choices">
-          {Object.entries(MESSAGE_VARIANTS).map(([value, label]) => (
-            <label class="work-choice">
-              <input type="radio" name="message-variant" value={value} autocomplete="off" />
-              <span>{label}</span>
-            </label>
-          ))}
-        </div>
-      </fieldset>
-
-      <fieldset class="admin-subform">
-        <legend>물건·거래</legend>
-        <div class="admin-form-grid">
-          <div class="admin-field">
-            <label for="message-property">물건 표시</label>
-            <input id="message-property" type="text" maxlength="40" autocomplete="off" placeholder="예: 가상단지 101동" data-message-field="property" />
-            <small>단지·동까지만 적고 호수는 적지 마세요.</small>
+        <div class="work-form__section">
+          <h3>문자</h3>
+          <div class="work-row" role="radiogroup" aria-labelledby="message-template-label">
+            <span class="work-row__label" id="message-template-label">문자 종류</span>
+            <div class="work-segment">
+              {Object.entries(MESSAGE_TEMPLATES).map(([value, template]) => (
+                <label class="work-choice">
+                  <input type="radio" name="message-template" value={value} autocomplete="off" />
+                  <span>{template.label}</span>
+                </label>
+              ))}
+            </div>
           </div>
-          <div class="admin-field">
-            <label for="message-deal-type">거래 종류</label>
-            <select id="message-deal-type" autocomplete="off" data-message-field="dealType">
-              <option value="">선택 안 함</option>
-              {Object.entries(MESSAGE_DEAL_TYPES).map(([value, label]) => <option value={value}>{label}</option>)}
-            </select>
-          </div>
-          <div class="admin-field">
-            <label for="message-amount" data-message-amount-label>거래 금액(원)</label>
-            <input id="message-amount" type="text" inputmode="numeric" autocomplete="off" placeholder="예: 320000000" data-message-field="amountWon" />
-            <small class="work-amount-hint" aria-live="polite" data-message-hint="amountWon"></small>
-          </div>
-          <div class="admin-field" data-message-group="rent">
-            <label for="message-rent">월세(원)</label>
-            <input id="message-rent" type="text" inputmode="numeric" autocomplete="off" placeholder="예: 500000" data-message-field="monthlyRentWon" />
-            <small class="work-amount-hint" aria-live="polite" data-message-hint="monthlyRentWon"></small>
+          <div class="work-row" role="radiogroup" aria-labelledby="message-variant-label">
+            <span class="work-row__label" id="message-variant-label">형태</span>
+            <div class="work-segment">
+              {Object.entries(MESSAGE_VARIANTS).map(([value, label]) => (
+                <label class="work-choice">
+                  <input type="radio" name="message-variant" value={value} autocomplete="off" />
+                  <span>{label}</span>
+                </label>
+              ))}
+            </div>
           </div>
         </div>
-      </fieldset>
 
-      <fieldset class="admin-subform" data-message-group="deposit">
-        <legend>입금 안내</legend>
-        <div class="admin-form-grid">
-          <div class="admin-field">
-            <label for="message-deposit" data-message-deposit-label>가계약금(원)</label>
-            <input id="message-deposit" type="text" inputmode="numeric" autocomplete="off" placeholder="예: 10000000" data-message-field="depositAmountWon" />
-            <small class="work-amount-hint" aria-live="polite" data-message-hint="depositAmountWon"></small>
+        <div class="work-form__section">
+          <h3>물건·거래</h3>
+          <div class="work-row">
+            <label class="work-row__label" for="message-property">물건 표시</label>
+            <div class="work-row__control">
+              <input id="message-property" type="text" maxlength="40" autocomplete="off" placeholder="예: 가상단지 101동" data-message-field="property" />
+              <small>단지·동까지만 적고 호수는 적지 마세요.</small>
+            </div>
           </div>
-          <div class="admin-field">
-            <label for="message-deadline">입금 기한</label>
-            <input id="message-deadline" type="text" maxlength="40" autocomplete="off" placeholder="예: 11월 17일 오후 6시" data-message-field="depositDeadline" />
+          <div class="work-row">
+            <label class="work-row__label" for="message-deal-type">거래 종류</label>
+            <div class="work-row__control">
+              <select id="message-deal-type" autocomplete="off" data-message-field="dealType">
+                <option value="">선택 안 함</option>
+                {Object.entries(MESSAGE_DEAL_TYPES).map(([value, label]) => <option value={value}>{label}</option>)}
+              </select>
+            </div>
           </div>
-          <div class="admin-field">
-            <label for="message-bank">은행</label>
-            <input id="message-bank" type="text" maxlength="20" autocomplete="off" placeholder="예: 가상은행" data-message-field="bank" />
+          <div class="work-row">
+            <label class="work-row__label" for="message-amount" data-message-amount-label>거래 금액(원)</label>
+            <div class="work-row__control">
+              <input id="message-amount" type="text" inputmode="numeric" autocomplete="off" placeholder="예: 320000000" data-message-field="amountWon" />
+              <small class="work-amount-hint" aria-live="polite" data-message-hint="amountWon"></small>
+            </div>
           </div>
-          <div class="admin-field">
-            <label for="message-account">계좌번호</label>
-            <input id="message-account" type="text" inputmode="numeric" maxlength="30" autocomplete="off" placeholder="숫자와 -만" data-message-field="accountNumber" />
-          </div>
-          <div class="admin-field">
-            <label for="message-holder">예금주</label>
-            <input id="message-holder" type="text" maxlength="20" autocomplete="off" placeholder="등기부상 소유자와 같은지 확인" data-message-field="accountHolder" />
+          <div class="work-row" data-message-group="rent">
+            <label class="work-row__label" for="message-rent">월세(원)</label>
+            <div class="work-row__control">
+              <input id="message-rent" type="text" inputmode="numeric" autocomplete="off" placeholder="예: 500000" data-message-field="monthlyRentWon" />
+              <small class="work-amount-hint" aria-live="polite" data-message-hint="monthlyRentWon"></small>
+            </div>
           </div>
         </div>
-      </fieldset>
 
-      <fieldset class="admin-subform">
-        <legend>일정·메모</legend>
-        <div class="admin-form-grid">
-          <div class="admin-field">
-            <label for="message-contract-date" data-message-date-label>계약 예정일</label>
-            <input id="message-contract-date" type="date" autocomplete="off" data-message-field="contractDate" />
+        <div class="work-form__section" data-message-group="deposit">
+          <h3>입금 안내</h3>
+          <div class="work-row">
+            <label class="work-row__label" for="message-deposit" data-message-deposit-label>가계약금(원)</label>
+            <div class="work-row__control">
+              <input id="message-deposit" type="text" inputmode="numeric" autocomplete="off" placeholder="예: 10000000" data-message-field="depositAmountWon" />
+              <small class="work-amount-hint" aria-live="polite" data-message-hint="depositAmountWon"></small>
+            </div>
           </div>
-          <div class="admin-field admin-field--wide">
-            <label for="message-memo">특약 메모(선택, 최대 300자)</label>
-            <textarea id="message-memo" rows="3" maxlength="300" autocomplete="off" placeholder="비우면 문장에서 빠집니다." data-message-field="specialMemo"></textarea>
+          <div class="work-row">
+            <label class="work-row__label" for="message-deadline">입금 기한</label>
+            <div class="work-row__control">
+              <input id="message-deadline" type="text" maxlength="40" autocomplete="off" placeholder="예: 11월 17일 오후 6시" data-message-field="depositDeadline" />
+            </div>
+          </div>
+          <div class="work-row">
+            <label class="work-row__label" for="message-bank">은행</label>
+            <div class="work-row__control">
+              <input id="message-bank" type="text" maxlength="20" autocomplete="off" placeholder="예: 가상은행" data-message-field="bank" />
+            </div>
+          </div>
+          <div class="work-row">
+            <label class="work-row__label" for="message-account">계좌번호</label>
+            <div class="work-row__control">
+              <input id="message-account" type="text" inputmode="numeric" maxlength="30" autocomplete="off" placeholder="숫자와 -만" data-message-field="accountNumber" />
+            </div>
+          </div>
+          <div class="work-row">
+            <label class="work-row__label" for="message-holder">예금주</label>
+            <div class="work-row__control">
+              <input id="message-holder" type="text" maxlength="20" autocomplete="off" placeholder="등기부상 소유자와 같은지 확인" data-message-field="accountHolder" />
+            </div>
           </div>
         </div>
-      </fieldset>
-    </section>
 
-    <section class="admin-panel work-result" aria-labelledby="message-preview-title">
-      <div class="admin-panel__heading">
-        <div>
-          <p class="admin-eyebrow">2단계</p>
-          <h2 id="message-preview-title">미리보기</h2>
+        <div class="work-form__section">
+          <h3>일정·메모</h3>
+          <div class="work-row">
+            <label class="work-row__label" for="message-contract-date" data-message-date-label>계약 예정일</label>
+            <div class="work-row__control">
+              <input id="message-contract-date" type="date" autocomplete="off" data-message-field="contractDate" />
+            </div>
+          </div>
+          <div class="work-row">
+            <label class="work-row__label" for="message-memo">특약 메모(선택)</label>
+            <div class="work-row__control">
+              <textarea id="message-memo" rows="3" maxlength="300" autocomplete="off" placeholder="비우면 문장에서 빠집니다." data-message-field="specialMemo"></textarea>
+              <small>최대 300자</small>
+            </div>
+          </div>
         </div>
-      </div>
-      <div class="admin-field">
-        <label for="message-preview">보낼 문장</label>
+      </section>
+
+      <section class="work-output" aria-labelledby="message-preview-title">
+        <h2 id="message-preview-title">미리보기</h2>
+        <label class="work-output__label" for="message-preview">보낼 문장</label>
         <textarea id="message-preview" class="work-preview" rows="16" readonly data-message-preview></textarea>
-        <small aria-live="polite" data-message-count></small>
+        <small class="work-output__count" aria-live="polite" data-message-count></small>
+        <p class="work-help">문자 앱은 받는 사람이 빈 채로 열립니다. 길이 제한은 통신사마다 달라 막지 않습니다.</p>
+      </section>
+
+      <div class="work-doc__action">
+        <button class="work-primary-button" type="button" data-message-copy>문장 복사</button>
+        <div class="work-doc__secondary">
+          <a class="work-secondary-button" href="sms:" data-message-sms="query">문자 앱 열기</a>
+          <a class="work-secondary-button" href="sms:" data-message-sms="ampersand">문자 앱 열기(iPhone에서 본문이 비면)</a>
+        </div>
+        <p class="admin-form-status" role="status" aria-live="polite" data-message-status></p>
       </div>
-      <div class="work-actions">
-        <button class="admin-primary-button" type="button" data-message-copy>문장 복사</button>
-        <a class="admin-secondary-button work-link-button" href="sms:" data-message-sms="query">문자 앱 열기</a>
-        <a class="admin-secondary-button work-link-button" href="sms:" data-message-sms="ampersand">문자 앱 열기(iPhone에서 본문이 비면)</a>
-      </div>
-      <p class="admin-form-status" role="status" aria-live="polite" data-message-status></p>
-      <p class="work-help">문자 앱은 받는 사람이 빈 채로 열립니다. 길이 제한은 통신사마다 달라 막지 않습니다.</p>
-    </section>
+    </div>
   </div>
 
   <script>

@@ -1,4 +1,5 @@
 ---
+import AdminIcon from "../../../components/admin/AdminIcon.astro";
 import WorkLegalBasis from "../../../components/admin/WorkLegalBasis.astro";
 import WorkToolNav from "../../../components/admin/WorkToolNav.astro";
 import legalRules from "../../../data/work/legal-rules.json";
@@ -14,178 +15,201 @@ const ruleIds = [...legalRules.deadlineRules.map((rule) => rule.id), legalRules.
   title="계약 일정 계산 | 행복한부동산 관리자"
   description="계약일 기준 법정 신고 기한을 계산하고 캘린더 파일로 내려받는 관리자 업무 도구입니다."
 >
-  <div class="admin-page-header admin-page-header--compact">
-    <div>
-      <p class="admin-eyebrow">WORK TOOLS · SCHEDULE</p>
+  <div class="work-ui work-doc">
+    <header class="work-doc__header">
+      <span class="work-round-icon work-round-icon--title" data-tone="gold">
+        <AdminIcon name="schedule" size={22} />
+      </span>
       <h1>계약 일정 계산</h1>
-      <p>기한은 계약일을 첫날로 세어 더 이른 날짜로 보여 줍니다. 주말이어도 미루지 않으며, 공휴일은 직접 확인하세요.</p>
+      <span class="admin-stage-badge">저장하지 않음</span>
+    </header>
+
+    <WorkToolNav />
+
+    <p class="work-doc__lead">기한은 계약일을 첫날로 세어 더 이른 날짜로 보여 줍니다. 주말이어도 미루지 않으며, 공휴일은 직접 확인하세요.</p>
+
+    <div class="work-tool work-doc__layout" data-schedule-tool>
+      <section class="work-form" aria-labelledby="schedule-input-title">
+        <h2 id="schedule-input-title" class="sr-only">거래와 날짜</h2>
+
+        <div class="work-form__section">
+          <h3>거래</h3>
+          <div class="work-row" role="radiogroup" aria-labelledby="schedule-deal-label">
+            <span class="work-row__label" id="schedule-deal-label">거래 종류</span>
+            <div class="work-segment">
+              {Object.entries(SCHEDULE_DEAL_KINDS).map(([value, label]) => (
+                <label class="work-choice">
+                  <input type="radio" name="schedule-deal-kind" value={value} autocomplete="off" />
+                  <span>{label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+          <div class="work-row" role="radiogroup" aria-labelledby="schedule-target-label">
+            <span class="work-row__label" id="schedule-target-label">물건 종류</span>
+            <div class="work-segment">
+              {Object.entries(targets).map(([value, label]) => (
+                <label class="work-choice">
+                  <input type="radio" name="schedule-target" value={value} autocomplete="off" />
+                  <span>{label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div class="work-form__section">
+          <h3>날짜</h3>
+          <div class="work-row">
+            <label class="work-row__label" for="schedule-contract-date">계약일</label>
+            <div class="work-row__control">
+              <input id="schedule-contract-date" type="date" autocomplete="off" data-schedule-field="contractDate" />
+            </div>
+          </div>
+          <div class="work-row">
+            <label class="work-row__label" for="schedule-property">물건 표시</label>
+            <div class="work-row__control">
+              <input id="schedule-property" type="text" maxlength="40" autocomplete="off" placeholder="예: 가상단지 101동" data-schedule-field="propertyLabel" />
+              <small>일정 제목에 쓰입니다. 손님 이름·호수는 넣지 마세요.</small>
+            </div>
+          </div>
+          <div class="work-row">
+            <label class="work-row__label" for="schedule-middle-date">중도금일(선택)</label>
+            <div class="work-row__control">
+              <input id="schedule-middle-date" type="date" autocomplete="off" data-schedule-field="middlePaymentDate" />
+            </div>
+          </div>
+          <div class="work-row">
+            <label class="work-row__label" for="schedule-balance-date">잔금일(선택)</label>
+            <div class="work-row__control">
+              <input id="schedule-balance-date" type="date" autocomplete="off" data-schedule-field="balanceDate" />
+            </div>
+          </div>
+        </div>
+
+        <div class="work-form__section" data-schedule-section="purchase">
+          <h3>매수 조건(자금조달계획서 대상 판정)</h3>
+          <div class="work-row" data-schedule-section="price">
+            <label class="work-row__label" for="schedule-price">실제 거래가격(원)</label>
+            <div class="work-row__control">
+              <input id="schedule-price" type="text" inputmode="numeric" autocomplete="off" placeholder="예: 600000000" data-schedule-field="priceWon" />
+              <small class="work-amount-hint" aria-live="polite" data-schedule-hint="priceWon"></small>
+            </div>
+          </div>
+          <div class="work-row">
+            <label class="work-row__label" for="schedule-regulation">규제지역</label>
+            <div class="work-row__control">
+              <select id="schedule-regulation" autocomplete="off" data-schedule-field="regulation">
+                <option value="none">비규제</option>
+                <option value="adjusted">조정대상지역</option>
+                <option value="overheated">투기과열지구</option>
+              </select>
+              <small>지역 목록을 넣지 않았습니다. 거래마다 직접 고르세요.</small>
+            </div>
+          </div>
+          <div class="work-row" role="radiogroup" aria-labelledby="schedule-buyer-label">
+            <span class="work-row__label" id="schedule-buyer-label">매수인</span>
+            <div class="work-segment">
+              <label class="work-choice">
+                <input type="radio" name="schedule-buyer" value="individual" autocomplete="off" />
+                <span>매수인 개인</span>
+              </label>
+              <label class="work-choice">
+                <input type="radio" name="schedule-buyer" value="corporation" autocomplete="off" />
+                <span>매수인 법인</span>
+              </label>
+            </div>
+          </div>
+          <div class="work-row" role="group" aria-labelledby="schedule-purchase-check-label">
+            <span class="work-row__label" id="schedule-purchase-check-label">해당 사항</span>
+            <div class="work-checks">
+              <label class="work-check">
+                <input type="checkbox" autocomplete="off" data-schedule-check="landPermitArea" />
+                <span>토지거래허가를 받아 허가구역 주택을 매수</span>
+              </label>
+              <label class="work-check">
+                <input type="checkbox" autocomplete="off" data-schedule-check="capitalAreaEtc" />
+                <span>물건 소재지가 수도권·광역시(인천 제외)·세종(대전은 해당)</span>
+              </label>
+              <label class="work-check" data-schedule-section="land-share">
+                <input type="checkbox" autocomplete="off" data-schedule-check="landShare" />
+                <span>토지 지분 매수</span>
+              </label>
+              <label class="work-check">
+                <input type="checkbox" autocomplete="off" data-schedule-check="separateFundingSubmission" />
+                <span>자금조달계획서를 매수인이 따로 제출(분리 제출)</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="work-form__section" data-schedule-section="lease">
+          <h3>임대차 조건(주택 임대차 신고 대상 판정)</h3>
+          <div class="work-row">
+            <label class="work-row__label" for="schedule-deposit">보증금(원)</label>
+            <div class="work-row__control">
+              <input id="schedule-deposit" type="text" inputmode="numeric" autocomplete="off" placeholder="예: 60000001" data-schedule-field="depositWon" />
+              <small class="work-amount-hint" aria-live="polite" data-schedule-hint="depositWon"></small>
+            </div>
+          </div>
+          <div class="work-row" data-schedule-section="rent">
+            <label class="work-row__label" for="schedule-rent">월세(원)</label>
+            <div class="work-row__control">
+              <input id="schedule-rent" type="text" inputmode="numeric" autocomplete="off" placeholder="예: 300001" data-schedule-field="monthlyRentWon" />
+              <small class="work-amount-hint" aria-live="polite" data-schedule-hint="monthlyRentWon"></small>
+            </div>
+          </div>
+          <div class="work-row" role="group" aria-labelledby="schedule-lease-check-label">
+            <span class="work-row__label" id="schedule-lease-check-label">해당 사항</span>
+            <div class="work-checks">
+              <label class="work-check">
+                <input type="checkbox" autocomplete="off" data-schedule-check="renewalWithoutChange" />
+                <span>보증금·차임 변동 없이 기간만 연장하는 갱신</span>
+              </label>
+              <label class="work-check">
+                <input type="checkbox" autocomplete="off" data-schedule-check="reportingRegion" />
+                <span>신고 대상 지역(특별자치시·특별자치도·시·군·자치구, 대전 동구는 해당)</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="work-output" aria-labelledby="schedule-result-title">
+        <h2 id="schedule-result-title">일정 목록</h2>
+        <ol class="work-events" data-schedule-results></ol>
+        <div class="work-output__empty">
+          <span class="work-round-icon work-round-icon--hero" data-tone="blue">
+            <AdminIcon name="schedule" size={28} />
+          </span>
+          <p class="work-message" role="status" aria-live="polite" data-schedule-message></p>
+        </div>
+        <ul class="work-notes" data-schedule-notices></ul>
+      </section>
+
+      <div class="work-doc__action">
+        <div class="work-row" role="group" aria-labelledby="schedule-alarm-label">
+          <span class="work-row__label" id="schedule-alarm-label">캘린더 알림(일정마다 최대 {MAX_ALARMS_PER_EVENT}개)</span>
+          <div class="work-checks">
+            {Object.entries(ICS_ALARM_OPTIONS).map(([value, option]) => (
+              <label class="work-check">
+                <input type="checkbox" value={value} autocomplete="off" data-schedule-alarm />
+                <span>{option.label}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+        <button class="work-primary-button" type="button" data-schedule-download disabled>.ics 내려받기</button>
+        <div class="work-doc__secondary">
+          <a class="work-secondary-button" href="#schedule-result-title" aria-disabled="true" data-schedule-fallback>iPhone에서 안 열리면: 캘린더로 바로 열기</a>
+        </div>
+        <p class="admin-form-status" role="status" aria-live="polite" data-schedule-status></p>
+        <p class="work-help">두 버튼은 같은 파일 내용을 씁니다. 같은 일정을 다시 내려받으면 같은 UID가 들어가 캘린더 앱에 따라 중복 대신 갱신될 수 있습니다.</p>
+      </div>
     </div>
-    <span class="admin-stage-badge">저장하지 않음</span>
+
+    <WorkLegalBasis ruleIds={ruleIds} />
   </div>
-
-  <WorkToolNav />
-
-  <div class="work-tool work-layout" data-schedule-tool>
-    <section class="admin-panel" aria-labelledby="schedule-input-title">
-      <div class="admin-panel__heading">
-        <div>
-          <p class="admin-eyebrow">1단계</p>
-          <h2 id="schedule-input-title">거래와 날짜</h2>
-        </div>
-      </div>
-
-      <fieldset class="work-choice-group">
-        <legend>거래 종류</legend>
-        <div class="work-choices">
-          {Object.entries(SCHEDULE_DEAL_KINDS).map(([value, label]) => (
-            <label class="work-choice">
-              <input type="radio" name="schedule-deal-kind" value={value} autocomplete="off" />
-              <span>{label}</span>
-            </label>
-          ))}
-        </div>
-      </fieldset>
-
-      <fieldset class="work-choice-group">
-        <legend>물건 종류</legend>
-        <div class="work-choices">
-          {Object.entries(targets).map(([value, label]) => (
-            <label class="work-choice">
-              <input type="radio" name="schedule-target" value={value} autocomplete="off" />
-              <span>{label}</span>
-            </label>
-          ))}
-        </div>
-      </fieldset>
-
-      <div class="admin-form-grid">
-        <div class="admin-field">
-          <label for="schedule-contract-date">계약일</label>
-          <input id="schedule-contract-date" type="date" autocomplete="off" data-schedule-field="contractDate" />
-        </div>
-        <div class="admin-field">
-          <label for="schedule-property">물건 표시(일정 제목에 쓰임)</label>
-          <input id="schedule-property" type="text" maxlength="40" autocomplete="off" placeholder="예: 가상단지 101동" data-schedule-field="propertyLabel" />
-          <small>손님 이름·호수는 넣지 마세요.</small>
-        </div>
-        <div class="admin-field">
-          <label for="schedule-middle-date">중도금일(선택)</label>
-          <input id="schedule-middle-date" type="date" autocomplete="off" data-schedule-field="middlePaymentDate" />
-        </div>
-        <div class="admin-field">
-          <label for="schedule-balance-date">잔금일(선택)</label>
-          <input id="schedule-balance-date" type="date" autocomplete="off" data-schedule-field="balanceDate" />
-        </div>
-      </div>
-
-      <fieldset class="admin-subform" data-schedule-section="purchase">
-        <legend>매수 조건(자금조달계획서 대상 판정)</legend>
-        <div class="admin-form-grid">
-          <div class="admin-field" data-schedule-section="price">
-            <label for="schedule-price">실제 거래가격(원)</label>
-            <input id="schedule-price" type="text" inputmode="numeric" autocomplete="off" placeholder="예: 600000000" data-schedule-field="priceWon" />
-            <small class="work-amount-hint" aria-live="polite" data-schedule-hint="priceWon"></small>
-          </div>
-          <div class="admin-field">
-            <label for="schedule-regulation">규제지역</label>
-            <select id="schedule-regulation" autocomplete="off" data-schedule-field="regulation">
-              <option value="none">비규제</option>
-              <option value="adjusted">조정대상지역</option>
-              <option value="overheated">투기과열지구</option>
-            </select>
-            <small>지역 목록을 넣지 않았습니다. 거래마다 직접 고르세요.</small>
-          </div>
-        </div>
-        <div class="work-choices" role="radiogroup" aria-label="매수인">
-          <label class="work-choice">
-            <input type="radio" name="schedule-buyer" value="individual" autocomplete="off" />
-            <span>매수인 개인</span>
-          </label>
-          <label class="work-choice">
-            <input type="radio" name="schedule-buyer" value="corporation" autocomplete="off" />
-            <span>매수인 법인</span>
-          </label>
-        </div>
-        <div class="work-checks">
-          <label class="work-check">
-            <input type="checkbox" autocomplete="off" data-schedule-check="landPermitArea" />
-            <span>토지거래허가를 받아 허가구역 주택을 매수</span>
-          </label>
-          <label class="work-check">
-            <input type="checkbox" autocomplete="off" data-schedule-check="capitalAreaEtc" />
-            <span>물건 소재지가 수도권·광역시(인천 제외)·세종(대전은 해당)</span>
-          </label>
-          <label class="work-check" data-schedule-section="land-share">
-            <input type="checkbox" autocomplete="off" data-schedule-check="landShare" />
-            <span>토지 지분 매수</span>
-          </label>
-          <label class="work-check">
-            <input type="checkbox" autocomplete="off" data-schedule-check="separateFundingSubmission" />
-            <span>자금조달계획서를 매수인이 따로 제출(분리 제출)</span>
-          </label>
-        </div>
-      </fieldset>
-
-      <fieldset class="admin-subform" data-schedule-section="lease">
-        <legend>임대차 조건(주택 임대차 신고 대상 판정)</legend>
-        <div class="admin-form-grid">
-          <div class="admin-field">
-            <label for="schedule-deposit">보증금(원)</label>
-            <input id="schedule-deposit" type="text" inputmode="numeric" autocomplete="off" placeholder="예: 60000001" data-schedule-field="depositWon" />
-            <small class="work-amount-hint" aria-live="polite" data-schedule-hint="depositWon"></small>
-          </div>
-          <div class="admin-field" data-schedule-section="rent">
-            <label for="schedule-rent">월세(원)</label>
-            <input id="schedule-rent" type="text" inputmode="numeric" autocomplete="off" placeholder="예: 300001" data-schedule-field="monthlyRentWon" />
-            <small class="work-amount-hint" aria-live="polite" data-schedule-hint="monthlyRentWon"></small>
-          </div>
-        </div>
-        <div class="work-checks">
-          <label class="work-check">
-            <input type="checkbox" autocomplete="off" data-schedule-check="renewalWithoutChange" />
-            <span>보증금·차임 변동 없이 기간만 연장하는 갱신</span>
-          </label>
-          <label class="work-check">
-            <input type="checkbox" autocomplete="off" data-schedule-check="reportingRegion" />
-            <span>신고 대상 지역(특별자치시·특별자치도·시·군·자치구, 대전 동구는 해당)</span>
-          </label>
-        </div>
-      </fieldset>
-    </section>
-
-    <section class="admin-panel work-result" aria-labelledby="schedule-result-title">
-      <div class="admin-panel__heading">
-        <div>
-          <p class="admin-eyebrow">2단계</p>
-          <h2 id="schedule-result-title">일정 목록</h2>
-        </div>
-      </div>
-      <p class="work-message" role="status" aria-live="polite" data-schedule-message></p>
-      <ol class="work-events" data-schedule-results></ol>
-      <ul class="work-notes" data-schedule-notices></ul>
-
-      <fieldset class="work-choice-group">
-        <legend>캘린더 알림(일정마다 최대 {MAX_ALARMS_PER_EVENT}개)</legend>
-        <div class="work-checks">
-          {Object.entries(ICS_ALARM_OPTIONS).map(([value, option]) => (
-            <label class="work-check">
-              <input type="checkbox" value={value} autocomplete="off" data-schedule-alarm />
-              <span>{option.label}</span>
-            </label>
-          ))}
-        </div>
-      </fieldset>
-
-      <div class="work-actions">
-        <button class="admin-primary-button" type="button" data-schedule-download disabled>.ics 내려받기</button>
-        <a class="admin-secondary-button work-link-button" href="#schedule-result-title" aria-disabled="true" data-schedule-fallback>iPhone에서 안 열리면: 캘린더로 바로 열기</a>
-      </div>
-      <p class="admin-form-status" role="status" aria-live="polite" data-schedule-status></p>
-      <p class="work-help">두 버튼은 같은 파일 내용을 씁니다. 같은 일정을 다시 내려받으면 같은 UID가 들어가 캘린더 앱에 따라 중복 대신 갱신될 수 있습니다.</p>
-    </section>
-  </div>
-
-  <WorkLegalBasis ruleIds={ruleIds} />
 
   <script>
     import legalRules from "../../../data/work/legal-rules.json";

@@ -11,6 +11,8 @@ const stage0Files = async () => [
   ...await listFiles("src/pages/admin/work", ".astro"),
   "src/components/admin/WorkToolNav.astro",
   "src/components/admin/WorkLegalBasis.astro",
+  "src/components/admin/AdminSubnav.astro",
+  "src/components/admin/AdminIcon.astro",
 ];
 
 test("T0-115 단계 0 모듈과 화면 스크립트는 서버 요청·브라우저 저장·주소 변경을 하지 않는다", async () => {
@@ -70,13 +72,45 @@ test("TU-15 관리자 메뉴의 대시보드 다음에 업무 도구(짧은 이�
   );
 });
 
-test("업무 도구 첫 화면은 세 도구 바로가기와 탭을 제공한다", async () => {
-  const [index, nav] = await Promise.all([readSource("src/pages/admin/work/index.astro"), readSource("src/components/admin/WorkToolNav.astro")]);
+test("업무 도구 첫 화면은 왼쪽 목록과 세 도구 바로가기를, 세 도구 화면은 밑줄 탭을 제공한다", async () => {
+  const [index, nav, subnav, ...toolPages] = await Promise.all([
+    readSource("src/pages/admin/work/index.astro"),
+    readSource("src/components/admin/WorkToolNav.astro"),
+    readSource("src/components/admin/AdminSubnav.astro"),
+    readSource("src/pages/admin/work/fee.astro"),
+    readSource("src/pages/admin/work/messages.astro"),
+    readSource("src/pages/admin/work/schedule.astro"),
+  ]);
   for (const href of ["/admin/work/fee/", "/admin/work/messages/", "/admin/work/schedule/"]) {
     assert.ok(index.includes(`href: "${href}"`), href);
     assert.ok(nav.includes(`href: "${href}"`), href);
   }
+  assert.match(index, /<AdminSubnav slot="aside"/u, "첫 화면은 왼쪽 보조 목록을 쓴다");
+  assert.match(index, /\{ href: "\/admin\/work\/", label: "업무 도구 처음"/u, "왼쪽 목록 맨 위는 첫 화면");
+  assert.match(subnav, /aria-current=\{pathname === item\.href \? "page" : undefined\}/u);
   assert.match(nav, /aria-current=\{isCurrent\(tool\.href\) \? "page" : undefined\}/u);
+  for (const page of toolPages) {
+    assert.match(page, /<WorkToolNav \/>/u);
+    assert.doesNotMatch(page, /slot="aside"/u, "문구·계산 화면은 왼쪽 목록 없이 밑줄 탭만 쓴다(운영자 승인 2026-11-16 15:05:43)");
+  }
+});
+
+test("왼쪽 목록 찾기 칸은 메뉴 이름만 거르고 저장·전송하지 않는다", async () => {
+  const subnav = await readSource("src/components/admin/AdminSubnav.astro");
+  assert.doesNotMatch(subnav, /<form\b/u);
+  assert.match(subnav, /<input\b[^>]*type="search"[^>]*autocomplete="off"[^>]*data-admin-subnav-search/u);
+  assert.match(subnav, /window\.addEventListener\("pageshow", \(\) => \{\s*\n\s*search\.value = "";/u, "뒤로 가기 복원 때 찾기 칸을 비운다");
+});
+
+test("관리자 메뉴의 지금 화면 표시는 색만이 아니라 굵기·밑줄·막대·기호 반전으로도 구분한다", async () => {
+  const [styles, layout] = await Promise.all([readSource("src/styles/admin.css"), readSource("src/layouts/AdminLayout.astro")]);
+  assert.match(styles, /\.admin-topnav__item\[aria-current="page"\] \{[^}]*font-weight: 900;/u);
+  assert.match(styles, /\.admin-topnav__item\[aria-current="page"\] \.admin-topnav__icon \{ color: var\(--admin-blue\); background: #fff; \}/u);
+  assert.match(styles, /\.work-tool-nav a\[aria-current="page"\] \{[^}]*font-weight: 900;[^}]*box-shadow: inset 0 -2px 0/u);
+  assert.match(styles, /\.admin-subnav__nav a\[aria-current="page"\] \{[^}]*font-weight: 900;/u);
+  assert.match(styles, /\.admin-subnav__nav a\[aria-current="page"\] \{ background: #e6e9ed; box-shadow: inset 3px 0 0 var\(--admin-blue\); \}/u);
+  assert.match(layout, /aria-current=\{isCurrentPath\(item\.href\) \? "page" : undefined\}/u);
+  assert.match(layout, /if \(document\.activeElement === button\)/u, "넘기기 단추가 숨겨질 때 포커스를 옮긴다");
 });
 
 test("부가세 기본값은 켬이고 금액 입력은 숫자 키패드를 쓴다", async () => {
