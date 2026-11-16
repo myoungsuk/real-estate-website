@@ -151,6 +151,7 @@ npm run sync:external:dry-run
 - `/admin/content/` → 홈 대표·사무소·리더스시티 설명과 대표 사진
 - `/admin/external-links/` → 네이버 블로그·유튜브를 분리한 관리 카테고리, 유튜브 일반 영상·Shorts 형식 선택, 카테고리별 건수·검색·링크 미리보기·썸네일
 - `/admin/complexes/` → 리더스시티 전체 비교 콘텐츠와 대전 동구 지역·단지 소개·사진·면적·공급·생활환경·시설 상태·FAQ·관련 콘텐츠·복수 출처·확인일
+- `/admin/work/`·`fee/`·`messages/`·`schedule/` → 관리자 전용 중개업무 도구 단계 0. `src/data/work/legal-rules.json`(공개 법령 요율·기한·판정 기준과 출처) → `src/lib/work/*.mjs` 순수 함수 → 중개보수 계산·안내 문자·계약 일정·`.ics`. 입력값은 저장·서버 전송·URL·브라우저 저장소에 넣지 않고, 법령 데이터는 `validateLegalRules()`로 빌드 전 검증한다. 상세는 `docs/work-tools/`.
 - 관리자 저장 화면 → `src/lib/admin-content-diff.mjs` 공개 필드 diff·민감 문자열 가림 → `src/lib/admin-content-review.ts` 변경 전후·영향 화면 확인과 dirty 이탈 경고 → 서버 사전 검증 → 최종 저장
 - 관리자 저장 성공 → commit SHA·정규화 JSON SHA-256 digest·저장 시각을 브라우저에 안전하게 기억 → `/api/admin/v1/deployment-status`가 같은 Worker의 Production `deployment-marker.json`과 비교 → 공개 반영 상태 표시
 - 관리자 복원 → `/api/admin/v1/content-history/:resource`에서 현재 branch 이력·과거 blob 확인 → 현재 전체 허용 JSON과 교차 검증 → `/api/admin/v1/content/restore`가 `force: false` 새 commit 생성 → 일반 배포 상태 추적. Cloudflare 전체 롤백과 혼합하지 않는다.

@@ -1,0 +1,68 @@
+---
+import WorkToolNav from "../../../components/admin/WorkToolNav.astro";
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+
+const tools = [
+  {
+    href: "/admin/work/fee/",
+    eyebrow: "중개보수",
+    title: "중개보수 계산",
+    description: "물건·거래 종류와 금액을 넣으면 법정 상한 보수, 협의 요율 금액, 부가세를 한쪽 의뢰인 기준으로 보여 줍니다.",
+    action: "중개보수 계산하기",
+  },
+  {
+    href: "/admin/work/messages/",
+    eyebrow: "안내 문자",
+    title: "안내 문자 만들기",
+    description: "가계약·약정금 입금·계약일 안내 문장을 만들고 복사하거나 문자 앱으로 엽니다. 빈 칸은 자리표시로 남습니다.",
+    action: "안내 문자 만들기",
+  },
+  {
+    href: "/admin/work/schedule/",
+    eyebrow: "계약 일정",
+    title: "계약 일정 계산",
+    description: "계약일 기준 거래신고·자금조달계획서·임대차 신고 기한을 계산하고 휴대폰 캘린더용 .ics 파일로 내려받습니다.",
+    action: "계약 일정 계산하기",
+  },
+];
+---
+
+<AdminLayout
+  title="업무 도구 | 행복한부동산 관리자"
+  description="중개보수 계산, 안내 문자, 계약 일정 계산을 모은 관리자 업무 도구입니다."
+>
+  <div class="admin-page-header admin-page-header--compact">
+    <div>
+      <p class="admin-eyebrow">WORK TOOLS</p>
+      <h1>업무 도구</h1>
+      <p>상담과 계약 준비에 쓰는 계산·문구 도구입니다. 입력값은 이 화면에서만 쓰고 저장하거나 서버로 보내지 않습니다.</p>
+    </div>
+    <span class="admin-stage-badge">단계 0 · 저장하지 않는 도구</span>
+  </div>
+
+  <WorkToolNav />
+
+  <p class="admin-inline-notice">
+    <span aria-hidden="true">!</span>
+    <span>손님 이름·전화번호·주민등록번호는 넣지 마세요. 새로 고치거나 화면을 닫으면 입력값이 모두 사라집니다.</span>
+  </p>
+
+  <div class="work-tool-grid">
+    {tools.map((tool, index) => (
+      <section class="admin-panel admin-next-action" aria-labelledby={`work-tool-${index}`}>
+        <div class="admin-panel__heading">
+          <div>
+            <p class="admin-eyebrow">{tool.eyebrow}</p>
+            <h2 id={`work-tool-${index}`}>{tool.title}</h2>
+          </div>
+          <span class="admin-panel__number" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
+        </div>
+        <p>{tool.description}</p>
+        <a class="admin-action-link" href={tool.href}>
+          {tool.action}
+          <span aria-hidden="true">→</span>
+        </a>
+      </section>
+    ))}
+  </div>
+</AdminLayout>

@@ -1,0 +1,22 @@
+---
+const pathname = Astro.url.pathname;
+
+const tools = [
+  { href: "/admin/work/", label: "업무 도구 처음" },
+  { href: "/admin/work/fee/", label: "중개보수 계산" },
+  { href: "/admin/work/messages/", label: "안내 문자" },
+  { href: "/admin/work/schedule/", label: "계약 일정" },
+];
+
+const isCurrent = (href: string) => (href === "/admin/work/" ? pathname === href : pathname.startsWith(href));
+---
+
+<nav class="work-tool-nav" aria-label="업무 도구 메뉴">
+  <ul>
+    {tools.map((tool) => (
+      <li>
+        <a href={tool.href} aria-current={isCurrent(tool.href) ? "page" : undefined}>{tool.label}</a>
+      </li>
+    ))}
+  </ul>
+</nav>

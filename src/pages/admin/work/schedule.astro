@@ -1,0 +1,509 @@
+---
+import WorkLegalBasis from "../../../components/admin/WorkLegalBasis.astro";
+import WorkToolNav from "../../../components/admin/WorkToolNav.astro";
+import legalRules from "../../../data/work/legal-rules.json";
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import { ICS_ALARM_OPTIONS, MAX_ALARMS_PER_EVENT } from "../../../lib/work/ics.mjs";
+import { SCHEDULE_DEAL_KINDS } from "../../../lib/work/legal-dates.mjs";
+
+const targets = { housing: "주택(주거용 건물)", land: "토지", other: "그 밖의 건축물" };
+const ruleIds = [...legalRules.deadlineRules.map((rule) => rule.id), legalRules.screeningRules.id];
+---
+
+<AdminLayout
+  title="계약 일정 계산 | 행복한부동산 관리자"
+  description="계약일 기준 법정 신고 기한을 계산하고 캘린더 파일로 내려받는 관리자 업무 도구입니다."
+>
+  <div class="admin-page-header admin-page-header--compact">
+    <div>
+      <p class="admin-eyebrow">WORK TOOLS · SCHEDULE</p>
+      <h1>계약 일정 계산</h1>
+      <p>기한은 계약일을 첫날로 세어 더 이른 날짜로 보여 줍니다. 주말이어도 미루지 않으며, 공휴일은 직접 확인하세요.</p>
+    </div>
+    <span class="admin-stage-badge">저장하지 않음</span>
+  </div>
+
+  <WorkToolNav />
+
+  <div class="work-tool work-layout" data-schedule-tool>
+    <section class="admin-panel" aria-labelledby="schedule-input-title">
+      <div class="admin-panel__heading">
+        <div>
+          <p class="admin-eyebrow">1단계</p>
+          <h2 id="schedule-input-title">거래와 날짜</h2>
+        </div>
+      </div>
+
+      <fieldset class="work-choice-group">
+        <legend>거래 종류</legend>
+        <div class="work-choices">
+          {Object.entries(SCHEDULE_DEAL_KINDS).map(([value, label]) => (
+            <label class="work-choice">
+              <input type="radio" name="schedule-deal-kind" value={value} autocomplete="off" />
+              <span>{label}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+      <fieldset class="work-choice-group">
+        <legend>물건 종류</legend>
+        <div class="work-choices">
+          {Object.entries(targets).map(([value, label]) => (
+            <label class="work-choice">
+              <input type="radio" name="schedule-target" value={value} autocomplete="off" />
+              <span>{label}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+      <div class="admin-form-grid">
+        <div class="admin-field">
+          <label for="schedule-contract-date">계약일</label>
+          <input id="schedule-contract-date" type="date" autocomplete="off" data-schedule-field="contractDate" />
+        </div>
+        <div class="admin-field">
+          <label for="schedule-property">물건 표시(일정 제목에 쓰임)</label>
+          <input id="schedule-property" type="text" maxlength="40" autocomplete="off" placeholder="예: 가상단지 101동" data-schedule-field="propertyLabel" />
+          <small>손님 이름·호수는 넣지 마세요.</small>
+        </div>
+        <div class="admin-field">
+          <label for="schedule-middle-date">중도금일(선택)</label>
+          <input id="schedule-middle-date" type="date" autocomplete="off" data-schedule-field="middlePaymentDate" />
+        </div>
+        <div class="admin-field">
+          <label for="schedule-balance-date">잔금일(선택)</label>
+          <input id="schedule-balance-date" type="date" autocomplete="off" data-schedule-field="balanceDate" />
+        </div>
+      </div>
+
+      <fieldset class="admin-subform" data-schedule-section="purchase">
+        <legend>매수 조건(자금조달계획서 대상 판정)</legend>
+        <div class="admin-form-grid">
+          <div class="admin-field" data-schedule-section="price">
+            <label for="schedule-price">실제 거래가격(원)</label>
+            <input id="schedule-price" type="text" inputmode="numeric" autocomplete="off" placeholder="예: 600000000" data-schedule-field="priceWon" />
+            <small class="work-amount-hint" aria-live="polite" data-schedule-hint="priceWon"></small>
+          </div>
+          <div class="admin-field">
+            <label for="schedule-regulation">규제지역</label>
+            <select id="schedule-regulation" autocomplete="off" data-schedule-field="regulation">
+              <option value="none">비규제</option>
+              <option value="adjusted">조정대상지역</option>
+              <option value="overheated">투기과열지구</option>
+            </select>
+            <small>지역 목록을 넣지 않았습니다. 거래마다 직접 고르세요.</small>
+          </div>
+        </div>
+        <div class="work-choices" role="radiogroup" aria-label="매수인">
+          <label class="work-choice">
+            <input type="radio" name="schedule-buyer" value="individual" autocomplete="off" />
+            <span>매수인 개인</span>
+          </label>
+          <label class="work-choice">
+            <input type="radio" name="schedule-buyer" value="corporation" autocomplete="off" />
+            <span>매수인 법인</span>
+          </label>
+        </div>
+        <div class="work-checks">
+          <label class="work-check">
+            <input type="checkbox" autocomplete="off" data-schedule-check="landPermitArea" />
+            <span>토지거래허가를 받아 허가구역 주택을 매수</span>
+          </label>
+          <label class="work-check">
+            <input type="checkbox" autocomplete="off" data-schedule-check="capitalAreaEtc" />
+            <span>물건 소재지가 수도권·광역시(인천 제외)·세종(대전은 해당)</span>
+          </label>
+          <label class="work-check" data-schedule-section="land-share">
+            <input type="checkbox" autocomplete="off" data-schedule-check="landShare" />
+            <span>토지 지분 매수</span>
+          </label>
+          <label class="work-check">
+            <input type="checkbox" autocomplete="off" data-schedule-check="separateFundingSubmission" />
+            <span>자금조달계획서를 매수인이 따로 제출(분리 제출)</span>
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset class="admin-subform" data-schedule-section="lease">
+        <legend>임대차 조건(주택 임대차 신고 대상 판정)</legend>
+        <div class="admin-form-grid">
+          <div class="admin-field">
+            <label for="schedule-deposit">보증금(원)</label>
+            <input id="schedule-deposit" type="text" inputmode="numeric" autocomplete="off" placeholder="예: 60000001" data-schedule-field="depositWon" />
+            <small class="work-amount-hint" aria-live="polite" data-schedule-hint="depositWon"></small>
+          </div>
+          <div class="admin-field" data-schedule-section="rent">
+            <label for="schedule-rent">월세(원)</label>
+            <input id="schedule-rent" type="text" inputmode="numeric" autocomplete="off" placeholder="예: 300001" data-schedule-field="monthlyRentWon" />
+            <small class="work-amount-hint" aria-live="polite" data-schedule-hint="monthlyRentWon"></small>
+          </div>
+        </div>
+        <div class="work-checks">
+          <label class="work-check">
+            <input type="checkbox" autocomplete="off" data-schedule-check="renewalWithoutChange" />
+            <span>보증금·차임 변동 없이 기간만 연장하는 갱신</span>
+          </label>
+          <label class="work-check">
+            <input type="checkbox" autocomplete="off" data-schedule-check="reportingRegion" />
+            <span>신고 대상 지역(특별자치시·특별자치도·시·군·자치구, 대전 동구는 해당)</span>
+          </label>
+        </div>
+      </fieldset>
+    </section>
+
+    <section class="admin-panel work-result" aria-labelledby="schedule-result-title">
+      <div class="admin-panel__heading">
+        <div>
+          <p class="admin-eyebrow">2단계</p>
+          <h2 id="schedule-result-title">일정 목록</h2>
+        </div>
+      </div>
+      <p class="work-message" role="status" aria-live="polite" data-schedule-message></p>
+      <ol class="work-events" data-schedule-results></ol>
+      <ul class="work-notes" data-schedule-notices></ul>
+
+      <fieldset class="work-choice-group">
+        <legend>캘린더 알림(일정마다 최대 {MAX_ALARMS_PER_EVENT}개)</legend>
+        <div class="work-checks">
+          {Object.entries(ICS_ALARM_OPTIONS).map(([value, option]) => (
+            <label class="work-check">
+              <input type="checkbox" value={value} autocomplete="off" data-schedule-alarm />
+              <span>{option.label}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+      <div class="work-actions">
+        <button class="admin-primary-button" type="button" data-schedule-download disabled>.ics 내려받기</button>
+        <a class="admin-secondary-button work-link-button" href="#schedule-result-title" aria-disabled="true" data-schedule-fallback>iPhone에서 안 열리면: 캘린더로 바로 열기</a>
+      </div>
+      <p class="admin-form-status" role="status" aria-live="polite" data-schedule-status></p>
+      <p class="work-help">두 버튼은 같은 파일 내용을 씁니다. 같은 일정을 다시 내려받으면 같은 UID가 들어가 캘린더 앱에 따라 중복 대신 갱신될 수 있습니다.</p>
+    </section>
+  </div>
+
+  <WorkLegalBasis ruleIds={ruleIds} />
+
+  <script>
+    import legalRules from "../../../data/work/legal-rules.json";
+    import { MAX_ALARMS_PER_EVENT, buildIcsCalendar, icsFileName } from "../../../lib/work/ics.mjs";
+    import { buildContractSchedule, todayInKorea } from "../../../lib/work/legal-dates.mjs";
+    import { WorkInputError, formatKoreanWon, parseWonInput } from "../../../lib/work/work-format.mjs";
+
+    type ScheduleEvent = {
+      kind: string;
+      date: string;
+      label: string;
+      dateLine: string;
+      legalText: string | null;
+      weekend: boolean;
+      title: string;
+    };
+
+    const root = document.querySelector<HTMLElement>("[data-schedule-tool]");
+
+    if (root) {
+      const message = root.querySelector<HTMLElement>("[data-schedule-message]");
+      const results = root.querySelector<HTMLOListElement>("[data-schedule-results]");
+      const notices = root.querySelector<HTMLUListElement>("[data-schedule-notices]");
+      const download = root.querySelector<HTMLButtonElement>("[data-schedule-download]");
+      const fallback = root.querySelector<HTMLAnchorElement>("[data-schedule-fallback]");
+      const status = root.querySelector<HTMLElement>("[data-schedule-status]");
+      const alarms = [...root.querySelectorAll<HTMLInputElement>("[data-schedule-alarm]")];
+
+      if (message && results && notices && download && fallback && status) {
+        const field = (name: string) =>
+          root.querySelector<HTMLInputElement | HTMLSelectElement>(`[data-schedule-field="${name}"]`);
+        const check = (name: string) => root.querySelector<HTMLInputElement>(`[data-schedule-check="${name}"]`);
+        const section = (name: string) => root.querySelector<HTMLElement>(`[data-schedule-section="${name}"]`);
+        const checkedValue = (name: string) =>
+          root.querySelector<HTMLInputElement>(`input[name="${name}"]:checked`)?.value ?? "";
+        const titleOverrides = new Map<string, string>();
+        const excludedKinds = new Set<string>();
+        let currentEvents: ScheduleEvent[] = [];
+        let currentContractDate = "";
+        let latestIcs = "";
+        let icsSequence = 0;
+
+        const readAmount = (name: string, allowZero = false) => {
+          const hint = root.querySelector<HTMLElement>(`[data-schedule-hint="${name}"]`);
+          try {
+            const value = parseWonInput(field(name)?.value, { allowZero, label: "금액" });
+            if (hint) {
+              hint.textContent = value === null ? "" : formatKoreanWon(value);
+              hint.dataset.state = "ok";
+            }
+            return { value, error: null as string | null };
+          } catch (error) {
+            const text = error instanceof WorkInputError ? error.message : "금액을 확인해 주세요.";
+            if (hint) {
+              hint.textContent = text;
+              hint.dataset.state = "error";
+            }
+            return { value: null, error: text };
+          }
+        };
+
+        const clearIcs = () => {
+          icsSequence += 1;
+          latestIcs = "";
+          download.disabled = true;
+          fallback.href = "#schedule-result-title";
+          fallback.setAttribute("aria-disabled", "true");
+        };
+
+        const selectedAlarmKeys = () => alarms.filter((box) => box.checked).map((box) => box.value);
+
+        const limitAlarms = () => {
+          const full = selectedAlarmKeys().length >= MAX_ALARMS_PER_EVENT;
+          alarms.forEach((box) => {
+            box.disabled = full && !box.checked;
+          });
+        };
+
+        const refreshIcs = async () => {
+          const sequence = ++icsSequence;
+          const events = currentEvents
+            .filter((event) => !excludedKinds.has(event.kind))
+            .map((event) => ({
+              kind: event.kind,
+              date: event.date,
+              title: titleOverrides.get(event.kind) ?? event.title,
+              description: [event.label, event.legalText].filter(Boolean).join("\n"),
+            }));
+          if (!currentContractDate || events.length === 0) {
+            clearIcs();
+            if (currentContractDate) status.textContent = "캘린더에 넣을 일정을 하나 이상 고르세요.";
+            return;
+          }
+          try {
+            const text = await buildIcsCalendar({
+              events,
+              contractDate: currentContractDate,
+              alarmKeys: selectedAlarmKeys(),
+            });
+            if (sequence !== icsSequence) return;
+            latestIcs = text;
+            download.disabled = false;
+            fallback.href = `data:text/calendar;charset=utf-8,${encodeURIComponent(text)}`;
+            fallback.removeAttribute("aria-disabled");
+            status.textContent = "";
+          } catch (error) {
+            if (sequence !== icsSequence) return;
+            clearIcs();
+            status.textContent = error instanceof Error ? error.message : "캘린더 파일을 만들지 못했습니다.";
+            status.dataset.state = "error";
+          }
+        };
+
+        const renderEvents = () => {
+          results.replaceChildren(...currentEvents.map((event) => {
+            const item = document.createElement("li");
+            item.className = "work-event";
+            if (event.weekend) item.dataset.weekend = "true";
+
+            const include = document.createElement("label");
+            include.className = "work-check";
+            const box = document.createElement("input");
+            box.type = "checkbox";
+            box.autocomplete = "off";
+            box.checked = !excludedKinds.has(event.kind);
+            box.dataset.scheduleInclude = event.kind;
+            const includeText = document.createElement("span");
+            includeText.textContent = `캘린더에 넣기 · ${event.label}`;
+            include.append(box, includeText);
+
+            const date = document.createElement("p");
+            date.className = "work-event__date";
+            date.textContent = event.dateLine;
+
+            item.append(include, date);
+            if (event.legalText) {
+              const legal = document.createElement("p");
+              legal.className = "work-event__legal";
+              legal.textContent = event.legalText;
+              item.append(legal);
+            }
+
+            const titleWrap = document.createElement("div");
+            titleWrap.className = "admin-field";
+            const titleId = `schedule-title-${event.kind}`;
+            const titleLabel = document.createElement("label");
+            titleLabel.htmlFor = titleId;
+            titleLabel.textContent = "캘린더 제목";
+            const titleInput = document.createElement("input");
+            titleInput.id = titleId;
+            titleInput.type = "text";
+            titleInput.maxLength = 80;
+            titleInput.autocomplete = "off";
+            titleInput.value = titleOverrides.get(event.kind) ?? event.title;
+            titleInput.dataset.scheduleTitle = event.kind;
+            titleWrap.append(titleLabel, titleInput);
+            item.append(titleWrap);
+            return item;
+          }));
+        };
+
+        const showMessage = (text: string, state: "idle" | "error") => {
+          message.textContent = text;
+          message.dataset.state = state;
+          currentEvents = [];
+          currentContractDate = "";
+          results.replaceChildren();
+          notices.replaceChildren();
+          clearIcs();
+        };
+
+        const update = () => {
+          status.textContent = "";
+          const dealKind = checkedValue("schedule-deal-kind");
+          const target = checkedValue("schedule-target");
+          const isPurchase = ["sale", "supply", "status_sale"].includes(dealKind);
+          const isLease = dealKind === "jeonse" || dealKind === "monthly_rent";
+          const purchase = section("purchase");
+          const lease = section("lease");
+          const price = section("price");
+          const rent = section("rent");
+          const landShare = section("land-share");
+          if (purchase) purchase.hidden = !isPurchase;
+          if (lease) lease.hidden = !isLease;
+          if (price) price.hidden = target === "other";
+          if (rent) rent.hidden = dealKind !== "monthly_rent";
+          if (landShare) landShare.hidden = target !== "land";
+
+          const priceRead = isPurchase && target !== "other" ? readAmount("priceWon") : { value: null, error: null };
+          const depositRead = isLease ? readAmount("depositWon", dealKind === "monthly_rent") : { value: null, error: null };
+          const rentRead = dealKind === "monthly_rent" ? readAmount("monthlyRentWon") : { value: null, error: null };
+          const firstError = priceRead.error ?? depositRead.error ?? rentRead.error;
+
+          if (!dealKind || !target) return showMessage("거래 종류와 물건 종류를 고르세요.", "idle");
+          if (firstError) return showMessage(firstError, "error");
+          if (isPurchase && target !== "other" && priceRead.value === null) {
+            return showMessage("실제 거래가격을 넣으면 자금조달계획서 대상까지 판정합니다.", "idle");
+          }
+          if (isLease && target === "housing" && depositRead.value === null) {
+            return showMessage("보증금을 넣으면 임대차 신고 대상을 판정합니다.", "idle");
+          }
+          if (dealKind === "monthly_rent" && target === "housing" && rentRead.value === null) {
+            return showMessage("월세를 넣으면 임대차 신고 대상을 판정합니다.", "idle");
+          }
+
+          const schedule = buildContractSchedule({
+            dealKind,
+            target,
+            contractDate: field("contractDate")?.value ?? "",
+            middlePaymentDate: field("middlePaymentDate")?.value ?? "",
+            balanceDate: field("balanceDate")?.value ?? "",
+            propertyLabel: field("propertyLabel")?.value ?? "",
+            priceWon: priceRead.value,
+            buyerType: checkedValue("schedule-buyer") || "individual",
+            regulation: field("regulation")?.value ?? "none",
+            landPermitArea: check("landPermitArea")?.checked === true,
+            capitalAreaEtc: check("capitalAreaEtc")?.checked === true,
+            landShare: target === "land" && check("landShare")?.checked === true,
+            separateFundingSubmission: check("separateFundingSubmission")?.checked === true,
+            depositWon: depositRead.value,
+            monthlyRentWon: rentRead.value,
+            renewalWithoutChange: check("renewalWithoutChange")?.checked === true,
+            reportingRegion: check("reportingRegion")?.checked === true,
+          }, legalRules);
+
+          if (!schedule.ok) return showMessage(schedule.error.message, "error");
+          message.textContent = "";
+          message.dataset.state = "idle";
+          currentEvents = schedule.events;
+          currentContractDate = schedule.contractDate;
+          renderEvents();
+          notices.replaceChildren(...schedule.notices.map((notice: string) => {
+            const item = document.createElement("li");
+            item.textContent = notice;
+            return item;
+          }));
+          void refreshIcs();
+        };
+
+        const reset = () => {
+          titleOverrides.clear();
+          excludedKinds.clear();
+          root.querySelectorAll<HTMLInputElement>("input[type='radio'], input[type='checkbox']").forEach((input) => {
+            input.checked = false;
+            input.disabled = false;
+          });
+          root.querySelectorAll<HTMLInputElement | HTMLSelectElement>("[data-schedule-field]").forEach((input) => {
+            input.value = "";
+          });
+          const defaults = [
+            'input[name="schedule-deal-kind"][value="sale"]',
+            'input[name="schedule-target"][value="housing"]',
+            'input[name="schedule-buyer"][value="individual"]',
+            '[data-schedule-check="capitalAreaEtc"]',
+            '[data-schedule-check="reportingRegion"]',
+          ];
+          defaults.forEach((selector) => {
+            const input = root.querySelector<HTMLInputElement>(selector);
+            if (input) input.checked = true;
+          });
+          const regulation = field("regulation");
+          if (regulation) regulation.value = "none";
+          const contractDate = field("contractDate");
+          if (contractDate) contractDate.value = todayInKorea();
+          limitAlarms();
+          update();
+        };
+
+        root.addEventListener("input", (event) => {
+          const target = event.target as HTMLElement | null;
+          const titleKind = target?.dataset.scheduleTitle;
+          if (titleKind && target instanceof HTMLInputElement) {
+            titleOverrides.set(titleKind, target.value);
+            void refreshIcs();
+            return;
+          }
+          if (target?.hasAttribute("data-schedule-include") || target?.hasAttribute("data-schedule-alarm")) return;
+          update();
+        });
+        root.addEventListener("change", (event) => {
+          const target = event.target as HTMLElement | null;
+          if (target?.dataset.scheduleTitle) return;
+          const includeKind = target?.dataset.scheduleInclude;
+          if (includeKind && target instanceof HTMLInputElement) {
+            if (target.checked) excludedKinds.delete(includeKind);
+            else excludedKinds.add(includeKind);
+            void refreshIcs();
+            return;
+          }
+          if (target?.hasAttribute("data-schedule-alarm")) {
+            limitAlarms();
+            void refreshIcs();
+            return;
+          }
+          update();
+        });
+        fallback.addEventListener("click", (event) => {
+          if (!latestIcs) event.preventDefault();
+        });
+        download.addEventListener("click", () => {
+          if (!latestIcs || !currentContractDate) return;
+          const blob = new Blob([latestIcs], { type: "text/calendar;charset=utf-8" });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = icsFileName(currentContractDate);
+          document.body.append(link);
+          link.click();
+          link.remove();
+          window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+          status.textContent = `✓ ${link.download} 파일을 만들었습니다. 휴대폰에서 열어 캘린더에 추가하세요.`;
+          status.dataset.state = "success";
+        });
+        window.addEventListener("pageshow", (event) => {
+          if (event.persisted) reset();
+        });
+        reset();
+      }
+    }
+  </script>
+</AdminLayout>

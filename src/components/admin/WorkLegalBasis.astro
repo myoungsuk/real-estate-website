@@ -1,0 +1,15 @@
+---
+import legalRules from "../../data/work/legal-rules.json";
+
+interface Props {
+  ruleIds: string[];
+}
+
+const { ruleIds } = Astro.props;
+---
+
+<footer class="work-legal-basis">
+  <p>법령 기준: 국가법령정보센터, 확인일 {legalRules.checkedAt}</p>
+  <p>규칙 ID: {ruleIds.join(", ")}</p>
+  <p>입력값은 이 화면 안에서만 쓰며 저장하거나 보내지 않습니다. 새로 고치면 사라집니다.</p>
+</footer>
