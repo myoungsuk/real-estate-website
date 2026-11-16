@@ -1,3 +1,4 @@
+// marker 주소·User-Agent·요청 5초·10초 × 180회를 바꿀 때는 scripts/verify-production-commit.mjs도 함께 본다.
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { deploymentMarkerScopes } from "./deployment-marker.mjs";

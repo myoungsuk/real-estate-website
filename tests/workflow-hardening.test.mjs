@@ -63,6 +63,17 @@ for (const name of ["sync-bank-listings.yml", "sync-external-content.yml"]) {
   });
 }
 
+test("운영 반영 확인은 master push마다 읽기 권한으로 source commit marker만 기다린다", async () => {
+  const workflow = await readWorkflow("verify-production-deploy.yml");
+  assertPinnedOfficialActions(workflow);
+  assert.match(workflow, /on:\s*\n\s*push:\s*\n\s*branches: \[master\]/u);
+  assert.match(workflow, /permissions:\s*\n\s*contents: read/u);
+  assert.doesNotMatch(workflow, /contents: write|GITHUB_TOKEN|secrets\.|pull_request|wrangler|deploy --/u);
+  assert.match(workflow, /fetch-depth: 0/u);
+  assert.match(workflow, /PUSHED_COMMIT: \$\{\{ github\.sha \}\}/u);
+  assert.match(workflow, /node scripts\/verify-production-commit\.mjs --commit "\$PUSHED_COMMIT"/u);
+});
+
 test("IndexNow 알림은 성공한 master CI와 Production search marker 뒤에만 실행된다", async () => {
   const workflow = await readWorkflow("notify-indexnow.yml");
   assertPinnedOfficialActions(workflow);
