@@ -120,7 +120,7 @@ npm run sync:external:dry-run
 - `npm run sync:external:dry-run`: `YOUTUBE_CHANNEL_ID`로 공식 Naver RSS·YouTube Atom을 조회하고 예상 변경을 파일 수정 없이 검증
 - 실제 검색 공개 빌드: `PUBLIC_SITE_URL`과 `PUBLIC_ALLOW_INDEXING=true`를 함께 설정
 
-`PUBLIC_ALLOW_INDEXING=true`인데 `PUBLIC_SITE_URL`이 없으면 빌드를 실패시킨다. 로컬 기본값은 `noindex`다. 현재 Cloudflare의 Production 이외 브랜치 빌드는 비활성화되어 있어, 별도 Preview URL이 아니라 로컬 화면과 PR CI를 공개 전 승인 근거로 사용한다.
+`PUBLIC_ALLOW_INDEXING=true`인데 `PUBLIC_SITE_URL`이 없으면 빌드를 실패시킨다. 로컬 기본값은 `noindex`다. 현재 Cloudflare Workers Builds의 Production 이외 브랜치 빌드는 비활성화되어 있고, 롤백용 Cloudflare Pages 프로젝트도 2026-11-16부터 미리보기(Preview) 브랜치 배포를 끄고 `master` 배포만 유지한다. 별도 Preview URL이 아니라 로컬 화면과 PR CI를 공개 전 승인 근거로 사용한다.
 
 ## 핵심 모듈과 화면 흐름
 
@@ -137,6 +137,7 @@ npm run sync:external:dry-run
 - `src/layouts/BaseLayout.astro` → 페이지별 title, description, canonical, robots, JSON-LD와 공개 하위 페이지 `BreadcrumbList`. 홈은 `WebSite`와 `RealEstateAgent`·`LocalBusiness`를 고정 `@id`로 연결한 단일 `@graph`를 제공
 - `src/pages/robots.txt.ts`, `llms.txt.ts`, sitemap integration → 검색 로봇 안내
 - `scripts/indexnow.mjs`, `.github/workflows/notify-indexnow.yml` → 성공한 `master` CI의 변경 URL 계획 → Production `search` marker·공개키 확인 → 네이버 IndexNow 알림
+- `.github/workflows/verify-production-deploy.yml` → `scripts/verify-production-commit.mjs` → `master` push 커밋이 운영 `/deployment-marker.json`의 `source.commit`과 같거나 그 조상이 될 때까지 확인 → 시간 초과 시 Action 실패(GitHub 실패 알림)
 - `/admin/` → 관리자 대시보드와 관리 API 연결 상태
 - `/admin/deployment/` → 마지막 관리자 저장 commit·resource digest와 Production marker v2를 비교한 배포 중·공개 완료·최신 배포 포함·지연·확인 불가 상태
 - `/admin/history/` → 허용 공개 JSON별 현재 `master` 변경 이력, 과거 JSON과 현재 JSON의 안전한 diff, 현재 스키마 재검증, 정확한 2차 문구와 최신 blob SHA를 요구하는 새 커밋 복원
@@ -225,6 +226,8 @@ DB와 TR 흐름은 없다. 관리 API의 콘텐츠 쓰기는 `ADMIN_WRITE_ENABLE
 - Production 빌드는 `PUBLIC_SITE_URL=https://leaderscityhappy.com`, `PUBLIC_ALLOW_INDEXING=true`를 사용한다.
 - `npm run build`는 공개 `deployment-marker.json` v2에 Workers Builds·GitHub Actions source commit/branch, 허용 관리자 JSON별 정규화 SHA-256 digest와 검색 대상·Bank·외부 콘텐츠·scheduler scope hash를 생성한다. 기존 v1 scope reader는 2026-09-30까지 호환한다. 동기화와 IndexNow 워크플로는 push 후 해당 scope가 운영 URL과 일치할 때까지 확인하며 불일치·시간 초과를 실패로 표시한다.
 - `wrangler.jsonc`의 `CF_VERSION_METADATA` binding은 인증된 관리자에게 현재 Worker version ID·생성 시각만 제공하며 Secret·태그·관리자 이메일은 반환하지 않는다.
+- `.github/workflows/verify-production-deploy.yml`은 `master` push마다 `contents: read` 권한과 비밀값 없이 실행한다. 운영 `/deployment-marker.json`의 `source.commit`이 push 커밋과 같거나, push 커밋을 포함한 `master`의 후속 커밋이 될 때까지 10초 간격으로 최대 30분 확인하고, 시간이 지나면 실패로 끝나 GitHub 실패 알림을 남긴다. Cloudflare 알림(Platform Notifications)에는 Workers Builds 실패 항목이 없어 이 방식으로 빌드 실패·미실행을 감지한다. Workers Builds의 빌드 감시 경로는 포함 `*`, 제외 `node_modules/**`·`.git/`이고 프리뷰 브랜치 빌드는 꺼져 있다(2026-11-16 대시보드 확인). 따라서 `master`에 커밋되는 변경은 모두 Production 빌드를 시작해야 하며, 감시 경로를 바꾸면 이 워크플로가 거짓 실패를 낼 수 있으므로 함께 검토한다. 배포·롤백·재실행은 하지 않는다. `GITHUB_TOKEN`으로 push하는 동기화 커밋에서는 GitHub 정책상 실행되지 않으며, 동기화 워크플로는 자체 scope marker를 확인한다. 후속 커밋 판정의 `git fetch`는 자격 증명 없이 하므로 저장소를 비공개로 바꾸면 이 워크플로를 다시 설계한다.
+- 기존 Cloudflare Pages 프로젝트 `real-estate-website`는 운영 도메인 연결 없이 롤백용으로 유지한다. Production 분기 `master`만 `https://real-estate-website-dnv.pages.dev`에 자동 배포하고, 2026-11-16부터 미리보기 브랜치 배포는 "없음"으로 꺼 두었다(이미 만들어진 미리보기 배포는 남아 있음). 이 사본을 운영 경로나 관리자 화면 접속에 쓰지 않는다.
 - `master` 푸시 후에는 deployment marker와 Cloudflare 새 배포 버전, 운영 URL 반영을 확인한다. 자동 배포가 진행 중인 동안 중복 수동 배포를 실행하지 않는다.
 - 자동 배포가 실패하거나 시작되지 않은 사실을 확인한 경우에만 Production 환경변수 빌드와 `npx wrangler deploy --dry-run`을 다시 검증한 뒤 `npx wrangler deploy`로 수동 배포한다.
 - GitHub·Cloudflare 계정 연결 변경, Production/Preview 환경변수 변경, 사용자 도메인 DNS 변경은 외부 운영 작업이다.

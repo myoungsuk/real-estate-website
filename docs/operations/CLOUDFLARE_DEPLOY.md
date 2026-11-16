@@ -14,10 +14,11 @@
 - 검증된 브랜치를 `master`에 fast-forward 병합하고 자동 배포 트리거 커밋 `0f07589`를 추가했다. 현재 관리자 저장 대상은 `GITHUB_BRANCH=master`, 운영 쓰기는 `ADMIN_WRITE_ENABLED=true`다.
 - Email 입력과 `Send login code` 화면 노출을 확인했고, 운영자가 허용 이메일 1개의 실제 OTP 수신과 관리자 진입 성공을 확인했다. 다른 허용 이메일과 비허용 이메일의 실제 로그인 시험은 운영자 결정으로 추후 확인한다.
 - 기존 Pages 프로젝트 `real-estate-website`는 운영 도메인 연결만 해제했으며 `https://real-estate-website-dnv.pages.dev`는 롤백 확인용으로 유지한다.
+- 2026-11-16 Pages 프로젝트의 분기 제어에서 "분기 미리 보기"를 "프로덕션이 아닌 모든 분기"에서 "없음(자동 분기 배포 사용 중지)"으로 바꿨다. Production 분기 `master`와 자동 프로덕션 배포는 그대로 두어 롤백용 사본은 계속 갱신된다. 이미 만들어진 미리보기 배포는 삭제하지 않았다.
 
 ## GitHub 자동 배포
 
-Worker는 GitHub `myoungsuk/real-estate-website`의 `master`에 연결되어 있다. 빌드 명령은 `npm run build`, 배포 명령은 `npx wrangler deploy`, 루트 디렉터리는 `/`다. Production에는 `PUBLIC_SITE_URL=https://leaderscityhappy.com`, `PUBLIC_ALLOW_INDEXING=true`를 등록했고 Production 이외 브랜치 빌드는 비활성화했다. 공개 전 승인은 로컬 화면 확인과 pull request CI로 수행한다.
+Worker는 GitHub `myoungsuk/real-estate-website`의 `master`에 연결되어 있다. 빌드 명령은 `npm run build`, 배포 명령은 `npx wrangler deploy`, 루트 디렉터리는 `/`다. Production에는 `PUBLIC_SITE_URL=https://leaderscityhappy.com`, `PUBLIC_ALLOW_INDEXING=true`를 등록했고 Production 이외 브랜치 빌드는 비활성화했다. 빌드 감시 경로는 포함 `*`, 제외 `node_modules/**`·`.git/`이다(2026-11-16 대시보드 확인). 공개 전 승인은 로컬 화면 확인과 pull request CI로 수행한다.
 
 최초 Git 빌드 `91d02fd6`과 Worker 버전 `5e3350e4-276a-46a6-a696-ff0dc9ad0927`의 100% 운영 배포를 확인했다. GitHub Actions `CI #3`도 성공했다.
 
@@ -30,6 +31,8 @@ Worker는 GitHub `myoungsuk/real-estate-website`의 `master`에 연결되어 있
 부동산뱅크 동기화는 매일 00:10 KST, 공식 RSS 동기화는 매시간 17분에 예약 실행한다. 두 워크플로 모두 네트워크 조회·의존성 설치·테스트·빌드는 `contents: read` 검증 job에서 수행하고, 허용 파일만 담은 artifact를 별도 `contents: write` 배포 job이 적용한다. 모든 공식 GitHub Action은 검증한 commit SHA로 고정하고 checkout 자격 증명은 저장하지 않는다. 쓰기 토큰은 검증 스크립트가 아니라 최종 `git push` 단계에만 전달한다. 배포 job은 push 직전 `master`가 검증한 기준 SHA와 같은지 다시 확인해 동시 변경을 덮어쓰지 않는다.
 
 `GITHUB_TOKEN` push는 GitHub의 기존 push 기반 CI를 다시 실행하지 않으므로 동기화 워크플로 자체의 테스트·검사·Production-mode 빌드 성공 로그를 확인한다. push 뒤에는 새 빌드의 `/deployment-marker.json`에서 해당 콘텐츠 범위의 SHA-256 값이 검증 job의 예상값과 일치할 때까지 10초 간격으로 최대 30분간 확인하며, 배포가 시작되지 않거나 잘못된 버전이 계속 제공되면 Action을 실패로 표시한다. 이 표시는 자동 롤백은 아니므로 실패 알림을 확인한 운영자가 Cloudflare 빌드 로그와 공개 화면을 점검한다.
+
+사람이 올린 `master` push(pull request 병합, 관리자 화면 저장)는 `.github/workflows/verify-production-deploy.yml`이 확인한다. 이 워크플로는 `contents: read` 권한과 비밀값 없이 push 커밋을 받아 `scripts/verify-production-commit.mjs`를 실행하고, 운영 `/deployment-marker.json`의 `source.commit`이 push 커밋과 같거나 push 커밋을 포함한 `master`의 후속 커밋이 될 때까지 동기화 워크플로와 같은 10초 간격으로, 조회 시간을 포함해 시작 시각 기준 최대 30분 확인한다(job 제한 45분보다 먼저 끝나 마지막 관찰값을 로그에 남김). 연달아 push되어 앞 커밋의 빌드가 취소되거나 뒤 커밋이 먼저 반영돼도 후속 커밋 판정(`git merge-base --is-ancestor`)으로 성공 처리한다. 시간 안에 반영되지 않으면 Action이 실패하고 GitHub가 push한 사람에게 실패 알림을 보낸다(수신 여부는 GitHub 알림 설정에 따름). Cloudflare 알림(Platform Notifications)에는 Workers Builds 실패 항목이 없고, Workers Builds 이벤트는 Queue 기반 Event subscriptions로만 받을 수 있어 이 방식을 택했다(2026-11-16). `GITHUB_TOKEN`으로 push한 동기화 커밋은 GitHub 정책상 이 워크플로를 실행하지 않으므로 확인이 겹치지 않는다. 후속 커밋 판정의 `git fetch`는 자격 증명 없이 실행하므로 저장소를 비공개로 바꾸면 다시 설계한다. 2026-11-13 Bank 동기화 커밋 `4ae45ef`처럼 Workers Builds가 실패하면 다음 push가 있을 때까지 운영이 옛 버전으로 남으므로, 실패 알림을 받으면 Cloudflare 빌드 로그로 원인을 확인하고, 자동 배포 실패가 확인된 경우에만 `CLAUDE.md`의 수동 배포 절차(Production 환경변수 빌드와 `npx wrangler deploy --dry-run` 재검증 뒤 `npx wrangler deploy`)를 따른다.
 
 `wrangler.jsonc`는 `./dist` 정적 자산과 `worker/index.mjs` 관리 API를 같은 Worker로 배포합니다. `leaderscityhappy.com`은 Worker Custom Domain으로 선언하며 `/api/admin`과 `/api/admin/*`만 Worker를 먼저 실행하므로 공개 경로는 정적 자산으로 제공합니다. `CF_VERSION_METADATA` binding은 인증된 관리자에게 현재 Worker version ID·생성 시각만 제공합니다. Production 빌드는 `PUBLIC_SITE_URL=https://leaderscityhappy.com`과 `PUBLIC_ALLOW_INDEXING=true`를 반드시 함께 설정합니다.
 
