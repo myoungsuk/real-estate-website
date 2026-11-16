@@ -30,6 +30,8 @@
 
 관리자 시스템 관련 작업은 `docs/리더스시티 행복한부동산 관리자시스템 설계서.md`와 `docs/리더스시티 행복한부동산 관리자시스템 개발 진행 체크리스트.md`를 추가로 확인한다.
 
+중개업무 도구 작업은 `docs/work-tools/`의 문서 4개(기획서·설계서·개발 진행 체크리스트·테스트 체크리스트)와 `docs/adr/ADR-011-private-work-data-d1-r2-openai.md`를 추가로 확인한다.
+
 작업 시작 전 관련 파일, 호출 흐름, 영향 범위를 확인하고 실제 코드 기준으로 판단한다.
 
 ## 문서 동기화 규칙
@@ -86,6 +88,7 @@
 ├─ worker/             동일 Worker의 Access 검증·관리 API
 ├─ docs/operations/    콘텐츠·배포·검색 등록 절차
 ├─ docs/adr/           승인된 아키텍처 결정
+├─ docs/work-tools/    관리자 중개업무 도구 기획·설계·개발 진행·테스트 문서
 ├─ .github/workflows/  GitHub CI·예약/수동 외부 콘텐츠 동기화
 ├─ astro.config.mjs
 └─ wrangler.jsonc
