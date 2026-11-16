@@ -5,6 +5,8 @@ import {
   DEFAULT_DOCUMENTS,
   PROGRESS_MARKERS,
   ProgressDocumentError,
+  TEST_GROUPS,
+  TEST_GROUP_LABELS,
   TEST_MARKERS,
   countProgress,
   countTestScore,
@@ -149,8 +151,23 @@ test("테스트 체크리스트: 결과 칸 첫 낱말·묶음·시험 층을 1.
 
   const written = updateDocumentText(text, "test");
   assert.match(written, /\*\*전체 통과 3 \/ 6 \(50%\) · 실패 1 · 해당 없음 1 · 미실행 2\*\*/u, "분모는 전체 − 해당 없음");
-  assert.match(written, /\| T3 \| `░░░░░░░░░░ —` \| 0 \| 0 \| 0 \| 1 \|/u, "분모 0이면 —");
+  assert.match(written, /\| 단계 3 알림·모자이크 \(T3\) \| `░░░░░░░░░░ —` \| 0 \| 0 \| 0 \| 1 \|/u, "분모 0이면 —");
   assert.match(written, /\(전체 7개 − 해당 없음 1개 = 6개\)/u);
+  assert.equal(updateDocumentText(written, "test"), written);
+});
+
+test("테스트 체크리스트: 점수표 묶음 이름은 쉬운 말 + 괄호 속 시험 ID 앞부분으로 쓴다(운영자 요청 2026-11-16)", () => {
+  assert.deepEqual(Object.keys(TEST_GROUP_LABELS), [...TEST_GROUPS], "묶음마다 이름이 하나씩, 같은 순서");
+  for (const group of TEST_GROUPS) {
+    const label = TEST_GROUP_LABELS[group];
+    assert.ok(label.endsWith(` (${group})`), `${label}: 괄호 속 ID 앞부분`);
+    assert.ok(label.length > group.length + 3, `${label}: 쉬운 말 이름이 있음`);
+  }
+  const written = updateDocumentText(testDocument(["| T0-01 | 가 | 통과 |", "| TR-01 | 나 | 미실행 |"]), "test");
+  assert.match(written, /^\| 단계 0 계산·문구·일정 \(T0\) \| `██████████ 100%` \| 1 \| 0 \| 0 \| 0 \|$/mu);
+  assert.match(written, /^\| 기존 기능 유지 \(TR\) \| `░░░░░░░░░░ 0%` \| 0 \| 0 \| 1 \| 0 \|$/mu);
+  assert.doesNotMatch(written, /^\| T0 \|/mu, "약어만 쓴 묶음 칸이 남지 않음");
+  // 세는 규칙은 그대로: 같은 문서를 다시 써도 같은 결과
   assert.equal(updateDocumentText(written, "test"), written);
 });
 

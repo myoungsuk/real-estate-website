@@ -23,6 +23,17 @@ export const PROGRESS_DOCUMENT = new URL("리더스시티 행복한부동산 중
 export const TEST_DOCUMENT = new URL("리더스시티 행복한부동산 중개업무 도구 테스트 체크리스트.md", WORK_TOOLS_DIR);
 
 export const TEST_GROUPS = Object.freeze(["T0", "TU", "T2", "TP", "T3", "T4", "TR", "TD"]);
+// 점수표에 보이는 묶음 이름. 세는 규칙(시험 ID 앞부분)은 그대로 두고, 표에는 쉬운 말과 괄호 속 ID 앞부분을 함께 쓴다.
+export const TEST_GROUP_LABELS = Object.freeze({
+  T0: "단계 0 계산·문구·일정 (T0)",
+  TU: "화면 (TU)",
+  T2: "단계 2 손님·메모·일정·파일 (T2)",
+  TP: "개인정보 유출 검사 (TP)",
+  T3: "단계 3 알림·모자이크 (T3)",
+  T4: "단계 4 AI (T4)",
+  TR: "기존 기능 유지 (TR)",
+  TD: "배포 후 확인 (TD)",
+});
 export const TEST_LAYERS = Object.freeze(["자동", "화면 자동", "수동 확인", "실기기", "배포 후"]);
 const RESULT_KEYS = Object.freeze({ 통과: "pass", 실패: "fail", 미실행: "notRun", "해당 없음": "notApplicable" });
 const LAYER_TAGS = Object.freeze({ "[실기기]": "실기기", "[화면]": "화면 자동", "[수동]": "수동 확인" });
@@ -184,7 +195,7 @@ export function renderTestBlock({ groups, layers, total }) {
     `**전체 통과 ${total.pass} / ${denominator} (${percent}) · 실패 ${total.fail} · 해당 없음 ${total.notApplicable} · 미실행 ${total.notRun}**`,
     "",
     ...header("묶음"),
-    ...TEST_GROUPS.map((group) => row(group, groups[group])),
+    ...TEST_GROUPS.map((group) => row(TEST_GROUP_LABELS[group], groups[group])),
     row("**전체**", total),
     "",
     ...header("시험 층"),
