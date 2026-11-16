@@ -121,6 +121,7 @@ npm run sync:external:dry-run
 - `npm run deploy`: 검사·빌드 후 Wrangler로 Cloudflare 배포
 - `npm run sync:bank:dry-run`: 허용된 부동산뱅크 공개 사무소 목록을 조회하고 예상 매물 변경을 파일 수정 없이 검증
 - `npm run sync:external:dry-run`: `YOUTUBE_CHANNEL_ID`로 공식 Naver RSS·YouTube Atom을 조회하고 예상 변경을 파일 수정 없이 검증
+- `node scripts/work-tools-progress.mjs --write`: 중개업무 도구 진행 체크리스트·테스트 체크리스트의 체크 표시나 결과 칸을 바꾼 뒤 진행표·점수표를 다시 쓴다. 표가 실제와 다르면 `npm test`가 실패하며, `--check`는 고치지 않고 확인만 한다.
 - 실제 검색 공개 빌드: `PUBLIC_SITE_URL`과 `PUBLIC_ALLOW_INDEXING=true`를 함께 설정
 
 `PUBLIC_ALLOW_INDEXING=true`인데 `PUBLIC_SITE_URL`이 없으면 빌드를 실패시킨다. 로컬 기본값은 `noindex`다. 현재 Cloudflare Workers Builds의 Production 이외 브랜치 빌드는 비활성화되어 있고, 롤백용 Cloudflare Pages 프로젝트도 2026-11-16부터 미리보기(Preview) 브랜치 배포를 끄고 `master` 배포만 유지한다. 별도 Preview URL이 아니라 로컬 화면과 PR CI를 공개 전 승인 근거로 사용한다.
