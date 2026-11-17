@@ -136,6 +136,28 @@ test("위 메뉴 줄은 모든 폭에서 고정되고, 고정 머리글 뒤로 �
   assert.doesNotMatch(layout, /admin-write-ready|AdminApiError|fetch\(/u, "세션·쓰기 흐름은 건드리지 않음");
 });
 
+test("관리자 탭 미리 그리기는 업무 도구 4화면만 prerender, 나머지 관리자는 prefetch하고 저장·인증·내려받기 링크와 공개 화면은 뺀다", async () => {
+  const layout = await readSource("src/layouts/AdminLayout.astro");
+  assert.match(layout, /<script type="speculationrules" is:inline set:html=\{JSON\.stringify\(speculationRules\)\}><\/script>\r?\n\s*<\/head>/u, "규칙은 관리자 공용 틀 head 안에 한 번");
+  assert.match(layout, /const prerenderPages = \["\/admin\/work\/", "\/admin\/work\/fee\/", "\/admin\/work\/messages\/", "\/admin\/work\/schedule\/"\];/u, "화면 전체 미리 그리기는 서버 요청이 없는 단계 0 업무 도구 4화면만 이름으로(T0-115)");
+  assert.match(layout, /prerender: \[\{ where: \{ and: \[\{ or: prerenderPages\.map\(\(page\) => \(\{ href_matches: page \}\)\) \}, \.\.\.speculationExclusions\] \}, eagerness: "moderate" \}\]/u);
+  assert.doesNotMatch(layout, /href_matches: "\/admin\/work\/\*"/u, "업무 도구 아래 새 화면이 저절로 prerender되지 않게 앞부분 맞춤을 쓰지 않음");
+  assert.match(layout, /prefetch: \[\{ where: \{ and: \[\{ href_matches: "\/admin\/\*" \}, \.\.\.speculationExclusions\] \}, eagerness: "moderate" \}\]/u, "HTML만 미리 받기는 관리자 경로 안에서만");
+  for (const exclusion of ['"/api/*"', '"/cdn-cgi/*"', '"/admin/listings/editor*"', '"[data-no-speculate], [download], [rel~=nofollow]"']) {
+    assert.ok(layout.includes(exclusion), `두 규칙 공통 제외 목록에 ${exclusion}`);
+  }
+  assert.doesNotMatch(layout, /eagerness: "(eager|immediate)"/u, "손을 올리기 전 자동 미리 그리기는 쓰지 않음");
+
+  const sourceFiles = (await readdir(new URL("../src/", import.meta.url), { recursive: true }))
+    .filter((name) => /\.(astro|ts|mjs|js|json)$/u.test(name))
+    .map((name) => `src/${name.replaceAll("\\", "/")}`);
+  const withRules = [];
+  for (const file of sourceFiles) {
+    if ((await readSource(file)).includes("speculationrules")) withRules.push(file);
+  }
+  assert.deepEqual(withRules, ["src/layouts/AdminLayout.astro"], "공개 화면(BaseLayout·공개 페이지)에는 미리 그리기 규칙이 없음");
+});
+
 test("부가세 기본값은 켬이고 금액 입력은 숫자 키패드를 쓴다", async () => {
   const [fee, feePage, messagesPage, schedulePage] = await Promise.all([
     readSource("src/lib/work/brokerage-fee.mjs"),

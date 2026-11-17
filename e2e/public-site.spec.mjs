@@ -237,3 +237,45 @@ test("신흥 SK뷰 상세와 매물 필터가 연결되고 주요 화면 폭에�
   }
   assertNoBrowserErrors();
 });
+
+test("미리 그리기 규칙은 관리자 화면에만 있고 공개 화면에는 없다", async ({ page }) => {
+  for (const path of ["/", "/properties/", "/complexes/sinheung-sk-view/"]) {
+    await page.goto(path);
+    await expect(page.locator('script[type="speculationrules"]'), `${path} 공개 화면`).toHaveCount(0);
+  }
+
+  const assertNoBrowserErrors = failOnBrowserErrors(page);
+  await page.goto("/admin/work/");
+  const rules = page.locator('script[type="speculationrules"]');
+  await expect(rules).toHaveCount(1);
+  const parsed = JSON.parse(await rules.textContent());
+  const includes = (rule) => rule.where.and
+    .filter((item) => item.href_matches || item.or)
+    .flatMap((item) => (item.or ? item.or.map((choice) => choice.href_matches) : [item.href_matches]));
+  const excludes = (rule) => rule.where.and.filter((item) => item.not).map((item) => item.not.href_matches ?? item.not.selector_matches);
+  const prerenderPages = ["/admin/work/", "/admin/work/fee/", "/admin/work/messages/", "/admin/work/schedule/"];
+  expect(parsed.prerender.map(includes)).toEqual([prerenderPages]);
+  expect(parsed.prefetch.map(includes)).toEqual([["/admin/*"]]);
+  for (const rule of [...parsed.prerender, ...parsed.prefetch]) {
+    expect(rule.eagerness).toBe("moderate");
+    expect(excludes(rule)).toEqual(["/api/*", "/cdn-cgi/*", "/admin/listings/editor*", "[data-no-speculate], [download], [rel~=nofollow]"]);
+  }
+
+  // 브라우저의 주소 맞춤 규칙(URLPattern)으로, 나중에 생길 업무 도구 화면과 편집·인증 주소가 미리 그리기에 걸리지 않는지 확인한다.
+  const matched = await page.evaluate((patterns) => {
+    const urls = ["/admin/work/fee/", "/admin/work/fee/?from=menu", "/admin/work/fee", "/admin/work/customers/", "/admin/listings/editor/", "/admin/listings/editor/?id=1", "/admin/listings/editor", "/cdn-cgi/access/logout", "/api/admin/v1/session"];
+    const test = (pattern, url) => new URLPattern(pattern, location.href).test(new URL(url, location.href).href);
+    return Object.fromEntries(urls.map((url) => [url, {
+      prerender: patterns.prerender.some((pattern) => test(pattern, url)),
+      excluded: patterns.excluded.some((pattern) => test(pattern, url)),
+    }]));
+  }, { prerender: prerenderPages, excluded: ["/api/*", "/cdn-cgi/*", "/admin/listings/editor*"] });
+  expect(matched["/admin/work/fee/"].prerender).toBe(true);
+  expect(matched["/admin/work/fee/?from=menu"].prerender).toBe(true);
+  expect(matched["/admin/work/fee"].prerender, "뒤 빗금 없는 주소는 prerender하지 않음(prefetch만)").toBe(false);
+  expect(matched["/admin/work/customers/"].prerender, "단계 2 화면은 목록에 넣기 전까지 prerender하지 않음").toBe(false);
+  for (const url of ["/admin/listings/editor/", "/admin/listings/editor/?id=1", "/admin/listings/editor", "/cdn-cgi/access/logout", "/api/admin/v1/session"]) {
+    expect(matched[url].excluded, `${url} 두 규칙 모두에서 제외`).toBe(true);
+  }
+  assertNoBrowserErrors();
+});
