@@ -20,6 +20,7 @@ import {
 import { createWorkCsrfToken, getWorkConfigState, verifyWorkCsrfToken } from "../worker/work-security.mjs";
 
 const migrationSql = await readFile(new URL("../migrations/work/0001_init.sql", import.meta.url), "utf8");
+const migration0002Sql = await readFile(new URL("../migrations/work/0002_deal_schedule_inputs.sql", import.meta.url), "utf8");
 const ORIGIN = "https://leaderscityhappy.com";
 const TEAM = "https://leaderscityhappy.cloudflareaccess.com";
 const AUD = "test-audience";
@@ -54,10 +55,12 @@ function createD1(database) {
   };
 }
 
-function freshDb() {
+// 업무 시험 DB: 지금 코드의 구조 번호(0002까지)와 맞게 마이그레이션을 차례로 적용한다. F 시험은 0001만 따로 본다.
+function freshDb({ only0001 = false } = {}) {
   const database = new DatabaseSync(":memory:");
   database.exec("PRAGMA foreign_keys = ON;");
   database.exec(migrationSql);
+  if (!only0001) database.exec(migration0002Sql);
   return { database, db: createD1(database) };
 }
 
@@ -210,8 +213,9 @@ test("C. 스키마 번호가 낮거나 없으면 503 WORK_SCHEMA_OUTDATED, 높�
     ["행 없음", (database) => database.exec("DELETE FROM settings WHERE key = 'schema_version'"), "WORK_SCHEMA_OUTDATED"],
     ["값 깨짐(abc)", (database) => database.exec("UPDATE settings SET value_json = 'abc' WHERE key = 'schema_version'"), "WORK_SCHEMA_OUTDATED"],
     ["값 깨짐({)", (database) => database.exec("UPDATE settings SET value_json = '{' WHERE key = 'schema_version'"), "WORK_SCHEMA_OUTDATED"],
-    ["숫자 아님(\"1\")", (database) => database.exec("UPDATE settings SET value_json = '\"1\"' WHERE key = 'schema_version'"), "WORK_SCHEMA_OUTDATED"],
-    ["2", (database) => database.exec("UPDATE settings SET value_json = '2' WHERE key = 'schema_version'"), "WORK_SCHEMA_AHEAD"],
+    ["숫자 아님(\"2\")", (database) => database.exec("UPDATE settings SET value_json = '\"2\"' WHERE key = 'schema_version'"), "WORK_SCHEMA_OUTDATED"],
+    ["1(0002 적용 전)", (database) => database.exec("UPDATE settings SET value_json = '1' WHERE key = 'schema_version'"), "WORK_SCHEMA_OUTDATED"],
+    ["3", (database) => database.exec("UPDATE settings SET value_json = '3' WHERE key = 'schema_version'"), "WORK_SCHEMA_AHEAD"],
   ]) {
     const { database, db } = freshDb();
     setup(database);
@@ -395,11 +399,11 @@ test("E. 업무 응답은 no-store·noindex·요청 ID를 달고, 오류 본문�
 });
 
 test("F. 0001_init.sql은 테이블 12개·색인 14개·구조 번호 1을 만들고 제약·외래 키·감사 칸 규칙을 지킨다", () => {
-  const { database } = freshDb();
+  const { database } = freshDb({ only0001: true });
   const tables = database.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all().map((row) => row.name);
   assert.deepEqual(tables, ["ai_jobs", "ai_usage_daily", "audit_events", "calendar_feeds", "customers", "deal_events", "deal_parties", "deals", "files", "notes", "settings", "worker_leases"]);
   assert.equal(database.prepare("SELECT count(*) AS n FROM sqlite_master WHERE type = 'index' AND name LIKE 'idx_%'").get().n, 14);
-  assert.equal(JSON.parse(database.prepare("SELECT value_json FROM settings WHERE key = 'schema_version'").get().value_json), WORK_SCHEMA_VERSION);
+  assert.equal(JSON.parse(database.prepare("SELECT value_json FROM settings WHERE key = 'schema_version'").get().value_json), 1);
   const now = new Date(NOW).toISOString();
   assert.throws(() => database.prepare("INSERT INTO customers (id, display_name, created_at, updated_at) VALUES ('c', '', ?, ?)").run(now, now), /CHECK/u, "이름 비면 거부");
   assert.throws(() => database.prepare("INSERT INTO customers (id, display_name, status, created_at, updated_at) VALUES ('c', '가상', 'vip', ?, ?)").run(now, now), /CHECK/u);

@@ -6,12 +6,13 @@ import { errorResponse, jsonResponse } from "./http.mjs";
 import { WorkApiError, createWorkCsrfToken, getWorkConfigState, validateWorkJsonWrite } from "./work-security.mjs";
 import { auditStatement, withViewAudit, writeBatchWithAudit } from "./work-audit.mjs";
 import { routeWorkData } from "./work-customers.mjs";
+import { routeWorkDeals } from "./work-deals.mjs";
 
 // 기존 시험·다른 모듈이 쓰던 이름을 그대로 내보낸다(감사 도우미는 work-audit.mjs로 옮김).
 export { withViewAudit, writeBatchWithAudit };
 
 export const WORK_API_ROOT = "/api/admin/v1/work";
-export const WORK_SCHEMA_VERSION = 1;
+export const WORK_SCHEMA_VERSION = 2; // migrations/work 0002(거래 일정 계산 입력 칸)까지
 export const MAX_WORK_JSON_BYTES = 256 * 1024;
 const WRITE_METHODS = new Set(["POST", "PATCH", "PUT", "DELETE"]);
 const RAY_ID_PATTERN = /^[A-Za-z0-9-]{1,64}$/u;
@@ -207,9 +208,10 @@ export async function handleWorkApi(request, env, options = {}) {
     }, requestId);
   }
 
-  // 손님·메모·검색(단계 2 PR-A). 경로가 맞지 않으면 null을 돌려준다.
+  // 손님·메모·검색(단계 2 PR-A), 거래·참여자(PR-B1). 경로가 맞지 않으면 null을 돌려준다.
   try {
-    const handled = await routeWorkData({ db, actor, requestId, now, method, route, url, body, randomUUID: options.randomUUID ?? (() => crypto.randomUUID()) });
+    const dataContext = { db, actor, requestId, now, method, route, url, body, randomUUID: options.randomUUID ?? (() => crypto.randomUUID()) };
+    const handled = (await routeWorkData(dataContext)) ?? (await routeWorkDeals(dataContext));
     if (handled) return jsonResponse({ ok: true, data: handled.data, requestId }, { status: handled.status ?? 200, headers: { "X-Request-Id": requestId } });
   } catch (error) {
     if (error instanceof WorkApiError) {

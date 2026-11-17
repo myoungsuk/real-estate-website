@@ -1,5 +1,5 @@
 // 업무 도구 시험 공용 도구(시험 파일이 아니라 npm test가 직접 돌리지 않음). 가짜 자료만 쓴다.
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { DatabaseSync } from "node:sqlite";
 import { SignJWT, generateKeyPair, jwtVerify } from "jose";
 import { authenticateAccess } from "../worker/access-auth.mjs";
@@ -7,6 +7,10 @@ import { handleAdminApi } from "../worker/admin-api.mjs";
 import { createWorkCsrfToken } from "../worker/work-security.mjs";
 
 export const migrationSql = await readFile(new URL("../migrations/work/0001_init.sql", import.meta.url), "utf8");
+// migrations/work의 파일을 이름 순서대로(wrangler d1 migrations apply와 같은 순서) 모두 적용한다.
+const migrationDir = new URL("../migrations/work/", import.meta.url);
+export const migrationFiles = (await readdir(migrationDir)).filter((name) => /^\d{4}_.+\.sql$/u.test(name)).sort();
+export const allMigrationSql = await Promise.all(migrationFiles.map((name) => readFile(new URL(name, migrationDir), "utf8")));
 export const ORIGIN = "https://leaderscityhappy.com";
 export const TEAM = "https://leaderscityhappy.cloudflareaccess.com";
 export const AUD = "test-audience";
@@ -16,6 +20,7 @@ export const OWNER = "owner@example.com";
 export const BACKUP = "backup@example.com";
 
 // node:sqlite를 D1과 같은 모양(prepare→bind→first/run/all, batch)으로 감싼다.
+// beforeNextBatch에 함수를 넣으면 다음 batch 직전에 한 번 실행한다(미리 읽은 뒤 다른 관리자가 쓰는 상황 재현용).
 export function createD1(database) {
   const wrap = (sql, values = []) => ({
     bind: (...next) => wrap(sql, next),
@@ -25,9 +30,15 @@ export function createD1(database) {
     _sql: sql,
     _values: values,
   });
-  return {
+  const db = {
+    beforeNextBatch: null,
     prepare: (sql) => wrap(sql),
     batch: async (statements) => {
+      if (db.beforeNextBatch) {
+        const interleave = db.beforeNextBatch;
+        db.beforeNextBatch = null;
+        await interleave();
+      }
       database.exec("BEGIN");
       try {
         const results = statements.map((statement) => database.prepare(statement._sql).run(...statement._values));
@@ -39,12 +50,13 @@ export function createD1(database) {
       }
     },
   };
+  return db;
 }
 
 export function freshDb() {
   const database = new DatabaseSync(":memory:");
   database.exec("PRAGMA foreign_keys = ON;");
-  database.exec(migrationSql);
+  for (const sql of allMigrationSql) database.exec(sql);
   return { database, db: createD1(database) };
 }
 
