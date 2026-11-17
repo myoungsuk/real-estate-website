@@ -64,63 +64,37 @@ test("신흥 SK뷰 공개 데이터는 사진·공식 수치·strict schema Gate
     readJson("../src/data/external-links.json"),
   ]);
 
-  assert.equal(complexes.find((complex) => complex.slug === "sinheung-sk-view")?.status, "published");
-  assert.deepEqual(overview.featuredComplexSlugs, ["leaders-city-4", "leaders-city-5", "sinheung-sk-view"]);
-  assert.deepEqual(overview.comparisonComplexSlugs, ["leaders-city-4", "leaders-city-5"]);
+  // 단지 이름·사실 문구·사진 설명·관련 글·출처·공개 여부와 홈·비교 단지 목록은 운영자가 관리자 화면에서 바꿀 수 있어
+  // 글자 대신 구조와 연결만 본다. 공식 세대수·주소·규모·출처처럼 바뀌면 안 되는 값은 content-validation이 고정하고
+  // 아래 validateComplexes·validateComplexOverview가 그 검사를 함께 돌린다(검사 약화 없음).
   assert.deepEqual(validateComplexes(complexes, externalLinks), []);
   assert.deepEqual(validateComplexOverview(overview, complexes, externalLinks), []);
   assert.deepEqual(findUnexpectedKeys("complexes", complexes), []);
   assert.deepEqual(findUnexpectedKeys("complexOverview", overview), []);
 
+  const slugs = complexes.map((complex) => complex.slug);
+  assert.equal(new Set(slugs).size, slugs.length);
+  assert.ok(overview.featuredComplexSlugs.length > 0);
+  assert.ok(overview.featuredComplexSlugs.every((slug) => slugs.includes(slug)));
   const publishedOnly = complexes.filter((complex) => complex.status === "published");
+  assert.ok(publishedOnly.length > 0);
+  assert.ok(overview.comparisonComplexSlugs.every((slug) => publishedOnly.some((complex) => complex.slug === slug)));
+
+  const contentIds = new Set(externalLinks.map((item) => item.id));
+  const isText = (value) => typeof value === "string" && value.trim().length > 0;
   for (const complex of publishedOnly) {
     assert.ok(complex.seo.title.length > 0 && complex.seo.title.length <= 70);
     assert.ok(complex.seo.description.length > 0 && complex.seo.description.length <= 180);
+    assert.equal(matchComplexByListingTitle(complex.name, publishedOnly)?.slug, complex.slug, `${complex.slug}: 단지 이름으로 자기 단지를 찾음`);
+    assert.equal(matchComplexByListingTitle(complex.name.replace(/\s+/gu, ""), complexes)?.slug, complex.slug, `${complex.slug}: 띄어쓰기를 뺀 이름으로도 찾음`);
+    assert.match(complex.image.src, /^\/images\/[a-z0-9/-]+\.webp$/u);
+    assert.ok(isText(complex.image.alt));
+    assert.ok(complex.facts.length > 0 && complex.facts.every((fact) => isText(fact.label) && isText(fact.value)));
+    assert.ok((complex.livingSections ?? []).every((section) => isText(section.title)));
+    assert.ok((complex.relatedContentIds ?? []).every((id) => contentIds.has(id)), `${complex.slug}: 관련 글 ID가 모두 있음`);
+    const sourceIds = complex.sources.map((source) => source.id);
+    assert.ok(sourceIds.length > 0 && new Set(sourceIds).size === sourceIds.length);
   }
-  assert.equal(matchComplexByListingTitle("신흥SK뷰", publishedOnly)?.slug, "sinheung-sk-view");
-  assert.equal(matchComplexByListingTitle("신흥SK뷰", complexes)?.slug, "sinheung-sk-view");
-
-  const sinheung = complexes.find((complex) => complex.slug === "sinheung-sk-view");
-  assert.deepEqual(sinheung.image, {
-    src: "/images/area/sinheung-sk-view.webp",
-    alt: "대전 동구 신흥 SK뷰 야간 출입구와 아파트 전경",
-  });
-  assert.deepEqual(sinheung.facts, [
-    { label: "주소", value: "대전광역시 동구 충무로 255" },
-    { label: "지번", value: "대전광역시 동구 신흥동 161-33" },
-    { label: "사업 맥락", value: "신흥3구역 재개발정비사업" },
-    { label: "규모", value: "12개동 · 1,588세대" },
-    { label: "사용승인", value: "2022년 4월 28일" },
-    { label: "공급 구성", value: "분양 1,499세대 · 임대 89세대" },
-    { label: "전용면적 구간", value: "60㎡ 이하 897세대 · 60㎡ 초과~85㎡ 이하 691세대" },
-    { label: "난방", value: "개별난방" },
-    { label: "주차", value: "지상 0대 · 지하 1,957대" },
-    { label: "승강기", value: "34대" },
-  ]);
-  assert.deepEqual(sinheung.unitGroups, [
-    { category: "전체", areaLabel: "60㎡ 이하", households: 897, note: "K-apt 전용면적 구간 집계" },
-    { category: "전체", areaLabel: "60㎡ 초과~85㎡ 이하", households: 691, note: "K-apt 전용면적 구간 집계" },
-  ]);
-  assert.equal(sinheung.unitGroups.reduce((sum, unit) => sum + unit.households, 0), 1588);
-  assert.equal(sinheung.amenityGroups[0].verification, "official");
-  assert.equal(sinheung.supplySummary.reduce((sum, item) => sum + Number(item.value.replace(/\D/gu, "")), 0), 1588);
-  assert.deepEqual(sinheung.livingSections.map((section) => section.title), [
-    "12개동 · 1,588세대",
-    "2022년 4월 28일",
-    "지하 1,957대",
-    "전 세대 85㎡ 이하 구간",
-  ]);
-  assert.deepEqual(sinheung.relatedContentIds, [
-    "youtube-hhmqrk5ih60",
-    "naver-blog-224218400489",
-    "youtube-3pccpq6ya0u",
-  ]);
-  assert.deepEqual(sinheung.sources.map((source) => source.id), [
-    "kapt-sinheung-sk-view-basic",
-    "kapt-sinheung-sk-view-management",
-    "donggu-sinheung-3-status",
-    "daejeon-2022-housing-move-in-plan",
-  ]);
 
   const publicationCandidate = structuredClone(complexes);
   const candidate = publicationCandidate.find((complex) => complex.slug === "sinheung-sk-view");
@@ -130,10 +104,13 @@ test("신흥 SK뷰 공개 데이터는 사진·공식 수치·strict schema Gate
 });
 
 test("고정 매물 fixture로 단지 연결과 매물 추가·삭제·빈 배열·3건 미리보기를 검증한다", async () => {
-  const [complexes, detailTemplate] = await Promise.all([
-    readJson("../src/data/complexes.json"),
-    readFile(new URL("../src/pages/complexes/[slug].astro", import.meta.url), "utf8"),
-  ]);
+  const detailTemplate = await readFile(new URL("../src/pages/complexes/[slug].astro", import.meta.url), "utf8");
+  // 운영자가 단지 이름·별칭을 바꿔도 이 매칭 시험이 깨지지 않게 단지 목록도 고정 fixture로 쓴다.
+  const complexes = [
+    { slug: "leaders-city-4", name: "리더스시티 4블록", aliases: [], status: "published" },
+    { slug: "leaders-city-5", name: "리더스시티 5블록", aliases: [], status: "published" },
+    { slug: "sinheung-sk-view", name: "신흥 SK뷰", aliases: ["신흥에스케이뷰"], status: "published" },
+  ];
   const matcher = (title) => matchComplexByListingTitle(title, complexes);
   const listings = [
     { id: "leaders-4", title: "리더스시티 4블록 401동" },
@@ -181,7 +158,7 @@ test("alias 충돌·공개 SEO 누락·비교 범위 오염을 검증 단계에�
   ]);
 
   const aliasConflict = structuredClone(complexes);
-  aliasConflict[2].aliases.push("리더스시티 4블록");
+  aliasConflict[2].aliases.push(aliasConflict[0].name);
   assert.match(validateComplexes(aliasConflict, externalLinks).join("\n"), /정규화 매칭 이름이 충돌/);
 
   const shortAlias = structuredClone(complexes);
