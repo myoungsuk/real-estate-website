@@ -406,7 +406,14 @@ const sheetStyles = `
         sortRow.toggleAttribute("data-more-end", sortRow.scrollLeft < hidden - 1);
       };
       sortRow.addEventListener("scroll", updateSortEdges, { passive: true });
-      window.addEventListener("resize", updateSortEdges);
+      // 칸이나 칩 크기가 바뀌면(창 크기, 글자 크기 설정, 글꼴 늦게 뜸) 다시 계산한다
+      if (typeof ResizeObserver === "function") {
+        const sortRowObserver = new ResizeObserver(updateSortEdges);
+        sortRowObserver.observe(sortRow);
+        sortRow.querySelectorAll<HTMLElement>(":scope > *").forEach((child) => sortRowObserver.observe(child));
+      } else {
+        window.addEventListener("resize", updateSortEdges);
+      }
       updateSortEdges();
     }
     previousButton?.addEventListener("click", () => showPage(currentPage - 1, true));

@@ -7,7 +7,7 @@ import { formatOfficeHours, office, phoneHref, smsHref } from "../lib/site";
 const listingCount = naverListings.length;
 const checkedLabel = `${Number(naverListingsUpdatedAt.slice(5, 7))}월 ${Number(naverListingsUpdatedAt.slice(8, 10))}일 확인`;
 // 대표 칸은 평일 상담 시간만(DESIGN.md "대표 칸"). 토·일을 포함한 전체 시간은 사무소 구역에 둔다.
-const weekdayHours = office.hours[0];
+const weekdayHours = office.hours.find((hour) => hour.label === "평일") ?? office.hours[0];
 ---
 
 <style is:inline>

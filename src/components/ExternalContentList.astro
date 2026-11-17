@@ -13,6 +13,8 @@ interface Props {
   youtubeFilters?: boolean;
   paginate?: boolean;
   hoverPreview?: boolean;
+  // "note": 홈 "블로그·유튜브 새 글"의 썸네일·제목·날짜만 보이는 모양(스타일은 src/styles/home.css, 홈 전용)
+  variant?: "card" | "note";
 }
 
 const {
@@ -23,7 +25,9 @@ const {
   youtubeFilters = false,
   paginate = true,
   hoverPreview = false,
+  variant = "card",
 } = Astro.props;
+const isNote = variant === "note";
 const safePageSize = Math.max(1, pageSize);
 const pageCount = Math.ceil(items.length / safePageSize);
 const gridId = `content-grid-${items[0]?.type ?? "all"}-${items[0]?.id ?? "empty"}`;
@@ -67,18 +71,26 @@ function getYoutubeVideoId(item: ExternalContent) {
         {hoverPreview && <p class="content-filter__preview-hint">PC에서는 카드에 잠시 머물면 소리 없이 미리 재생됩니다.</p>}
       </div>
     )}
-    <div class="content-card-grid" id={gridId}>
+    <div class={isNote ? "content-notes" : "content-card-grid"} id={gridId}>
       {items.map((item) => (
-        <article class:list={["content-card", `content-card--${item.type}`]} data-content-item data-content-format={item.type === "youtube" ? item.youtubeFormat : undefined} hidden={!initiallyVisibleIds.has(item.id)}>
+        <article class:list={isNote ? ["content-note", `content-note--${item.type}`] : ["content-card", `content-card--${item.type}`]} data-content-item data-content-format={item.type === "youtube" ? item.youtubeFormat : undefined} hidden={!initiallyVisibleIds.has(item.id)}>
           <div
             class="content-card__media"
             data-youtube-preview-media={hoverPreview && item.type === "youtube" && getYoutubeVideoId(item) ? "true" : undefined}
             data-youtube-video-id={hoverPreview ? getYoutubeVideoId(item) : undefined}
             data-youtube-preview-title={hoverPreview && item.type === "youtube" ? item.title : undefined}
           >
-            <a class="content-card__thumbnail" href={item.url} target="_blank" rel="noopener noreferrer" aria-label={`${item.title} 원문 보기`}>
+            <a
+              class="content-card__thumbnail"
+              href={item.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={isNote ? undefined : `${item.title} 원문 보기`}
+              tabindex={isNote ? "-1" : undefined}
+              aria-hidden={isNote ? "true" : undefined}
+            >
               {item.thumbnail ? (
-                <img src={item.thumbnail.src} alt={item.thumbnail.alt} width="960" height="540" loading="lazy" />
+                <img src={item.thumbnail.src} alt={isNote ? "" : item.thumbnail.alt} width="960" height="540" loading="lazy" />
               ) : (
                 <span aria-hidden="true">{item.type === "blog" ? "N" : "\u25B6\uFE0E"}</span>
               )}
@@ -90,13 +102,21 @@ function getYoutubeVideoId(item: ExternalContent) {
               </>
             )}
           </div>
-          <div class="content-card__body">
-            <p class="content-card__source">{item.type === "blog" ? "NAVER BLOG" : item.youtubeFormat === "short" ? "YOUTUBE SHORTS" : "YOUTUBE VIDEO"}</p>
-            <h3><a href={item.url} target="_blank" rel="noopener noreferrer">{item.title}</a></h3>
-            {formatContentDate(item.publishedAt) && <time datetime={item.publishedAt!}>{formatContentDate(item.publishedAt)}</time>}
-            <p>{item.summary}</p>
-            <a class="content-card__link" href={item.url} target="_blank" rel="noopener noreferrer">원문에서 보기 <span aria-hidden="true">↗</span></a>
-          </div>
+          {isNote ? (
+            <>
+              {/* 썸네일 링크는 키보드·읽기 프로그램에서 숨기고, 제목 링크 하나가 카드 전체 누름 영역을 덮는다 */}
+              <a class="content-note__title" href={item.url} target="_blank" rel="noopener noreferrer">{item.title}</a>
+              {formatContentDate(item.publishedAt) && <time datetime={item.publishedAt!}>{formatContentDate(item.publishedAt)}</time>}
+            </>
+          ) : (
+            <div class="content-card__body">
+              <p class="content-card__source">{item.type === "blog" ? "NAVER BLOG" : item.youtubeFormat === "short" ? "YOUTUBE SHORTS" : "YOUTUBE VIDEO"}</p>
+              <h3><a href={item.url} target="_blank" rel="noopener noreferrer">{item.title}</a></h3>
+              {formatContentDate(item.publishedAt) && <time datetime={item.publishedAt!}>{formatContentDate(item.publishedAt)}</time>}
+              <p>{item.summary}</p>
+              <a class="content-card__link" href={item.url} target="_blank" rel="noopener noreferrer">원문에서 보기 <span aria-hidden="true">↗</span></a>
+            </div>
+          )}
         </article>
       ))}
     </div>
