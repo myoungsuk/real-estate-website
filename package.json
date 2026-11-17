@@ -21,7 +21,7 @@
     "deploy": "npm run build && wrangler deploy"
   },
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=22.13.0"
   },
   "dependencies": {
     "@astrojs/sitemap": "3.7.3",
