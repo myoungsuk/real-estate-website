@@ -139,15 +139,32 @@ test("고정 매물 fixture로 단지 연결과 매물 추가·삭제·빈 배�
   assert.match(detailTemplate, /loading="lazy"/);
 });
 
-test("현재 운영 매물의 알려진 단지명은 매물 건수와 무관하게 연결된다", async () => {
+test("알려진 매물 단지 표기(고정 시험 자료)는 지금 단지 자료로 연결되고, 운영 매물의 새 표기는 경고만 남긴다", async (t) => {
   const [complexes, listingData] = await Promise.all([
     readJson("../src/data/complexes.json"),
     readJson("../src/data/naver-listings.json"),
   ]);
-  const unmatchedKnownTitles = listingData.items
+  // 지금까지 운영 매물·부동산뱅크 목록에서 본 단지 표기. 이것이 연결되지 않으면 단지 이름·별칭 자료가 고장 난 것이라 실패시킨다.
+  const knownTitles = [
+    ["리더스시티 4블록", "leaders-city-4"],
+    ["리더스시티 5블록", "leaders-city-5"],
+    ["신흥SK뷰", "sinheung-sk-view"],
+    ["리더스시티4블록 401동", "leaders-city-4"],
+    ["리더스시티5블록 501동", "leaders-city-5"],
+    ["신흥에스케이뷰 101동", "sinheung-sk-view"],
+  ];
+  for (const [title, slug] of knownTitles) {
+    assert.equal(matchComplexByListingTitle(title, complexes)?.slug, slug, title);
+  }
+
+  // 운영 매물은 매일 동기화가 바꾼다. 처음 보는 표기가 단지에 연결되지 않아도 실패시키지 않고(동기화·CI를 막지 않음) 경고만 남긴다.
+  // 연결되지 않은 매물도 숨기지 않고 공개 목록에는 그대로 나온다(CLAUDE.md 핵심 모듈).
+  const unmatchedKnownTitles = [...new Set(listingData.items
     .filter((listing) => /리더스시티|신흥.*뷰/iu.test(listing.title) && !matchComplexByListingTitle(listing.title, complexes))
-    .map((listing) => listing.title);
-  assert.deepEqual(unmatchedKnownTitles, []);
+    .map((listing) => listing.title))];
+  if (unmatchedKnownTitles.length > 0) {
+    t.diagnostic(`경고: 단지에 연결되지 않은 운영 매물 표기 ${unmatchedKnownTitles.length}종(${unmatchedKnownTitles.slice(0, 5).join(", ")}). 단지 별칭 추가를 검토하세요.`);
+  }
 });
 
 test("alias 충돌·공개 SEO 누락·비교 범위 오염을 검증 단계에서 차단한다", async () => {
