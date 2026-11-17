@@ -11,7 +11,7 @@ CREATE TABLE customers (
   status           TEXT NOT NULL DEFAULT 'consulting'
                    CHECK (status IN ('consulting','contracting','completed','on_hold')),
   last_contact_on  TEXT,
-  retention_until  TEXT,
+  retention_until  TEXT,                                -- 정리 안내 기준일(삭제 예정일 아님). 지나면 1년마다 정리 알림만 띄움
   version          INTEGER NOT NULL DEFAULT 1,
   created_at       TEXT NOT NULL,
   updated_at       TEXT NOT NULL
@@ -36,7 +36,7 @@ CREATE TABLE deals (
   status               TEXT NOT NULL DEFAULT 'open'
                        CHECK (status IN ('open','contracted','completed','cancelled')),
   closed_on            TEXT,
-  retention_until      TEXT,
+  retention_until      TEXT,                            -- 정리 안내 기준일(삭제 예정일 아님)
   version              INTEGER NOT NULL DEFAULT 1,
   created_at           TEXT NOT NULL,
   updated_at           TEXT NOT NULL
@@ -89,13 +89,11 @@ CREATE TABLE files (
   customer_id     TEXT REFERENCES customers(id) ON DELETE SET NULL,
   deal_id         TEXT REFERENCES deals(id) ON DELETE SET NULL,
   rrn_masked      INTEGER NOT NULL DEFAULT 0 CHECK (rrn_masked IN (0,1)),   -- 사용자가 가림 완료를 확인
-  faces_masked    INTEGER NOT NULL DEFAULT 0 CHECK (faces_masked IN (0,1)),
   caption         TEXT NOT NULL DEFAULT '' CHECK (length(caption) <= 200),
   extracted_text  TEXT,                       -- 단계 4 글자 인식 결과(주민번호 가림 후)
   recording_group_id TEXT,                    -- 대면 녹음 묶음 ID(14.11절)
   recording_index    INTEGER CHECK (recording_index IS NULL OR recording_index BETWEEN 1 AND 40),
-  keep_original   INTEGER NOT NULL DEFAULT 0 CHECK (keep_original IN (0,1)),  -- 녹음 "원본 보관" 선택
-  retention_until TEXT,
+  retention_until TEXT,                                 -- 정리 안내 기준일(삭제 예정일 아님)
   created_at      TEXT NOT NULL,
   UNIQUE (recording_group_id, recording_index)
 );

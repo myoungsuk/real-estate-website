@@ -408,6 +408,10 @@ test("F. 0001_init.sql은 테이블 12개·색인 14개·구조 번호 1을 만�
   assert.throws(() => database.prepare("INSERT INTO audit_events (at, actor_email, action, request_id, outcome) VALUES (?, '', 'x', 'r', 'denied')").run(now), /CHECK/u);
   assert.throws(() => database.prepare("INSERT INTO audit_events (at, actor_email, action, request_id, outcome) VALUES (?, 'a@b.c', 'x', 'r', 'maybe')").run(now), /CHECK/u);
   const auditColumns = database.prepare("PRAGMA table_info(audit_events)").all().map((row) => row.name);
+  const fileColumns = database.prepare("PRAGMA table_info(files)").all().map((row) => row.name);
+  assert.equal(fileColumns.includes("keep_original"), false, "녹음 원본 보관 선택 칸 없음(DEC-WT-10 기본 1년 보관)");
+  assert.equal(fileColumns.includes("faces_masked"), false, "얼굴 가림 칸 없음(DEC-WT-09 앱 안 사진은 가리지 않음)");
+  assert.ok(fileColumns.includes("retention_until") && fileColumns.includes("rrn_masked"), "정리 안내 기준일·주민번호 가림 확인 칸은 그대로");
   assert.ok(auditColumns.includes("reason"));
   const allColumns = tables.flatMap((table) => database.prepare(`PRAGMA table_info(${table})`).all().map((row) => row.name));
   assert.equal(allColumns.filter((name) => /rrn_number|resident|jumin|password|passwd|id_card|account_pin/iu.test(name)).length, 0, "주민번호·비밀번호·신분증 칸 없음");
