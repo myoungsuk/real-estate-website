@@ -20,6 +20,7 @@ interface Props {
   noindexFollow?: boolean;
   canonicalPath?: string;
   inlineGlobalStyles?: boolean;
+  preloadImage?: { href: string; srcset?: string; sizes?: string; type?: string };
 }
 
 const {
@@ -35,6 +36,7 @@ const {
   noindexFollow = false,
   canonicalPath,
   inlineGlobalStyles = false,
+  preloadImage,
 } = Astro.props;
 const canonical = Astro.site && (!noindex || canonicalPath) ? new URL(canonicalPath ?? Astro.url.pathname, Astro.site) : undefined;
 const shareImage = Astro.site ? new URL(shareImagePath, Astro.site) : undefined;
@@ -61,6 +63,9 @@ const serializedStructuredData = structuredDataItems.length > 0
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#17344f" />
+    {preloadImage && (
+      <link rel="preload" as="image" href={preloadImage.href} imagesrcset={preloadImage.srcset} imagesizes={preloadImage.sizes} type={preloadImage.type} fetchpriority="high" />
+    )}
     {inlineGlobalStyles
       ? <style is:inline set:html={globalStyles} />
       : <link rel="stylesheet" href={globalStylesheet} />}
