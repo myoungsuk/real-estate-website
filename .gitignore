@@ -19,3 +19,6 @@ docs/images/readme/skview/*.jpg
 
 .DS_Store
 Thumbs.db
+
+# Impeccable design tool records (kept local)
+.impeccable/
