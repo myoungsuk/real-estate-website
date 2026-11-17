@@ -21,6 +21,12 @@
       "migrations_dir": "migrations/work"
     }
   ],
+  "r2_buckets": [
+    {
+      "binding": "WORK_FILES",
+      "bucket_name": "leaderscity-work-files"
+    }
+  ],
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
