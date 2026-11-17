@@ -131,7 +131,7 @@ const structuredData = {
                   src={complex.image.src}
                   srcset={getResponsivePublicImageSrcSet(complex.image.src)}
                   sizes="(min-width: 1180px) 380px, (min-width: 700px) 31vw, calc(100vw - 32px)"
-                  alt={complex.image.alt}
+                  alt=""
                   width="2000"
                   height="2000"
                   loading="lazy"
@@ -219,35 +219,34 @@ const structuredData = {
     </div>
   </section>
 
-  <section class="section" id="blog" aria-labelledby="blog-heading">
+  <section class="home-sec home-sec--tint home-notes" aria-labelledby="home-notes-heading">
     <div class="shell">
-      <div class="content-section-heading">
-        <p>리더스시티행복한부동산</p>
-        <h2 id="blog-heading">THE BLOG</h2>
-        <a class="button button--secondary" href="/blog/">블로그 전체 보기</a>
+      <h2 class="home-sec__title" id="home-notes-heading">블로그·유튜브 새 글</h2>
+      <div class="home-notes__groups">
+        <div class="home-notes__group" id="blog">
+          <h3 id="blog-heading">블로그</h3>
+          <ExternalContentList items={homeBlogContents} emptyLabel="공개할 블로그 글을 준비하고 있습니다." pageSize={9} paginate={false} variant="note" />
+          <a class="home-more" href="/blog/">블로그 전체 보기</a>
+        </div>
+        <div class="home-notes__group" id="youtube">
+          <h3 id="youtube-heading">유튜브</h3>
+          <ExternalContentList items={homeYoutubeContents} emptyLabel="공개할 일반 영상을 준비하고 있습니다." pageSize={6} categoryLabel="유튜브 일반 영상" paginate={false} hoverPreview variant="note" />
+          <a class="home-more" href="/youtube/">유튜브 전체 보기</a>
+        </div>
       </div>
-      <ExternalContentList items={homeBlogContents} emptyLabel="공개할 블로그 글을 준비하고 있습니다." pageSize={9} paginate={false} />
     </div>
   </section>
 
-  <section class="section section--navy" id="youtube" aria-labelledby="youtube-heading">
+  <section class="home-sec home-contact" aria-labelledby="contact-heading">
     <div class="shell">
-      <div class="content-section-heading content-section-heading--light">
-        <p>대전동구유튜브---천동리더스시티행복한부동산tv</p>
-        <h2 id="youtube-heading">YOUTUBE</h2>
-        <a class="button button--light" href="/youtube/">유튜브 전체 보기</a>
-      </div>
-      <ExternalContentList items={homeYoutubeContents} emptyLabel="공개할 일반 영상을 준비하고 있습니다." pageSize={6} categoryLabel="유튜브 일반 영상" paginate={false} hoverPreview />
-    </div>
-  </section>
-
-  <section class="section" aria-labelledby="contact-heading">
-    <div class="shell contact-panel">
-      <div><p class="eyebrow">상담 안내</p><h2 id="contact-heading">찾는 집이 아직 공개되지 않았나요?</h2><p>원하는 동네, 거래유형, 면적을 알려주시면 대전 동구에서 현재 확인 가능한 정보를 안내해 드립니다.</p></div>
-      <div class="contact-panel__actions">
-        <a class="button button--primary" href={phoneHref}>{office.mobile}</a>
-        <a class="button button--secondary" href={smsHref}>문자로 조건 보내기</a>
-        <a class="button button--kakao" href={kakaoHref} target="_blank" rel="noopener noreferrer">카카오톡 상담</a>
+      <div class="home-contact__box">
+        <h2 class="home-sec__title" id="contact-heading">찾는 집이 아직 공개되지 않았나요?</h2>
+        <p>원하는 동네, 거래유형, 면적을 알려주시면 대전 동구에서 현재 확인 가능한 정보를 안내해 드립니다.</p>
+        <div class="home-contact__row">
+          <a class="home-contact__call" href={phoneHref}>전화 {office.mobile}</a>
+          <a href={smsHref}>문자로 조건 보내기</a>
+          <a class="home-contact__kakao" href={kakaoHref} target="_blank" rel="noopener noreferrer">카카오톡 상담</a>
+        </div>
       </div>
     </div>
   </section>

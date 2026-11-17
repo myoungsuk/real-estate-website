@@ -350,3 +350,153 @@
     align-items: start;
   }
 }
+
+/* 블로그·유튜브 새 글: 썸네일 격자(휴대폰 2열, 700px 이상 3열) */
+.home-notes__groups {
+  display: grid;
+  gap: 36px;
+}
+
+.home-notes__group h3 {
+  margin: 0 0 12px;
+  color: var(--home-navy);
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.content-notes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 10px;
+  margin: 0 0 6px;
+}
+
+.content-note {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 6px;
+}
+
+.content-note[hidden] {
+  display: none;
+}
+
+.content-note .content-card__media {
+  border-radius: 2px;
+  background: var(--home-edge);
+}
+
+.content-note .content-card__thumbnail {
+  color: var(--home-navy);
+}
+
+.content-note .content-card__thumbnail > span {
+  border-color: var(--home-navy);
+}
+
+/* 미리보기 표시가 카드 누름 영역을 가로막지 않게 */
+.content-note .content-card__preview-label {
+  pointer-events: none;
+}
+
+/* 작은 썸네일이라 "음소거 미리보기" 표시는 실제로 재생되는 동안에만 보인다(공용 규칙은 정밀 포인터에서 늘 보임) */
+@media (hover: hover) and (pointer: fine) {
+  .content-note .content-card__preview-label {
+    display: none;
+  }
+
+  .content-note .content-card__media.is-previewing .content-card__preview-label {
+    display: inline-flex;
+  }
+}
+
+/* 제목은 두 줄까지. 제목 링크가 카드 전체를 덮어 누름 영역이 넉넉하다 */
+.content-note__title {
+  display: -webkit-box;
+  overflow: hidden;
+  font-weight: 800;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.content-note__title::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.content-note time {
+  color: var(--home-ink-soft);
+  font-size: 0.875rem;
+}
+
+/* 상담 구역 */
+.home-contact__box {
+  display: grid;
+  gap: 10px;
+  padding: 24px 18px;
+  border-radius: 2px;
+  color: var(--home-paper);
+  background: var(--home-navy);
+}
+
+.home-sec .home-contact__box .home-sec__title {
+  margin: 0;
+  color: var(--home-paper);
+}
+
+.home-contact__box p {
+  margin: 0;
+}
+
+/* 남색 바탕이라 밝은 포커스 테두리 */
+.home-contact__box :focus-visible {
+  outline-color: var(--focus-ring-light);
+}
+
+.home-contact__row {
+  display: grid;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.home-contact__row a {
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  border: 1px solid var(--home-paper);
+  border-radius: 2px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.home-contact__row .home-contact__call {
+  color: var(--home-ink);
+  background: var(--home-paper);
+}
+
+.home-contact__row .home-contact__kakao {
+  border-color: #fee500;
+  color: #191919;
+  background: #fee500;
+}
+
+@media (min-width: 700px) {
+  /* 표 최소 폭(680px)은 휴대폰에서 옆으로 밀어 보기용. 700px 이상은 칸 안에 맞춘다(700 ~ 713px의 표 안 가로 스크롤 방지) */
+  .home-compare table {
+    min-width: 0;
+  }
+
+  .content-notes {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 22px 16px;
+  }
+
+  .home-contact__row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
