@@ -388,7 +388,9 @@ const sheetStyles = `
 
     const applySort = (sortKey: string) => {
       orderedItems = [...items].sort((a, b) => compareNaverListingSortData(a.dataset, b.dataset, sortKey));
-      grid?.append(...orderedItems);
+      // 순서가 그대로면 다시 붙이지 않는다(다시 붙이면 첫 화면 종이 움직임이 처음부터 다시 시작됨)
+      const alreadyInOrder = grid !== null && orderedItems.every((item, index) => grid.children[index] === item);
+      if (!alreadyInOrder) grid?.append(...orderedItems);
       sortButtons.forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.listingSort === sortKey)));
       showPage(0);
     };
@@ -420,5 +422,7 @@ const sheetStyles = `
     nextButton?.addEventListener("click", () => showPage(currentPage + 1, true));
     pager.dataset.paginationReady = "true";
     applySort("latest");
+    // 종이 모양: 첫 화면 들어올 때의 움직임(0.28초)이 끝난 뒤에는 넘기기·정렬로 다시 보여도 움직이지 않게 한다
+    if (grid && pager.classList.contains("listing-pager--sheet")) window.setTimeout(() => grid.classList.add("is-settled"), 400);
   });
 </script>
