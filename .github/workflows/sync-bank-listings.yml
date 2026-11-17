@@ -123,7 +123,17 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -- .github/bank-listing-sync-state.json .github/listing-review-state.json src/data/naver-listings.json
           git diff --cached --quiet && { echo "검증 산출물에 커밋할 변경이 없습니다." >&2; exit 1; }
-          git commit -m "chore(content): sync Bank listings"
+          message_file="$RUNNER_TEMP/commit-message.txt"
+          printf '%s\n' \
+            "네이버 공개 매물 목록을 부동산뱅크 최신 목록에 맞춰 자동 갱신" \
+            "" \
+            "홈페이지 매물 목록 가운데 부동산뱅크에서 가져온 매물이 부동산뱅크의 최신 공개 목록과 같아집니다." \
+            "무엇: 부동산뱅크 공개 목록에 새로 생기거나 내용이 바뀐 매물은 반영하고, 목록에서 내려간 매물은 지웁니다. 다른 곳에서 등록한 매물은 그대로 둡니다." \
+            "언제: 매일 00:10(한국 시간) 자동 실행 또는 운영자가 직접 실행했을 때 만들어집니다." \
+            "확인: 반영 전에 자동 시험(npm test), 공개 자료 검사, 빌드, 검색용 운영 빌드 검사를 모두 통과했고, 바뀐 파일이 허용된 3개 안에서만 바뀌었는지 확인했습니다." \
+            "반영: 커밋 뒤 운영 사이트에 이 변경이 실제로 올라갔는지 자동으로 확인합니다." \
+            > "$message_file"
+          git commit -F "$message_file"
 
       - name: Push with job-scoped credential
         env:
