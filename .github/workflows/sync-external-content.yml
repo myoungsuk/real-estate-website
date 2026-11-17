@@ -142,15 +142,31 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          message_file="$RUNNER_TEMP/commit-message.txt"
           if [ "$CHANGE_MODE" = "content" ]; then
             git add -- src/data/external-links.json public/images/blog/ public/images/youtube/
-            message="chore(content): sync external content"
+            printf '%s\n' \
+              "공식 블로그·유튜브의 새 글과 영상을 자동으로 추가" \
+              "" \
+              "지역 콘텐츠 화면(블로그·유튜브)에 공식 채널의 새 글·영상이 나타납니다." \
+              "무엇: 공식 네이버 블로그와 유튜브 채널의 새 항목만 추가하고 썸네일은 홈페이지에 직접 저장합니다. 기존 항목은 고치거나 지우지 않습니다." \
+              "언제: 매시간 17분 자동 실행 또는 운영자가 직접 실행했을 때 만들어집니다." \
+              "확인: 반영 전에 자동 시험(npm test), 공개 자료 검사, 빌드, 검색용 운영 빌드 검사를 모두 통과했고, 바뀐 파일이 허용된 콘텐츠 파일과 썸네일뿐인지 확인했습니다." \
+              "반영: 커밋 뒤 운영 사이트에 이 변경이 실제로 올라갔는지 자동으로 확인합니다." \
+              > "$message_file"
           else
             git add -- .github/automation-health.json
-            message="chore(automation): refresh scheduler activity"
+            printf '%s\n' \
+              "자동 동기화가 멈추지 않게 활동 기록 날짜를 갱신" \
+              "" \
+              "홈페이지 화면은 바뀌지 않습니다." \
+              "왜: GitHub는 공개 저장소에 60일 동안 활동이 없으면 예약 실행을 자동으로 멈춥니다." \
+              "무엇: 새 글·영상이 없어 마지막 활동 기록에서 45일이 되면 .github/automation-health.json의 날짜만 오늘로 바꿉니다." \
+              "확인: 반영 전에 자동 시험(npm test), 공개 자료 검사, 빌드, 검색용 운영 빌드 검사를 모두 통과했고, 바뀐 파일이 이 1개뿐인지 확인했습니다." \
+              > "$message_file"
           fi
           git diff --cached --quiet && { echo "검증 산출물에 커밋할 변경이 없습니다." >&2; exit 1; }
-          git commit -m "$message"
+          git commit -F "$message_file"
 
       - name: Push with job-scoped credential
         env:
