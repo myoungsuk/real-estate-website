@@ -258,8 +258,14 @@ import { MESSAGE_DEAL_TYPES, MESSAGE_TEMPLATES, MESSAGE_VARIANTS } from "../../.
             status.textContent = "✓ 문장을 복사했습니다. 문자·카카오톡에 붙여 넣으세요.";
             status.dataset.state = "success";
           } catch {
-            preview.focus();
+            // 글상자가 조금이라도 보이면 브라우저가 스크롤하지 않아 위쪽이 고정 머리글에 가리므로, 직접 머리글 아래로 옮긴다(보드 35번).
+            // block "nearest"는 글상자가 화면 안에 있으면 머리글 뒤에 걸쳐도 움직이지 않아(768px 확인), 위쪽이 머리글 여백(admin.css scroll-margin)보다 위일 때만 "start"로 맞춘다.
+            preview.focus({ preventScroll: true });
             preview.select();
+            const previewBox = preview.getBoundingClientRect();
+            const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+            if (previewBox.top < (Number.parseFloat(getComputedStyle(preview).scrollMarginTop) || 0)) preview.scrollIntoView({ block: "start", behavior });
+            else if (previewBox.bottom > window.innerHeight) preview.scrollIntoView({ block: "nearest", behavior });
             status.textContent = "자동 복사가 막혔습니다. 선택된 문장을 직접 복사해 주세요.";
             status.dataset.state = "error";
           }
