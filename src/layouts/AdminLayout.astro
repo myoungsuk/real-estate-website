@@ -196,6 +196,31 @@ const speculationRules = {
         updateButtons();
       }
 
+      // 휴대폰 폭의 가로로 미는 줄(왼쪽 목록이 위로 온 줄, 업무 도구 밑줄 탭)에서 키보드로 간 링크가 줄 옆으로 잘리면, 그 줄만 가로로 민다(보드 34번).
+      // Chromium은 링크가 조금이라도 보이면 줄을 밀지 않는다. scrollIntoView는 문서까지 세로로 움직일 수 있어 줄의 가로 위치만 바꾼다.
+      // 마우스·손가락으로 누를 때는 밀지 않는다. 누르는 사이 줄이 움직이면 손을 뗀 자리가 다른 링크가 되어 엉뚱한 화면으로 갈 수 있기 때문이다.
+      {
+        const strips = ".admin-subnav__nav, .work-tool-nav";
+        const stripMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+        let stripPointerAt = -Infinity;
+        document.addEventListener("pointerdown", () => {
+          stripPointerAt = performance.now();
+        }, { capture: true, passive: true });
+        document.addEventListener("focusin", (event) => {
+          const target = event.target as HTMLElement | null;
+          const strip = target?.closest<HTMLElement>(strips);
+          if (!target || !strip || !target.matches(":focus-visible") || performance.now() - stripPointerAt < 600) return;
+          if (strip.scrollWidth <= strip.clientWidth) return;
+          const gap = 16;
+          const bounds = strip.getBoundingClientRect();
+          const box = target.getBoundingClientRect();
+          let delta = 0;
+          if (box.left < bounds.left + gap) delta = box.left - bounds.left - gap;
+          else if (box.right > bounds.right - gap) delta = Math.min(box.right - bounds.right + gap, box.left - bounds.left - gap);
+          if (delta !== 0) strip.scrollBy({ left: delta, behavior: stripMotion.matches ? "auto" : "smooth" });
+        });
+      }
+
       // 위 메뉴 줄은 모든 폭에서 화면 위에 고정된다(사용자 선택 2026-11-16 16:59:58, 좁은 화면은 브랜드 줄이 올라가고 메뉴 줄만 남음).
       // 문서 전체 scroll-padding-top은 쓰지 않으므로(머리글 안 Tab 때 문서가 튀는 문제), 앞으로 Tab·Shift+Tab·처음으로 돌아오기
       // 모두 이 스크립트가 맡는다. 키보드 포커스(:focus-visible 또는 글 입력류)가 머리글에 가리면, 스크롤이 멈춘 뒤 머리글 아래 8px까지 바로 내린다.

@@ -200,4 +200,19 @@ test("안내 문자 화면은 받는 사람 없는 sms 주소와 복사 실패 �
   assert.match(page, /buildSmsHref\(message\.text, link\.dataset\.messageSms === "ampersand" \? "ampersand" : "query"\)/u);
   assert.match(page, /자동 복사가 막혔습니다/u);
   assert.match(page, /손님 이름·전화번호·주민등록번호·계좌 비밀번호는 넣지 마세요/u);
+  // 복사가 막혀 미리보기로 갈 때 위쪽이 고정 머리글에 가리지 않게 직접 옮긴다(보드 35번). 선택·안내 문구는 그대로
+  assert.match(page, /preview\.focus\(\{ preventScroll: true \}\);\r?\n\s*preview\.select\(\);/u);
+  assert.match(page, /if \(previewBox\.top < \(Number\.parseFloat\(getComputedStyle\(preview\)\.scrollMarginTop\) \|\| 0\)\) preview\.scrollIntoView\(\{ block: "start", behavior \}\);/u, "위쪽이 머리글 여백보다 위면 머리글 아래로");
+  assert.match(page, /else if \(previewBox\.bottom > window\.innerHeight\) preview\.scrollIntoView\(\{ block: "nearest", behavior \}\);/u, "화면 아래로 벗어나면 보이게");
+  const styles = await readSource("src/styles/admin.css");
+  assert.match(styles, /\[data-message-preview\] \{ scroll-margin-top: calc\(var\(--admin-sticky-height\) \+ 8px\); \}/u, "보정 스크립트와 같은 머리글 아래 8px");
+});
+
+test("휴대폰 폭 가로로 미는 줄은 키보드로 간 링크만 그 줄 안에서 가로로 밀고 문서는 세로로 움직이지 않는다(보드 34번)", async () => {
+  const layout = await readSource("src/layouts/AdminLayout.astro");
+  assert.match(layout, /const strips = "\.admin-subnav__nav, \.work-tool-nav";/u);
+  assert.match(layout, /!target\.matches\(":focus-visible"\) \|\| performance\.now\(\) - stripPointerAt < 600\) return;/u, "마우스·손가락으로 누를 때는 밀지 않음");
+  assert.match(layout, /strip\.scrollBy\(\{ left: delta, behavior: stripMotion\.matches \? "auto" : "smooth" \}\)/u, "줄의 가로 위치만 바꿈");
+  const stripBlock = layout.slice(layout.indexOf("const strips ="), layout.indexOf("const header ="));
+  assert.doesNotMatch(stripBlock, /scrollIntoView|window\.scroll/u, "문서 세로 스크롤을 건드리지 않음");
 });
