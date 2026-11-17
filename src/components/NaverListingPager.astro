@@ -49,8 +49,25 @@ const sheetStyles = `
     padding: 7px 16px 8px;
     margin-inline: -16px;
     overflow-x: auto;
-    scroll-padding-inline: 16px;
+    scroll-padding-inline: 48px;
     scrollbar-width: none;
+  }
+
+  /* 가려진 칩이 있는 쪽 가장자리를 흐리게 해 옆으로 더 있다는 것을 보여 준다(스크립트가 data-more-* 를 붙임).
+     포커스로 옮긴 칩은 scroll-padding 48px 덕분에 흐린 36px 밖에 선다. */
+  .listing-pager--sheet .listing-sort[data-more-end] {
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent);
+  }
+
+  .listing-pager--sheet .listing-sort[data-more-start] {
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 36px);
+    mask-image: linear-gradient(to right, transparent, #000 36px);
+  }
+
+  .listing-pager--sheet .listing-sort[data-more-start][data-more-end] {
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent);
+    mask-image: linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent);
   }
 
   /* 어두운 사진 띠 위라 남색 구역과 같은 밝은 포커스 색을 쓴다 */
@@ -380,6 +397,18 @@ const sheetStyles = `
     sortButtons.forEach((button) => button.addEventListener("click", () => applySort(button.dataset.listingSort ?? "")));
     // 옆으로 넘기는 정렬 줄에서 고른 단추가 반쯤 가려지지 않게 보이는 곳으로 옮긴다(가려지지 않으면 움직이지 않음)
     sortButtons.forEach((button) => button.addEventListener("focus", () => button.scrollIntoView({ block: "nearest", inline: "nearest" })));
+    // 종이 모양 정렬 줄: 양 끝에 가려진 칩이 있는지 표시(가장자리 흐림용). 다 보이면 표시를 떼어 흐림이 없다.
+    const sortRow = pager.classList.contains("listing-pager--sheet") ? pager.querySelector<HTMLElement>(".listing-sort") : null;
+    if (sortRow) {
+      const updateSortEdges = () => {
+        const hidden = sortRow.scrollWidth - sortRow.clientWidth;
+        sortRow.toggleAttribute("data-more-start", sortRow.scrollLeft > 1);
+        sortRow.toggleAttribute("data-more-end", sortRow.scrollLeft < hidden - 1);
+      };
+      sortRow.addEventListener("scroll", updateSortEdges, { passive: true });
+      window.addEventListener("resize", updateSortEdges);
+      updateSortEdges();
+    }
     previousButton?.addEventListener("click", () => showPage(currentPage - 1, true));
     nextButton?.addEventListener("click", () => showPage(currentPage + 1, true));
     pager.dataset.paginationReady = "true";

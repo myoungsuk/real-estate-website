@@ -7,7 +7,8 @@ import { homeContent, publishedBlogContents, publishedYoutubeVideoContents } fro
 import { featuredComplexes, getComplexFact } from "../lib/complexes";
 import { naverListings } from "../lib/naver-listings";
 import { getResponsivePublicImageSrcSet } from "../lib/responsive-images";
-import { kakaoHref, office, phoneHref, smsHref } from "../lib/site";
+import { formatOfficeHours, kakaoHref, office, phoneHref, smsHref } from "../lib/site";
+import homeStyles from "../styles/home.css?inline";
 
 const title = "대전 동구 지역 전문 행복한부동산 | 리더스시티·신흥 SK뷰";
 const description = "리더스시티5블록 단지 내 행복한부동산입니다. 리더스시티 4·5블록과 신흥 SK뷰를 중심으로 천동·신흥동의 매매·전세·월세를 백진옥 대표 공인중개사가 직접 상담합니다.";
@@ -96,38 +97,93 @@ const structuredData = {
     </div>
   </HomeWindowHero>
 
-  <section class="home-quick-nav" aria-labelledby="home-quick-nav-heading">
-    <div class="shell home-quick-nav__inner">
-      <div class="home-quick-nav__heading">
-        <p class="eyebrow">빠른 탐색</p>
-        <h2 id="home-quick-nav-heading">찾는 조건으로 바로 보기</h2>
+  <style is:inline set:html={homeStyles} />
+
+  <nav class="home-sec home-find" aria-labelledby="home-find-heading">
+    <div class="shell">
+      <h2 class="home-sec__title" id="home-find-heading">조건으로 찾기</h2>
+      <span class="home-find__label" id="home-find-trade">거래유형</span>
+      <ul class="home-find__row" aria-labelledby="home-find-trade">
+        <li><a href="/properties/?trade=sale">매매</a></li>
+        <li><a href="/properties/?trade=jeonse">전세</a></li>
+        <li><a href="/properties/?trade=monthly-rent">월세</a></li>
+      </ul>
+      <span class="home-find__label" id="home-find-complex">단지</span>
+      {/* 단지 링크의 home-quick-nav__links--complex는 E2E가 단지 링크 수·이름을 세는 기준이라 유지한다 */}
+      <ul class="home-find__row" aria-labelledby="home-find-complex">
+        {featuredComplexes.map((complex) => <li class="home-quick-nav__links--complex"><a href={`/complexes/${complex.slug}/`}>{complex.name}</a></li>)}
+        <li><a href="/properties/">동구 전체 매물</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <section class="home-sec home-sec--tint home-area" id="leaders-city" aria-labelledby="area-guide-heading">
+    <div class="shell">
+      <ul class="home-tags" aria-label="단지 구역 안내"><li>{homeContent.areaGuide.eyebrow}</li></ul>
+      <h2 class="home-sec__title" id="area-guide-heading">{homeContent.areaGuide.title}</h2>
+      <p class="home-sec__desc">{homeContent.areaGuide.description}</p>
+      <ul class="home-area__complexes">
+        {featuredComplexes.map((complex) => (
+          <li>
+            <a href={`/complexes/${complex.slug}/`}>
+              {complex.image ? (
+                <img
+                  src={complex.image.src}
+                  srcset={getResponsivePublicImageSrcSet(complex.image.src)}
+                  sizes="(min-width: 1180px) 380px, (min-width: 700px) 31vw, calc(100vw - 32px)"
+                  alt={complex.image.alt}
+                  width="2000"
+                  height="2000"
+                  loading="lazy"
+                  decoding="async"
+                />
+              ) : (
+                <span class="home-area__photo-plain" aria-hidden="true"></span>
+              )}
+              <span class="home-area__name">{complex.name}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+      <div class="home-compare">
+        <h3>확인된 단지 규모를 먼저 살펴보세요</h3>
+        <div class="home-compare__scroll" tabindex="0" aria-label="천동·신흥 주요 단지 기본정보 표">
+          <table>
+            <thead><tr><th scope="col">단지</th><th scope="col">규모</th><th scope="col">입주</th><th scope="col">전용면적</th><th scope="col">상세</th></tr></thead>
+            <tbody>
+              {featuredComplexes.map((complex) => (
+                <tr>
+                  <th scope="row">{complex.name}</th>
+                  <td>{getComplexFact(complex, "규모")}</td>
+                  <td>{getHomeComplexFact(complex, ["입주", "사용승인"])}</td>
+                  <td>{getHomeComplexFact(complex, ["전용면적", "전용면적 구간"])}</td>
+                  <td><a href={`/complexes/${complex.slug}/`}>자세히 보기 →</a></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p class="home-compare__note">단지 정보는 공개자료 기준이며, 실제 계약 전에는 최신 공부·관리사무소·현장 내용을 다시 확인합니다.</p>
       </div>
-      <nav class="home-quick-nav__groups" aria-label="매물과 단지 빠른 탐색">
-        <div class="home-quick-nav__group">
-          <span>거래유형</span>
-          <div class="home-quick-nav__links home-quick-nav__links--trade">
-            <a href="/properties/?trade=sale">매매</a>
-            <a href="/properties/?trade=jeonse">전세</a>
-            <a href="/properties/?trade=monthly-rent">월세</a>
-          </div>
-        </div>
-        <div class="home-quick-nav__group">
-          <span>주요 단지</span>
-          <div class="home-quick-nav__links home-quick-nav__links--complex">
-            {featuredComplexes.map((complex) => <a href={`/complexes/${complex.slug}/`}>{complex.name}</a>)}
-          </div>
-        </div>
-      </nav>
+      <ul class="home-area__cards">
+        {homeContent.areaGuide.cards.map((card) => (
+          <li>
+            <h3>{card.title}</h3>
+            <p>{card.description}</p>
+          </li>
+        ))}
+      </ul>
+      <a class="home-more" href="/complexes/">대전 동구 단지정보 보기</a>
     </div>
   </section>
 
-  <section class="section area-photo-feature" aria-labelledby="office-photo-heading">
-    <div class="shell area-photo-feature__grid">
+  <section class="home-sec home-office" aria-labelledby="office-photo-heading">
+    <div class="shell home-office__grid">
       <figure>
         <img
           src={homeContent.office.image.src}
           srcset={getResponsivePublicImageSrcSet(homeContent.office.image.src)}
-          sizes="(min-width: 1180px) 560px, (min-width: 700px) 50vw, calc(100vw - 32px)"
+          sizes="(min-width: 1180px) 570px, (min-width: 700px) 50vw, calc(100vw - 32px)"
           alt={homeContent.office.image.alt}
           width="2000"
           height="2000"
@@ -137,62 +193,29 @@ const structuredData = {
         />
         <figcaption>{homeContent.office.eyebrow}</figcaption>
       </figure>
-      <div class="area-photo-feature__copy">
-        <p class="eyebrow">대전 동구 지역 전문</p>
-        <h2 id="office-photo-heading">{homeContent.office.title}</h2>
-        <p class="area-photo-feature__description">{homeContent.office.description}</p>
-        <address class="area-photo-feature__address">{office.address}</address>
-        <ul class="office-badges" aria-label="상담 특징">
+      <div>
+        <h2 class="home-sec__title" id="office-photo-heading">{homeContent.office.title}</h2>
+        <p class="home-sec__desc">{homeContent.office.description}</p>
+        <ul class="home-office__checks" aria-label="상담 특징">
           {homeContent.office.badges.map((badge) => <li>{badge}</li>)}
         </ul>
-        <div class="area-photo-feature__actions">
-          <a class="button button--primary" href="/office/">사무소 자세히 보기</a>
-          <a class="button button--secondary" href="/location/">오시는 길</a>
+        <dl class="home-office__list" aria-label="사무소 정보">
+          <div><dt>주소</dt><dd><address>{office.address}</address></dd></div>
+          <div>
+            <dt>상담 시간</dt>
+            <dd>
+              <ul class="home-office__hours">
+                {office.hours.map((hour) => <li><b>{hour.label}</b> {formatOfficeHours(hour)}</li>)}
+              </ul>
+            </dd>
+          </div>
+          <div><dt>주차</dt><dd>{office.parking}</dd></div>
+        </dl>
+        <div class="home-office__more">
+          <a class="home-more" href="/office/">사무소 자세히 보기</a>
+          <a class="home-more" href="/location/">오시는 길</a>
         </div>
       </div>
-    </div>
-  </section>
-
-  <section class="section section--soft" id="leaders-city" aria-labelledby="area-guide-heading">
-    <div class="shell area-guide">
-      <div class="area-guide__intro">
-        <p class="eyebrow">{homeContent.areaGuide.eyebrow}</p>
-        <h2 id="area-guide-heading">{homeContent.areaGuide.title}</h2>
-        <p>{homeContent.areaGuide.description}</p>
-        <a class="text-link" href="/complexes/">대전 동구 단지정보 보기 →</a>
-      </div>
-      <div class="area-guide__cards">
-        {homeContent.areaGuide.cards.map((card, index) => (
-          <article class:list={["area-guide-card", index === 0 && "area-guide-card--featured"]}>
-            <span aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
-            <h3>{card.title}</h3>
-            <p>{card.description}</p>
-          </article>
-        ))}
-      </div>
-    </div>
-    <div class="shell complex-comparison">
-      <div class="complex-comparison__heading">
-        <div><p class="eyebrow">주요 단지 기본정보</p><h3>확인된 단지 규모를 먼저 살펴보세요</h3></div>
-        <p>단지별 공식 공개자료와 확인일을 기준으로 정리했습니다.</p>
-      </div>
-      <div class="complex-comparison__scroll" tabindex="0" aria-label="천동·신흥 주요 단지 기본정보 표">
-        <table>
-          <thead><tr><th scope="col">단지</th><th scope="col">규모</th><th scope="col">입주</th><th scope="col">전용면적</th><th scope="col">상세</th></tr></thead>
-          <tbody>
-            {featuredComplexes.map((complex) => (
-              <tr>
-                <th scope="row">{complex.name}</th>
-                <td>{getComplexFact(complex, "규모")}</td>
-                <td>{getHomeComplexFact(complex, ["입주", "사용승인"])}</td>
-                <td>{getHomeComplexFact(complex, ["전용면적", "전용면적 구간"])}</td>
-                <td><a href={`/complexes/${complex.slug}/`}>자세히 보기 →</a></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <p class="complex-comparison__note">단지 정보는 공개자료 기준이며, 실제 계약 전에는 최신 공부·관리사무소·현장 내용을 다시 확인합니다.</p>
     </div>
   </section>
 
