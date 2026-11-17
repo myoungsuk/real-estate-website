@@ -12,7 +12,7 @@ const description = "리더스시티 4·5블록과 신흥 SK뷰의 확인된 단
 const relatedContents = getPublishedExternalContentsByIds(complexOverview.relatedContentIds);
 ---
 
-<BaseLayout {title} {description} breadcrumbItems={[{ name: "홈", path: "/" }, { name: "단지 정보", path: "/complexes/" }]}>
+<BaseLayout {title} {description} breadcrumbItems={[{ name: "홈", path: "/" }, { name: "단지 정보", path: "/complexes/" }]} inlineGlobalStyles>
   <PageIntro eyebrow={complexOverview.eyebrow} title={complexOverview.title} description={complexOverview.description} />
 
   <section class="section section--navy" aria-labelledby="complex-featured-heading">

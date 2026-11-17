@@ -25,6 +25,17 @@ test("낮은 화면의 모바일 메뉴와 잘리지 않는 고대비 포커스�
   assert.ok(Number(paginationPadding[1]) >= requiredInset);
 });
 
+test("단지 목록·상세는 첫 화면 사진을 먼저 받고 전역 CSS를 HTML에 넣어 사진 표시를 늦추지 않는다", async () => {
+  const [complexIndex, complexDetail] = await Promise.all([
+    readSource("src/pages/complexes/index.astro"),
+    readSource("src/pages/complexes/[slug].astro"),
+  ]);
+  for (const page of [complexIndex, complexDetail]) assert.match(page, /<BaseLayout[\s\S]*?inlineGlobalStyles[\s\S]*?>/u);
+  assert.match(complexIndex, /loading=\{index === 0 \? "eager" : "lazy"\}/u, "목록 첫 사진만 바로 받고 나머지는 늦게 받음");
+  assert.match(complexIndex, /fetchpriority=\{index === 0 \? "high" : "low"\}/u);
+  assert.match(complexDetail, /loading="eager"\s+fetchpriority="high"/u, "상세 대표 사진은 바로·높은 우선순위로 받음");
+});
+
 test("홈은 최신 콘텐츠만 렌더하고 페이저는 정확한 상태와 활성 페이지 노출을 제공한다", async () => {
   const [home, layout, contentPager, listingPager] = await Promise.all([
     readSource("src/pages/index.astro"),
