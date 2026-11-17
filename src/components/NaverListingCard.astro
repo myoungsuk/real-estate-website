@@ -14,16 +14,20 @@ interface Props {
   hidden?: boolean;
   complexSlug?: string;
   selectionControls?: boolean;
+  variant?: "card" | "sheet";
+  band?: { src: string; width?: number; height?: number } | null;
 }
 
-const { listing, compact = false, rank = 0, hidden = false, complexSlug = "", selectionControls = false } = Astro.props;
+const { listing, compact = false, rank = 0, hidden = false, complexSlug = "", selectionControls = false, variant = "card", band = null } = Astro.props;
+const isSheet = variant === "sheet";
+const stampLabel = `${Number(listing.registeredAt.slice(5, 7))}.${listing.registeredAt.slice(8, 10)}`;
 const details = [listing.areaLabel, listing.floorLabel, listing.direction].filter(Boolean).join(" · ");
 const registeredAtLabel = listing.registeredAt.replaceAll("-", ".");
 const price = getNaverListingPriceParts(listing.priceLabel, listing.tradeType);
 ---
 
 <article
-  class:list={["listing-card", "listing-card--naver", compact && "listing-card--compact"]}
+  class:list={["listing-card", "listing-card--naver", compact && "listing-card--compact", isSheet && "listing-card--sheet"]}
   data-naver-listing-card
   data-listing-id={listing.id}
   data-trade={listing.tradeType}
@@ -43,6 +47,22 @@ const price = getNaverListingPriceParts(listing.priceLabel, listing.tradeType);
   data-listing-url={listing.url}
   hidden={hidden}
 >
+  {isSheet ? (
+    <>
+      {band ? (
+        <img class="sheet__band" src={band.src} alt="" width={band.width} height={band.height} loading="lazy" fetchpriority="low" decoding="async" />
+      ) : (
+        <span class="sheet__band sheet__band--plain" aria-hidden="true"></span>
+      )}
+      <p class="sheet__stamp"><time datetime={listing.registeredAt}>{stampLabel} 등록</time></p>
+      <div class="sheet__body">
+        <p class="sheet__price"><span>{naverTradeNames[listing.tradeType]}</span> {listing.priceLabel}</p>
+        <h3 class="sheet__title"><a href={listing.url} target="_blank" rel="noopener noreferrer">{listing.title}</a></h3>
+        {details && <p class="sheet__facts">{details}</p>}
+        <a class="sheet__link" href={listing.url} target="_blank" rel="noopener noreferrer">네이버에서 매물 보기 <span aria-hidden="true">↗</span></a>
+      </div>
+    </>
+  ) : (
   <div class="listing-card__body">
     <p><span>{listing.propertyType}</span><time datetime={listing.registeredAt}>등록 {registeredAtLabel}</time></p>
     {selectionControls && (
@@ -57,6 +77,7 @@ const price = getNaverListingPriceParts(listing.priceLabel, listing.tradeType);
     <p class="listing-card__summary">{listing.summary}</p>
     <a class="listing-card__link" href={listing.url} target="_blank" rel="noopener noreferrer">네이버에서 매물 보기 <span aria-hidden="true">↗</span></a>
   </div>
+  )}
 </article>
 
 <style>

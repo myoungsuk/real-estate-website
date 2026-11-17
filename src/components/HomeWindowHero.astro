@@ -1,0 +1,400 @@
+---
+import { homeContent } from "../lib/content";
+import { naverListings, naverListingsUpdatedAt } from "../lib/naver-listings";
+import { formatOfficeHours, office, phoneHref, smsHref } from "../lib/site";
+
+// 홈 첫 화면(DESIGN.md "첫 화면 구성"). 관리자 편집 값(home-content.broker.*)을 그대로 읽는다.
+const listingCount = naverListings.length;
+const checkedLabel = `${Number(naverListingsUpdatedAt.slice(5, 7))}월 ${Number(naverListingsUpdatedAt.slice(8, 10))}일 확인`;
+---
+
+<style is:inline>
+  .hw {
+    --hw-paper: #fbfaf6;
+    --hw-paper-2: #f1eee6;
+    --hw-edge: #e2ded3;
+    --hw-ink: #141414;
+    --hw-navy: #132a3e;
+    --hw-ink-soft: #4a4844;
+    --hw-shade: rgba(12, 20, 26, 0.86);
+    background: var(--hw-paper);
+    color: var(--hw-ink);
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+  }
+
+  /* 간판 사진: 글이 길어지면 사진 칸이 함께 늘어나 잘리지 않는다 */
+  .hw__photo {
+    position: relative;
+    isolation: isolate;
+    min-height: clamp(320px, 50vh, 470px);
+    display: flex;
+    align-items: flex-end;
+    padding: 96px 0 104px;
+    overflow: hidden;
+    background: #3b4a52;
+  }
+
+  .hw__img {
+    position: absolute;
+    inset: 0;
+    z-index: -2;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center 28%;
+  }
+
+  .hw__photo::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: linear-gradient(180deg, rgba(10, 18, 24, 0.1) 0%, rgba(10, 18, 24, 0.2) 30%, rgba(10, 18, 24, 0.55) 100%);
+  }
+
+  /* 글 뒤 어두운 띠: 사진 비율이 아니라 글 덩어리에 붙어 있어 문구가 길어져도 대비가 유지된다 */
+  .hw__text {
+    position: relative;
+    color: #ffffff;
+  }
+
+  .hw__text::before {
+    content: "";
+    position: absolute;
+    inset: -64px -100vw -104px;
+    z-index: -1;
+    background: linear-gradient(180deg, rgba(10, 18, 24, 0) 0, rgba(10, 18, 24, 0.78) 64px, rgba(10, 18, 24, 0.82) 100%);
+  }
+
+  .hw__tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0 0 10px;
+    padding: 0;
+    list-style: none;
+  }
+
+  .hw__tag {
+    min-height: 32px;
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 10px;
+    border-radius: 2px;
+    color: var(--hw-navy);
+    background: var(--hw-paper);
+    font-size: 0.875rem;
+    font-weight: 800;
+  }
+
+  .hw__tag--strong {
+    color: var(--hw-paper);
+    background: var(--hw-navy);
+  }
+
+  .hw h1 {
+    max-width: 760px;
+    margin: 0 0 18px;
+    color: #ffffff;
+    font-size: clamp(1.75rem, 7.6vw, 3rem);
+    font-weight: 900;
+    line-height: 1.2;
+    letter-spacing: -0.04em;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  }
+
+  .hw__board-head h2 {
+    margin: 0;
+    color: #ffffff;
+    font-size: 1.25rem;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+  }
+
+  .hw__board-head p {
+    margin: 2px 0 0;
+    color: #ffffff;
+    font-weight: 700;
+  }
+
+  /* 매물 종이 칸: 정렬 줄과 종이 윗부분이 사진 아래 끝에 걸친다 */
+  .hw__board {
+    position: relative;
+    z-index: 2;
+    margin-top: -96px;
+  }
+
+  .hw__board--empty {
+    margin-top: -64px;
+  }
+
+  /* 아래 세 덩이는 index.astro에서 넣는 매물 칸(슬롯) */
+  .hw__board .hw__more {
+    display: grid;
+    gap: 6px;
+  }
+
+  .hw__board .hw__all {
+    min-height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 2px;
+    color: var(--hw-paper);
+    background: var(--hw-ink);
+    font-size: 1.05rem;
+    font-weight: 800;
+    text-decoration: none;
+  }
+
+  .hw__board .hw__naver {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-self: start;
+    font-weight: 800;
+    text-decoration: underline;
+    text-underline-offset: 5px;
+  }
+
+  .hw__empty {
+    padding: 22px 18px;
+    border: 2px dashed #8c8a84;
+    border-radius: 2px;
+    background: var(--hw-paper);
+    box-shadow: 0 14px 28px rgba(20, 20, 20, 0.12);
+  }
+
+  .hw__empty h3 {
+    margin: 0 0 6px;
+    color: var(--hw-navy);
+    font-size: 1.35rem;
+  }
+
+  .hw__empty p {
+    margin: 0 0 6px;
+  }
+
+  .hw__empty-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 16px;
+  }
+
+  .hw__empty-links a,
+  .hw__person-links a {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    font-weight: 800;
+    text-decoration: underline;
+    text-underline-offset: 5px;
+  }
+
+  .hw__intro {
+    padding: 28px 0 36px;
+  }
+
+  .hw__lead {
+    margin: 0 0 18px;
+    font-size: 1.05rem;
+    line-height: 1.75;
+  }
+
+  .hw__person {
+    display: grid;
+    grid-template-columns: 104px minmax(0, 1fr);
+    gap: 16px;
+    align-items: center;
+    padding: 14px;
+    border-radius: 2px;
+    background: var(--hw-paper-2);
+  }
+
+  .hw__person img {
+    width: 104px;
+    height: 128px;
+    object-fit: cover;
+    object-position: top;
+    border-radius: 2px;
+  }
+
+  .hw__person p {
+    margin: 0;
+  }
+
+  .hw__person .hw__person-tag {
+    display: inline-block;
+    margin-bottom: 4px;
+    padding: 2px 8px;
+    border-radius: 2px;
+    color: var(--hw-paper);
+    background: var(--hw-navy);
+    font-size: 0.875rem;
+    font-weight: 800;
+  }
+
+  .hw__person-name {
+    color: var(--hw-navy);
+    font-size: 1.3rem;
+    font-weight: 800;
+    line-height: 1.3;
+  }
+
+  /* 상담 시간: office.json 값을 모두 보여 준다(C에서 사무소 구역으로 옮길 때 정리) */
+  .hw__hours {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .hw__hours b {
+    font-weight: 800;
+  }
+
+  .hw__person-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 16px;
+  }
+
+  .hw__facts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 16px;
+    margin: 16px 0 0;
+    border-top: 2px solid var(--hw-navy);
+  }
+
+  .hw__facts div {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--hw-edge);
+  }
+
+  .hw__facts dt {
+    color: var(--hw-ink-soft);
+    font-size: 0.875rem;
+    font-weight: 800;
+  }
+
+  .hw__facts dd {
+    margin: 0;
+    font-weight: 700;
+  }
+
+  @media (min-width: 700px) {
+    .hw__person {
+      grid-template-columns: 120px minmax(0, 1fr);
+    }
+
+    .hw__person img {
+      width: 120px;
+      height: 148px;
+    }
+
+    .hw__facts {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .hw__photo {
+      min-height: 520px;
+    }
+
+    .hw__img {
+      object-position: center 8%;
+    }
+
+    .hw__board .hw__more {
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .hw__intro {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+      gap: 12px 32px;
+      align-items: start;
+    }
+
+    .hw__facts {
+      grid-column: 1 / -1;
+    }
+  }
+</style>
+
+<section class="hw" id="about" aria-labelledby="broker-heading">
+  <div class="hw__photo">
+    <picture>
+      <source
+        type="image/avif"
+        srcset="/images/office/office-storefront-640.avif 640w, /images/office/office-storefront-768.avif 768w, /images/office/office-storefront-900.avif 900w"
+        sizes="100vw"
+      />
+      <img
+        class="hw__img"
+        src="/images/office/office-storefront.webp"
+        srcset="/images/office/office-storefront-640.webp 640w, /images/office/office-storefront-768.webp 768w, /images/office/office-storefront.webp 900w"
+        sizes="100vw"
+        width="900"
+        height="1049"
+        alt="리더스시티5블록 상가 105호 리더스시티 행복한부동산 외부 간판과 출입구"
+        loading="eager"
+        fetchpriority="high"
+        decoding="async"
+      />
+    </picture>
+    <div class="shell hw__text">
+      <ul class="hw__tags" aria-label="상담 안내">
+        <li class="hw__tag hw__tag--strong">대표 직접 상담</li>
+        <li class="hw__tag">{homeContent.broker.eyebrow}</li>
+      </ul>
+      <h1 id="broker-heading">{homeContent.broker.headline}</h1>
+      <div class="hw__board-head">
+        <h2 id="listing-heading">최근 등록 매물</h2>
+        <p>네이버 공개 매물 {listingCount}건 · {checkedLabel}</p>
+      </div>
+    </div>
+  </div>
+
+  <div class:list={["shell", "hw__board", listingCount === 0 && "hw__board--empty"]}>
+    <slot />
+    {listingCount === 0 && (
+      <div class="hw__empty">
+        <h3>지금 공개된 매물이 없습니다</h3>
+        <p>찾는 조건을 전화나 문자로 남겨 주세요.</p>
+        <div class="hw__empty-links">
+          <a href={phoneHref}>전화 {office.mobile}</a>
+          <a href={smsHref}>문자로 조건 보내기</a>
+        </div>
+      </div>
+    )}
+  </div>
+
+  <div class="shell hw__intro">
+    <p class="hw__lead">{homeContent.broker.lead}</p>
+    <div class="hw__person">
+      <img src={homeContent.broker.portrait.src} alt={homeContent.broker.portrait.alt} width="900" height="900" loading="lazy" decoding="async" />
+      <div>
+        <p class="hw__person-tag">대표 직접 상담</p>
+        <p class="hw__person-name">{office.representative} 공인중개사</p>
+        <ul class="hw__hours" aria-label="상담 시간">
+          {office.hours.map((hour) => <li><b>{hour.label}</b> {formatOfficeHours(hour)}</li>)}
+        </ul>
+        <div class="hw__person-links">
+          <a href={phoneHref}>전화 {office.mobile}</a>
+          <a href={smsHref}>문자로 문의하기</a>
+        </div>
+      </div>
+    </div>
+    <dl class="hw__facts" aria-label="대표와 사무소 정보">
+      <div><dt>대표</dt><dd>{office.representative} 공인중개사</dd></div>
+      <div><dt>전문 지역</dt><dd>대전 동구 전역</dd></div>
+      <div><dt>등록번호</dt><dd>{office.registrationNumber}</dd></div>
+      <div><dt>운영 현황</dt><dd>{office.publicClaims.items.map((claim) => `${claim.label} ${claim.value}`).join(" · ")}</dd></div>
+    </dl>
+  </div>
+</section>
