@@ -13,6 +13,14 @@
   "version_metadata": {
     "binding": "CF_VERSION_METADATA"
   },
+  "d1_databases": [
+    {
+      "binding": "WORK_DB",
+      "database_name": "leaderscity-work",
+      "database_id": "30bedf32-4a65-46cc-a56d-af38cf30b6e2",
+      "migrations_dir": "migrations/work"
+    }
+  ],
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
