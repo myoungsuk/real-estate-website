@@ -7,6 +7,7 @@ import { WorkApiError, createWorkCsrfToken, getWorkConfigState, validateWorkJson
 import { auditStatement, withViewAudit, writeBatchWithAudit } from "./work-audit.mjs";
 import { routeWorkData } from "./work-customers.mjs";
 import { routeWorkDeals } from "./work-deals.mjs";
+import { routeWorkEvents } from "./work-events.mjs";
 
 // 기존 시험·다른 모듈이 쓰던 이름을 그대로 내보낸다(감사 도우미는 work-audit.mjs로 옮김).
 export { withViewAudit, writeBatchWithAudit };
@@ -23,6 +24,22 @@ export function isWorkApiPath(pathname) {
 
 function workSuccess(data, requestId) {
   return jsonResponse({ ok: true, data, requestId }, { headers: { "X-Request-Id": requestId } });
+}
+
+// 파일 응답(거래 .ics). JSON 응답(http.mjs)과 같은 보안 헤더를 달고 본문 종류·내려받기 이름만 바꾼다. 파일 이름은 ASCII(손님 정보 없음).
+function workFileResponse({ body, contentType, filename }, requestId) {
+  return new Response(body, {
+    status: 200,
+    headers: {
+      "Cache-Control": "no-store",
+      "Content-Type": contentType,
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Referrer-Policy": "no-referrer",
+      "X-Content-Type-Options": "nosniff",
+      "X-Robots-Tag": "noindex, nofollow, noarchive",
+      "X-Request-Id": requestId,
+    },
+  });
 }
 
 function workError(requestId, error, headers = {}) {
@@ -211,7 +228,8 @@ export async function handleWorkApi(request, env, options = {}) {
   // 손님·메모·검색(단계 2 PR-A), 거래·참여자(PR-B1). 경로가 맞지 않으면 null을 돌려준다.
   try {
     const dataContext = { db, actor, requestId, now, method, route, url, body, randomUUID: options.randomUUID ?? (() => crypto.randomUUID()) };
-    const handled = (await routeWorkData(dataContext)) ?? (await routeWorkDeals(dataContext));
+    const handled = (await routeWorkData(dataContext)) ?? (await routeWorkDeals(dataContext)) ?? (await routeWorkEvents(dataContext));
+    if (handled?.raw) return workFileResponse(handled.raw, requestId);
     if (handled) return jsonResponse({ ok: true, data: handled.data, requestId }, { status: handled.status ?? 200, headers: { "X-Request-Id": requestId } });
   } catch (error) {
     if (error instanceof WorkApiError) {

@@ -49,7 +49,7 @@ const SQL = Object.freeze({
     "SELECT p.customer_id, p.role, c.display_name FROM deal_parties p JOIN customers c ON c.id = p.customer_id"
     + " WHERE p.deal_id = ? ORDER BY c.display_name, p.customer_id, p.role",
   dealEvents:
-    "SELECT id, kind, due_on, title, alarm_offsets, source, done_at, version, created_at, updated_at FROM deal_events WHERE deal_id = ? ORDER BY due_on, id",
+    "SELECT id, deal_id, kind, due_on, title, alarm_offsets, source, done_at, version, created_at, updated_at FROM deal_events WHERE deal_id = ? ORDER BY due_on, id",
   dealNotes:
     "SELECT id, customer_id, deal_id, body, source, file_id, version, created_at, updated_at FROM notes WHERE deal_id = ? ORDER BY created_at DESC, id DESC LIMIT 50",
   dealFiles: "SELECT id, kind, mime_type, byte_size, caption, customer_id, created_at FROM files WHERE deal_id = ? ORDER BY created_at DESC, id DESC",
@@ -152,7 +152,7 @@ function closedFields(status, current, today) {
   return { closedOn: today, retentionUntil: addOneYear(today) };
 }
 
-async function loadDeal(db, id) {
+export async function loadDeal(db, id) {
   return (await db.prepare(SQL.dealById).bind(id).first()) ?? null;
 }
 
@@ -200,7 +200,7 @@ async function getDeal(ctx, id) {
       deal: dealView(row),
       parties: await loadParties(ctx.db, id),
       events: events.map((event) => ({
-        id: event.id, kind: event.kind, dueOn: event.due_on, title: event.title, alarmOffsets: JSON.parse(event.alarm_offsets),
+        id: event.id, dealId: event.deal_id, kind: event.kind, dueOn: event.due_on, title: event.title, alarmOffsets: JSON.parse(event.alarm_offsets),
         source: event.source, doneAt: event.done_at, version: event.version, createdAt: event.created_at, updatedAt: event.updated_at,
       })),
       notes: notes.map((note) => ({ id: note.id, customerId: note.customer_id, dealId: note.deal_id, body: note.body, source: note.source, fileId: note.file_id, version: note.version, createdAt: note.created_at, updatedAt: note.updated_at })),
@@ -281,7 +281,7 @@ async function deleteDeal(ctx, id) {
   return { data: { deleted: { deals: 1, events: changesOf(results[4]), notes: changesOf(results[3]), files: 0 }, kept: { notes: changesOf(results[2]) } } };
 }
 
-// 경로가 거래(/deals, /deals/:id)면 { status?, data }를, 아니면 null을 돌려준다. 일정 경로(/deals/:id/events…)는 PR-B2.
+// 경로가 거래(/deals, /deals/:id)면 { status?, data }를, 아니면 null을 돌려준다. 일정 경로(/deals/:id/events…·calendar.ics)는 work-events.mjs(PR-B2)가 맡는다.
 export async function routeWorkDeals(ctx) {
   const [collection, id, extra] = ctx.route.split("/").filter(Boolean);
   if (collection !== "deals" || extra !== undefined) return null;

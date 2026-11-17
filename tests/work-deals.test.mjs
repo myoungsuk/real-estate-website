@@ -302,7 +302,7 @@ test("동시 작업 ⑤·⑥: 거래를 지우는 사이 제목이 바뀌면 되
   assert.equal(rows(database, "SELECT count(*) AS n FROM deals")[0].n, 1, "새 거래 안 생김");
 });
 
-test("거래 경로는 정해진 방식만 받고, 일정 경로(/deals/:id/events)는 아직 없다(PR-B2)", async () => {
+test("거래 경로는 정해진 방식만 받고, 일정 경로(/deals/:id/events)는 만들기(POST)만 받는다(PR-B2)", async () => {
   const { db } = freshDb();
   const env = workEnv(db);
   const list = await work(env, "/deals");
@@ -312,5 +312,7 @@ test("거래 경로는 정해진 방식만 받고, 일정 경로(/deals/:id/even
   const put = await work(env, `/deals/${deal.id}`, { method: "PUT", body: {} });
   assert.equal(put.status, 405);
   assert.equal(put.response.headers.get("Allow"), "GET, PATCH, DELETE");
-  assert.equal((await work(env, `/deals/${deal.id}/events`)).status, 404);
+  const listEvents = await work(env, `/deals/${deal.id}/events`);
+  assert.equal(listEvents.status, 405, "일정 목록은 거래 보기(GET /deals/:id)에 들어 있음");
+  assert.equal(listEvents.response.headers.get("Allow"), "POST");
 });

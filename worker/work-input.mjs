@@ -1,5 +1,6 @@
 // 업무 도구 API 입력 검사·정규화(순수 함수). 오류 메시지는 고정 문구만 쓰고 입력값을 담지 않는다(설계서 10.1절).
 import { WorkApiError } from "./work-security.mjs";
+import { DEFAULT_ALARM_TRIGGERS, isAllowedAlarmTriggers } from "./work-calendar.mjs";
 
 export const CUSTOMER_STATUSES = Object.freeze(["consulting", "contracting", "completed", "on_hold"]);
 export const LIST_LIMIT_DEFAULT = 20;
@@ -424,4 +425,55 @@ export function parseDealPatch(body) {
   const parties = body.parties === undefined ? undefined : parseParties(body.parties);
   if (Object.keys(fields).length === 0 && parties === undefined) throw invalid(["body"]);
   return { version, changes: fields, parties, rrnMasked };
+}
+
+// 일정(설계서 8.2 deal_events·10.2절, PR-B2). 직접 넣는 일정은 kind "custom"만 받는다(법정 기한 일정은 다시 계산으로만 만든다).
+// 제목은 주민번호 형태를 가리고 1 ~ 80자, 알림은 단계 0과 같은 세 시점 중 최대 2개(기본 전날 18:00).
+function readAlarms(body, { required }) {
+  if (!("alarmOffsets" in body) || body.alarmOffsets === undefined) return required ? [...DEFAULT_ALARM_TRIGGERS] : undefined;
+  if (!isAllowedAlarmTriggers(body.alarmOffsets)) throw invalid(["alarmOffsets"]);
+  return [...body.alarmOffsets];
+}
+
+export function parseEventCreate(body) {
+  if (!isPlainObject(body)) throw invalid(["body"]);
+  rejectUnknown(body, ["kind", "dueOn", "title", "alarmOffsets"]);
+  if (body.kind !== "custom") throw invalid(["kind"]);
+  if (!isCalendarDate(body.dueOn)) throw invalid(["dueOn"]);
+  const title = maskField(readText(body, "title", { min: 1, max: 80, required: true }), "title", 80);
+  return { dueOn: body.dueOn, title: title.text, alarmOffsets: readAlarms(body, { required: true }), rrnMasked: title.count };
+}
+
+export function parseEventPatch(body) {
+  if (!isPlainObject(body)) throw invalid(["body"]);
+  rejectUnknown(body, ["version", "dueOn", "title", "done", "alarmOffsets"]);
+  const version = readVersion(body);
+  const changes = {};
+  let rrnMasked = 0;
+  if ("dueOn" in body && body.dueOn !== undefined) {
+    if (!isCalendarDate(body.dueOn)) throw invalid(["dueOn"]);
+    changes.dueOn = body.dueOn;
+  }
+  const rawTitle = readText(body, "title", { min: 1, max: 80, required: false });
+  if (rawTitle !== undefined) {
+    const title = maskField(rawTitle, "title", 80);
+    changes.title = title.text;
+    rrnMasked = title.count;
+  }
+  if ("done" in body && body.done !== undefined) {
+    if (typeof body.done !== "boolean") throw invalid(["done"]);
+    changes.done = body.done;
+  }
+  const alarms = readAlarms(body, { required: false });
+  if (alarms !== undefined) changes.alarmOffsets = alarms;
+  if (Object.keys(changes).length === 0) throw invalid(["body"]);
+  return { version, changes, rrnMasked };
+}
+
+// 다시 계산 요청: { replaceCalculated: true }만 받는다(자동 계산 일정만 바꾼다는 뜻을 분명히, 설계서 10.2).
+export function parseCalculate(body) {
+  if (!isPlainObject(body)) throw invalid(["body"]);
+  rejectUnknown(body, ["replaceCalculated"]);
+  if (body.replaceCalculated !== true) throw invalid(["replaceCalculated"]);
+  return { replaceCalculated: true };
 }
