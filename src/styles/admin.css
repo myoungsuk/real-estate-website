@@ -403,7 +403,16 @@
 /* 관리자 공용 틀 C안(2026-11-16 운영자 지시): 맨 위 가로 메뉴 줄 + 화면별 왼쪽 보조 목록.
    그림 기호·이름·로고는 이 사무소용으로 새로 만든 것을 쓰고, 다른 서비스의 그림·로고·고유 이름은 쓰지 않는다.
    메뉴 알약은 보이는 크기를 작게 두되 누르는 영역 44px, 본문 16px, 대비 4.5:1, 색 아닌 현재 표시는 지킨다. */
-:root { --admin-topnav-height: 61px; --admin-blue: #2563eb; --admin-blue-dark: #1d4ed8; --admin-ink: #191f28; --admin-text: #333d4b; --admin-muted: #4e5968; --admin-subtle: #6b7684; --admin-line: #e5e8eb; --admin-soft: #f7f8fa; }
+:root { --admin-topnav-height: 61px; --admin-topnav-hide: 56px; --admin-sticky-height: 53px; --admin-blue: #2563eb; --admin-blue-dark: #1d4ed8; --admin-ink: #191f28; --admin-text: #333d4b; --admin-muted: #4e5968; --admin-subtle: #6b7684; --admin-line: #e5e8eb; --admin-soft: #f7f8fa; }
+/* 위 메뉴 줄은 모든 폭에서 고정한다(사용자 선택 2026-11-16 16:59:58). 979px 이하는 브랜드 줄(위 8px + 44px + 줄 간격 4px = 56px)이 올라가고
+   메뉴 줄(44px + 아래 8px + 선 1px = 53px)만 남는다. 공용 부드러운 스크롤은 그대로 둔다
+   (관리자 화면에서 끄면 매물 편집의 안쪽 스크롤 목록에서 포커스한 항목이 목록 밖으로 밀려나는 것을 확인함). */
+/* 문서 전체 scroll-padding-top은 쓰지 않는다. 쓰면 늘 위에 붙어 있는 머리글 안 링크로 Tab할 때마다 브라우저가 문서를 위로 튀게 한다(회귀 1회차 S2).
+   건너뛰기 링크 대상과 아래 스크립트 스크롤 대상만 머리글 높이만큼 띄우고, 나머지 키보드 포커스 가림은 AdminLayout 보정 스크립트가 맡는다. */
+#admin-main { scroll-margin-top: var(--admin-sticky-height); }
+/* 본문에서 스크립트(scrollIntoView 등)로 옮기는 묶음은 머리글 바로 아래에 오게 한다(회귀 2회차 S3: 매물 편집 폼, 변경 이력 미리보기).
+   본문에서 스크립트로 스크롤·포커스를 옮기는 대상을 새로 만들면 이 목록에 추가한다. */
+[data-manual-form], [data-history-preview] { scroll-margin-top: var(--admin-sticky-height); }
 [data-tone] { --tone: #17344f; }
 [data-tone="rose"] { --tone: #954650; }
 [data-tone="gold"] { --tone: #8a6424; }
@@ -414,7 +423,10 @@
 .admin-subnav__item-icon,
 .work-round-icon { display: inline-grid; flex: 0 0 auto; place-items: center; width: 26px; height: 26px; border-radius: 50%; color: #fff; background: var(--tone, #17344f); }
 
-.admin-topnav { position: relative; z-index: 100; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "brand tools" "nav nav"; align-items: center; gap: 4px 10px; padding: 8px 12px; border-bottom: 1px solid var(--admin-line); background: #fff; }
+.admin-topnav { position: sticky; top: calc(-1 * var(--admin-topnav-hide)); z-index: 100; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "brand tools" "nav nav"; align-items: center; gap: 4px 10px; padding: 8px 12px; border-bottom: 1px solid var(--admin-line); background: #fff; }
+/* 머리글 안에 키보드 포커스(:focus-visible)가 있으면 좁은 화면에서도 브랜드 줄까지 내려 보여 준다(숨은 브랜드 줄 링크에 포커스가 가도 보이게).
+   손가락으로 누를 때는 내려오지 않게 :focus-within 대신 :focus-visible을 본다. :has()를 모르는 오래된 브라우저에서는 적용되지 않는다. */
+.admin-topnav:has(:focus-visible) { top: 0; }
 .admin-topnav__brand { grid-area: brand; justify-self: start; display: inline-flex; align-items: center; justify-content: center; max-width: 100%; gap: 10px; min-width: 44px; min-height: 44px; color: var(--admin-ink); }
 .admin-topnav .admin-brand__mark { width: 36px; height: 36px; border-radius: 10px; box-shadow: inset 0 0 0 1px var(--admin-line); }
 .admin-topnav .admin-brand__mark img { top: -9px; left: -33px; width: 101px; }
@@ -602,11 +614,11 @@ a.admin-topnav__item:hover { background-color: #f2f4f6; }
 }
 
 @media (min-width: 980px) {
-  /* 머리글은 고정하지 않는다(고정하면 Shift+Tab 등에서 포커스가 머리글 뒤로 숨음). */
-  .admin-topnav { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "brand nav tools"; min-height: var(--admin-topnav-height); padding: 8px 20px; }
+  :root { --admin-sticky-height: var(--admin-topnav-height); }
+  .admin-topnav { top: 0; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "brand nav tools"; min-height: var(--admin-topnav-height); padding: 8px 20px; }
   .admin-topnav__brand-text { display: none; }
-  .admin-shell__body--split { display: grid; grid-template-columns: 248px minmax(0, 1fr); background: linear-gradient(90deg, var(--admin-soft) 0 247px, var(--admin-line) 247px 248px, transparent 248px); }
-  .admin-shell__aside { position: sticky; top: 0; height: calc(100vh - var(--admin-topnav-height)); overflow-y: auto; border-right: 1px solid var(--admin-line); border-bottom: 0; }
+  .admin-shell__body--split { display: grid; grid-template-columns: 248px minmax(0, 1fr); }
+  .admin-shell__aside { position: sticky; top: var(--admin-topnav-height); height: calc(100vh - var(--admin-topnav-height)); overflow-y: auto; border-right: 1px solid var(--admin-line); border-bottom: 0; }
   .admin-subnav { min-height: 100%; padding: 16px 12px 14px; }
   .admin-subnav__title,
   .admin-subnav__search { display: flex; }
@@ -617,7 +629,7 @@ a.admin-topnav__item:hover { background-color: #f2f4f6; }
   .admin-subnav__nav a[aria-current="page"] { background: #e6e9ed; box-shadow: inset 3px 0 0 var(--admin-blue); }
   .admin-subnav__footer { display: grid; gap: 8px; margin-top: auto; padding-top: 12px; border-top: 1px solid var(--admin-line); }
   .work-doc__layout { grid-template-columns: minmax(0, 1fr) minmax(0, 0.92fr); grid-template-areas: "form output" "action output"; align-items: start; }
-  .work-output { position: sticky; top: 16px; min-height: 380px; padding: 16px 0 16px 28px; border-top: 0; border-left: 1px solid var(--admin-line); }
+  .work-output { position: sticky; top: calc(var(--admin-topnav-height) + 16px); min-height: 380px; padding: 16px 0 16px 28px; border-top: 0; border-left: 1px solid var(--admin-line); }
 }
 
 @media (min-width: 1440px) {
