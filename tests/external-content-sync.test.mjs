@@ -522,7 +522,7 @@ test("git status porcelain 경로를 안전하게 해석하고 rename은 거부�
 
 test("thumbnail:null UI fallback과 읽기 검증·쓰기 배포 분리·예약 워크플로를 고정한다", () => {
   assert.match(externalContentComponent, /item\.thumbnail \?/u);
-  assert.match(externalContentComponent, /item\.type === "blog" \? "N" : "▶"/u);
+  assert.match(externalContentComponent, /item\.type === "blog" \? "N" : "\\u25B6\\uFE0E"/u);
   const testStep = syncWorkflow.indexOf("- run: npm test");
   const validateStep = syncWorkflow.indexOf("- name: Validate changed paths");
   const packageStep = syncWorkflow.indexOf("- name: Package verified changes");
