@@ -436,15 +436,15 @@ test("G. maskEmail·getAuditActorId를 옮긴 뒤에도 같은 입력에 같은 
   assert.match(await getAuditActorId("owner@example.com", SECRET), /^[A-Za-z0-9_-]{16}$/u);
 });
 
-test("G. 배포 설정은 D1 바인딩 WORK_DB 하나만 두고 vars·Cron·R2를 넣지 않는다(대시보드 변수 덮어쓰기·처리 함수 없는 Cron 방지)", async () => {
+test("G. 배포 설정은 D1 WORK_DB 하나와 R2 WORK_FILES 하나만 두고 vars·Cron을 넣지 않는다(켜기 값 덮어쓰기·처리 함수 없는 Cron 방지)", async () => {
   const raw = await readFile(new URL("../wrangler.jsonc", import.meta.url), "utf8");
   const config = JSON.parse(raw.replace(/^\s*\/\/.*$/gmu, ""));
   assert.deepEqual(config.d1_databases, [{ binding: "WORK_DB", database_name: "leaderscity-work", database_id: config.d1_databases[0].database_id, migrations_dir: "migrations/work" }]);
   assert.match(config.d1_databases[0].database_id, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u);
   assert.equal("vars" in config, false, "vars에 켜기 값 기본값을 두면 배포 때마다 다시 쓰임(켜기 값은 Secret으로 등록, 설계서 16.1)");
   assert.equal("triggers" in config, false, "scheduled 처리 함수를 만드는 PR에서 Cron을 넣음");
-  assert.equal("r2_buckets" in config, false, "계정에서 R2를 켠 뒤 다음 PR에서 넣음");
-  assert.equal(getWorkConfigState({ WORK_DB: { prepare() {}, batch() {} }, ADMIN_CSRF_SECRET: SECRET }), "disabled", "바인딩이 있어도 WORK_TOOLS_ENABLED가 없으면 꺼짐");
+  assert.deepEqual(config.r2_buckets, [{ binding: "WORK_FILES", bucket_name: "leaderscity-work-files" }], "파일 저장소는 이 이름의 버킷 하나만(공개 주소·사용자 도메인 없음은 버킷 설정에서 확인)");
+  assert.equal(getWorkConfigState({ WORK_DB: { prepare() {}, batch() {} }, WORK_FILES: { put() {}, get() {}, delete() {} }, ADMIN_CSRF_SECRET: SECRET }), "disabled", "D1·R2 바인딩이 있어도 WORK_TOOLS_ENABLED가 없으면 꺼짐");
 });
 
 test("G. 같은 Worker 진입점에서 업무 경로도 관리 API로 넘어간다", async () => {
