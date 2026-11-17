@@ -1,4 +1,8 @@
+import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
+
+// 단지 이름·사실·사진 설명·홈 단지 목록은 운영자가 관리자 화면에서 바꾸는 값이라, 기대값을 글자로 적지 않고 같은 공개 JSON에서 읽는다.
+const readData = (name) => JSON.parse(readFileSync(new URL(`../src/data/${name}.json`, import.meta.url), "utf8"));
 
 function failOnBrowserErrors(page) {
   const errors = [];
@@ -173,6 +177,19 @@ test("360px 매물 화면에서 조건 패널과 선택 기능이 가로 넘침 
 });
 
 test("신흥 SK뷰 상세와 매물 필터가 연결되고 주요 화면 폭에서 넘치지 않는다", async ({ page }) => {
+  const complexes = readData("complexes");
+  const overview = readData("complexes-overview");
+  const publishedContentIds = new Set(readData("external-links").filter((item) => item.status === "published").map((item) => item.id));
+  const sinheung = complexes.find((complex) => complex.slug === "sinheung-sk-view");
+  test.skip(sinheung?.status !== "published", "신흥 SK뷰가 공개 상태가 아니면 상세 화면이 만들어지지 않음(운영자 선택)");
+  const featured = overview.featuredComplexSlugs
+    .map((slug) => complexes.find((complex) => complex.slug === slug))
+    .filter((complex) => complex?.status === "published");
+  // 홈 기본정보 표와 같은 규칙(index.astro getHomeComplexFact): 앞 이름부터 "확인 중"이 아닌 첫 값
+  const homeFact = (complex, labels) => labels
+    .map((label) => complex.facts.find((fact) => fact.label === label)?.value ?? "확인 중")
+    .find((value) => value !== "확인 중") ?? "확인 중";
+  const relatedCount = sinheung.relatedContentIds.filter((id) => publishedContentIds.has(id)).length;
   const assertNoBrowserErrors = failOnBrowserErrors(page);
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("/properties/");
@@ -181,32 +198,32 @@ test("신흥 SK뷰 상세와 매물 필터가 연결되고 주요 화면 폭에�
   await page.goto("/");
 
   const homeComplexLinks = page.locator(".home-quick-nav__links--complex a");
-  await expect(homeComplexLinks).toHaveCount(3);
-  await expect(homeComplexLinks.nth(0)).toHaveText("리더스시티 4블록");
-  await expect(homeComplexLinks.nth(1)).toHaveText("리더스시티 5블록");
-  await expect(homeComplexLinks.nth(2)).toHaveText("신흥 SK뷰");
+  await expect(homeComplexLinks).toHaveCount(featured.length);
+  for (const [index, complex] of featured.entries()) {
+    await expect(homeComplexLinks.nth(index)).toHaveText(complex.name);
+  }
   await expect(page.locator('a[href="/complexes/sinheung-sk-view/"]').first()).toBeVisible();
   await expect(page.getByText("단지 상세정보는 사진과 공식 자료 검수 후 공개합니다.", { exact: true })).toHaveCount(0);
   const sinheungHomeRow = page.locator('[aria-label="천동·신흥 주요 단지 기본정보 표"]')
     .getByRole("row")
-    .filter({ hasText: "신흥 SK뷰" });
-  await expect(sinheungHomeRow).toContainText("2022년 4월 28일");
-  await expect(sinheungHomeRow).toContainText("60㎡ 이하 897세대 · 60㎡ 초과~85㎡ 이하 691세대");
+    .filter({ hasText: sinheung.name });
+  await expect(sinheungHomeRow).toContainText(homeFact(sinheung, ["입주", "사용승인"]));
+  await expect(sinheungHomeRow).toContainText(homeFact(sinheung, ["전용면적", "전용면적 구간"]));
 
   await page.goto("/complexes/");
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("천동·신흥 주요 단지");
-  await expect(page.locator(".complex-index-card")).toHaveCount(3);
+  await expect(page.getByRole("heading", { level: 1 })).toContainText(overview.title);
+  await expect(page.locator(".complex-index-card")).toHaveCount(featured.length);
   await page.locator('a[href="/complexes/sinheung-sk-view/"]').click();
   await expect(page).toHaveURL(/\/complexes\/sinheung-sk-view\/$/u);
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("신흥 SK뷰");
-  await expect(page.getByRole("img", { name: "대전 동구 신흥 SK뷰 야간 출입구와 아파트 전경" })).toBeVisible();
-  await expect(page.getByRole("heading", { level: 2, name: `현재 등록된 신흥 SK뷰 매물 ${sinheungListingIds.length}건` })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(sinheung.name);
+  await expect(page.getByRole("img", { name: sinheung.image.alt })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: `현재 등록된 ${sinheung.name} 매물 ${sinheungListingIds.length}건` })).toBeVisible();
   await expect(page.locator("[data-naver-listing-card]")).toHaveCount(Math.min(sinheungListingIds.length, 3));
   if (sinheungListingIds.length === 0) {
-    await expect(page.getByRole("heading", { name: "현재 공개 목록에 신흥 SK뷰 매물이 없습니다" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: `현재 공개 목록에 ${sinheung.name} 매물이 없습니다` })).toBeVisible();
   }
-  await expect(page.getByRole("heading", { level: 2, name: "신흥 SK뷰 한눈에 보기" })).toBeVisible();
-  await expect(page.getByRole("heading", { level: 2, name: "신흥 SK뷰 핵심 포인트" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: `${sinheung.name} 한눈에 보기` })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: `${sinheung.name} 핵심 포인트` })).toBeVisible();
   await expect(page.getByText("LIVING GUIDE", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "K-apt 공동주택관리정보시스템 원문 보기" })).toHaveAttribute("href", "https://www.k-apt.go.kr/kaptinfo/openKaptMng.do");
   const amenityPhotos = page.locator(".complex-amenity-gallery img");
@@ -214,9 +231,9 @@ test("신흥 SK뷰 상세와 매물 필터가 연결되고 주요 화면 폭에�
   await amenityPhotos.last().scrollIntoViewIfNeeded();
   await expect(page.getByRole("img", { name: "신흥 SK뷰 La VIEW Center 입구와 작은도서관·실내골프연습장 안내" })).toBeVisible();
   await expect.poll(async () => amenityPhotos.evaluateAll((images) => images.every((image) => image.naturalWidth > 0))).toBe(true);
-  await expect(page.locator(".content-card")).toHaveCount(3);
-  await expect(page.getByRole("link", { name: "신흥 SK뷰 조건 상담" }).first()).toHaveAttribute("href", "#contact");
-  await page.getByRole("link", { name: "신흥 SK뷰 현재 매물 보기" }).click();
+  await expect(page.locator(".content-card")).toHaveCount(relatedCount);
+  await expect(page.getByRole("link", { name: `${sinheung.name} 조건 상담` }).first()).toHaveAttribute("href", "#contact");
+  await page.getByRole("link", { name: `${sinheung.name} 현재 매물 보기` }).click();
   await expect(page).toHaveURL(/\/properties\/\?complex=sinheung-sk-view$/u);
   await expect(page.locator("[data-listing-filter]").getByLabel("단지")).toHaveValue("sinheung-sk-view");
   await expect(page.locator("[data-naver-listing-card]:visible")).toHaveCount(sinheungListingIds.length);

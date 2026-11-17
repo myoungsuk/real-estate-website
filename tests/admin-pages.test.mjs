@@ -57,8 +57,11 @@ test("메인페이지 선택 개선은 기존 데이터와 URL을 재사용한�
   ]);
   const homeContent = JSON.parse(rawHomeContent);
 
-  assert.equal(homeContent.broker.headline, "리더스시티와 신흥 SK뷰, 직접 확인하고 비교해서 안내합니다.");
-  assert.match(homeContent.broker.lead, /리더스시티 4·5블록과 신흥 SK뷰[^]*매매·전세·월세/);
+  // 홈 대표 제목·설명은 운영자가 관리자 화면에서 바꾸는 문구라 글자 대신 있는지만 본다(내용 검사는 content-validation).
+  assert.equal(typeof homeContent.broker.headline, "string");
+  assert.ok(homeContent.broker.headline.trim().length > 0);
+  assert.equal(typeof homeContent.broker.lead, "string");
+  assert.ok(homeContent.broker.lead.trim().length > 0);
   assert.match(home, /href="\/properties\/">현재 매물 \{naverListings\.length\}건 보기/);
   assert.match(home, /\/properties\/\?trade=sale/);
   assert.match(home, /\/properties\/\?trade=jeonse/);
@@ -316,8 +319,9 @@ test("공개 매물 화면은 조건·관심·비교 기능과 기존 네이버 
   const data = JSON.parse(rawData);
   assert.ok(data.items.length > 0);
   assert.equal(new Set(data.items.map((item) => item.id)).size, data.items.length);
-  assert.equal(data.items[0].title, "휴먼시아2단지 202동");
-  assert.equal(data.items[0].floorLabel, "2/22층");
+  // 매물 목록은 매일 동기화와 관리자 화면이 바꾸므로 첫 매물의 글자 대신 모든 매물의 모양을 본다.
+  assert.ok(data.items.every((item) => typeof item.title === "string" && item.title.trim().length > 0));
+  assert.ok(data.items.every((item) => item.floorLabel === null || (typeof item.floorLabel === "string" && /층$/u.test(item.floorLabel))));
   assert.ok(data.items.every((item) => item.url === `https://fin.land.naver.com/articles/${item.id}`));
   assert.ok(data.items.every((item) => /^\d{4}-\d{2}-\d{2}$/u.test(item.registeredAt)));
   assert.match(home, /NaverListingPager items=\{naverListings\} pageSize=\{6\}/);
@@ -386,23 +390,21 @@ test("공개 헤더와 상담 화면은 전체 상호·분리된 콘텐츠·FAQ 
   assert.match(faq, /class="faq-category-nav"/);
   assert.match(faq, /class="faq-category-section"/);
   const faqItems = JSON.parse(faqData);
-  assert.equal(faqItems.length, 38);
-  assert.deepEqual(
-    Object.fromEntries([...new Set(faqItems.map((item) => item.category))].map((category) => [
-      category,
-      faqItems.filter((item) => item.category === category).length,
-    ])),
-    {
-      "매물 확인과 상담": 8,
-      "리더스시티 4블록·5블록": 5,
-      "가격과 시세": 4,
-      "매매계약과 권리관계": 6,
-      "전세·월세와 보증금 보호": 7,
-      "중개보수·대출·세금과 관리비": 4,
-      "하자·잔금과 입주": 3,
-      "정보의 범위와 책임": 1,
-    },
-  );
+  // 카테고리 8개는 화면 코드(faq.astro)와 content-validation이 정한 목록이라 그대로 본다.
+  const faqCategoryTitles = [...faq.matchAll(/title: "([^"]+)", shortTitle:/gu)].map((match) => match[1]);
+  assert.deepEqual(faqCategoryTitles, [
+    "매물 확인과 상담",
+    "리더스시티 4블록·5블록",
+    "가격과 시세",
+    "매매계약과 권리관계",
+    "전세·월세와 보증금 보호",
+    "중개보수·대출·세금과 관리비",
+    "하자·잔금과 입주",
+    "정보의 범위와 책임",
+  ]);
+  // FAQ 개수와 카테고리별 개수는 운영자가 관리자 화면에서 바꾸므로, 있는지와 화면 카테고리 안에 드는지만 본다.
+  assert.ok(faqItems.length > 0);
+  assert.ok(faqItems.every((item) => faqCategoryTitles.includes(item.category)));
 });
 
 test("사무소·블로그·유튜브 안내 문구는 공개 범위와 자연스러운 표현을 사용한다", async () => {
