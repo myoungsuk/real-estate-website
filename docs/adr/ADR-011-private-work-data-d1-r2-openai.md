@@ -119,7 +119,7 @@
 
 ## 롤백
 
-1. Cloudflare Production 변수 `WORK_TOOLS_ENABLED=false`(또는 `WORK_AI_ENABLED=false`)로 즉시 기능을 막는다. 데이터는 그대로 남는다.
+1. Worker Secret `WORK_TOOLS_ENABLED`(또는 `WORK_AI_ENABLED`)를 지우거나 `false`로 바꿔 즉시 기능을 막는다. 데이터는 그대로 남는다. 켜기 값은 일반 변수가 아니라 Secret으로만 둔다(일반 변수는 다음 배포 때 덮어써짐, 업무 도구 설계서 16.1).
 2. 코드 문제면 직전 정상 Cloudflare 배포로 되돌리고 `git revert`한다.
 3. 구조 자체를 걷어내면 `wrangler.jsonc`에서 D1·R2·Cron 바인딩과 `/api/calendar/*`를 빼고 `worker/work-*.mjs`를 제거해 재배포한다.
 4. D1·R2 데이터 삭제는 운영자에게 전체 내보내기를 넘긴 뒤, 운영자 승인을 받아 별도 작업으로 한다. 삭제 후에도 D1 Time Travel 기간 동안은 복원 가능하다는 점을 기록한다.
