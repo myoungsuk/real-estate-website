@@ -52,6 +52,8 @@ h1, h2, h3 { line-height: 1.22; letter-spacing: -0.04em; }
 h1 { font-size: clamp(2.55rem, 7vw, 5rem); }
 h2 { margin-bottom: 0; font-size: clamp(2rem, 4vw, 3.25rem); }
 h3 { font-size: 1.35rem; }
+:where(body:not(.admin-body)) :where(p, li, dd, figcaption) { word-break: keep-all; overflow-wrap: anywhere; }
+:where(body:not(.admin-body)) :where(td, th) { word-break: keep-all; overflow-wrap: break-word; }
 
 .shell { width: min(calc(100% - 32px), var(--shell)); margin-inline: auto; }
 .section { padding: clamp(72px, 9vw, 120px) 0; }
