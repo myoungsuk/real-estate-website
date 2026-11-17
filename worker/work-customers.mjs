@@ -1,7 +1,7 @@
 // 업무 도구 단계 2 PR-A: 손님·메모·검색 API(설계서 8.5 ~ 8.8·10.2·11.2절). 모든 SQL은 준비된 문장(고정 문자열 + bind)만 쓴다.
 // 파일(R2)은 아직 없어서, 손님 삭제 때 파일 행이 있으면 409 FILES_REQUIRE_STORAGE로 막는다(R2 PR에서 실제 삭제로 바꿈).
 import { WorkApiError } from "./work-security.mjs";
-import { auditIfUpdatedStatement, changesOf, loadThenAudit, runBatch, writeBatchWithAudit } from "./work-audit.mjs";
+import { auditIfUpdatedStatement, auditStatement, changesOf, loadThenAudit, runBatch, writeBatchWithAudit } from "./work-audit.mjs";
 import {
   CUSTOMER_STATUSES,
   addOneYear,
@@ -45,6 +45,10 @@ const SQL = Object.freeze({
   customerUpdate:
     "UPDATE customers SET display_name = coalesce(?, display_name), phone_digits = CASE WHEN ? = 1 THEN ? ELSE phone_digits END,"
     + " needs = coalesce(?, needs), status = coalesce(?, status), version = version + 1, updated_at = ? WHERE id = ? AND version = ?",
+  // 고치기 batch 첫 문장(guard): version이 그대로가 아니면 json('guard')(잘못된 JSON)로 batch 전체를 되돌린다(8.5절).
+  // 통과하면 같은 트랜잭션이라 UPDATE가 반드시 들어가므로 감사 기록에 "새 version + 같은 시각" 조건을 걸지 않는다
+  // (같은 밀리초에 다른 관리자가 같은 version을 만들면 실패한 수정의 감사 행이 남던 겹침을 막음).
+  customerVersionGuard: "SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM customers WHERE id = ? AND version = ?) THEN json('guard') ELSE 1 END AS ok",
   customerDelete: "DELETE FROM customers WHERE id = ?",
   customerDeals:
     "SELECT d.id, d.title, d.deal_type, d.status, d.version, d.updated_at, p.role FROM deal_parties p JOIN deals d ON d.id = p.deal_id WHERE p.customer_id = ? ORDER BY d.updated_at DESC, d.id DESC",
@@ -96,6 +100,8 @@ const SQL = Object.freeze({
   noteUpdate:
     "UPDATE notes SET body = coalesce(?, body), customer_id = CASE WHEN ? = 1 THEN ? ELSE customer_id END,"
     + " deal_id = CASE WHEN ? = 1 THEN ? ELSE deal_id END, version = version + 1, updated_at = ? WHERE id = ? AND version = ? AND " + NOTE_LINK_OK,
+  // 메모 고치기 guard: version과 고친 뒤 연결 조건(NOTE_LINK_OK)을 batch 안에서 다시 본다.
+  noteVersionGuard: "SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM notes WHERE id = ? AND version = ?) OR NOT (" + NOTE_LINK_OK + ") THEN json('guard') ELSE 1 END AS ok",
   customerTouchContactIfNote: "UPDATE customers SET last_contact_on = ?, retention_until = ? WHERE id = ? AND EXISTS (SELECT 1 FROM notes WHERE id = ?)",
   noteDelete: "DELETE FROM notes WHERE id = ?",
   searchCustomers:
@@ -215,24 +221,33 @@ async function updateCustomer(ctx, id) {
   const input = parseCustomerPatch(ctx.body);
   const at = new Date(ctx.now).toISOString();
   const phoneGiven = "phoneDigits" in input.changes ? 1 : 0;
-  const results = await runBatch(ctx.db, [
-    ctx.db.prepare(SQL.customerUpdate).bind(
-      input.changes.displayName ?? null,
-      phoneGiven,
-      phoneGiven ? input.changes.phoneDigits : null,
-      input.changes.needs ?? null,
-      input.changes.status ?? null,
-      at,
-      id,
-      input.version,
-    ),
-    auditIfUpdatedStatement(ctx.db, "customers", auditBase(ctx, "customer.update", { targetType: "customer", targetId: id, reason: maskReason(input.rrnMasked) }), { id, version: input.version + 1, updatedAt: at }),
-  ]);
-  if (changesOf(results[0]) === 0) {
-    if (!(await loadCustomer(ctx.db, id))) throw notFound();
-    throw new WorkApiError("VERSION_CONFLICT", "다른 화면에서 먼저 고쳤습니다. 다시 불러온 뒤 고쳐 주세요.", 409);
+  try {
+    await runBatch(ctx.db, [
+      ctx.db.prepare(SQL.customerVersionGuard).bind(id, input.version),
+      ctx.db.prepare(SQL.customerUpdate).bind(
+        input.changes.displayName ?? null,
+        phoneGiven,
+        phoneGiven ? input.changes.phoneDigits : null,
+        input.changes.needs ?? null,
+        input.changes.status ?? null,
+        at,
+        id,
+        input.version,
+      ),
+      auditStatement(ctx.db, { ...auditBase(ctx, "customer.update", { targetType: "customer", targetId: id, reason: maskReason(input.rrnMasked) }), outcome: "ok" }),
+    ]);
+  } catch (error) {
+    // guard가 되돌렸으면 손님 없음 404, 다른 화면이 먼저 고침 409. 그 밖에는 저장소 오류 그대로.
+    const latest = await loadCustomer(ctx.db, id);
+    if (!latest) throw notFound();
+    if (latest.version !== input.version) throw versionConflict();
+    throw error;
   }
   return { data: { customer: customerView(await loadCustomer(ctx.db, id)) } };
+}
+
+function versionConflict() {
+  return new WorkApiError("VERSION_CONFLICT", "다른 화면에서 먼저 고쳤습니다. 다시 불러온 뒤 고쳐 주세요.", 409);
 }
 
 export async function count(db, sql, ...values) {
@@ -343,32 +358,41 @@ async function updateNote(ctx, id) {
   const input = parseNotePatch(ctx.body);
   const current = await loadNote(ctx.db, id);
   if (!current) throw notFound();
-  // 고친 뒤의 연결(준 값 또는 지금 값)로 확인한다. 지금 값은 같은 version일 때만 쓰이므로 UPDATE의 version 조건이 함께 지킨다.
+  // 고친 뒤의 연결(준 값 또는 지금 값)로 확인한다. 지금 값은 같은 version일 때만 쓰이므로 guard의 version 조건이 함께 지킨다.
   const customerGiven = "customerId" in input.changes ? 1 : 0;
   const dealGiven = "dealId" in input.changes ? 1 : 0;
   const customerId = customerGiven ? input.changes.customerId : current.customer_id;
   const dealId = dealGiven ? input.changes.dealId : current.deal_id;
-  if (current.version === input.version) await assertLinks(ctx.db, { customerId, dealId });
+  if (current.version !== input.version) throw versionConflict();
+  await assertLinks(ctx.db, { customerId, dealId });
   const at = new Date(ctx.now).toISOString();
-  const results = await runBatch(ctx.db, [
-    ctx.db.prepare(SQL.noteUpdate).bind(
-      input.changes.body ?? null,
-      customerGiven,
-      customerGiven ? input.changes.customerId : null,
-      dealGiven,
-      dealGiven ? input.changes.dealId : null,
-      at,
-      id,
-      input.version,
-      ...linkValues(customerId, dealId),
-    ),
-    auditIfUpdatedStatement(ctx.db, "notes", auditBase(ctx, "note.update", { targetType: "note", targetId: id, reason: maskReason(input.rrnMasked) }), { id, version: input.version + 1, updatedAt: at }),
-  ]);
-  if (changesOf(results[0]) === 0) {
+  try {
+    await runBatch(ctx.db, [
+      ctx.db.prepare(SQL.noteVersionGuard).bind(id, input.version, ...linkValues(customerId, dealId)),
+      ctx.db.prepare(SQL.noteUpdate).bind(
+        input.changes.body ?? null,
+        customerGiven,
+        customerGiven ? input.changes.customerId : null,
+        dealGiven,
+        dealGiven ? input.changes.dealId : null,
+        at,
+        id,
+        input.version,
+        ...linkValues(customerId, dealId),
+      ),
+      auditStatement(ctx.db, { ...auditBase(ctx, "note.update", { targetType: "note", targetId: id, reason: maskReason(input.rrnMasked) }), outcome: "ok" }),
+    ]);
+  } catch (error) {
+    // guard가 되돌렸으면 메모 없음 404, 다른 화면이 먼저 고침 409, 그사이 손님·거래 연결이 바뀜 409. 그 밖에는 저장소 오류 그대로.
     const latest = await loadNote(ctx.db, id);
     if (!latest) throw notFound();
-    if (latest.version !== input.version) throw new WorkApiError("VERSION_CONFLICT", "다른 화면에서 먼저 고쳤습니다. 다시 불러온 뒤 고쳐 주세요.", 409);
-    throw linkChanged();
+    if (latest.version !== input.version) throw versionConflict();
+    try {
+      await assertLinks(ctx.db, { customerId, dealId });
+    } catch {
+      throw linkChanged();
+    }
+    throw error;
   }
   return { data: { note: noteView(await loadNote(ctx.db, id)) } };
 }

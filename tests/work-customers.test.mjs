@@ -24,6 +24,41 @@ test("0001은 원격 D1에 이미 적용됐으니 고치지 말고 0002 새 파�
   assert.ok(names.includes("0001_init.sql"));
 });
 
+test("0002는 원격 D1에 이미 적용됐으니 고치지 말고 0003 새 파일로 만드세요(0002 지문 고정)", async () => {
+  const sql = await readFile(new URL("../migrations/work/0002_deal_schedule_inputs.sql", import.meta.url), "utf8");
+  const digest = createHash("sha256").update(sql.replace(/\r\n/gu, "\n"), "utf8").digest("hex");
+  assert.equal(digest, "9adbf0997bb201212c71fc9bf9170c35557f6a1d9e2d05155279000622accd51",
+    "migrations/work/0002_deal_schedule_inputs.sql이 바뀌었습니다. 0002는 2026-11-17 원격 D1에 적용됐으므로 되돌리고, 구조를 바꾸려면 0003_*.sql을 새로 만드세요.");
+});
+
+test("동시 작업: 손님·메모를 고치는 사이 다른 관리자가 같은 밀리초에 먼저 고쳐도(같은 version·같은 시각) 내 수정은 409이고 감사 행이 남지 않는다", async () => {
+  const { database, db } = freshDb();
+  const env = workEnv(db);
+  const customer = (await work(env, "/customers", { method: "POST", body: { displayName: "가상 손님 동시" } })).json.data.customer;
+  const note = (await work(env, "/notes", { method: "POST", body: { body: "가상 메모 동시", customerId: customer.id } })).json.data.note;
+  const auditCount = () => rows(database, "SELECT count(*) AS n FROM audit_events")[0].n;
+
+  // 다른 관리자의 수정을 updated_at은 그대로(= 이 요청과 같은 NOW) 두고 version만 올려 흉내 낸다. 예전 조건부 감사는 이 겹침에서 실패한 수정의 감사 행을 남겼다.
+  const beforeCustomer = auditCount();
+  db.beforeNextBatch = () => database.prepare("UPDATE customers SET display_name = '가상 먼저 고침', version = version + 1 WHERE id = ?").run(customer.id);
+  const customerResult = await work(env, `/customers/${customer.id}`, { method: "PATCH", body: { version: 1, displayName: "가상 늦게 고침" } });
+  assert.equal(customerResult.status, 409);
+  assert.equal(customerResult.json.error.code, "VERSION_CONFLICT");
+  assert.equal(rows(database, "SELECT display_name FROM customers")[0].display_name, "가상 먼저 고침");
+  assert.equal(auditCount(), beforeCustomer, "실패한 손님 수정의 감사 행 없음");
+
+  const beforeNote = auditCount();
+  db.beforeNextBatch = () => database.prepare("UPDATE notes SET body = '가상 먼저 고친 메모', version = version + 1 WHERE id = ?").run(note.id);
+  const noteResult = await work(env, `/notes/${note.id}`, { method: "PATCH", body: { version: 1, body: "가상 늦게 고친 메모" } });
+  assert.equal(noteResult.status, 409);
+  assert.equal(rows(database, "SELECT body FROM notes")[0].body, "가상 먼저 고친 메모");
+  assert.equal(auditCount(), beforeNote, "실패한 메모 수정의 감사 행 없음");
+
+  const ok = await work(env, `/customers/${customer.id}`, { method: "PATCH", body: { version: 2, status: "on_hold" } });
+  assert.equal(ok.status, 200, "맞는 version이면 그대로 고쳐짐");
+  assert.equal(rows(database, "SELECT action FROM audit_events ORDER BY seq DESC LIMIT 1")[0].action, "customer.update");
+});
+
 test("손님 만들기: 201, 마지막 연락일은 오늘(한국 날짜)·정리 안내 기준일은 +1년, 찾는 조건의 주민번호 형태는 가리고 횟수만 감사에 남긴다", async () => {
   const { database, db } = freshDb();
   const env = workEnv(db);
