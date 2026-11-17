@@ -4,6 +4,11 @@
 import { getAuditActorId, maskEmail } from "./admin-audit.mjs";
 import { errorResponse, jsonResponse } from "./http.mjs";
 import { WorkApiError, createWorkCsrfToken, getWorkConfigState, validateWorkJsonWrite } from "./work-security.mjs";
+import { auditStatement, withViewAudit, writeBatchWithAudit } from "./work-audit.mjs";
+import { routeWorkData } from "./work-customers.mjs";
+
+// 기존 시험·다른 모듈이 쓰던 이름을 그대로 내보낸다(감사 도우미는 work-audit.mjs로 옮김).
+export { withViewAudit, writeBatchWithAudit };
 
 export const WORK_API_ROOT = "/api/admin/v1/work";
 export const WORK_SCHEMA_VERSION = 1;
@@ -26,6 +31,7 @@ function workError(requestId, error, headers = {}) {
     requestId,
     status: error.status,
     retryable: error.retryable === true,
+    details: Array.isArray(error.details) ? error.details : [],
     headers,
   });
 }
@@ -42,40 +48,6 @@ export function logWorkAccessDenied(request, { requestId, reasonCode, warnLog = 
     warnLog(JSON.stringify({ event: "work_access_denied", reason: reasonCode, rayId: rayIdOf(request), requestId }));
   } catch {
     // 로그 장애는 무시한다.
-  }
-}
-
-function auditStatement(db, entry) {
-  return db
-    .prepare("INSERT INTO audit_events (at, actor_email, action, target_type, target_id, request_id, outcome, reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-    .bind(
-      entry.at,
-      entry.actorEmail.toLowerCase(),
-      entry.action,
-      entry.targetType ?? null,
-      entry.targetId ?? null,
-      entry.requestId,
-      entry.outcome,
-      entry.reason ?? null,
-    );
-}
-
-// 보기 요청: 감사 기록을 먼저 쓰고 성공해야 자료를 돌려준다. 기록이 실패하면 503 AUDIT_UNAVAILABLE로 끝낸다(설계서 8.8절).
-export async function withViewAudit(db, entry, load) {
-  try {
-    await auditStatement(db, { ...entry, outcome: "ok" }).run();
-  } catch {
-    throw new WorkApiError("AUDIT_UNAVAILABLE", "작업 기록을 남기지 못해 자료를 보여 드리지 않았습니다.", 503, true);
-  }
-  return load();
-}
-
-// 수정·삭제: 같은 D1 batch 안에 감사 기록을 넣어 함께 성공·실패하게 한다.
-export async function writeBatchWithAudit(db, statements, entry) {
-  try {
-    return await db.batch([...statements, auditStatement(db, { ...entry, outcome: "ok" })]);
-  } catch {
-    throw new WorkApiError("STORAGE_UNAVAILABLE", "업무 자료를 저장하지 못했습니다.", 503, true);
   }
 }
 
@@ -131,6 +103,7 @@ async function readWorkJsonBody(request) {
   if (bytes.byteLength > MAX_WORK_JSON_BYTES) {
     throw new WorkApiError("PAYLOAD_TOO_LARGE", "요청 본문이 너무 큽니다.", 413);
   }
+  if (bytes.byteLength === 0) return {};
   try {
     return JSON.parse(new TextDecoder().decode(bytes));
   } catch {
@@ -140,6 +113,15 @@ async function readWorkJsonBody(request) {
 
 function defaultAuditLog(entry) {
   console.info(JSON.stringify(entry));
+}
+
+// 업무 자료 처리 중 5xx: Worker 로그에 요청 ID·상태·오류 코드·오류 종류 이름만 남긴다(11.7절, error.message·입력값은 남기지 않음).
+function logWorkFailure(auditLog, entry) {
+  try {
+    auditLog({ event: "work_request_failed", ...entry });
+  } catch {
+    // Worker 로그 장애는 무시한다.
+  }
 }
 
 export async function handleWorkApi(request, env, options = {}) {
@@ -188,6 +170,7 @@ export async function handleWorkApi(request, env, options = {}) {
     return workError(requestId, new WorkApiError("WORK_SCHEMA_AHEAD", "업무 자료 구조가 프로그램보다 새것입니다.", 503));
   }
 
+  let body = null;
   if (WRITE_METHODS.has(method)) {
     try {
       await validateWorkJsonWrite(request, actor, env, now);
@@ -201,7 +184,7 @@ export async function handleWorkApi(request, env, options = {}) {
       return workError(requestId, new WorkApiError("WORK_CONFIG_MISSING", "업무 도구 설정이 완료되지 않았습니다.", 503));
     }
     try {
-      await readWorkJsonBody(request);
+      body = await readWorkJsonBody(request);
     } catch (error) {
       return workError(requestId, error);
     }
@@ -222,6 +205,19 @@ export async function handleWorkApi(request, env, options = {}) {
       schemaVersion,
       aiWarnings: [],
     }, requestId);
+  }
+
+  // 손님·메모·검색(단계 2 PR-A). 경로가 맞지 않으면 null을 돌려준다.
+  try {
+    const handled = await routeWorkData({ db, actor, requestId, now, method, route, url, body, randomUUID: options.randomUUID ?? (() => crypto.randomUUID()) });
+    if (handled) return jsonResponse({ ok: true, data: handled.data, requestId }, { status: handled.status ?? 200, headers: { "X-Request-Id": requestId } });
+  } catch (error) {
+    if (error instanceof WorkApiError) {
+      if (error.status >= 500) logWorkFailure(auditLog, { requestId, status: error.status, code: error.code });
+      return workError(requestId, error, error.status === 405 ? { Allow: error.allow ?? "GET" } : {});
+    }
+    logWorkFailure(auditLog, { requestId, status: 503, code: "STORAGE_UNAVAILABLE", errorName: typeof error?.name === "string" ? error.name.slice(0, 40) : "Error" });
+    return workError(requestId, new WorkApiError("STORAGE_UNAVAILABLE", "업무 자료를 처리하지 못했습니다.", 503, true));
   }
 
   return workError(requestId, new WorkApiError("NOT_FOUND", "요청한 업무 자료를 찾지 못했습니다.", 404));

@@ -11,12 +11,14 @@ import {
 const encoder = new TextEncoder();
 
 export class WorkApiError extends Error {
-  constructor(code, message, status, retryable = false) {
+  constructor(code, message, status, retryable = false, details = []) {
     super(message);
     this.name = "WorkApiError";
     this.code = code;
     this.status = status;
     this.retryable = retryable;
+    // 칸 이름만 담는다(입력값은 담지 않음, 설계서 10.4절 VALIDATION_FAILED).
+    this.details = details;
   }
 }
 

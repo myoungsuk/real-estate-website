@@ -219,7 +219,7 @@ test("C. 스키마 번호가 낮거나 없으면 503 WORK_SCHEMA_OUTDATED, 높�
     const read = await call(workRequest("/session", { token }), env);
     assert.equal(read.response.status, 503, name);
     assert.equal(read.json.error.code, code, name);
-    const write = await call(workRequest("/customers", { method: "POST", token, headers: await writeHeaders(), body: "{}" }), env);
+    const write = await call(workRequest("/pipeline-check", { method: "POST", token, headers: await writeHeaders(), body: "{}" }), env);
     assert.equal(write.response.status, 503, name);
     assert.equal(write.json.error.code, code, name);
     assert.ok(auditRows(database).every((row) => row.outcome === "denied" && row.reason === code), name);
@@ -255,7 +255,7 @@ test("D. 쓰기는 같은 출처 Origin·JSON·업무 CSRF를 모두 통과해�
   ];
   for (const [name, headers, status, code] of cases) {
     const clean = Object.fromEntries(Object.entries(headers).filter(([, value]) => value !== undefined));
-    const { response, json } = await call(workRequest("/customers", { method: "POST", token, headers: clean, body: "{}" }), env);
+    const { response, json } = await call(workRequest("/pipeline-check", { method: "POST", token, headers: clean, body: "{}" }), env);
     assert.equal(response.status, status, name);
     assert.equal(json.error.code, code, name);
   }
@@ -265,7 +265,7 @@ test("D. 쓰기는 같은 출처 Origin·JSON·업무 CSRF를 모두 통과해�
   assert.deepEqual([...new Set(rows.map((row) => row.reason))].sort(), ["CSRF_INVALID", "ORIGIN_DENIED"]);
 
   // 경계: 1시간 59분 59초 된 토큰은 통과하고, 아직 쓰기 경로가 없으니 404
-  const boundary = await call(workRequest("/customers", { method: "POST", token, headers: { ...valid, "X-Admin-CSRF": await createWorkCsrfToken(OWNER, SECRET, NOW - (2 * 60 * 60 - 1) * 1000) }, body: "{}" }), env);
+  const boundary = await call(workRequest("/pipeline-check", { method: "POST", token, headers: { ...valid, "X-Admin-CSRF": await createWorkCsrfToken(OWNER, SECRET, NOW - (2 * 60 * 60 - 1) * 1000) }, body: "{}" }), env);
   assert.equal(boundary.response.status, 404);
   assert.equal(boundary.json.error.code, "NOT_FOUND");
 });
@@ -276,7 +276,7 @@ test("D. 업무 세션 토큰으로 업무 쓰기 검사를 통과하고, 그 �
   const token = await signToken();
   const session = await call(workRequest("/session", { token }), env);
   const workToken = session.json.data.csrfToken;
-  const pass = await call(workRequest("/customers", { method: "POST", token, headers: { Origin: ORIGIN, "Content-Type": "application/json", "X-Admin-CSRF": workToken }, body: "{}" }), env);
+  const pass = await call(workRequest("/pipeline-check", { method: "POST", token, headers: { Origin: ORIGIN, "Content-Type": "application/json", "X-Admin-CSRF": workToken }, body: "{}" }), env);
   assert.equal(pass.response.status, 404, "검사 통과 뒤 아직 없는 경로");
   const contentEnv = { ...env, ADMIN_WRITE_ENABLED: "true", GITHUB_CONTENTS_TOKEN: "test-token", GITHUB_REPOSITORY: "owner/repo", GITHUB_BRANCH: "master" };
   const content = await handleAdminApi(new Request(`${ORIGIN}/api/admin/v1/content/validate`, {
@@ -295,12 +295,12 @@ test("D. 본문은 256KB까지 받고 넘으면 413, JSON이 아니면 400, GET�
   const headers = await writeHeaders();
   const exact = `{"a":"${"x".repeat(MAX_WORK_JSON_BYTES - 8)}"}`;
   assert.equal(new TextEncoder().encode(exact).byteLength, MAX_WORK_JSON_BYTES);
-  assert.equal((await call(workRequest("/customers", { method: "POST", token, headers, body: exact }), env)).response.status, 404);
+  assert.equal((await call(workRequest("/pipeline-check", { method: "POST", token, headers, body: exact }), env)).response.status, 404);
   const over = `{"a":"${"x".repeat(MAX_WORK_JSON_BYTES - 7)}"}`;
-  const tooLarge = await call(workRequest("/customers", { method: "POST", token, headers, body: over }), env);
+  const tooLarge = await call(workRequest("/pipeline-check", { method: "POST", token, headers, body: over }), env);
   assert.equal(tooLarge.response.status, 413);
   assert.equal(tooLarge.json.error.code, "PAYLOAD_TOO_LARGE");
-  const notJson = await call(workRequest("/customers", { method: "POST", token, headers, body: "{" }), env);
+  const notJson = await call(workRequest("/pipeline-check", { method: "POST", token, headers, body: "{" }), env);
   assert.equal(notJson.response.status, 400);
   assert.equal(notJson.json.error.code, "VALIDATION_FAILED");
   for (const method of ["PUT", "DELETE", "PATCH", "POST"]) {
@@ -357,19 +357,19 @@ test("E. 신원 있는 거부 기록이 실패하거나 D1이 없어도 거부 �
   const logs = [];
   const { db } = freshDb();
   const flaky = { prepare: (sql) => (sql.startsWith("INSERT INTO audit_events") ? { bind: () => ({ run: async () => { throw new Error("audit down"); } }) } : db.prepare(sql)), batch: db.batch };
-  const { response, json } = await call(workRequest("/customers", { method: "POST", token, headers: { Origin: "https://evil.example", "Content-Type": "application/json" }, body: "{}" }), workEnv(flaky), { work: { auditLog: (entry) => logs.push(entry) } });
+  const { response, json } = await call(workRequest("/pipeline-check", { method: "POST", token, headers: { Origin: "https://evil.example", "Content-Type": "application/json" }, body: "{}" }), workEnv(flaky), { work: { auditLog: (entry) => logs.push(entry) } });
   assert.equal(response.status, 403);
   assert.equal(json.error.code, "ORIGIN_DENIED");
   assert.equal(logs.length, 1);
   assert.equal(logs[0].actorId, await getAuditActorId(OWNER, SECRET));
   assert.doesNotMatch(JSON.stringify(logs), /owner@example\.com/u);
-  const disabled = await call(workRequest("/customers", { method: "POST", token, headers: await writeHeaders(), body: "{}" }), workEnv(undefined, { WORK_TOOLS_ENABLED: "false" }));
+  const disabled = await call(workRequest("/pipeline-check", { method: "POST", token, headers: await writeHeaders(), body: "{}" }), workEnv(undefined, { WORK_TOOLS_ENABLED: "false" }));
   assert.equal(disabled.response.status, 503);
   assert.equal(disabled.json.error.code, "WORK_DISABLED");
   // 꺼져 있으면 D1이 있어도 손님 자료 DB에 거부를 쓰지 않고 HMAC 로그만 남긴다.
   const off = freshDb();
   const offLogs = [];
-  const offCall = await call(workRequest("/customers", { method: "POST", token, headers: await writeHeaders(), body: "{}" }), workEnv(off.db, { WORK_TOOLS_ENABLED: "false" }), { work: { auditLog: (entry) => offLogs.push(entry) } });
+  const offCall = await call(workRequest("/pipeline-check", { method: "POST", token, headers: await writeHeaders(), body: "{}" }), workEnv(off.db, { WORK_TOOLS_ENABLED: "false" }), { work: { auditLog: (entry) => offLogs.push(entry) } });
   assert.equal(offCall.json.error.code, "WORK_DISABLED");
   assert.equal(auditRows(off.database).length, 0);
   assert.deepEqual(offLogs.map((entry) => [entry.event, entry.reason, entry.actorId]), [["work_denied", "WORK_DISABLED", await getAuditActorId(OWNER, SECRET)]]);
@@ -382,7 +382,7 @@ test("E. 업무 응답은 no-store·noindex·요청 ID를 달고, 오류 본문�
   for (const request of [
     workRequest("/session", { token }),
     workRequest("/nothing", { token }),
-    workRequest("/customers", { method: "POST", token, headers: { Origin: ORIGIN, "Content-Type": "application/json" }, body: "{}" }),
+    workRequest("/pipeline-check", { method: "POST", token, headers: { Origin: ORIGIN, "Content-Type": "application/json" }, body: "{}" }),
   ]) {
     const { response } = await call(request, env);
     assert.equal(response.headers.get("Cache-Control"), "no-store");
