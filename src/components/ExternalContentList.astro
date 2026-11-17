@@ -80,7 +80,7 @@ function getYoutubeVideoId(item: ExternalContent) {
               {item.thumbnail ? (
                 <img src={item.thumbnail.src} alt={item.thumbnail.alt} width="960" height="540" loading="lazy" />
               ) : (
-                <span aria-hidden="true">{item.type === "blog" ? "N" : "▶"}</span>
+                <span aria-hidden="true">{item.type === "blog" ? "N" : "\u25B6\uFE0E"}</span>
               )}
             </a>
             {hoverPreview && item.type === "youtube" && getYoutubeVideoId(item) && (
