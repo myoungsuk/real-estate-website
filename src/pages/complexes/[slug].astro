@@ -64,6 +64,7 @@ const verificationLabels = {
     { name: "단지 정보", path: "/complexes/" },
     { name: complex.name, path: `/complexes/${complex.slug}/` },
   ]}
+  inlineGlobalStyles
 >
   <PageIntro eyebrow={`${complex.areaName} · ${complex.eyebrow} ${complex.mark}`} title={complex.name} description={complex.summary} />
 
