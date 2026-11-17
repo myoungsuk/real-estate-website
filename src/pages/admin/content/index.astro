@@ -2,6 +2,8 @@
 import AdminWriteGate from "../../../components/admin/AdminWriteGate.astro";
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 import { homeContent } from "../../../lib/content";
+// 칸별 최대 글자 수는 서버 검사(콘텐츠 검증)와 같은 값을 쓴다. 입력 칸 제한은 편의이고 실제 막기는 서버가 한다.
+import { HOME_CONTENT_MAX_LENGTHS as MAX } from "../../../../scripts/content-validation.mjs";
 ---
 
 <AdminLayout
@@ -24,10 +26,10 @@ import { homeContent } from "../../../lib/content";
     <section class="admin-panel admin-editor__section" aria-labelledby="broker-editor-heading">
       <div class="admin-panel__heading"><div><p class="admin-eyebrow">대표 소개</p><h2 id="broker-editor-heading">맨 위 대표 영역</h2></div><span class="admin-panel__number">01</span></div>
       <div class="admin-form-grid">
-        <div class="admin-field"><label for="broker-eyebrow">작은 제목</label><input id="broker-eyebrow" name="brokerEyebrow" value={homeContent.broker.eyebrow} required data-write-control disabled /></div>
-        <div class="admin-field admin-field--wide"><label for="broker-headline">대표 문장</label><textarea id="broker-headline" name="brokerHeadline" rows="3" required data-write-control disabled>{homeContent.broker.headline}</textarea></div>
-        <div class="admin-field admin-field--wide"><label for="broker-lead">소개 설명</label><textarea id="broker-lead" name="brokerLead" rows="4" required data-write-control disabled>{homeContent.broker.lead}</textarea></div>
-        <div class="admin-field"><label for="broker-alt">대표 사진 설명</label><input id="broker-alt" name="brokerAlt" value={homeContent.broker.portrait.alt} required data-write-control disabled /></div>
+        <div class="admin-field"><label for="broker-eyebrow">작은 제목</label><input id="broker-eyebrow" name="brokerEyebrow" value={homeContent.broker.eyebrow} maxlength={MAX["broker.eyebrow"]} required data-write-control disabled /></div>
+        <div class="admin-field admin-field--wide"><label for="broker-headline">대표 문장</label><textarea id="broker-headline" name="brokerHeadline" rows="3" maxlength={MAX["broker.headline"]} required data-write-control disabled>{homeContent.broker.headline}</textarea></div>
+        <div class="admin-field admin-field--wide"><label for="broker-lead">소개 설명</label><textarea id="broker-lead" name="brokerLead" rows="4" maxlength={MAX["broker.lead"]} required data-write-control disabled>{homeContent.broker.lead}</textarea></div>
+        <div class="admin-field"><label for="broker-alt">대표 사진 설명</label><input id="broker-alt" name="brokerAlt" value={homeContent.broker.portrait.alt} maxlength={MAX.imageAlt} required data-write-control disabled /></div>
         <div class="admin-field"><label for="broker-image">대표 사진 교체</label><input id="broker-image" name="brokerImage" type="file" accept="image/jpeg,image/png,image/webp" data-write-control disabled /><small>자동으로 WebP·최대 1600px로 최적화합니다.</small></div>
       </div>
     </section>
@@ -35,11 +37,11 @@ import { homeContent } from "../../../lib/content";
     <section class="admin-panel admin-editor__section" aria-labelledby="office-editor-heading">
       <div class="admin-panel__heading"><div><p class="admin-eyebrow">현장 사진</p><h2 id="office-editor-heading">단지 사진과 지역 설명</h2></div><span class="admin-panel__number">02</span></div>
       <div class="admin-form-grid">
-        <div class="admin-field"><label for="office-eyebrow">작은 제목</label><input id="office-eyebrow" name="officeEyebrow" value={homeContent.office.eyebrow} required data-write-control disabled /></div>
-        <div class="admin-field"><label for="office-title">큰 제목</label><input id="office-title" name="officeTitle" value={homeContent.office.title} required data-write-control disabled /></div>
-        <div class="admin-field admin-field--wide"><label for="office-description">지역 설명</label><textarea id="office-description" name="officeDescription" rows="4" required data-write-control disabled>{homeContent.office.description}</textarea></div>
-        <div class="admin-field admin-field--wide"><label for="office-badges">특징 표시</label><textarea id="office-badges" name="officeBadges" rows="4" data-write-control disabled>{homeContent.office.badges.join("\n")}</textarea><small>한 줄에 한 개씩 입력합니다.</small></div>
-        <div class="admin-field"><label for="office-alt">단지 사진 설명</label><input id="office-alt" name="officeAlt" value={homeContent.office.image.alt} required data-write-control disabled /></div>
+        <div class="admin-field"><label for="office-eyebrow">작은 제목</label><input id="office-eyebrow" name="officeEyebrow" value={homeContent.office.eyebrow} maxlength={MAX["office.eyebrow"]} required data-write-control disabled /></div>
+        <div class="admin-field"><label for="office-title">큰 제목</label><input id="office-title" name="officeTitle" value={homeContent.office.title} maxlength={MAX["office.title"]} required data-write-control disabled /></div>
+        <div class="admin-field admin-field--wide"><label for="office-description">지역 설명</label><textarea id="office-description" name="officeDescription" rows="4" maxlength={MAX["office.description"]} required data-write-control disabled>{homeContent.office.description}</textarea></div>
+        <div class="admin-field admin-field--wide"><label for="office-badges">특징 표시</label><textarea id="office-badges" name="officeBadges" rows="4" data-write-control disabled>{homeContent.office.badges.join("\n")}</textarea><small>한 줄에 한 개씩 입력합니다(한 줄 최대 {MAX.badge}자).</small></div>
+        <div class="admin-field"><label for="office-alt">단지 사진 설명</label><input id="office-alt" name="officeAlt" value={homeContent.office.image.alt} maxlength={MAX.imageAlt} required data-write-control disabled /></div>
         <div class="admin-field"><label for="office-image">단지 사진 교체</label><input id="office-image" name="officeImage" type="file" accept="image/jpeg,image/png,image/webp" data-write-control disabled /></div>
       </div>
     </section>
@@ -47,14 +49,14 @@ import { homeContent } from "../../../lib/content";
     <section class="admin-panel admin-editor__section" aria-labelledby="area-editor-heading">
       <div class="admin-panel__heading"><div><p class="admin-eyebrow">지역 설명</p><h2 id="area-editor-heading">리더스시티 알아보기</h2></div><span class="admin-panel__number">03</span></div>
       <div class="admin-form-grid">
-        <div class="admin-field"><label for="area-eyebrow">작은 제목</label><input id="area-eyebrow" name="areaEyebrow" value={homeContent.areaGuide.eyebrow} required data-write-control disabled /></div>
-        <div class="admin-field"><label for="area-title">큰 제목</label><input id="area-title" name="areaTitle" value={homeContent.areaGuide.title} required data-write-control disabled /></div>
-        <div class="admin-field admin-field--wide"><label for="area-description">도입 설명</label><textarea id="area-description" name="areaDescription" rows="4" required data-write-control disabled>{homeContent.areaGuide.description}</textarea></div>
+        <div class="admin-field"><label for="area-eyebrow">작은 제목</label><input id="area-eyebrow" name="areaEyebrow" value={homeContent.areaGuide.eyebrow} maxlength={MAX["areaGuide.eyebrow"]} required data-write-control disabled /></div>
+        <div class="admin-field"><label for="area-title">큰 제목</label><input id="area-title" name="areaTitle" value={homeContent.areaGuide.title} maxlength={MAX["areaGuide.title"]} required data-write-control disabled /></div>
+        <div class="admin-field admin-field--wide"><label for="area-description">도입 설명</label><textarea id="area-description" name="areaDescription" rows="4" maxlength={MAX["areaGuide.description"]} required data-write-control disabled>{homeContent.areaGuide.description}</textarea></div>
         {homeContent.areaGuide.cards.map((card, index) => (
           <fieldset class="admin-subform admin-field--wide">
             <legend>설명 카드 {index + 1}</legend>
-            <div class="admin-field"><label for={`area-card-title-${index}`}>제목</label><input id={`area-card-title-${index}`} name={`areaCardTitle${index}`} value={card.title} required data-write-control disabled /></div>
-            <div class="admin-field"><label for={`area-card-description-${index}`}>설명</label><textarea id={`area-card-description-${index}`} name={`areaCardDescription${index}`} rows="3" required data-write-control disabled>{card.description}</textarea></div>
+            <div class="admin-field"><label for={`area-card-title-${index}`}>제목</label><input id={`area-card-title-${index}`} name={`areaCardTitle${index}`} value={card.title} maxlength={MAX.cardTitle} required data-write-control disabled /></div>
+            <div class="admin-field"><label for={`area-card-description-${index}`}>설명</label><textarea id={`area-card-description-${index}`} name={`areaCardDescription${index}`} rows="3" maxlength={MAX.cardDescription} required data-write-control disabled>{card.description}</textarea></div>
           </fieldset>
         ))}
       </div>

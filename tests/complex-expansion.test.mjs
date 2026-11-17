@@ -16,9 +16,11 @@ import {
   selectComplexListings,
 } from "../src/lib/complex-listings.mjs";
 import {
+  KNOWN_LISTING_TITLES,
   findUnexpectedKeys,
   validateComplexes,
   validateComplexOverview,
+  validateKnownListingTitles,
 } from "../scripts/content-validation.mjs";
 
 const readJson = (relativePath) => readFile(new URL(relativePath, import.meta.url), "utf8").then(JSON.parse);
@@ -144,18 +146,10 @@ test("알려진 매물 단지 표기(고정 시험 자료)는 지금 단지 자�
     readJson("../src/data/complexes.json"),
     readJson("../src/data/naver-listings.json"),
   ]);
-  // 지금까지 운영 매물·부동산뱅크 목록에서 본 단지 표기. 이것이 연결되지 않으면 단지 이름·별칭 자료가 고장 난 것이라 실패시킨다.
-  const knownTitles = [
-    ["리더스시티 4블록", "leaders-city-4"],
-    ["리더스시티 5블록", "leaders-city-5"],
-    ["신흥SK뷰", "sinheung-sk-view"],
-    ["리더스시티4블록 401동", "leaders-city-4"],
-    ["리더스시티5블록 501동", "leaders-city-5"],
-    ["신흥에스케이뷰 101동", "sinheung-sk-view"],
-  ];
-  for (const [title, slug] of knownTitles) {
-    assert.equal(matchComplexByListingTitle(title, complexes)?.slug, slug, title);
-  }
+  // 지금까지 운영 매물·부동산뱅크 목록에서 본 단지 표기(고정 목록). 콘텐츠 검사(validateKnownListingTitles)와 같은 목록을 쓴다.
+  // 관리자 저장 전 검증이 같은 규칙으로 막으므로, 이것이 깨지는 것은 저장소에 직접 들어간 변경뿐이다.
+  assert.equal(KNOWN_LISTING_TITLES.length, 6);
+  assert.deepEqual(validateKnownListingTitles(complexes), []);
 
   // 운영 매물은 매일 동기화가 바꾼다. 처음 보는 표기가 단지에 연결되지 않아도 실패시키지 않고(동기화·CI를 막지 않음) 경고만 남긴다.
   // 연결되지 않은 매물도 숨기지 않고 공개 목록에는 그대로 나온다(CLAUDE.md 핵심 모듈).

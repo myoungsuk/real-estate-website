@@ -2,7 +2,7 @@ import {
   getNaverListingPublicTextErrors,
   getUnexpectedNaverListingKeys,
 } from "../src/lib/naver-listing-public-validation.mjs";
-import { normalizeComplexText } from "../src/lib/complex-matching.mjs";
+import { matchComplexByListingTitle, normalizeComplexText } from "../src/lib/complex-matching.mjs";
 
 const allowedStatuses = new Set(["draft", "published", "contracted", "ended"]);
 const allowedTradeTypes = new Set(["sale", "jeonse", "monthly-rent"]);
@@ -936,6 +936,33 @@ export function validateExternalLinks(externalLinks) {
   return errors;
 }
 
+// 홈 문구 칸별 최대 글자 수(JS .length, 관리자 입력 칸 maxlength와 같은 기준). 관리자 저장 전 검증·빌드·동기화 검증에서 같이 막는다.
+// 2026-11-17 사용자 승인 17:53:04 "제안대로 막기"(지금 값의 약 1.5 ~ 2배). 사진 위에 올라가는 대표 작은 제목·대표 문장은
+// 새 홈 배치(360px 4줄 안) 확인으로 30·50(날개-4 17:59).
+export const HOME_CONTENT_MAX_LENGTHS = Object.freeze({
+  "broker.eyebrow": 30,
+  "broker.headline": 50,
+  "broker.lead": 200,
+  "office.eyebrow": 40,
+  "office.title": 50,
+  "office.description": 150,
+  "areaGuide.eyebrow": 40,
+  "areaGuide.title": 40,
+  "areaGuide.description": 150,
+  imageAlt: 50,
+  badge: 24,
+  cardTitle: 30,
+  cardDescription: 120,
+});
+
+function tooLong(value, max) {
+  return typeof value === "string" && value.length > max;
+}
+
+function lengthError(path, max) {
+  return `${path}: 최대 ${max}자까지 쓸 수 있습니다.`;
+}
+
 export function validateHomeContent(homeContent) {
   const errors = [];
   const requiredStrings = [
@@ -951,11 +978,19 @@ export function validateHomeContent(homeContent) {
   ];
   requiredStrings.forEach(([path, value]) => {
     if (!isNonEmptyString(value)) errors.push(`homeContent.${path}: 공개 문구가 필요합니다.`);
+    else if (tooLong(value, HOME_CONTENT_MAX_LENGTHS[path])) errors.push(lengthError(`homeContent.${path}`, HOME_CONTENT_MAX_LENGTHS[path]));
   });
   errors.push(...validateImage(homeContent?.broker?.portrait, "homeContent.broker.portrait", { required: true }));
   errors.push(...validateImage(homeContent?.office?.image, "homeContent.office.image", { required: true }));
+  for (const [path, image] of [["broker.portrait", homeContent?.broker?.portrait], ["office.image", homeContent?.office?.image]]) {
+    if (tooLong(image?.alt, HOME_CONTENT_MAX_LENGTHS.imageAlt)) errors.push(lengthError(`homeContent.${path}.alt`, HOME_CONTENT_MAX_LENGTHS.imageAlt));
+  }
   if (!Array.isArray(homeContent?.office?.badges) || homeContent.office.badges.length === 0 || homeContent.office.badges.some((badge) => !isNonEmptyString(badge))) {
     errors.push("homeContent.office.badges: 한 개 이상의 표시 문구가 필요합니다.");
+  } else {
+    homeContent.office.badges.forEach((badge, index) => {
+      if (tooLong(badge, HOME_CONTENT_MAX_LENGTHS.badge)) errors.push(lengthError(`homeContent.office.badges[${index}]`, HOME_CONTENT_MAX_LENGTHS.badge));
+    });
   }
   if (!Array.isArray(homeContent?.areaGuide?.cards) || homeContent.areaGuide.cards.length === 0) {
     errors.push("homeContent.areaGuide.cards: 한 개 이상의 지역 안내 카드가 필요합니다.");
@@ -964,9 +999,59 @@ export function validateHomeContent(homeContent) {
       if (!isNonEmptyString(card.title) || !isNonEmptyString(card.description)) {
         errors.push(`homeContent.areaGuide.cards[${index}]: 제목과 설명이 필요합니다.`);
       }
+      if (tooLong(card.title, HOME_CONTENT_MAX_LENGTHS.cardTitle)) errors.push(lengthError(`homeContent.areaGuide.cards[${index}].title`, HOME_CONTENT_MAX_LENGTHS.cardTitle));
+      if (tooLong(card.description, HOME_CONTENT_MAX_LENGTHS.cardDescription)) errors.push(lengthError(`homeContent.areaGuide.cards[${index}].description`, HOME_CONTENT_MAX_LENGTHS.cardDescription));
     });
   }
   return errors;
+}
+
+// 확정 공개 정보 9가지(저장소 CLAUDE.md "확정 공개 정보" 표). 사칭에 민감해 관리자 저장·변경 이력 복원으로 바뀌지 않게 고정한다
+// (2026-11-17 사용자 승인 17:53:04 "9가지 고정"). 바꿀 때는 개발 PR(사용자 승인)로 이 표와 CLAUDE.md를 함께 고친다.
+// 영업시간·주차·소개 문장·네이버·유튜브 링크는 바뀔 수 있어 고정하지 않는다. validateOffice와 따로 두어 가짜 사무소 자료로 하는 형식 시험에는 걸지 않는다.
+export const APPROVED_OFFICE_FACTS = Object.freeze({
+  legalName: "리더스시티행복한공인중개사사무소",
+  brandName: "리더스시티 행복한부동산",
+  representative: "백진옥",
+  mobile: "010-2790-8675",
+  email: "packjinok123@gmail.com",
+  address: "대전광역시 동구 안샘로14번길 7, 리더스시티5블록 근린생활시설 105호",
+  registrationNumber: "30110-2023-00028",
+  businessNumber: "805-05-02602",
+  kakaoUrl: "https://pf.kakao.com/_nxmabn/chat",
+});
+
+export function validateApprovedOfficeFacts(office) {
+  return Object.entries(APPROVED_OFFICE_FACTS)
+    .filter(([key, value]) => office?.[key] !== value)
+    .map(([key]) => `office.${key}: 확정 공개 정보와 다릅니다. 바꾸려면 개발 PR로 승인값을 함께 고쳐야 합니다.`);
+}
+
+// 매물 제목에 쓰이는 단지 표기(고정 목록). 단지 이름·별칭을 바꿔도 이 표기가 원래 단지에 연결돼야 저장된다(2026-11-17 사용자 승인).
+// 운영 매물(naver-listings.json)이 아니라 이 고정 목록만 보므로 매일 동기화를 막지 않는다. 단지를 아예 지우면 그 단지 표기는 보지 않는다.
+// 공개 여부와 상관없이 본다(준비 중으로 돌려도 이름·별칭은 남으므로).
+export const KNOWN_LISTING_TITLES = Object.freeze([
+  Object.freeze({ title: "리더스시티 4블록", slug: "leaders-city-4" }),
+  Object.freeze({ title: "리더스시티 5블록", slug: "leaders-city-5" }),
+  Object.freeze({ title: "신흥SK뷰", slug: "sinheung-sk-view" }),
+  Object.freeze({ title: "리더스시티4블록 401동", slug: "leaders-city-4" }),
+  Object.freeze({ title: "리더스시티5블록 501동", slug: "leaders-city-5" }),
+  Object.freeze({ title: "신흥에스케이뷰 101동", slug: "sinheung-sk-view" }),
+]);
+
+export function validateKnownListingTitles(complexes) {
+  if (!Array.isArray(complexes)) return [];
+  const slugs = new Set(complexes.map((complex) => complex?.slug));
+  return KNOWN_LISTING_TITLES
+    .filter(({ title, slug }) => {
+      if (!slugs.has(slug)) return false;
+      try {
+        return matchComplexByListingTitle(title, complexes)?.slug !== slug;
+      } catch {
+        return false; // 이름·별칭 모양이 틀린 자료는 validateComplexes가 따로 알린다.
+      }
+    })
+    .map(({ title, slug }) => `complexes.${slug}: 매물 표기 "${title}"이(가) 이 단지에 연결되지 않습니다. 옛 이름을 별칭에 넣어 주세요.`);
 }
 
 export function validateFaq(faq) {
@@ -1025,9 +1110,11 @@ export function validateReviews(reviews) {
 
 export function validateContent({ office, listings, naverListings, complexes, complexOverview, externalLinks, homeContent, faq, reviews }) {
   const errors = validateOffice(office);
+  errors.push(...validateApprovedOfficeFacts(office));
   errors.push(...validateListings(listings));
   errors.push(...validateNaverListings(naverListings));
   errors.push(...validateComplexes(complexes, externalLinks));
+  errors.push(...validateKnownListingTitles(complexes));
   errors.push(...validateComplexOverview(complexOverview, complexes, externalLinks));
   errors.push(...validateExternalLinks(externalLinks));
   errors.push(...validateHomeContent(homeContent));
