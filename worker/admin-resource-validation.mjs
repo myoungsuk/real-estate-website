@@ -2,12 +2,14 @@ import {
   findBannedKeys,
   findSensitiveStrings,
   findUnexpectedKeys,
+  validateApprovedOfficeFacts,
   validateContent,
   validateComplexes,
   validateComplexOverview,
   validateExternalLinks,
   validateFaq,
   validateHomeContent,
+  validateKnownListingTitles,
   validateListings,
   validateNaverListings,
   validateOffice,
@@ -38,8 +40,9 @@ function validateSingleResource(resource, data) {
   switch (resource) {
     case "listings": return validateListings(data);
     case "naver-listings": return validateNaverListings(data);
-    case "office": return validateOffice(data);
-    case "complexes": return validateComplexes(data);
+    // 실제 저장 자료는 형식 검사에 더해 확정 공개 정보 고정·매물 단지 표기 연결도 본다(validateContent와 같은 규칙).
+    case "office": return [...validateOffice(data), ...validateApprovedOfficeFacts(data)];
+    case "complexes": return [...validateComplexes(data), ...validateKnownListingTitles(data)];
     case "complexes-overview": return validateComplexOverview(data);
     case "external-links": return validateExternalLinks(data);
     case "home-content": return validateHomeContent(data);

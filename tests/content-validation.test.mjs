@@ -1,7 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { ADMIN_RESOURCE_PATHS, validateAdminResource } from "../worker/admin-resource-validation.mjs";
 import {
+  APPROVED_OFFICE_FACTS,
+  HOME_CONTENT_MAX_LENGTHS,
   findBannedKeys,
   findSensitiveStrings,
   findUnexpectedKeys,
@@ -14,6 +17,8 @@ import {
   validateNaverListings,
   validateOffice,
   validateReviews,
+  validateApprovedOfficeFacts,
+  validateKnownListingTitles,
 } from "../scripts/content-validation.mjs";
 
 const base = {
@@ -397,4 +402,94 @@ test("홈 대표·사무소·지역 소개 문구와 이미지를 검증한다",
     areaGuide: { eyebrow: "지역", title: "리더스시티", description: "설명", cards: [{ title: "현장", description: "안내" }] },
   };
   assert.deepEqual(validateHomeContent(homeContent), []);
+});
+
+// ---- 2026-11-17 콘텐츠 검사 보강(사용자 승인 17:53:04): 홈 문구 최대 글자 수, 확정 공개 정보 9가지, 매물 단지 표기 6가지 ----
+const readRepoJson = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8").then(JSON.parse);
+
+async function currentAdminResources() {
+  const entries = await Promise.all(Object.entries(ADMIN_RESOURCE_PATHS).map(async ([resource, path]) => [resource, await readRepoJson(path)]));
+  return Object.fromEntries(entries);
+}
+
+test("홈 문구 칸별 최대 글자 수: 지금 자료와 최대 글자는 통과하고, 한 글자 넘으면 칸 이름·최대 글자 수로 막는다(관리자 저장 두 경로 모두)", async () => {
+  const homeContent = await readRepoJson("src/data/home-content.json");
+  assert.deepEqual(validateHomeContent(homeContent), []);
+  assert.equal(HOME_CONTENT_MAX_LENGTHS["broker.headline"], 50, "사진 위 대표 문장(날개-4 배치 확인)");
+  assert.equal(HOME_CONTENT_MAX_LENGTHS["broker.eyebrow"], 30);
+  const set = (path, value) => {
+    const copy = structuredClone(homeContent);
+    const keys = path.split(".");
+    keys.slice(0, -1).reduce((node, key) => node[key], copy)[keys.at(-1)] = value;
+    return copy;
+  };
+  const cases = [
+    ["broker.eyebrow", "broker.eyebrow"], ["broker.headline", "broker.headline"], ["broker.lead", "broker.lead"],
+    ["office.eyebrow", "office.eyebrow"], ["office.title", "office.title"], ["office.description", "office.description"],
+    ["areaGuide.eyebrow", "areaGuide.eyebrow"], ["areaGuide.title", "areaGuide.title"], ["areaGuide.description", "areaGuide.description"],
+    ["broker.portrait.alt", "imageAlt"], ["office.image.alt", "imageAlt"],
+    ["office.badges.0", "badge"], ["areaGuide.cards.0.title", "cardTitle"], ["areaGuide.cards.0.description", "cardDescription"],
+  ];
+  for (const [path, limitKey] of cases) {
+    const max = HOME_CONTENT_MAX_LENGTHS[limitKey];
+    assert.ok(Number.isInteger(max), path);
+    assert.deepEqual(validateHomeContent(set(path, "가".repeat(max))), [], `${path} ${max}자는 통과`);
+    const errors = validateHomeContent(set(path, "가".repeat(max + 1)));
+    assert.equal(errors.length, 1, path);
+    assert.match(errors[0], new RegExp(`최대 ${max}자`, "u"), path);
+  }
+  const over = set("broker.headline", "가".repeat(51));
+  assert.match(validateAdminResource("home-content", over).join("\n"), /broker\.headline: 최대 50자/u, "한 종류만 보는 저장 경로");
+  assert.match(validateAdminResource("home-content", over, await currentAdminResources()).join("\n"), /broker\.headline: 최대 50자/u, "다른 자료와 함께 보는 저장 경로");
+  const page = await readFile(new URL("../src/pages/admin/content/index.astro", import.meta.url), "utf8");
+  assert.match(page, /HOME_CONTENT_MAX_LENGTHS as MAX/u, "관리자 입력 칸도 같은 값을 씀");
+  assert.equal((page.match(/maxlength=\{MAX/gu) ?? []).length, 13);
+});
+
+test("확정 공개 정보 9가지는 승인값과 같아야 저장되고, 영업시간·주차·소개·링크는 바꿀 수 있다", async () => {
+  const office = await readRepoJson("src/data/office.json");
+  assert.deepEqual(Object.keys(APPROVED_OFFICE_FACTS), ["legalName", "brandName", "representative", "mobile", "email", "address", "registrationNumber", "businessNumber", "kakaoUrl"]);
+  assert.deepEqual(validateApprovedOfficeFacts(office), []);
+  const guide = await readFile(new URL("../CLAUDE.md", import.meta.url), "utf8");
+  for (const value of Object.values(APPROVED_OFFICE_FACTS)) {
+    assert.ok(guide.includes(value), "CLAUDE.md 확정 공개 정보 표와 같은 값(바꿀 때 함께 고침)");
+  }
+  for (const key of ["mobile", "kakaoUrl", "representative", "address"]) {
+    const changed = { ...office, [key]: `${office[key]}0` };
+    assert.deepEqual(validateApprovedOfficeFacts(changed), [`office.${key}: 확정 공개 정보와 다릅니다. 바꾸려면 개발 PR로 승인값을 함께 고쳐야 합니다.`]);
+  }
+  const editable = {
+    ...office,
+    parking: "가상 주차 안내",
+    introduction: ["가상 소개 문장"],
+    hours: office.hours.map((hour) => ({ ...hour, note: "가상 메모" })),
+    naverBlogUrl: "https://blog.naver.com/example",
+    youtubeUrl: "https://www.youtube.com/@example",
+  };
+  assert.deepEqual(validateApprovedOfficeFacts(editable), [], "고정하지 않는 칸");
+  const forged = { ...office, mobile: "010-0000-0000" };
+  assert.match(validateAdminResource("office", forged).join("\n"), /office\.mobile: 확정 공개 정보와 다릅니다/u, "한 종류만 보는 저장 경로");
+  assert.match(validateAdminResource("office", forged, await currentAdminResources()).join("\n"), /office\.mobile: 확정 공개 정보와 다릅니다/u, "다른 자료와 함께 보는 저장 경로");
+  assert.deepEqual(validateOffice({ ...office, mobile: "010-0000-0000" }).filter((error) => error.includes("확정 공개 정보")), [], "형식 검사(validateOffice)에는 걸지 않음");
+});
+
+test("매물 단지 표기 6가지: 단지 이름만 바꾸면 저장을 막고, 옛 이름을 별칭에 넣으면 통과하며, 단지를 지우거나 준비 중으로 돌리는 것은 막지 않는다", async () => {
+  const complexes = await readRepoJson("src/data/complexes.json");
+  assert.deepEqual(validateKnownListingTitles(complexes), []);
+  const renamed = structuredClone(complexes);
+  renamed.find((complex) => complex.slug === "leaders-city-4").name = "천동 리더스시티 4블록";
+  assert.deepEqual(validateKnownListingTitles(renamed), [
+    'complexes.leaders-city-4: 매물 표기 "리더스시티 4블록"이(가) 이 단지에 연결되지 않습니다. 옛 이름을 별칭에 넣어 주세요.',
+    'complexes.leaders-city-4: 매물 표기 "리더스시티4블록 401동"이(가) 이 단지에 연결되지 않습니다. 옛 이름을 별칭에 넣어 주세요.',
+  ]);
+  assert.match(validateAdminResource("complexes", renamed).join("\n"), /매물 표기 "리더스시티 4블록"/u, "한 종류만 보는 저장 경로");
+  assert.match(validateAdminResource("complexes", renamed, await currentAdminResources()).join("\n"), /매물 표기 "리더스시티 4블록"/u, "다른 자료와 함께 보는 저장 경로");
+  const withAlias = structuredClone(renamed);
+  withAlias.find((complex) => complex.slug === "leaders-city-4").aliases.push("리더스시티 4블록");
+  assert.deepEqual(validateKnownListingTitles(withAlias), []);
+  const preparing = structuredClone(complexes);
+  preparing.find((complex) => complex.slug === "sinheung-sk-view").status = "preparing";
+  assert.deepEqual(validateKnownListingTitles(preparing), []);
+  assert.deepEqual(validateKnownListingTitles(complexes.filter((complex) => complex.slug !== "sinheung-sk-view")), [], "단지를 지우면 그 단지 표기는 보지 않음");
+  assert.deepEqual(validateKnownListingTitles(null), []);
 });
