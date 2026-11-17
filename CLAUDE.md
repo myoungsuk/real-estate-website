@@ -98,7 +98,7 @@
 
 ## 빌드·실행 방법
 
-요구 환경은 Node.js 22.12 이상과 npm이다.
+요구 환경은 Node.js 22.13 이상과 npm이다(업무 도구 마이그레이션 시험이 Node 내장 `node:sqlite`를 플래그 없이 쓰기 때문, CI는 24).
 
 ```bash
 npm install

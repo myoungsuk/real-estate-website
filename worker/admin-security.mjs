@@ -8,7 +8,7 @@ export class AdminWriteError extends Error {
 }
 
 const encoder = new TextEncoder();
-const CSRF_MAX_AGE_SECONDS = 2 * 60 * 60;
+export const CSRF_MAX_AGE_SECONDS = 2 * 60 * 60;
 const DEFAULT_ADMIN_ALLOWED_ORIGINS = Object.freeze(["https://leaderscityhappy.com"]);
 
 export function parseAdminAllowedOrigins(value) {
@@ -41,20 +41,20 @@ export function parseAdminAllowedOrigins(value) {
   return origins;
 }
 
-function bytesToBase64Url(bytes) {
+export function bytesToBase64Url(bytes) {
   let binary = "";
   for (let index = 0; index < bytes.length; index += 1) binary += String.fromCharCode(bytes[index]);
   return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/u, "");
 }
 
-function base64UrlToBytes(value) {
+export function base64UrlToBytes(value) {
   const normalized = value.replaceAll("-", "+").replaceAll("_", "/");
   const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
   const binary = atob(padded);
   return Uint8Array.from(binary, (character) => character.charCodeAt(0));
 }
 
-async function importCsrfKey(secret) {
+export async function importCsrfKey(secret) {
   return crypto.subtle.importKey(
     "raw",
     encoder.encode(secret),

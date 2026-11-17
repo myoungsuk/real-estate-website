@@ -14,6 +14,8 @@ import {
 } from "./github-content.mjs";
 import { calculateAdminResourceDigest } from "../src/lib/admin-resource-digest.mjs";
 import { createRequestId, errorResponse, jsonResponse } from "./http.mjs";
+import { getAuditActorId, maskEmail } from "./admin-audit.mjs";
+import { handleWorkApi, isWorkApiPath, logWorkAccessDenied } from "./work-api.mjs";
 import { fetchExternalLinkPreview } from "./link-preview.mjs";
 import {
   DeploymentStatusInputError,
@@ -30,39 +32,13 @@ const READ_ONLY_PATHS = new Set([
 ]);
 const MAX_JSON_BODY_BYTES = 3 * 1024 * 1024;
 const COMMIT_SHA_PATTERN = /^[a-f0-9]{40}$/u;
-const auditEncoder = new TextEncoder();
 const jsonDecoder = new TextDecoder();
-
-function maskEmail(email) {
-  const [local, domain] = email.split("@");
-  if (!local || !domain) return "관리자";
-  const visible = local.slice(0, 1);
-  return `${visible}${"*".repeat(Math.max(3, local.length - 1))}@${domain}`;
-}
 
 function successResponse(data, requestId, status = 200) {
   return jsonResponse(
     { ok: true, data, requestId },
     { status, headers: { "X-Request-Id": requestId } },
   );
-}
-
-async function getAuditActorId(email, secret) {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    auditEncoder.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const signature = new Uint8Array(await crypto.subtle.sign(
-    "HMAC",
-    key,
-    auditEncoder.encode(`admin-audit:${email.toLowerCase()}`),
-  ));
-  let binary = "";
-  for (const byte of signature.subarray(0, 12)) binary += String.fromCharCode(byte);
-  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/u, "");
 }
 
 async function emitAdminAudit(auditLog, actor, env, entry) {
@@ -290,6 +266,10 @@ export async function handleAdminApi(request, env, options = {}) {
   try {
     actor = await authenticate(request, env);
   } catch (error) {
+    // 업무 도구 경로의 신원 없는 거부는 D1에 쓰지 않고 이유 코드와 Ray ID만 Worker 경고 로그에 남긴다.
+    if (isWorkApiPath(new URL(request.url).pathname)) {
+      logWorkAccessDenied(request, { requestId, reasonCode: error instanceof AccessAuthError ? error.code : "AUTH_UNAVAILABLE", ...(options.work ?? {}) });
+    }
     if (error instanceof AccessAuthError) {
       const message = error.code.startsWith("AUTH_CONFIG_")
         ? "관리자 인증 설정이 완료되지 않았습니다."
@@ -312,6 +292,10 @@ export async function handleAdminApi(request, env, options = {}) {
   }
 
   const url = new URL(request.url);
+  // 업무 도구 API는 Access 재검증을 통과한 뒤에만 따로 처리한다(콘텐츠 API의 GitHub 설정·CSRF와 분리).
+  if (isWorkApiPath(url.pathname)) {
+    return handleWorkApi(request, env, { actor, requestId, ...(options.work ?? {}) });
+  }
   const writeEnabled = isAdminWriteEnabled(env);
 
   if (request.method === "GET" && url.pathname === `${API_VERSION_ROOT}/health`) {
