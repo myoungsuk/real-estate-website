@@ -113,6 +113,29 @@ test("관리자 메뉴의 지금 화면 표시는 색만이 아니라 굵기·�
   assert.match(layout, /if \(document\.activeElement === button\)/u, "넘기기 단추가 숨겨질 때 포커스를 옮긴다");
 });
 
+test("위 메뉴 줄은 모든 폭에서 고정되고, 고정 머리글 뒤로 숨는 키보드 포커스를 보정한다(사용자 선택 2026-11-16 16:59:58)", async () => {
+  const [styles, layout] = await Promise.all([readSource("src/styles/admin.css"), readSource("src/layouts/AdminLayout.astro")]);
+  // 좁은 화면: 브랜드 줄(56px)이 올라가고 메뉴 줄만 남음. 넓은 화면: 한 줄 전체 고정
+  assert.match(styles, /\.admin-topnav \{ position: sticky; top: calc\(-1 \* var\(--admin-topnav-hide\)\);/u);
+  assert.match(styles, /--admin-topnav-hide: 56px; --admin-sticky-height: 53px;/u);
+  assert.match(styles, /:root \{ --admin-sticky-height: var\(--admin-topnav-height\); \}\r?\n\s*\.admin-topnav \{ top: 0;/u);
+  assert.doesNotMatch(styles, /^html \{[^}]*scroll-padding-top/mu, "문서 전체 여백은 머리글 안 Tab 때 문서를 튀게 하므로 쓰지 않음(회귀 1회차 S2)");
+  assert.match(styles, /#admin-main \{ scroll-margin-top: var\(--admin-sticky-height\); \}/u, "건너뛰기 링크 대상은 머리글 아래로");
+  assert.match(styles, /\[data-manual-form\], \[data-history-preview\] \{ scroll-margin-top: var\(--admin-sticky-height\); \}/u, "스크립트로 옮기는 매물 편집 폼·변경 이력 미리보기는 머리글 아래로(회귀 2회차 S3)");
+  assert.match(styles, /\.admin-topnav:has\(:focus-visible\) \{ top: 0; \}/u, "좁은 화면 숨은 브랜드 줄에 키보드 포커스가 가면 보이게(회귀 1회차 S1)");
+  assert.match(styles, /\.admin-shell__aside \{ position: sticky; top: var\(--admin-topnav-height\);/u, "왼쪽 목록은 고정 머리글 아래");
+  // 보정 스크립트: 키보드 포커스만, 머리글 안·건너뛰기·열린 확인 창 제외, 마우스 클릭 직후 제외, 횟수 제한
+  assert.match(layout, /document\.addEventListener\("focusin"/u);
+  assert.match(layout, /!\(target\.matches\(":focus-visible"\) \|\| target\.matches\(textEntry\)\)/u, "키보드로 들어가도 :focus-visible이 아닌 날짜 칸 등 글 입력류도 보정(회귀 2회차 S4)");
+  assert.match(layout, /const textEntry =\s*"textarea, select, input:not\(\[type=button\]\)/u);
+  assert.match(layout, /:not\(\[type=checkbox\]\):not\(\[type=radio\]\)/u, "체크·라디오는 :focus-visible 기준 그대로");
+  assert.match(layout, /performance\.now\(\) - pointerAt < 600/u);
+  assert.match(layout, /header\.contains\(target\) \|\| target\.classList\.contains\("skip-link"\) \|\| target\.closest\("dialog\[open\]"\)/u);
+  assert.match(layout, /attempts >= 3/u);
+  assert.match(layout, /target\.closest\("label"\) \?\? target/u, "숨긴 라디오는 감싼 라벨 기준");
+  assert.doesNotMatch(layout, /admin-write-ready|AdminApiError|fetch\(/u, "세션·쓰기 흐름은 건드리지 않음");
+});
+
 test("부가세 기본값은 켬이고 금액 입력은 숫자 키패드를 쓴다", async () => {
   const [fee, feePage, messagesPage, schedulePage] = await Promise.all([
     readSource("src/lib/work/brokerage-fee.mjs"),
