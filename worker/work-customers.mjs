@@ -22,6 +22,15 @@ import {
 const SEARCH_RESULT_LIMIT = 20;
 const DETAIL_NOTE_LIMIT = 50;
 
+// 손님 X의 단독 거래(그 순간 기준): X가 참여자이고 다른 손님 참여자가 없는 거래. 값 없이 ? 두 개(X, X)만 받는 고정 SQL 조각이다.
+// 손님 삭제 batch의 문장마다 이 조건을 batch 안에서 다시 계산한다(미리 읽은 뒤 다른 관리자가 참여자를 더해도 그 거래는 남는다, PR-B 메모 1).
+const EXCLUSIVE_DEALS_OF = "SELECT p.deal_id FROM deal_parties p WHERE p.customer_id = ?"
+  + " AND NOT EXISTS (SELECT 1 FROM deal_parties q WHERE q.deal_id = p.deal_id AND q.customer_id <> ?)";
+// 메모의 손님·거래 연결: 둘 다 있으면 그 손님이 그 거래 참여자여야 한다(PR-B 메모 2). ? 여섯 개(손님, 손님, 거래, 거래, 손님·거래 쌍).
+const NOTE_LINK_OK = "(? IS NULL OR EXISTS (SELECT 1 FROM customers WHERE id = ?))"
+  + " AND (? IS NULL OR EXISTS (SELECT 1 FROM deals WHERE id = ?))"
+  + " AND (? IS NULL OR ? IS NULL OR EXISTS (SELECT 1 FROM deal_parties WHERE deal_id = ? AND customer_id = ?))";
+
 const SQL = Object.freeze({
   customerList:
     "SELECT id, display_name, phone_digits, needs, status, last_contact_on, retention_until, version, created_at, updated_at FROM customers"
@@ -36,7 +45,6 @@ const SQL = Object.freeze({
   customerUpdate:
     "UPDATE customers SET display_name = coalesce(?, display_name), phone_digits = CASE WHEN ? = 1 THEN ? ELSE phone_digits END,"
     + " needs = coalesce(?, needs), status = coalesce(?, status), version = version + 1, updated_at = ? WHERE id = ? AND version = ?",
-  customerTouchContact: "UPDATE customers SET last_contact_on = ?, retention_until = ? WHERE id = ?",
   customerDelete: "DELETE FROM customers WHERE id = ?",
   customerDeals:
     "SELECT d.id, d.title, d.deal_type, d.status, d.version, d.updated_at, p.role FROM deal_parties p JOIN deals d ON d.id = p.deal_id WHERE p.customer_id = ? ORDER BY d.updated_at DESC, d.id DESC",
@@ -44,33 +52,36 @@ const SQL = Object.freeze({
     "SELECT id, customer_id, deal_id, body, source, file_id, version, created_at, updated_at FROM notes WHERE customer_id = ? ORDER BY created_at DESC, id DESC LIMIT ?",
   customerFiles:
     "SELECT id, kind, mime_type, byte_size, caption, deal_id, created_at FROM files WHERE customer_id = ? ORDER BY created_at DESC, id DESC",
-  // 그 손님에게만 연결된 거래(다른 손님이 없는 거래). 손님을 지울 때 함께 지운다(8.7절).
-  exclusiveDeals:
-    "SELECT d.id FROM deals d WHERE EXISTS (SELECT 1 FROM deal_parties p WHERE p.deal_id = d.id AND p.customer_id = ?)"
-    + " AND NOT EXISTS (SELECT 1 FROM deal_parties q WHERE q.deal_id = d.id AND q.customer_id <> ?)",
-  customerFileCount: "SELECT count(*) AS n FROM files WHERE customer_id = ?",
-  dealFileCount: "SELECT count(*) AS n FROM files WHERE deal_id = ?",
+  // 손님 삭제 미리 확인(친절한 오류용): 손님 파일 + 그 손님 단독 거래의 파일 수. 실제 막기는 아래 batch 첫 문장(guard)이 한다.
+  customerFileCount: "SELECT count(*) AS n FROM files WHERE customer_id = ? OR deal_id IN (" + EXCLUSIVE_DEALS_OF + ")",
+  // 손님 삭제 batch 첫 문장: 손님이 없거나 이름이 바뀌었거나 파일 행이 있으면 json('guard')(잘못된 JSON)로 일부러 오류를 내
+  // batch 전체를 되돌린다. batch는 한 트랜잭션이라 이 판정과 뒤 문장 사이에 다른 쓰기가 끼지 않는다.
+  customerDeleteGuard:
+    "SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM customers WHERE id = ? AND display_name = ?)"
+    + " OR EXISTS (SELECT 1 FROM files WHERE customer_id = ? OR deal_id IN (" + EXCLUSIVE_DEALS_OF + "))"
+    + " THEN json('guard') ELSE 1 END AS ok",
+  // 감사 기록은 지우기 전에 남기며, 남길 메모 수(notes_kept)를 batch 안에서 센다.
+  customerDeleteAudit:
+    "INSERT INTO audit_events (at, actor_email, action, target_type, target_id, request_id, outcome, reason)"
+    + " SELECT ?, ?, 'customer.delete', 'customer', ?, ?, 'ok', CASE WHEN kept > 0 THEN 'notes_kept=' || kept END FROM (SELECT"
+    + " (SELECT count(*) FROM notes WHERE customer_id = ? AND deal_id IS NOT NULL"
+    + " AND EXISTS (SELECT 1 FROM deal_parties q WHERE q.deal_id = notes.deal_id AND q.customer_id <> ?))"
+    + " + (SELECT count(*) FROM notes WHERE customer_id IS NOT NULL AND customer_id <> ? AND deal_id IN (" + EXCLUSIVE_DEALS_OF + "))"
+    + " AS kept)",
   // 손님 메모 중 다른 손님과 함께인 거래에도 걸린 메모는 지우지 않고 손님 연결만 끊는다(그 거래의 기록이므로, 8.7절).
   sharedDealNotesDetach:
     "UPDATE notes SET customer_id = NULL WHERE customer_id = ? AND deal_id IS NOT NULL"
     + " AND EXISTS (SELECT 1 FROM deal_parties q WHERE q.deal_id = notes.deal_id AND q.customer_id <> ?)",
-  sharedDealNoteCount:
-    "SELECT count(*) AS n FROM notes WHERE customer_id = ? AND deal_id IS NOT NULL"
-    + " AND EXISTS (SELECT 1 FROM deal_parties q WHERE q.deal_id = notes.deal_id AND q.customer_id <> ?)",
-  customerNoteCount:
-    "SELECT count(*) AS n FROM notes WHERE customer_id = ?"
-    + " AND NOT (deal_id IS NOT NULL AND EXISTS (SELECT 1 FROM deal_parties q WHERE q.deal_id = notes.deal_id AND q.customer_id <> ?))",
-  // 지우는 단독 거래에 걸린 메모 중 손님 연결이 없는 것만 함께 지운다. 다른 손님(Y)의 메모는 거래 연결만 끊고 Y의 메모로 남긴다(8.7절).
-  dealNoteCount: "SELECT count(*) AS n FROM notes WHERE deal_id = ? AND customer_id IS NULL",
-  dealOtherNoteCount: "SELECT count(*) AS n FROM notes WHERE deal_id = ? AND customer_id IS NOT NULL AND customer_id <> ?",
-  dealOtherNotesDetach: "UPDATE notes SET deal_id = NULL WHERE deal_id = ? AND customer_id IS NOT NULL AND customer_id <> ?",
+  // 지우는 단독 거래에 걸린 다른 손님(Y)의 메모는 거래 연결만 끊어 Y의 메모로 남기고, 손님 연결 없는 거래 메모는 함께 지운다(8.7절).
+  exclusiveDealOtherNotesDetach:
+    "UPDATE notes SET deal_id = NULL WHERE customer_id IS NOT NULL AND customer_id <> ? AND deal_id IN (" + EXCLUSIVE_DEALS_OF + ")",
+  exclusiveDealOnlyNotesDelete: "DELETE FROM notes WHERE customer_id IS NULL AND deal_id IN (" + EXCLUSIVE_DEALS_OF + ")",
   notesDeleteByCustomer: "DELETE FROM notes WHERE customer_id = ?",
-  notesDeleteByDeal: "DELETE FROM notes WHERE deal_id = ?",
-  dealEventsDelete: "DELETE FROM deal_events WHERE deal_id = ?",
-  dealPartiesDelete: "DELETE FROM deal_parties WHERE deal_id = ?",
-  dealDelete: "DELETE FROM deals WHERE id = ?",
+  exclusiveDealEventsDelete: "DELETE FROM deal_events WHERE deal_id IN (" + EXCLUSIVE_DEALS_OF + ")",
+  exclusiveDealsDelete: "DELETE FROM deals WHERE id IN (" + EXCLUSIVE_DEALS_OF + ")",
   customerPartiesDelete: "DELETE FROM deal_parties WHERE customer_id = ?",
   dealExists: "SELECT id FROM deals WHERE id = ?",
+  partyExists: "SELECT 1 AS ok FROM deal_parties WHERE deal_id = ? AND customer_id = ? LIMIT 1",
   noteList:
     "SELECT id, customer_id, deal_id, body, source, file_id, version, created_at, updated_at FROM notes"
     + " WHERE (? = 0 OR (customer_id IS NULL AND deal_id IS NULL))"
@@ -78,11 +89,14 @@ const SQL = Object.freeze({
     + " AND (? IS NULL OR created_at < ? OR (created_at = ? AND id < ?))"
     + " ORDER BY created_at DESC, id DESC LIMIT ?",
   noteById: "SELECT id, customer_id, deal_id, body, source, file_id, version, created_at, updated_at FROM notes WHERE id = ?",
+  // 메모 넣기·고치기는 연결 조건(NOTE_LINK_OK)을 같은 문장에 걸어, 미리 확인한 뒤 참여자가 빠지면 아무것도 바꾸지 않는다.
   noteInsert:
-    "INSERT INTO notes (id, customer_id, deal_id, body, source, file_id, version, created_at, updated_at) VALUES (?, ?, ?, ?, 'manual', NULL, 1, ?, ?)",
+    "INSERT INTO notes (id, customer_id, deal_id, body, source, file_id, version, created_at, updated_at)"
+    + " SELECT ?, ?, ?, ?, 'manual', NULL, 1, ?, ? WHERE " + NOTE_LINK_OK,
   noteUpdate:
     "UPDATE notes SET body = coalesce(?, body), customer_id = CASE WHEN ? = 1 THEN ? ELSE customer_id END,"
-    + " deal_id = CASE WHEN ? = 1 THEN ? ELSE deal_id END, version = version + 1, updated_at = ? WHERE id = ? AND version = ?",
+    + " deal_id = CASE WHEN ? = 1 THEN ? ELSE deal_id END, version = version + 1, updated_at = ? WHERE id = ? AND version = ? AND " + NOTE_LINK_OK,
+  customerTouchContactIfNote: "UPDATE customers SET last_contact_on = ?, retention_until = ? WHERE id = ? AND EXISTS (SELECT 1 FROM notes WHERE id = ?)",
   noteDelete: "DELETE FROM notes WHERE id = ?",
   searchCustomers:
     "SELECT id, display_name, phone_digits, needs, status, last_contact_on, retention_until, version, created_at, updated_at FROM customers"
@@ -92,13 +106,13 @@ const SQL = Object.freeze({
     "SELECT id, customer_id, deal_id, body, source, file_id, version, created_at, updated_at FROM notes WHERE instr(lower(body), ?) > 0 ORDER BY created_at DESC, id DESC LIMIT ?",
 });
 
-function methodNotAllowed(allow) {
+export function methodNotAllowed(allow) {
   const error = new WorkApiError("METHOD_NOT_ALLOWED", "허용되지 않은 요청 방식입니다.", 405);
   error.allow = allow;
   return error;
 }
 
-function notFound() {
+export function notFound() {
   return new WorkApiError("NOT_FOUND", "요청한 업무 자료를 찾지 못했습니다.", 404);
 }
 
@@ -117,7 +131,7 @@ function customerView(row) {
   };
 }
 
-function noteView(row) {
+export function noteView(row) {
   return {
     id: row.id,
     customerId: row.customer_id,
@@ -131,17 +145,17 @@ function noteView(row) {
   };
 }
 
-async function all(statement) {
+export async function all(statement) {
   const result = await statement.all();
   return result?.results ?? [];
 }
 
-function auditBase(ctx, action, extra = {}) {
+export function auditBase(ctx, action, extra = {}) {
   return { at: new Date(ctx.now).toISOString(), actorEmail: ctx.actor.email, action, requestId: ctx.requestId, ...extra };
 }
 
 const countReason = (count) => `result_count=${count}`;
-const maskReason = (count) => (count > 0 ? `rrn_masked=${count}` : null);
+export const maskReason = (count) => (count > 0 ? `rrn_masked=${count}` : null);
 
 async function listCustomers(ctx) {
   const params = ctx.url.searchParams;
@@ -221,45 +235,52 @@ async function updateCustomer(ctx, id) {
   return { data: { customer: customerView(await loadCustomer(ctx.db, id)) } };
 }
 
-async function count(db, sql, ...values) {
+export async function count(db, sql, ...values) {
   return Number((await db.prepare(sql).bind(...values).first())?.n ?? 0);
 }
 
-async function deleteCustomer(ctx, id) {
-  const confirmName = parseConfirmation(ctx.body, "confirmName");
-  const row = await loadCustomer(ctx.db, id);
+// 손님 삭제 앞 확인. batch 전(친절한 오류)과 batch가 guard로 되돌려진 뒤(그사이 바뀐 상황 판정)에 같은 순서로 본다.
+async function assertCustomerDeletable(db, id, confirmName) {
+  const row = await loadCustomer(db, id);
   if (!row) throw notFound();
   if (confirmName !== row.display_name) {
     throw new WorkApiError("CONFIRMATION_MISMATCH", "확인 이름이 손님 이름과 다릅니다.", 400);
   }
-  const deals = (await all(ctx.db.prepare(SQL.exclusiveDeals).bind(id, id))).map((deal) => deal.id);
-  let fileCount = await count(ctx.db, SQL.customerFileCount, id);
-  for (const dealId of deals) fileCount += await count(ctx.db, SQL.dealFileCount, dealId);
-  if (fileCount > 0) {
+  if (await count(db, SQL.customerFileCount, id, id, id) > 0) {
     throw new WorkApiError("FILES_REQUIRE_STORAGE", "연결된 파일이 있어 파일 저장소가 켜진 뒤에 지울 수 있습니다.", 409);
   }
-  let noteCount = await count(ctx.db, SQL.customerNoteCount, id, id);
-  // 남기는 메모(함께인 거래에 걸린 이 손님의 메모 + 단독 거래에 걸린 다른 손님의 메모) 본문에 지운 손님 정보가 있을 수 있어,
-  // 그 개수를 응답과 감사 기록에 남긴다(화면 경고용).
-  let keptNotes = await count(ctx.db, SQL.sharedDealNoteCount, id, id);
-  for (const dealId of deals) {
-    noteCount += await count(ctx.db, SQL.dealNoteCount, dealId);
-    keptNotes += await count(ctx.db, SQL.dealOtherNoteCount, dealId, id);
-  }
+}
+
+async function deleteCustomer(ctx, id) {
+  const confirmName = parseConfirmation(ctx.body, "confirmName");
+  await assertCustomerDeletable(ctx.db, id, confirmName);
+  const at = new Date(ctx.now).toISOString();
+  // 한 batch(한 트랜잭션). 단독 거래·남길 메모는 각 문장이 batch 안에서 다시 판정하고, 첫 문장(guard)이 조건이 깨졌으면 전체를 되돌린다.
   // 외래 키 동작에 기대지 않고 지울 행을 직접 지운다(D1 외래 키 기본 검사는 추가 확인 필요).
-  const statements = [ctx.db.prepare(SQL.sharedDealNotesDetach).bind(id, id), ctx.db.prepare(SQL.notesDeleteByCustomer).bind(id)];
-  for (const dealId of deals) {
-    statements.push(
-      ctx.db.prepare(SQL.dealOtherNotesDetach).bind(dealId, id),
-      ctx.db.prepare(SQL.notesDeleteByDeal).bind(dealId),
-      ctx.db.prepare(SQL.dealEventsDelete).bind(dealId),
-      ctx.db.prepare(SQL.dealPartiesDelete).bind(dealId),
-      ctx.db.prepare(SQL.dealDelete).bind(dealId),
-    );
+  const statements = [
+    ctx.db.prepare(SQL.customerDeleteGuard).bind(id, confirmName, id, id, id),
+    ctx.db.prepare(SQL.customerDeleteAudit).bind(at, ctx.actor.email.toLowerCase(), id, ctx.requestId, id, id, id, id, id),
+    ctx.db.prepare(SQL.sharedDealNotesDetach).bind(id, id),
+    ctx.db.prepare(SQL.exclusiveDealOtherNotesDetach).bind(id, id, id),
+    ctx.db.prepare(SQL.exclusiveDealOnlyNotesDelete).bind(id, id),
+    ctx.db.prepare(SQL.notesDeleteByCustomer).bind(id),
+    ctx.db.prepare(SQL.exclusiveDealEventsDelete).bind(id, id),
+    ctx.db.prepare(SQL.exclusiveDealsDelete).bind(id, id),
+    ctx.db.prepare(SQL.customerPartiesDelete).bind(id),
+    ctx.db.prepare(SQL.customerDelete).bind(id),
+  ];
+  let results;
+  try {
+    results = await runBatch(ctx.db, statements);
+  } catch (error) {
+    // guard가 되돌렸으면 그사이 바뀐 상황(손님 없음·이름 바뀜·파일 생김)을 같은 순서로 알려 주고, 아니면 저장소 오류 그대로.
+    await assertCustomerDeletable(ctx.db, id, confirmName);
+    throw error;
   }
-  statements.push(ctx.db.prepare(SQL.customerPartiesDelete).bind(id), ctx.db.prepare(SQL.customerDelete).bind(id));
-  await writeBatchWithAudit(ctx.db, statements, auditBase(ctx, "customer.delete", { targetType: "customer", targetId: id, reason: keptNotes > 0 ? `notes_kept=${keptNotes}` : null }));
-  return { data: { deleted: { customers: 1, deals: deals.length, notes: noteCount, files: 0 }, kept: { notes: keptNotes } } };
+  // 지운·남긴 개수는 미리 센 값이 아니라 batch 결과로 센다. 남기는 메모 본문에 지운 손님 정보가 있을 수 있어 개수를 알린다(화면 경고용).
+  const kept = changesOf(results[2]) + changesOf(results[3]);
+  const notes = changesOf(results[4]) + changesOf(results[5]);
+  return { data: { deleted: { customers: 1, deals: changesOf(results[7]), notes, files: 0 }, kept: { notes: kept } } };
 }
 
 async function listNotes(ctx) {
@@ -282,13 +303,22 @@ async function listNotes(ctx) {
   }, (data) => auditBase(ctx, "notes.list", { reason: countReason(data.items.length) }));
 }
 
+// 메모 연결 확인(친절한 오류용): 손님·거래가 있는지, 둘 다 주면 그 손님이 그 거래 참여자인지(PR-B 메모 2).
+// 실제 막기는 넣기·고치기 문장의 같은 조건(NOTE_LINK_OK)이 한다.
 async function assertLinks(db, { customerId, dealId }) {
   if (customerId && !(await loadCustomer(db, customerId))) throw invalid(["customerId"]);
   if (dealId && !(await db.prepare(SQL.dealExists).bind(dealId).first())) throw invalid(["dealId"]);
+  if (customerId && dealId && !(await db.prepare(SQL.partyExists).bind(dealId, customerId).first())) throw invalid(["dealId"]);
 }
+
+const linkValues = (customerId, dealId) => [customerId, customerId, dealId, dealId, customerId, dealId, dealId, customerId];
 
 async function loadNote(db, id) {
   return (await db.prepare(SQL.noteById).bind(id).first()) ?? null;
+}
+
+function linkChanged() {
+  return new WorkApiError("VERSION_CONFLICT", "다른 화면에서 손님·거래 연결이 바뀌었습니다. 다시 불러온 뒤 저장해 주세요.", 409);
 }
 
 async function createNote(ctx) {
@@ -296,22 +326,30 @@ async function createNote(ctx) {
   await assertLinks(ctx.db, input);
   const id = ctx.randomUUID();
   const at = new Date(ctx.now).toISOString();
-  const statements = [ctx.db.prepare(SQL.noteInsert).bind(id, input.customerId, input.dealId, input.body, at, at)];
+  const statements = [ctx.db.prepare(SQL.noteInsert).bind(id, input.customerId, input.dealId, input.body, at, at, ...linkValues(input.customerId, input.dealId))];
   if (input.customerId) {
     // 손님 메모를 쓰면 그 손님의 마지막 연락일을 오늘로, 정리 안내 기준일을 +1년으로(8.7절 설계 선택). version은 올리지 않는다.
+    // 메모가 실제로 들어갔을 때만 바꾼다.
     const today = koreaDate(ctx.now);
-    statements.push(ctx.db.prepare(SQL.customerTouchContact).bind(today, addOneYear(today), input.customerId));
+    statements.push(ctx.db.prepare(SQL.customerTouchContactIfNote).bind(today, addOneYear(today), input.customerId, id));
   }
-  await writeBatchWithAudit(ctx.db, statements, auditBase(ctx, "note.create", { targetType: "note", targetId: id, reason: maskReason(input.rrnMasked) }));
+  statements.push(auditIfUpdatedStatement(ctx.db, "notes", auditBase(ctx, "note.create", { targetType: "note", targetId: id, reason: maskReason(input.rrnMasked) }), { id, version: 1, updatedAt: at }));
+  const results = await runBatch(ctx.db, statements);
+  if (changesOf(results[0]) === 0) throw linkChanged();
   return { status: 201, data: { note: noteView(await loadNote(ctx.db, id)) } };
 }
 
 async function updateNote(ctx, id) {
   const input = parseNotePatch(ctx.body);
-  await assertLinks(ctx.db, input.changes);
-  const at = new Date(ctx.now).toISOString();
+  const current = await loadNote(ctx.db, id);
+  if (!current) throw notFound();
+  // 고친 뒤의 연결(준 값 또는 지금 값)로 확인한다. 지금 값은 같은 version일 때만 쓰이므로 UPDATE의 version 조건이 함께 지킨다.
   const customerGiven = "customerId" in input.changes ? 1 : 0;
   const dealGiven = "dealId" in input.changes ? 1 : 0;
+  const customerId = customerGiven ? input.changes.customerId : current.customer_id;
+  const dealId = dealGiven ? input.changes.dealId : current.deal_id;
+  if (current.version === input.version) await assertLinks(ctx.db, { customerId, dealId });
+  const at = new Date(ctx.now).toISOString();
   const results = await runBatch(ctx.db, [
     ctx.db.prepare(SQL.noteUpdate).bind(
       input.changes.body ?? null,
@@ -322,12 +360,15 @@ async function updateNote(ctx, id) {
       at,
       id,
       input.version,
+      ...linkValues(customerId, dealId),
     ),
     auditIfUpdatedStatement(ctx.db, "notes", auditBase(ctx, "note.update", { targetType: "note", targetId: id, reason: maskReason(input.rrnMasked) }), { id, version: input.version + 1, updatedAt: at }),
   ]);
   if (changesOf(results[0]) === 0) {
-    if (!(await loadNote(ctx.db, id))) throw notFound();
-    throw new WorkApiError("VERSION_CONFLICT", "다른 화면에서 먼저 고쳤습니다. 다시 불러온 뒤 고쳐 주세요.", 409);
+    const latest = await loadNote(ctx.db, id);
+    if (!latest) throw notFound();
+    if (latest.version !== input.version) throw new WorkApiError("VERSION_CONFLICT", "다른 화면에서 먼저 고쳤습니다. 다시 불러온 뒤 고쳐 주세요.", 409);
+    throw linkChanged();
   }
   return { data: { note: noteView(await loadNote(ctx.db, id)) } };
 }

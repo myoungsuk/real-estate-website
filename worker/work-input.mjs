@@ -243,3 +243,185 @@ export function addOneYear(dateText) {
   date.setUTCFullYear(date.getUTCFullYear() + 1);
   return date.toISOString().slice(0, 10);
 }
+
+// 거래(설계서 8.2·10.2절). 0001 칸 + 0002 일정 계산 입력 칸. regulated_area(0/1)는 입력으로 받지 않고
+// regulation에서만 만든다(dealRegulatedArea, DB CHECK로도 묶음).
+export const DEAL_TYPES = Object.freeze(["sale", "exchange", "jeonse", "monthly_rent"]);
+export const PROPERTY_KINDS = Object.freeze(["housing", "officetel", "other", "land"]);
+export const DEAL_STATUSES = Object.freeze(["open", "contracted", "completed", "cancelled"]);
+export const CLOSED_DEAL_STATUSES = Object.freeze(["completed", "cancelled"]);
+export const PARTY_ROLES = Object.freeze(["buyer", "seller", "tenant", "landlord", "other"]);
+export const SALE_KINDS = Object.freeze(["sale", "supply", "status_sale"]);
+export const REGULATIONS = Object.freeze(["none", "adjusted", "overheated"]);
+export const OFFICETEL_SCHEDULE_TARGETS = Object.freeze(["housing", "other"]);
+export const MAX_DEAL_PARTIES = 10;
+const DEAL_FIELDS = Object.freeze([
+  "title", "dealType", "saleKind", "propertyKind", "scheduleTarget", "propertyLabel", "priceWon", "depositWon", "monthlyRentWon",
+  "contractOn", "middlePaymentOn", "balanceOn", "buyerIsCorporation", "regulation", "landPermitArea", "metroArea",
+  "landShare", "separateFundingSubmission", "leaseReportingRegion", "leaseRenewalWithoutChange", "status",
+]);
+const DEAL_FLAG_FIELDS = Object.freeze([
+  "buyerIsCorporation", "landPermitArea", "metroArea", "landShare", "separateFundingSubmission", "leaseReportingRegion", "leaseRenewalWithoutChange",
+]);
+
+// regulated_area는 이 함수 한 곳에서만 만든다(비규제 0, 조정·투기과열 1).
+export function dealRegulatedArea(regulation) {
+  return regulation === "none" ? 0 : 1;
+}
+const DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/u;
+// 거래 종류마다 받는 금액 칸(공개 매물과 같은 규칙: 매매·교환은 거래가, 전세는 보증금, 월세는 보증금·월세).
+const AMOUNT_FIELDS_BY_TYPE = Object.freeze({
+  sale: ["priceWon"],
+  exchange: ["priceWon"],
+  jeonse: ["depositWon"],
+  monthly_rent: ["depositWon", "monthlyRentWon"],
+});
+const AMOUNT_FIELDS = Object.freeze(["priceWon", "depositWon", "monthlyRentWon"]);
+
+export function isCalendarDate(value) {
+  const match = typeof value === "string" ? DATE_PATTERN.exec(value) : null;
+  if (!match) return false;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+function readEnum(body, key, allowed, { nullable = false } = {}) {
+  if (!(key in body) || body[key] === undefined) return undefined;
+  if (nullable && body[key] === null) return null;
+  if (!allowed.includes(body[key])) throw invalid([key]);
+  return body[key];
+}
+
+function readFlag(body, key) {
+  if (!(key in body) || body[key] === undefined) return undefined;
+  if (typeof body[key] !== "boolean") throw invalid([key]);
+  return body[key] ? 1 : 0;
+}
+
+function readAmount(body, key) {
+  if (!(key in body) || body[key] === undefined) return undefined;
+  if (body[key] === null) return null;
+  if (!Number.isSafeInteger(body[key]) || body[key] < 0) throw invalid([key]);
+  return body[key];
+}
+
+function readDate(body, key) {
+  if (!(key in body) || body[key] === undefined) return undefined;
+  if (body[key] === null || body[key] === "") return null;
+  if (!isCalendarDate(body[key])) throw invalid([key]);
+  return body[key];
+}
+
+// 참여자: [{ customerId, role }] 최대 10개. 같은 손님·역할 묶음은 한 번만.
+export function parseParties(value) {
+  if (!Array.isArray(value) || value.length > MAX_DEAL_PARTIES) throw invalid(["parties"]);
+  const seen = new Set();
+  return value.map((party) => {
+    if (!isPlainObject(party) || Object.keys(party).some((key) => key !== "customerId" && key !== "role")) throw invalid(["parties"]);
+    if (!isUuid(party.customerId) || !PARTY_ROLES.includes(party.role)) throw invalid(["parties"]);
+    const key = `${party.customerId}:${party.role}`;
+    if (seen.has(key)) throw invalid(["parties"]);
+    seen.add(key);
+    return { customerId: party.customerId, role: party.role };
+  });
+}
+
+// 거래 칸을 읽어 바뀐 값만 돌려준다(없는 칸은 undefined). 제목·물건 표시는 주민번호 형태를 가린다.
+function readDealFields(body) {
+  const fields = {};
+  let rrnMasked = 0;
+  const title = readText(body, "title", { min: 1, max: 80, required: false });
+  if (title !== undefined) {
+    const masked = maskField(title, "title", 80);
+    fields.title = masked.text;
+    rrnMasked += masked.count;
+  }
+  const propertyLabel = readText(body, "propertyLabel", { min: 0, max: 120, required: false });
+  if (propertyLabel !== undefined) {
+    const masked = maskField(propertyLabel, "propertyLabel", 120);
+    fields.propertyLabel = masked.text;
+    rrnMasked += masked.count;
+  }
+  const dealType = readEnum(body, "dealType", DEAL_TYPES);
+  if (dealType !== undefined) fields.dealType = dealType;
+  const saleKind = readEnum(body, "saleKind", SALE_KINDS, { nullable: true });
+  if (saleKind !== undefined) fields.saleKind = saleKind;
+  const propertyKind = readEnum(body, "propertyKind", PROPERTY_KINDS);
+  if (propertyKind !== undefined) fields.propertyKind = propertyKind;
+  const scheduleTarget = readEnum(body, "scheduleTarget", OFFICETEL_SCHEDULE_TARGETS, { nullable: true });
+  if (scheduleTarget !== undefined) fields.scheduleTarget = scheduleTarget;
+  const regulation = readEnum(body, "regulation", REGULATIONS);
+  if (regulation !== undefined) fields.regulation = regulation;
+  const status = readEnum(body, "status", DEAL_STATUSES);
+  if (status !== undefined) fields.status = status;
+  for (const key of AMOUNT_FIELDS) {
+    const amount = readAmount(body, key);
+    if (amount !== undefined) fields[key] = amount;
+  }
+  for (const key of ["contractOn", "middlePaymentOn", "balanceOn"]) {
+    const date = readDate(body, key);
+    if (date !== undefined) fields[key] = date;
+  }
+  for (const key of DEAL_FLAG_FIELDS) {
+    const flag = readFlag(body, key);
+    if (flag !== undefined) fields[key] = flag;
+  }
+  return { fields, rrnMasked };
+}
+
+// 합친 거래 값의 앞뒤를 본다(단계 0 일정 계산과 같은 규칙).
+// 거래 종류에 없는 금액 칸, 매매가 아닌데 매매 세부 종류, 오피스텔인데 일정 판정 미선택·오피스텔이 아닌데 선택, 계약일보다 빠른 중도금·잔금일.
+export function assertDealConsistent(deal) {
+  const allowed = AMOUNT_FIELDS_BY_TYPE[deal.dealType] ?? [];
+  const wrong = AMOUNT_FIELDS.filter((key) => !allowed.includes(key) && deal[key] !== null && deal[key] !== undefined);
+  if (deal.dealType !== "sale" && deal.saleKind !== null) wrong.push("saleKind");
+  if (deal.propertyKind === "officetel" ? deal.scheduleTarget === null : deal.scheduleTarget !== null) wrong.push("scheduleTarget");
+  wrong.push(...["middlePaymentOn", "balanceOn"].filter((key) => deal[key] && deal.contractOn && deal[key] < deal.contractOn));
+  if (wrong.length > 0) throw invalid(wrong);
+}
+
+export const DEAL_DEFAULTS = Object.freeze({
+  saleKind: null,
+  scheduleTarget: null,
+  propertyLabel: "",
+  priceWon: null,
+  depositWon: null,
+  monthlyRentWon: null,
+  contractOn: null,
+  middlePaymentOn: null,
+  balanceOn: null,
+  buyerIsCorporation: 0,
+  regulation: "none",
+  landPermitArea: 0,
+  metroArea: 1,
+  landShare: 0,
+  separateFundingSubmission: 0,
+  leaseReportingRegion: 1,
+  leaseRenewalWithoutChange: 0,
+  status: "open",
+});
+
+export function parseDealCreate(body) {
+  if (!isPlainObject(body)) throw invalid(["body"]);
+  rejectUnknown(body, [...DEAL_FIELDS, "parties"]);
+  for (const key of ["title", "dealType", "propertyKind"]) {
+    if (!(key in body) || body[key] === undefined) throw invalid([key]);
+  }
+  const { fields, rrnMasked } = readDealFields(body);
+  const deal = { ...DEAL_DEFAULTS, ...fields };
+  // 매매인데 세부 종류를 안 주면 일반 매매로 둔다.
+  if (deal.dealType === "sale" && deal.saleKind === null && !("saleKind" in fields)) deal.saleKind = "sale";
+  assertDealConsistent(deal);
+  const parties = body.parties === undefined ? [] : parseParties(body.parties);
+  return { deal, parties, rrnMasked };
+}
+
+export function parseDealPatch(body) {
+  if (!isPlainObject(body)) throw invalid(["body"]);
+  rejectUnknown(body, ["version", ...DEAL_FIELDS, "parties"]);
+  const version = readVersion(body);
+  const { fields, rrnMasked } = readDealFields(body);
+  const parties = body.parties === undefined ? undefined : parseParties(body.parties);
+  if (Object.keys(fields).length === 0 && parties === undefined) throw invalid(["body"]);
+  return { version, changes: fields, parties, rrnMasked };
+}
