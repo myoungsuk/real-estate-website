@@ -3,7 +3,7 @@
 ## 현재 연결 상태 (2026-08-27)
 
 - 운영 도메인 `https://leaderscityhappy.com`은 Worker `leaders-city-happy-realty`의 Custom Domain이다.
-- 같은 Worker의 보조 확인 주소는 `https://leaders-city-happy-realty.k4858678.workers.dev`이다. 공개 안내와 검색 등록에는 운영 도메인만 사용한다.
+- 같은 Worker의 보조 확인 주소는 `https://leaders-city-happy-realty.<계정>.workers.dev`이다. 공개 안내와 검색 등록에는 운영 도메인만 사용한다.
 - 운영 쓰기 활성 상태로 확인한 Worker 버전은 `1e5f54e2-85cc-4123-b451-6e3f51e8465d`이다.
 - Access 애플리케이션 `리더스시티 행복한부동산 관리자`가 운영 도메인과 보조 Worker 주소의 `/admin*`, `/api/admin*`만 보호한다.
 - One-time PIN ID 공급자를 추가하고 애플리케이션 로그인 방법을 One-time PIN 하나로 제한했다. Allow 정책은 Include에 정확한 관리자 이메일 2개, Require에 Login method `One-time PIN`을 사용하며 Bypass 정책은 없다.
@@ -36,7 +36,7 @@ Worker는 GitHub `myoungsuk/real-estate-website`의 `master`에 연결되어 있
 
 사람이 올린 `master` push(pull request 병합, 관리자 화면 저장)는 `.github/workflows/verify-production-deploy.yml`이 확인한다. 이 워크플로는 `contents: read` 권한과 비밀값 없이 push 커밋을 받아 `scripts/verify-production-commit.mjs`를 실행하고, 운영 `/deployment-marker.json`의 `source.commit`이 push 커밋과 같거나 push 커밋을 포함한 `master`의 후속 커밋이 될 때까지 동기화 워크플로와 같은 10초 간격으로, 조회 시간을 포함해 시작 시각 기준 최대 30분 확인한다(job 제한 45분보다 먼저 끝나 마지막 관찰값을 로그에 남김). 연달아 push되어 앞 커밋의 빌드가 취소되거나 뒤 커밋이 먼저 반영돼도 후속 커밋 판정(`git merge-base --is-ancestor`)으로 성공 처리한다. 시간 안에 반영되지 않으면 Action이 실패하고 GitHub가 push한 사람에게 실패 알림을 보낸다(수신 여부는 GitHub 알림 설정에 따름). Cloudflare 알림(Platform Notifications)에는 Workers Builds 실패 항목이 없고, Workers Builds 이벤트는 Queue 기반 Event subscriptions로만 받을 수 있어 이 방식을 택했다(2026-11-16). `GITHUB_TOKEN`으로 push한 동기화 커밋은 GitHub 정책상 이 워크플로를 실행하지 않으므로 확인이 겹치지 않는다. 후속 커밋 판정의 `git fetch`는 자격 증명 없이 실행하므로 저장소를 비공개로 바꾸면 다시 설계한다. 2026-11-13 Bank 동기화 커밋 `4ae45ef`처럼 Workers Builds가 실패하면 다음 push가 있을 때까지 운영이 옛 버전으로 남으므로, 실패 알림을 받으면 Cloudflare 빌드 로그로 원인을 확인하고, 자동 배포 실패가 확인된 경우에만 `CLAUDE.md`의 수동 배포 절차(Production 환경변수 빌드와 `npx wrangler deploy --dry-run` 재검증 뒤 `npx wrangler deploy`)를 따른다.
 
-`wrangler.jsonc`는 `./dist` 정적 자산과 `worker/index.mjs` 관리 API를 같은 Worker로 배포합니다. `leaderscityhappy.com`은 Worker Custom Domain으로 선언하며 `/api/admin`과 `/api/admin/*`만 Worker를 먼저 실행하므로 공개 경로는 정적 자산으로 제공합니다. `CF_VERSION_METADATA` binding은 인증된 관리자에게 현재 Worker version ID·생성 시각만 제공합니다. Production 빌드는 `PUBLIC_SITE_URL=https://leaderscityhappy.com`과 `PUBLIC_ALLOW_INDEXING=true`를 반드시 함께 설정합니다.
+`wrangler.jsonc`는 `./dist` 정적 자산과 `worker/index.mjs` 관리 API를 같은 Worker로 배포합니다. `leaderscityhappy.com`은 Worker Custom Domain으로 선언하며 `/api/admin`과 `/api/admin/*`만 Worker를 먼저 실행하므로 공개 경로는 정적 자산으로 제공합니다. `CF_VERSION_METADATA` binding은 인증된 관리자에게 현재 Worker version ID·생성 시각만 제공합니다. `WORK_DB` D1 binding(`leaderscity-work`, `migrations_dir` `migrations/work`)과 `WORK_FILES` R2 binding(`leaderscity-work-files`)은 관리자 전용 중개업무 도구의 자료 저장소입니다. 업무 도구 켜기 값(`WORK_TOOLS_ENABLED`·`WORK_AI_ENABLED`)은 Worker Secret으로만 등록하고 `wrangler.jsonc`에 `vars`를 두지 않습니다(일반 변수는 다음 배포 때 덮어써짐). 켜기 Secret이 없으면 업무 도구는 꺼져 있습니다. 원격 D1에는 2026-11-17 `0001_init.sql`이 적용됐으므로 0001은 고치지 않고 구조 변경은 `0002_*.sql`부터 만듭니다(업무 도구 설계서 16장). Production 빌드는 `PUBLIC_SITE_URL=https://leaderscityhappy.com`과 `PUBLIC_ALLOW_INDEXING=true`를 반드시 함께 설정합니다.
 
 `deployment-marker.json` v2는 기존 `search`, `bank`, `external`, `automation` scope hash를 그대로 유지하면서 Workers Builds의 `WORKERS_CI_COMMIT_SHA`·`WORKERS_CI_BRANCH`, GitHub Actions의 `GITHUB_SHA`·`GITHUB_REF_NAME`, 허용 관리자 JSON 10종의 정규화 SHA-256 digest를 추가한다. `bank` scope에는 공개 목록·Bank 기준선·재확인 상태·재확인 정책이 함께 포함된다. v1 scope reader는 2026-09-30까지 유지한다. 관리자 `/admin/deployment/`는 마지막 저장 commit·digest와 Production marker를 비교하며, marker 조회 실패는 GitHub 저장 실패가 아니라 `확인 불가`로 표시한다.
 
