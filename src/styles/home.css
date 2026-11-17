@@ -500,3 +500,130 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
+
+/* 움직임(DESIGN.md "움직임"): transform·opacity만 쓰고(레이아웃 이동 없음), 움직임 줄이기 설정이면 이 덩어리 전체가 적용되지 않는다. */
+@keyframes home-sheet-in {
+  from {
+    transform: translateY(8px);
+  }
+}
+
+@keyframes home-stamp-in {
+  from {
+    transform: rotate(-5deg) scale(1.25);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* ① 들어올 때 움직이는 것은 첫 화면 매물 종이뿐: 0.28초 안에 한 번 8px 올라오고 도장이 찍힌다.
+     정렬·넘기기로 다시 보일 때는 스크립트가 is-settled를 붙여 움직이지 않는다. */
+  .listing-grid--sheets:not(.is-settled) > .listing-card--sheet {
+    animation: home-sheet-in 0.28s ease-out;
+  }
+
+  .listing-grid--sheets:not(.is-settled) .sheet__stamp {
+    animation: home-stamp-in 0.26s ease-out;
+  }
+
+  /* ② 단추를 누르면 0.1초 97%로 눌린다. 눌린 동안 투명 칸(::before)을 반대로 키워 누름 영역은 그대로 둔다. */
+  .hw__board .hw__all,
+  .listing-pager--sheet .listing-sort button,
+  .listing-pagination--sheet button,
+  .home-find__row a,
+  .home-contact__row a {
+    position: relative;
+    transition: transform 0.1s ease-out, box-shadow 0.15s ease-out, background-color 0.15s ease-out, color 0.15s ease-out;
+  }
+
+  .hw__board .hw__all::before,
+  .listing-pager--sheet .listing-sort button::before,
+  .listing-pagination--sheet button::before,
+  .home-find__row a::before,
+  .home-contact__row a::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+  }
+
+  .hw__board .hw__all:active,
+  .listing-pager--sheet .listing-sort button:active,
+  .listing-pagination--sheet button:active:not(:disabled),
+  .home-find__row a:active,
+  .home-contact__row a:active {
+    transform: scale(0.97);
+  }
+
+  .hw__board .hw__all:active::before,
+  .listing-pager--sheet .listing-sort button:active::before,
+  .listing-pagination--sheet button:active:not(:disabled)::before,
+  .home-find__row a:active::before,
+  .home-contact__row a:active::before {
+    transform: scale(1.0309);
+  }
+
+  /* ④ 첫 화면 아래 칸: 스크립트가 붙은 뒤 아직 화면 아래에 있는 칸에만 is-reveal-waiting을 걸고,
+     화면에 들어오면 한 번 16px 아래에서 올라오며 나타난다. 스크립트가 없거나 늦으면 그냥 보인다. */
+  /* 전환은 숨김이 아닌 상태에만 건다: 숨김 표시를 붙일 때는 전환 없이 바로 숨고, 뗄 때만 0.45초 나타난다 */
+  [data-home-reveal]:not(.is-reveal-waiting) {
+    transition: opacity 0.45s ease-out, transform 0.45s ease-out;
+  }
+
+  [data-home-reveal].is-reveal-waiting {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+
+  /* 키보드 포커스로 들어온 칸은 페이드 없이 바로 보인다(위 전환 규칙과 구체성이 같아 뒤에 있는 이 규칙이 이긴다) */
+  [data-home-reveal].is-reveal-instant {
+    transition: none;
+  }
+}
+
+/* ③ 정밀 포인터에서 종이·단지 사진·새 글 썸네일이 3px 떠오른다. 커서 가장자리에서 떨리지 않게
+   종이는 아래에 투명 띠를 붙이고, 사진·썸네일은 가만히 있는 바깥 칸이 마우스를 받는다. */
+@media (prefers-reduced-motion: no-preference) and (hover: hover) and (pointer: fine) {
+  .listing-card--sheet,
+  .home-area__complexes a,
+  .content-note .content-card__media {
+    transition: transform 0.18s ease-out, box-shadow 0.18s ease-out;
+  }
+
+  .listing-card.listing-card--sheet:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 4px 6px rgba(20, 20, 20, 0.12), 0 18px 32px rgba(20, 20, 20, 0.2);
+  }
+
+  .listing-card.listing-card--sheet:hover::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    right: 0;
+    left: 0;
+    height: 4px;
+  }
+
+  .home-area__complexes li:hover > a,
+  .content-note:hover .content-card__media {
+    transform: translateY(-3px);
+    box-shadow: 0 12px 24px rgba(20, 20, 20, 0.14);
+  }
+
+  .hw__board .hw__all:hover,
+  .listing-pager--sheet .listing-sort button:hover,
+  .listing-pagination--sheet button:hover:not(:disabled),
+  .home-contact__row a:hover {
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+  }
+}
+
+/* 인쇄할 때는 나타나기 전 칸도 모두 보이게 */
+@media print {
+  [data-home-reveal].is-reveal-waiting {
+    opacity: 1;
+    transform: none;
+  }
+
+  [data-home-reveal] {
+    transition: none !important;
+  }
+}
