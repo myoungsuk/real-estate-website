@@ -11,8 +11,8 @@ const { eyebrow, title, description } = Astro.props;
 <header class="page-intro section">
   <div class="shell page-intro__inner">
     <nav class="breadcrumbs" aria-label="현재 위치"><a href="/">홈</a><span aria-hidden="true">/</span><span aria-current="page">{title}</span></nav>
-    <p class="eyebrow">{eyebrow}</p>
+    <p class="page-intro__tag">{eyebrow}</p>
     <h1>{title}</h1>
-    <p>{description}</p>
+    <p class="page-intro__lead">{description}</p>
   </div>
 </header>
