@@ -274,6 +274,10 @@ const weekdayHours = office.hours.find((hour) => hour.label === "평일") ?? off
     font-weight: 700;
   }
 
+  .hw__facts div:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+
   @media (min-width: 700px) {
     .hw__person {
       grid-template-columns: 120px minmax(0, 1fr);
@@ -285,7 +289,11 @@ const weekdayHours = office.hours.find((hour) => hour.label === "평일") ?? off
     }
 
     .hw__facts {
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .hw__facts div:last-child:nth-child(odd) {
+      grid-column: auto;
     }
   }
 
@@ -383,7 +391,6 @@ const weekdayHours = office.hours.find((hour) => hour.label === "평일") ?? off
       <div><dt>대표</dt><dd>{office.representative} 공인중개사</dd></div>
       <div><dt>전문 지역</dt><dd>대전 동구 전역</dd></div>
       <div><dt>등록번호</dt><dd>{office.registrationNumber}</dd></div>
-      <div><dt>운영 현황</dt><dd>{office.publicClaims.items.map((claim) => `${claim.label} ${claim.value}`).join(" · ")}</dd></div>
     </dl>
   </div>
 </section>
