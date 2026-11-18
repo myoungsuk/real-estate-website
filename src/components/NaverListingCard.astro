@@ -91,10 +91,10 @@ const price = getNaverListingPriceParts(listing.priceLabel, listing.tradeType);
   .listing-card__selection button {
     min-height: 44px;
     padding: 8px 14px;
-    border: 1.5px solid #132a3e;
+    border: 1.5px solid var(--ds-navy);
     border-radius: 2px;
-    color: #132a3e;
-    background: #fbfaf6;
+    color: var(--ds-navy);
+    background: var(--ds-paper);
     font: inherit;
     font-size: 1rem;
     font-weight: 800;
@@ -102,7 +102,7 @@ const price = getNaverListingPriceParts(listing.priceLabel, listing.tradeType);
   }
 
   .listing-card__selection button[aria-pressed="true"] {
-    color: #fbfaf6;
-    background: #132a3e;
+    color: var(--ds-paper);
+    background: var(--ds-navy);
   }
 </style>

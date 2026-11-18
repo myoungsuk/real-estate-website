@@ -148,10 +148,10 @@ const { heading = "문의 조건을 문장으로 정리해 보세요" } = Astro.
     gap: 26px;
     margin-top: 48px;
     padding: clamp(20px, 4vw, 32px);
-    border: 1px solid #e2ded3;
+    border: 1px solid var(--ds-edge);
     border-radius: 2px;
-    color: #141414;
-    background: #fbfaf6;
+    color: var(--ds-ink);
+    background: var(--ds-paper);
   }
 
   .inquiry-composer__intro .eyebrow {
@@ -161,8 +161,8 @@ const { heading = "문의 조건을 문장으로 정리해 보세요" } = Astro.
     margin-bottom: 10px;
     padding: 2px 10px;
     border-radius: 2px;
-    color: #132a3e;
-    background: #f1eee6;
+    color: var(--ds-navy);
+    background: var(--ds-paper-2);
     letter-spacing: 0;
     text-transform: none;
   }
@@ -170,7 +170,7 @@ const { heading = "문의 조건을 문장으로 정리해 보세요" } = Astro.
   .inquiry-composer__intro h2 {
     max-width: 760px;
     margin-bottom: 10px;
-    color: #132a3e;
+    color: var(--ds-navy);
     font-size: clamp(1.625rem, 7.5vw, 2.25rem);
     font-weight: 800;
     letter-spacing: -0.035em;
@@ -184,7 +184,7 @@ const { heading = "문의 조건을 문장으로 정리해 보세요" } = Astro.
 
   .inquiry-composer__privacy,
   .inquiry-composer__notice {
-    color: #4a4844;
+    color: var(--ds-ink-soft);
   }
 
   .inquiry-composer__form,
@@ -201,7 +201,7 @@ const { heading = "문의 조건을 문장으로 정리해 보세요" } = Astro.
 
   .inquiry-composer label,
   .inquiry-composer__selected strong {
-    color: #132a3e;
+    color: var(--ds-navy);
     font-size: 1rem;
     font-weight: 800;
   }
@@ -216,7 +216,7 @@ const { heading = "문의 조건을 문장으로 정리해 보세요" } = Astro.
     width: 100%;
     min-height: 48px;
     padding: 12px 14px;
-    border: 1px solid #8a857a;
+    border: 1px solid var(--ds-field-edge);
     border-radius: 2px;
     color: var(--ink);
     background: var(--white);
@@ -231,13 +231,13 @@ const { heading = "문의 조건을 문장으로 정리해 보세요" } = Astro.
   .inquiry-composer__output {
     padding: 18px;
     border-radius: 2px;
-    background: #f1eee6;
+    background: var(--ds-paper-2);
   }
 
   .inquiry-composer__selected p,
   .inquiry-composer__status {
     margin: 6px 0 0;
-    color: #4a4844;
+    color: var(--ds-ink-soft);
   }
 
   .inquiry-composer .button {
@@ -247,15 +247,15 @@ const { heading = "문의 조건을 문장으로 정리해 보세요" } = Astro.
   }
 
   .inquiry-composer .button--primary {
-    color: #fbfaf6;
-    border-color: #141414;
-    background: #141414;
+    color: var(--ds-paper);
+    border-color: var(--ds-ink);
+    background: var(--ds-ink);
   }
 
   .inquiry-composer .button--secondary {
-    color: #132a3e;
-    border: 1.5px solid #132a3e;
-    background: #fbfaf6;
+    color: var(--ds-navy);
+    border: 1.5px solid var(--ds-navy);
+    background: var(--ds-paper);
   }
 
   .inquiry-composer__actions {

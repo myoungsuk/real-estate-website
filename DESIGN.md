@@ -3,7 +3,7 @@ name: 리더스시티 행복한부동산
 description: 상가 유리창 매물판 — 사무소 유리창에 붙인 매물 종이처럼, 최근 공개 매물과 확인일을 그대로 보여 주는 공개 홈페이지
 colors:
   paper: "#FBFAF6"
-  paper-edge: "#E4E1D8"
+  paper-edge: "#E2DED3"
   ink: "#141414"
   heading-navy: "#132A3E"
   ink-soft: "#4A4844"
