@@ -1,0 +1,62 @@
+/* 사무소 소개·오시는 길(F4, DESIGN.md "상가 유리창 매물판"). 이 두 화면에만 인라인으로 들어가 다른 화면·관리자 CSS는 그대로다. 여러 화면이 같이 쓰는 클래스를 이 화면에서만 홈 방향으로 맞춘다. 두 화면 전용 클래스(.office-*·.location-*·.contact-details)는 global.css 제자리에서 바꿨다. */
+
+/* 칸 제목: 머리표 대신 태그 */
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  margin: 0 0 10px;
+  padding: 2px 10px;
+  border-radius: 2px;
+  color: var(--ds-navy);
+  background: var(--ds-paper-2);
+  font-size: 0.875rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* 바탕이 종이색이 아닌 구역에서는 태그를 종이색으로 */
+.section--soft .eyebrow,
+.section--navy .eyebrow {
+  background: var(--ds-paper);
+}
+
+/* 남색 띠 구역(상담 과정·사무소 정보) → 종이 구역. 남색은 상담 상자에만 */
+.section--navy {
+  color: var(--ds-ink);
+  background: var(--ds-paper-2);
+}
+
+.section--navy :focus-visible {
+  outline-color: var(--focus-ring);
+}
+
+/* 연락처·이메일 링크: 색만이 아니라 밑줄로도 링크임을 알린다 */
+.office-facts dd a,
+.contact-details dd a {
+  color: var(--ds-navy);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+/* 본문 단추(머리 "전화 상담" 단추는 main 밖이라 그대로 장미색, 카카오톡은 노랑 그대로) */
+main .button {
+  min-height: 52px;
+  border-radius: 2px;
+  box-shadow: none;
+}
+
+main .button--primary,
+main .button--primary:hover {
+  color: var(--ds-paper);
+  border-color: var(--ds-ink);
+  background: var(--ds-ink);
+}
+
+main .button--secondary,
+main .button--secondary:hover {
+  color: var(--ds-navy);
+  border: 1.5px solid var(--ds-navy);
+  background: var(--ds-paper);
+}

@@ -2,12 +2,14 @@
 import BaseLayout from "../layouts/BaseLayout.astro";
 import ContactPanel from "../components/ContactPanel.astro";
 import { emailHref, formatOfficeHours, office, phoneHref, smsHref } from "../lib/site";
+import officeStyles from "../styles/office.css?inline";
 
 const title = "리더스시티·신흥 SK뷰 상담 | 행복한부동산 사무소 소개";
 const description = "리더스시티5블록 단지 내 행복한부동산입니다. 백진옥 대표가 리더스시티 4·5블록과 신흥 SK뷰를 중심으로 천동·신흥동의 매매·전세·월세를 직접 상담합니다.";
 ---
 
 <BaseLayout {title} {description} breadcrumbItems={[{ name: "홈", path: "/" }, { name: "사무소 소개", path: "/office/" }]}>
+  <style is:inline set:html={officeStyles} />
   <section class="office-hero" aria-labelledby="office-hero-heading">
     <div class="shell office-hero__grid">
       <div class="office-hero__copy">
