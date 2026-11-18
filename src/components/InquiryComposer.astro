@@ -147,23 +147,44 @@ const { heading = "문의 조건을 문장으로 정리해 보세요" } = Astro.
     display: grid;
     gap: 26px;
     margin-top: 48px;
-    padding: clamp(24px, 5vw, 44px);
-    border: 1px solid var(--line);
-    border-radius: 24px;
-    background: var(--ivory);
+    padding: clamp(20px, 4vw, 32px);
+    border: 1px solid #e2ded3;
+    border-radius: 2px;
+    color: #141414;
+    background: #fbfaf6;
+  }
+
+  .inquiry-composer__intro .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    margin-bottom: 10px;
+    padding: 2px 10px;
+    border-radius: 2px;
+    color: #132a3e;
+    background: #f1eee6;
+    letter-spacing: 0;
+    text-transform: none;
   }
 
   .inquiry-composer__intro h2 {
     max-width: 760px;
-    margin-bottom: 14px;
-    font-size: clamp(1.7rem, 4vw, 2.6rem);
+    margin-bottom: 10px;
+    color: #132a3e;
+    font-size: clamp(1.625rem, 7.5vw, 2.25rem);
+    font-weight: 800;
+    letter-spacing: -0.035em;
   }
 
   .inquiry-composer__intro > p:last-child,
   .inquiry-composer__privacy,
   .inquiry-composer__notice {
     margin-bottom: 0;
-    color: var(--muted);
+  }
+
+  .inquiry-composer__privacy,
+  .inquiry-composer__notice {
+    color: #4a4844;
   }
 
   .inquiry-composer__form,
@@ -180,7 +201,7 @@ const { heading = "문의 조건을 문장으로 정리해 보세요" } = Astro.
 
   .inquiry-composer label,
   .inquiry-composer__selected strong {
-    color: var(--navy-950);
+    color: #132a3e;
     font-size: 1rem;
     font-weight: 800;
   }
@@ -195,8 +216,8 @@ const { heading = "문의 조건을 문장으로 정리해 보세요" } = Astro.
     width: 100%;
     min-height: 48px;
     padding: 12px 14px;
-    border: 1px solid #bcc2c4;
-    border-radius: 10px;
+    border: 1px solid #8a857a;
+    border-radius: 2px;
     color: var(--ink);
     background: var(--white);
     font: inherit;
@@ -209,14 +230,32 @@ const { heading = "문의 조건을 문장으로 정리해 보세요" } = Astro.
   .inquiry-composer__selected,
   .inquiry-composer__output {
     padding: 18px;
-    border-radius: 14px;
-    background: var(--white);
+    border-radius: 2px;
+    background: #f1eee6;
   }
 
   .inquiry-composer__selected p,
   .inquiry-composer__status {
     margin: 6px 0 0;
-    color: var(--muted);
+    color: #4a4844;
+  }
+
+  .inquiry-composer .button {
+    min-height: 52px;
+    border-radius: 2px;
+    box-shadow: none;
+  }
+
+  .inquiry-composer .button--primary {
+    color: #fbfaf6;
+    border-color: #141414;
+    background: #141414;
+  }
+
+  .inquiry-composer .button--secondary {
+    color: #132a3e;
+    border: 1.5px solid #132a3e;
+    background: #fbfaf6;
   }
 
   .inquiry-composer__actions {

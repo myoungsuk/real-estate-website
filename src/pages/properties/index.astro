@@ -444,13 +444,12 @@ const description = "대전 동구에서 직접 확인한 매매·전세·월세
     align-items: center;
     gap: 0.55rem;
     margin: 0.7rem 0 0.45rem;
-    color: var(--white);
   }
 
   .listing-update span {
-    border-radius: 999px;
-    background: var(--rose-soft);
-    color: var(--rose-dark);
+    border-radius: 2px;
+    background: #f1eee6;
+    color: #132a3e;
     font-size: 0.875rem;
     font-weight: 800;
     letter-spacing: -0.01em;
@@ -466,10 +465,10 @@ const description = "대전 동구에서 직접 확인한 매매·전세·월세
     align-items: center;
     justify-content: space-between;
     padding: 12px 16px;
-    border: 1px solid var(--line);
-    border-radius: 14px;
-    color: var(--navy-950);
-    background: var(--ivory);
+    border: 1.5px solid #132a3e;
+    border-radius: 2px;
+    color: #132a3e;
+    background: #fbfaf6;
     font: inherit;
     font-weight: 850;
     cursor: pointer;
@@ -481,43 +480,52 @@ const description = "대전 동구에서 직접 확인한 매매·전세·월세
   .filter-panel__fields[hidden] { display: none; }
   .filter-panel__fields > div { display: grid; gap: 6px; }
   .filter-panel select,
-  .filter-panel input { width: 100%; min-height: 48px; padding: 0 13px; border: 1px solid #bcc2c4; border-radius: 10px; color: var(--ink); background: var(--white); }
+  .filter-panel input { width: 100%; min-height: 48px; padding: 0 13px; border: 1px solid #8a857a; border-radius: 2px; color: var(--ink); background: var(--white); }
   .filter-panel label,
-  .filter-range legend { color: var(--navy-950); font-size: 1rem; font-weight: 800; }
+  .filter-range legend { color: #132a3e; font-size: 1rem; font-weight: 800; }
   .filter-range { min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 0; border: 0; }
   .filter-range[hidden] { display: none; }
   .filter-range legend { grid-column: 1 / -1; margin-bottom: 6px; }
   .filter-range legend small { font-size: 0.875rem; }
   .filter-range label { min-width: 0; display: grid; gap: 5px; }
-  .filter-range label span { color: var(--muted); font-size: 0.875rem; }
+  .filter-range label span { color: #4a4844; font-size: 0.875rem; }
   .filter-range--monthly { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .filter-panel__actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .filter-panel__actions .button,
+  .empty-state__actions .button { min-height: 52px; border-radius: 2px; box-shadow: none; }
+  .filter-panel__actions .button--primary,
+  .empty-state__actions .button--primary { color: #fbfaf6; border-color: #141414; background: #141414; }
+  .filter-panel__actions .button--secondary,
+  .empty-state__actions .button--secondary { color: #132a3e; border: 1.5px solid #132a3e; background: #fbfaf6; }
   .filter-panel__hint,
-  .filter-panel__error { margin: 0; color: var(--muted); font-size: 1rem; }
+  .filter-panel__error { margin: 0; color: #4a4844; font-size: 1rem; }
   .filter-panel__error:not(:empty) { color: #8a2e39; font-weight: 750; }
   .quick-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; }
-  .quick-filter > span { margin-right: 2px; color: var(--muted); font-size: 0.875rem; font-weight: 800; }
+  .quick-filter > span { margin-right: 2px; color: #4a4844; font-size: 0.875rem; font-weight: 800; }
   .quick-filter button,
   .listing-view-toggle button,
   .text-button,
-  .compare-tray button { min-height: 44px; padding: 8px 13px; border: 1px solid var(--line); border-radius: 999px; color: var(--navy-950); background: var(--white); font: inherit; font-size: 1rem; font-weight: 800; cursor: pointer; }
+  .compare-tray button { min-height: 44px; padding: 8px 13px; border: 1.5px solid #132a3e; border-radius: 2px; color: #132a3e; background: #fbfaf6; font: inherit; font-size: 1rem; font-weight: 800; cursor: pointer; }
   .active-filter-summary { display: grid; gap: 8px; margin-top: 18px; }
-  .active-filter-summary > strong { color: var(--navy-950); font-size: 1rem; }
+  .active-filter-summary > strong { color: #132a3e; font-size: 1rem; }
   .active-filter-summary > div { display: flex; flex-wrap: wrap; gap: 7px; }
-  .active-filter-summary span { padding: 6px 10px; border-radius: 999px; color: var(--rose-dark); background: var(--rose-soft); font-size: 0.875rem; font-weight: 800; }
+  .active-filter-summary span { padding: 6px 10px; border-radius: 2px; color: #132a3e; background: #f1eee6; font-size: 0.875rem; font-weight: 800; }
   .listing-view-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-top: 24px; }
   .listing-view-toggle { display: flex; gap: 8px; }
-  .listing-view-toggle button[aria-pressed="true"] { color: var(--white); border-color: var(--navy-900); background: var(--navy-900); }
+  .listing-view-toggle button[aria-pressed="true"] { color: #fbfaf6; background: #132a3e; }
   .text-button:disabled { opacity: 0.45; cursor: not-allowed; }
-  .listing-preference-note { margin: 10px 0 0; color: var(--muted); font-size: 1rem; }
-  .compare-tray { position: sticky; bottom: calc(76px + env(safe-area-inset-bottom)); z-index: 90; display: grid; gap: 12px; margin-bottom: 18px; padding: 14px; border: 1px solid rgba(255,255,255,0.16); border-radius: 16px; color: var(--white); background: rgba(16, 40, 61, 0.97); box-shadow: var(--shadow); }
+  .listing-preference-note { margin: 10px 0 0; color: #4a4844; font-size: 1rem; }
+  .compare-tray { position: sticky; bottom: calc(76px + env(safe-area-inset-bottom)); z-index: 90; display: grid; gap: 12px; margin-bottom: 18px; padding: 14px; border-radius: 2px; color: #fbfaf6; background: #132a3e; box-shadow: var(--shadow); }
+  .compare-tray :focus-visible { outline-color: var(--focus-ring-light); }
   .compare-tray[hidden] { display: none; }
-  .compare-tray p { margin: 2px 0 0; color: #cddae3; font-size: 1rem; }
+  .compare-tray p { margin: 2px 0 0; font-size: 1rem; }
   .compare-tray__actions { display: flex; flex-wrap: wrap; gap: 8px; }
   .compare-tray__actions .button,
   .compare-tray__actions button { min-height: 44px; padding: 8px 14px; }
-  .compare-tray__actions button { color: var(--white); border-color: rgba(255,255,255,0.36); background: transparent; }
-  .compare-tray .button--secondary { color: var(--white); border-color: rgba(255,255,255,0.42); }
+  .compare-tray__actions .button { border-radius: 2px; }
+  .compare-tray__actions button,
+  .compare-tray .button--secondary { color: #fbfaf6; border: 1.5px solid #fbfaf6; background: transparent; }
+  .compare-tray .button--light { color: #141414; border-color: #fbfaf6; background: #fbfaf6; }
   .empty-state { margin-top: 18px; }
   .empty-state__actions { display: flex; flex-wrap: wrap; gap: 10px; }
 
