@@ -3,12 +3,16 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 import PageIntro from "../components/PageIntro.astro";
 import ContactPanel from "../components/ContactPanel.astro";
 import { emailHref, formatOfficeHours, kakaoHref, office, phoneHref } from "../lib/site";
+import officeStyles from "../styles/office.css?inline";
 
 const title = "오시는 길 | 리더스시티행복한공인중개사사무소";
 const description = `${office.address}에 위치한 리더스시티행복한공인중개사사무소의 주소와 연락처입니다.`;
+// 띄어쓰기 없는 법적 상호가 단어 가운데서 끊기지 않게 "리더스시티 / 행복한 / 공인중개사사무소" 자리에만 줄바꿈 후보(<wbr>)를 둔다. 상호가 바뀌어 맞지 않으면 한 덩어리로 둔다.
+const legalNameParts = office.legalName.match(/^(리더스시티)(행복한)(공인중개사사무소)$/)?.slice(1) ?? [office.legalName];
 ---
 
 <BaseLayout {title} {description} breadcrumbItems={[{ name: "홈", path: "/" }, { name: "오시는 길", path: "/location/" }]}>
+  <style is:inline set:html={officeStyles} />
   <PageIntro eyebrow="LOCATION" title="오시는 길" description="리더스시티5블록 단지 내 상가 주차장을 이용할 수 있습니다. 방문 전 연락해 주시면 더 편하게 상담받을 수 있습니다." />
   <section class="section">
     <div class="shell location-grid">
@@ -17,7 +21,7 @@ const description = `${office.address}에 위치한 리더스시티행복한공�
         <figcaption>리더스시티5블록 근린생활시설 105호</figcaption>
       </figure>
       <div class="location-copy">
-        <p class="eyebrow">행복한부동산</p><h2>{office.legalName}</h2>
+        <p class="eyebrow">행복한부동산</p><h2>{legalNameParts.map((part, index) => <Fragment>{index > 0 && <wbr />}{part}</Fragment>)}</h2>
         <dl class="contact-details">
           <div><dt>주소</dt><dd>{office.address}</dd></div>
           <div><dt>대표</dt><dd>{office.representative}</dd></div>
