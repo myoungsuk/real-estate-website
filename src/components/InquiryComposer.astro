@@ -98,6 +98,10 @@ const { heading = "문의 조건을 문장으로 정리해 보세요" } = Astro.
     const copy = root.querySelector<HTMLButtonElement>("[data-inquiry-copy]");
     if (!form || !selectedText || !output || !result || !status || !copy) return;
 
+    // Chromium은 읽기 전용 textarea로 포커스가 옮겨 갈 때(Tab·focus()) 화면을 스크롤하지 않아, 휴대폰에서 칸이 화면 아래·하단 상담 막대 밑에 남는다.
+    // scroll-padding(하단 막대 높이)을 지키는 scrollIntoView로 칸을 보이는 곳까지 올린다.
+    result.addEventListener("focus", () => result.scrollIntoView({ block: "nearest" }));
+
     const updateSelectedText = () => {
       const listings = readSelectedListings();
       selectedText.textContent = listings.length > 0
