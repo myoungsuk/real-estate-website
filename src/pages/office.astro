@@ -152,10 +152,6 @@ const description = "리더스시티5블록 단지 내 행복한부동산입니�
           <div><dt>주차</dt><dd>{office.parking}</dd></div>
           <div><dt>사업자등록번호</dt><dd>{office.businessNumber}</dd></div>
         </dl>
-        <aside class="office-claims" aria-label="운영 현황">
-          <span>운영 현황</span>
-          <ul>{office.publicClaims.items.map((claim) => <li><span>{claim.label}</span><strong>{claim.value}</strong></li>)}</ul>
-        </aside>
       </div>
     </div>
   </section>
