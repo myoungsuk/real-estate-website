@@ -304,6 +304,13 @@ const description = "대전 동구에서 직접 확인한 매매·전세·월세
       document.dispatchEvent(new CustomEvent("listing-selection-change"));
     };
 
+    // 떠 있는 비교 상자의 높이(폭·문구 줄바꿈·글자 크기에 따라 달라짐)를 CSS 변수로 넘겨, 상자가 열려 있을 때 아래 스크롤 여백을 그만큼 늘린다(아래 style).
+    if (compareTray && "ResizeObserver" in window) {
+      new ResizeObserver(() => {
+        document.documentElement.style.setProperty("--compare-tray-height", `${Math.ceil(compareTray.getBoundingClientRect().height)}px`);
+      }).observe(compareTray);
+    }
+
     const apply = ({ updateUrl = true, announceError = true } = {}) => {
       const { state, invalidRanges } = stateFromForm();
       if (invalidRanges.length > 0) writeStateToForm(state);
@@ -526,6 +533,9 @@ const description = "대전 동구에서 직접 확인한 매매·전세·월세
   .compare-tray__actions button,
   .compare-tray .button--secondary { color: var(--ds-paper); border: 1.5px solid var(--ds-paper); background: transparent; }
   .compare-tray .button--light { color: var(--ds-ink); border-color: var(--ds-paper); background: var(--ds-paper); }
+  /* 열린 비교 상자는 자기보다 앞(위)에 있는 필터·빠른 조건·보기 전환 위에만 떠 있으므로, 포커스가 그 안에 있을 때만 아래 스크롤 여백을 상자 위치(아래 76px) + 상자 높이 + 8px로 늘려 Tab으로 간 단추가 상자 뒤에 숨지 않게 한다.
+     뒤쪽(매물 카드·문의 문장 칸)은 상자가 떠 있지 않으므로 늘리지 않는다(키 작은 화면에서 긴 문의 문장 칸이 위 머리 밑으로 올라가지 않게). 높이는 스크립트가 잰 값, 없으면 휴대폰 최대값. */
+  :global(html:has(:focus-within ~ .compare-tray:not([hidden]))) { scroll-padding-bottom: calc(76px + var(--compare-tray-height, 220px) + 8px + env(safe-area-inset-bottom)); }
   .empty-state { margin-top: 18px; }
   .empty-state__actions { display: flex; flex-wrap: wrap; gap: 10px; }
 
@@ -534,6 +544,7 @@ const description = "대전 동구에서 직접 확인한 매매·전세·월세
     .filter-range,
     .filter-panel__actions { grid-column: span 2; }
     .compare-tray { bottom: 16px; grid-template-columns: 1fr auto; align-items: center; }
+    :global(html:has(:focus-within ~ .compare-tray:not([hidden]))) { scroll-padding-bottom: calc(16px + var(--compare-tray-height, 96px) + 8px); }
   }
 
   @media (min-width: 1024px) {
