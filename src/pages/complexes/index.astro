@@ -6,6 +6,7 @@ import ExternalContentList from "../../components/ExternalContentList.astro";
 import { getPublishedExternalContentsByIds } from "../../lib/content";
 import { comparisonComplexes, complexOverview, featuredComplexes } from "../../lib/complexes";
 import { getResponsivePublicImageSrcSet } from "../../lib/responsive-images";
+import complexStyles from "../../styles/complexes.css?inline";
 
 const title = "천동·신흥 주요 단지정보 | 리더스시티·신흥 SK뷰";
 const description = "리더스시티 4·5블록과 신흥 SK뷰의 확인된 단지 규모, 입주시기, 면적 구성, 생활환경과 현재 공개 매물을 안내합니다.";
@@ -14,6 +15,8 @@ const relatedContents = getPublishedExternalContentsByIds(complexOverview.relate
 
 <BaseLayout {title} {description} breadcrumbItems={[{ name: "홈", path: "/" }, { name: "단지 정보", path: "/complexes/" }]} inlineGlobalStyles>
   <PageIntro eyebrow={complexOverview.eyebrow} title={complexOverview.title} description={complexOverview.description} />
+
+  <style is:inline set:html={complexStyles} />
 
   <section class="section section--navy" aria-labelledby="complex-featured-heading">
     <div class="shell">

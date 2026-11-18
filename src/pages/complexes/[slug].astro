@@ -9,6 +9,7 @@ import { createComplexListingPreview, selectComplexListings } from "../../lib/co
 import { matchPublishedComplexByListingTitle, publishedComplexes } from "../../lib/complexes";
 import { naverListings, naverListingsUpdatedAt } from "../../lib/naver-listings";
 import { getResponsivePublicImageSrcSet } from "../../lib/responsive-images";
+import complexStyles from "../../styles/complexes.css?inline";
 
 export function getStaticPaths() {
   return publishedComplexes.map((complex) => ({ params: { slug: complex.slug }, props: { complex } }));
@@ -70,6 +71,8 @@ const verificationLabels = {
   inlineGlobalStyles
 >
   <PageIntro eyebrow={introEyebrow} title={complex.name} description={complex.summary} />
+
+  <style is:inline set:html={complexStyles} />
 
   <section class="section">
     <div class="shell complex-story">
