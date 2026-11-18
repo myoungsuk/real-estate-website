@@ -5,12 +5,14 @@ import ContactPanel from "../components/ContactPanel.astro";
 import ExternalContentList from "../components/ExternalContentList.astro";
 import { publishedBlogContents } from "../lib/content";
 import { office } from "../lib/site";
+import textPageStyles from "../styles/text-pages.css?inline";
 
 const title = "대전 동구 블로그 | 리더스시티행복한공인중개사사무소";
 const description = "네이버 블로그에 공개한 대전 동구와 리더스시티 지역 소식을 모아 안내합니다.";
 ---
 
 <BaseLayout {title} {description} breadcrumbItems={[{ name: "홈", path: "/" }, { name: "블로그", path: "/blog/" }]}>
+  <style is:inline set:html={textPageStyles} />
   <PageIntro eyebrow="리더스시티행복한부동산" title="대전 동구 블로그" description="대전 동구와 리더스시티의 새로운 소식과 생활 정보를 편하게 둘러보세요." />
   <section class="section" aria-labelledby="blog-content-heading">
     <div class="shell">

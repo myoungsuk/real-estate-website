@@ -1,12 +1,14 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
 import PageIntro from "../components/PageIntro.astro";
+import textPageStyles from "../styles/text-pages.css?inline";
 
 const title = "개인정보처리방침 | 대전 동구 행복한부동산";
 const description = "행복한부동산 홈페이지의 개인정보 처리와 외부 서비스 연결 안내입니다.";
 ---
 
 <BaseLayout {title} {description} breadcrumbItems={[{ name: "홈", path: "/" }, { name: "개인정보처리방침", path: "/privacy/" }]}>
+  <style is:inline set:html={textPageStyles} />
   <PageIntro eyebrow="PRIVACY" title="개인정보처리방침" description="현재 홈페이지는 상담 내용을 서버에 저장하지 않으며 회원가입·고객 데이터베이스를 운영하지 않습니다." />
   <article class="section policy"><div class="shell narrow-shell">
     <section><h2>1. 홈페이지가 직접 수집하는 정보</h2><p>상담 작성 화면에 입력한 이름, 회신 연락처, 제목과 내용은 홈페이지 서버·저장소·데이터베이스로 전송하거나 저장하지 않습니다. 회원가입과 자체 상담 게시판은 운영하지 않으며, 방문 통계와 광고 측정 도구는 아래 4·5항에서 안내합니다.</p></section>
