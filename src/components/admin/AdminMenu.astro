@@ -1,0 +1,58 @@
+---
+// 관리자 메뉴 목록. PC 왼쪽 고정 목록과 휴대폰 전체 메뉴 창이 같은 목록을 쓴다. 메뉴 자료와 지금 화면 판정은 AdminLayout이 넘긴다.
+import AdminIcon, { type AdminIconName } from "./AdminIcon.astro";
+
+interface MenuSubItem {
+  href: string;
+  label: string;
+  current?: "page";
+}
+
+interface MenuItem {
+  href: string;
+  label: string;
+  icon: AdminIconName;
+  current?: "page" | "true";
+  sub?: MenuSubItem[];
+}
+
+interface MenuGroup {
+  label: string;
+  items: MenuItem[];
+}
+
+interface Props {
+  label: string;
+  groups: MenuGroup[];
+}
+
+const { label, groups } = Astro.props;
+---
+
+<nav class="admin-menu" aria-label={label}>
+  {groups.map((group) => (
+    <div class="admin-menu__group">
+      <p class="admin-menu__label">{group.label}</p>
+      <ul>
+        {group.items.map((item) => (
+          <li>
+            <a class="admin-menu__item" href={item.href} aria-current={item.current}>
+              <span class="admin-menu__icon"><AdminIcon name={item.icon} size={20} /></span>
+              <span>{item.label}</span>
+            </a>
+            {item.sub && (
+              <ul class="admin-menu__sub">
+                {item.sub.map((sub) => (
+                  <li>
+                    <a class="admin-menu__subitem" href={sub.href} aria-current={sub.current}>{sub.label}</a>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  ))}
+  <p class="admin-menu__future">FAQ·후기 <span>준비 중</span></p>
+</nav>

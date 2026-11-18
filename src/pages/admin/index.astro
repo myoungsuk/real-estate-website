@@ -1,7 +1,5 @@
 ---
 import AdminApiStatus from "../../components/admin/AdminApiStatus.astro";
-import AdminIcon from "../../components/admin/AdminIcon.astro";
-import AdminSubnav from "../../components/admin/AdminSubnav.astro";
 import AdminLayout from "../../layouts/AdminLayout.astro";
 import { naverListings, naverListingsUpdatedAt } from "../../lib/naver-listings";
 import { buildListingReviewQueue } from "../../lib/listing-review.mjs";
@@ -25,77 +23,22 @@ const reviewQueue = buildListingReviewQueue(
   reviewPolicy,
   `${todayParts.year}-${todayParts.month}-${todayParts.day}`,
 );
-
-const subnavGroups = [
-  {
-    label: "바로가기",
-    items: [
-      { href: "/admin/", label: "운영 현황", icon: "dashboard" as const, tone: "blue" },
-      { href: "/admin/listings/", label: "네이버 매물 관리", icon: "building" as const, tone: "teal" },
-      { href: "/admin/listings/editor/", label: "매물 등록·동기화", icon: "building" as const, tone: "teal" },
-      { href: "/admin/work/", label: "업무 도구", icon: "tools" as const, tone: "rose" },
-    ],
-  },
-  {
-    label: "확인",
-    items: [
-      { href: "/admin/deployment/", label: "배포 상태", icon: "cloud" as const, tone: "navy" },
-      { href: "/admin/history/", label: "변경 이력·복원", icon: "history" as const, tone: "gold" },
-    ],
-  },
-];
 ---
 
 <AdminLayout
   title="관리자 대시보드 | 행복한부동산"
   description="행복한부동산 콘텐츠와 배포 상태를 확인하는 관리자 대시보드입니다."
 >
-  <AdminSubnav slot="aside" title="대시보드" icon="dashboard" tone="navy" searchLabel="메뉴 찾기" groups={subnavGroups}>
-    <Fragment slot="footer">
-      <p class="admin-subnav__note">
-        <AdminIcon name="shield" size={15} />
-        Access 보호 영역입니다. 저장은 별도 GitHub 연결이 필요합니다.
-      </p>
-      <a class="admin-subnav__footer-link" href="/">
-        공개 홈페이지
-        <AdminIcon name="external" size={15} />
-      </a>
-    </Fragment>
-  </AdminSubnav>
-
   <div class="admin-page-header">
     <div>
-      <p class="admin-eyebrow">ADMIN CONSOLE</p>
       <h1>운영 현황을 한눈에 확인하세요.</h1>
       <p>네이버 공개 매물과 첫 화면 문구, 블로그·유튜브, 지역·단지 설명을 한곳에서 확인합니다.</p>
     </div>
     <span class="admin-stage-badge">2단계 · 콘텐츠 관리</span>
   </div>
 
-  <section class="admin-stat-grid" aria-label="매물 현황">
-    <article class="admin-stat-card">
-      <span>전체 매물</span>
-      <strong>{counts.total.toLocaleString("ko-KR")}</strong>
-      <small>네이버 공개 데이터 기준</small>
-    </article>
-    <article class="admin-stat-card admin-stat-card--published">
-      <span>매매</span>
-      <strong>{counts.sale.toLocaleString("ko-KR")}</strong>
-      <small>네이버 거래유형 기준</small>
-    </article>
-    <article class="admin-stat-card">
-      <span>전세·월세</span>
-      <strong>{counts.lease.toLocaleString("ko-KR")}</strong>
-      <small>네이버 거래유형 기준</small>
-    </article>
-    <article class="admin-stat-card">
-      <span>최근 동기화 기준</span>
-      <strong>{naverListingsUpdatedAt}</strong>
-      <small>매물 목록 업데이트일</small>
-    </article>
-  </section>
-
-  <div class="admin-dashboard-grid">
+  <section class="admin-dash-group admin-dash-group--todo">
+    <h2 class="admin-dash-label">지금 할 일</h2>
     <section class="admin-panel admin-next-action" aria-labelledby="admin-next-action-title">
       <div class="admin-panel__heading">
         <div>
@@ -125,34 +68,63 @@ const subnavGroups = [
         <span aria-hidden="true">→</span>
       </a>
     </section>
+  </section>
 
+  <section class="admin-dash-group admin-dash-group--numbers">
+    <h2 class="admin-dash-label">운영 숫자</h2>
+    <section class="admin-stat-grid" aria-label="매물 현황">
+      <article class="admin-stat-card">
+        <span>전체 매물</span>
+        <strong>{counts.total.toLocaleString("ko-KR")}</strong>
+        <small>네이버 공개 데이터 기준</small>
+      </article>
+      <article class="admin-stat-card admin-stat-card--published">
+        <span>매매</span>
+        <strong>{counts.sale.toLocaleString("ko-KR")}</strong>
+        <small>네이버 거래유형 기준</small>
+      </article>
+      <article class="admin-stat-card">
+        <span>전세·월세</span>
+        <strong>{counts.lease.toLocaleString("ko-KR")}</strong>
+        <small>네이버 거래유형 기준</small>
+      </article>
+      <article class="admin-stat-card">
+        <span>최근 동기화 기준</span>
+        <strong>{naverListingsUpdatedAt}</strong>
+        <small>매물 목록 업데이트일</small>
+      </article>
+    </section>
+  </section>
+
+  <section class="admin-dash-group admin-dash-group--system">
+    <h2 class="admin-dash-label">시스템 상태</h2>
     <AdminApiStatus />
-  </div>
 
-  <section class="admin-panel admin-roadmap" aria-labelledby="admin-roadmap-title">
-    <div class="admin-panel__heading">
-      <div>
-        <p class="admin-eyebrow">개발 순서</p>
-        <h2 id="admin-roadmap-title">관리자 페이지 진행 단계</h2>
+    <section class="admin-panel admin-roadmap" aria-labelledby="admin-roadmap-title">
+      <div class="admin-panel__heading">
+        <div>
+          <p class="admin-eyebrow">개발 순서</p>
+          <h2 id="admin-roadmap-title">관리자 페이지 진행 단계</h2>
+        </div>
       </div>
-    </div>
-    <ol>
-      <li>
-        <span>1</span>
-        <div><strong>보호된 관리자</strong><small>대시보드·Access 연결</small></div>
-      </li>
-      <li class="is-current">
-        <span>2</span>
-        <div><strong>네이버 매물 관리</strong><small>부동산뱅크 자동 동기화·엑셀 보완·직접 등록</small></div>
-      </li>
-      <li>
-        <span>3</span>
-        <div><strong>자체 콘텐츠 편집</strong><small>문구·링크·지역 설명</small></div>
-      </li>
-      <li>
-        <span>4</span>
-        <div><strong>배포·복구</strong><small>미리보기·상태 확인·롤백</small></div>
-      </li>
-    </ol>
+      <ol>
+        <li>
+          <span>1</span>
+          <div><strong>보호된 관리자</strong><small>대시보드·Access 연결</small></div>
+        </li>
+        <li class="is-current">
+          <span>2</span>
+          <div><strong>네이버 매물 관리</strong><small>부동산뱅크 자동 동기화·엑셀 보완·직접 등록</small></div>
+        </li>
+        <li>
+          <span>3</span>
+          <div><strong>자체 콘텐츠 편집</strong><small>문구·링크·지역 설명</small></div>
+        </li>
+        <li>
+          <span>4</span>
+          <div><strong>배포·복구</strong><small>미리보기·상태 확인·롤백</small></div>
+        </li>
+      </ol>
+    </section>
   </section>
 </AdminLayout>

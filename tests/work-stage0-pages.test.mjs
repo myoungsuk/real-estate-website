@@ -9,10 +9,11 @@ const listFiles = async (directory, extension) =>
 const stage0Files = async () => [
   ...await listFiles("src/lib/work", ".mjs"),
   ...await listFiles("src/pages/admin/work", ".astro"),
-  "src/components/admin/WorkToolNav.astro",
   "src/components/admin/WorkLegalBasis.astro",
-  "src/components/admin/AdminSubnav.astro",
   "src/components/admin/AdminIcon.astro",
+  // 업무 도구 화면을 감싸는 관리자 공용 틀(메뉴·전체 메뉴 창 스크립트)도 같은 규칙을 지킨다.
+  "src/layouts/AdminLayout.astro",
+  "src/components/admin/AdminMenu.astro",
 ];
 
 test("T0-115 단계 0 모듈과 화면 스크립트는 서버 요청·브라우저 저장·주소 변경을 하지 않는다", async () => {
@@ -72,68 +73,88 @@ test("TU-15 관리자 메뉴의 대시보드 다음에 업무 도구(짧은 이�
   );
 });
 
-test("업무 도구 첫 화면은 왼쪽 목록과 세 도구 바로가기를, 세 도구 화면은 밑줄 탭을 제공한다", async () => {
-  const [index, nav, subnav, ...toolPages] = await Promise.all([
+test("업무 도구 네 화면은 관리자 공용 틀의 아래 단계 메뉴(PC 왼쪽 목록·휴대폰 작은 탭)로 오가고 화면 안에 따로 메뉴를 두지 않는다(사용자 선택 2026-11-18 C+D 17:24:07·CD1 17:55:44)", async () => {
+  const [layout, index, ...toolPages] = await Promise.all([
+    readSource("src/layouts/AdminLayout.astro"),
     readSource("src/pages/admin/work/index.astro"),
-    readSource("src/components/admin/WorkToolNav.astro"),
-    readSource("src/components/admin/AdminSubnav.astro"),
     readSource("src/pages/admin/work/fee.astro"),
     readSource("src/pages/admin/work/messages.astro"),
     readSource("src/pages/admin/work/schedule.astro"),
   ]);
   for (const href of ["/admin/work/fee/", "/admin/work/messages/", "/admin/work/schedule/"]) {
-    assert.ok(index.includes(`href: "${href}"`), href);
-    assert.ok(nav.includes(`href: "${href}"`), href);
+    assert.ok(index.includes(`href: "${href}"`), `첫 화면 바로가기 ${href}`);
+    assert.match(layout, new RegExp(`\\{ href: "${href.replaceAll("/", "\\/")}", label: "[^"]+" \\},`, "u"), `아래 단계 메뉴 ${href}`);
   }
-  assert.match(index, /<AdminSubnav slot="aside"/u, "첫 화면은 왼쪽 보조 목록을 쓴다");
-  assert.match(index, /\{ href: "\/admin\/work\/", label: "업무 도구 처음"/u, "왼쪽 목록 맨 위는 첫 화면");
-  assert.match(subnav, /aria-current=\{pathname === item\.href \? "page" : undefined\}/u);
-  assert.match(nav, /aria-current=\{isCurrent\(tool\.href\) \? "page" : undefined\}/u);
-  for (const page of toolPages) {
-    assert.match(page, /<WorkToolNav \/>/u);
-    assert.doesNotMatch(page, /slot="aside"/u, "문구·계산 화면은 왼쪽 목록 없이 밑줄 탭만 쓴다(운영자 승인 2026-11-16 15:05:43)");
+  assert.match(layout, /"\/admin\/work\/": \[\r?\n\s*\{ href: "\/admin\/work\/", label: "업무 도구 처음" \},/u, "아래 단계 맨 위는 첫 화면");
+  for (const page of [index, ...toolPages]) {
+    // 11-16 결정(문구·계산 화면은 밑줄 탭만, 위 메뉴 줄 + 왼쪽 목록)은 11-18 C+D·CD1 선택이 대신한다.
+    assert.doesNotMatch(page, /slot="aside"|<WorkToolNav|<AdminSubnav/u, "화면 안 메뉴는 공용 틀 하나로 합침");
   }
+  assert.doesNotMatch(layout, /<slot name="aside"/u, "화면별 왼쪽 목록 자리는 없앰");
+  assert.doesNotMatch(layout, /type="search"/u, "왼쪽 목록 찾기 칸은 없앰(사용자 결정 2026-11-18 19:47:29)");
 });
 
-test("왼쪽 목록 찾기 칸은 메뉴 이름만 거르고 저장·전송하지 않는다", async () => {
-  const subnav = await readSource("src/components/admin/AdminSubnav.astro");
-  assert.doesNotMatch(subnav, /<form\b/u);
-  assert.match(subnav, /<input\b[^>]*type="search"[^>]*autocomplete="off"[^>]*data-admin-subnav-search/u);
-  assert.match(subnav, /window\.addEventListener\("pageshow", \(\) => \{\s*\n\s*search\.value = "";/u, "뒤로 가기 복원 때 찾기 칸을 비운다");
+test("관리자 메뉴는 모든 메뉴를 묶음에 한 번씩 넣고, 지금 화면(page)과 지금 구역(true)을 색만이 아니라 막대·굵기로 구분한다", async () => {
+  const [styles, layout, menu] = await Promise.all([
+    readSource("src/styles/admin.css"),
+    readSource("src/layouts/AdminLayout.astro"),
+    readSource("src/components/admin/AdminMenu.astro"),
+  ]);
+  const navigationHrefs = [...layout.matchAll(/\{ href: "(\/admin\/[^"]*)", label: "[^"]+", shortLabel: "[^"]+" \}/gu)].map((match) => match[1]);
+  const groupHrefs = [...layout.matchAll(/hrefs: \[([^\]]+)\]/gu)].flatMap((match) => [...match[1].matchAll(/"([^"]+)"/gu)].map((href) => href[1]));
+  assert.equal(navigationHrefs.length, 8);
+  assert.deepEqual([...groupHrefs].sort(), [...navigationHrefs].sort(), "메뉴 묶음에 빠지거나 두 번 들어간 메뉴가 없음");
+  assert.match(layout, /const currentState = \(href: string\): "page" \| "true" \| undefined => \(currentPath === href \? "page" : isCurrentPath\(href\) \? "true" : undefined\);/u);
+  assert.match(layout, /<a href=\{item\.href\} aria-current=\{currentState\(item\.href\)\}>/u, "아래 탭은 지금 화면·지금 구역");
+  assert.match(layout, /<a href=\{item\.href\} aria-current=\{currentPath === item\.href \? "page" : undefined\}>/u, "작은 탭은 지금 화면만");
+  assert.match(menu, /aria-current=\{item\.current\}/u);
+  assert.match(menu, /aria-current=\{sub\.current\}/u);
+  assert.match(styles, /\.admin-menu \[aria-current="page"\] \{[^}]*box-shadow: inset 4px 0 0 var\(--ds-navy\);[^}]*font-weight: 800;/u, "왼쪽 목록·전체 메뉴: 왼쪽 막대 4px + 굵기");
+  assert.match(styles, /\.admin-menu__item\[aria-current="true"\] \{[^}]*font-weight: 800;/u, "지금 구역: 굵기");
+  assert.match(styles, /\.admin-subtabs a\[aria-current="page"\] \{[^}]*font-weight: 800;[^}]*box-shadow: inset 0 -3px 0/u, "작은 탭: 아래 막대 3px");
+  assert.match(styles, /\.admin-tabbar a\[aria-current\] \{[^}]*font-weight: 800;[^}]*box-shadow: inset 0 3px 0/u, "아래 탭: 위 막대 3px");
 });
 
-test("관리자 메뉴의 지금 화면 표시는 색만이 아니라 굵기·밑줄·막대·기호 반전으로도 구분한다", async () => {
+test("휴대폰 아래 탭은 화면 아래에 고정되고 본문 끝·키보드 포커스가 탭 뒤로 숨지 않게 띄우며, 위 제목 줄은 고정하지 않는다(사용자 선택 2026-11-18 C+D 17:24:07·CD1 17:55:44)", async () => {
   const [styles, layout] = await Promise.all([readSource("src/styles/admin.css"), readSource("src/layouts/AdminLayout.astro")]);
-  assert.match(styles, /\.admin-topnav__item\[aria-current="page"\] \{[^}]*font-weight: 900;/u);
-  assert.match(styles, /\.admin-topnav__item\[aria-current="page"\] \.admin-topnav__icon \{ color: var\(--admin-blue\); background: #fff; \}/u);
-  assert.match(styles, /\.work-tool-nav a\[aria-current="page"\] \{[^}]*font-weight: 900;[^}]*box-shadow: inset 0 -2px 0/u);
-  assert.match(styles, /\.admin-subnav__nav a\[aria-current="page"\] \{[^}]*font-weight: 900;/u);
-  assert.match(styles, /\.admin-subnav__nav a\[aria-current="page"\] \{ background: #e6e9ed; box-shadow: inset 3px 0 0 var\(--admin-blue\); \}/u);
-  assert.match(layout, /aria-current=\{isCurrentPath\(item\.href\) \? "page" : undefined\}/u);
-  assert.match(layout, /if \(document\.activeElement === button\)/u, "넘기기 단추가 숨겨질 때 포커스를 옮긴다");
-});
-
-test("위 메뉴 줄은 모든 폭에서 고정되고, 고정 머리글 뒤로 숨는 키보드 포커스를 보정한다(사용자 선택 2026-11-16 16:59:58)", async () => {
-  const [styles, layout] = await Promise.all([readSource("src/styles/admin.css"), readSource("src/layouts/AdminLayout.astro")]);
-  // 좁은 화면: 브랜드 줄(56px)이 올라가고 메뉴 줄만 남음. 넓은 화면: 한 줄 전체 고정
-  assert.match(styles, /\.admin-topnav \{ position: sticky; top: calc\(-1 \* var\(--admin-topnav-hide\)\);/u);
-  assert.match(styles, /--admin-topnav-hide: 56px; --admin-sticky-height: 53px;/u);
-  assert.match(styles, /:root \{ --admin-sticky-height: var\(--admin-topnav-height\); \}\r?\n\s*\.admin-topnav \{ top: 0;/u);
-  assert.doesNotMatch(styles, /^html \{[^}]*scroll-padding-top/mu, "문서 전체 여백은 머리글 안 Tab 때 문서를 튀게 하므로 쓰지 않음(회귀 1회차 S2)");
-  assert.match(styles, /#admin-main \{ scroll-margin-top: var\(--admin-sticky-height\); \}/u, "건너뛰기 링크 대상은 머리글 아래로");
-  assert.match(styles, /\[data-manual-form\], \[data-history-preview\] \{ scroll-margin-top: var\(--admin-sticky-height\); \}/u, "스크립트로 옮기는 매물 편집 폼·변경 이력 미리보기는 머리글 아래로(회귀 2회차 S3)");
-  assert.match(styles, /\.admin-topnav:has\(:focus-visible\) \{ top: 0; \}/u, "좁은 화면 숨은 브랜드 줄에 키보드 포커스가 가면 보이게(회귀 1회차 S1)");
-  assert.match(styles, /\.admin-shell__aside \{ position: sticky; top: var\(--admin-topnav-height\);/u, "왼쪽 목록은 고정 머리글 아래");
-  // 보정 스크립트: 키보드 포커스만, 머리글 안·건너뛰기·열린 확인 창 제외, 마우스 클릭 직후 제외, 횟수 제한
-  assert.match(layout, /document\.addEventListener\("focusin"/u);
-  assert.match(layout, /!\(target\.matches\(":focus-visible"\) \|\| target\.matches\(textEntry\)\)/u, "키보드로 들어가도 :focus-visible이 아닌 날짜 칸 등 글 입력류도 보정(회귀 2회차 S4)");
-  assert.match(layout, /const textEntry =\s*"textarea, select, input:not\(\[type=button\]\)/u);
-  assert.match(layout, /:not\(\[type=checkbox\]\):not\(\[type=radio\]\)/u, "체크·라디오는 :focus-visible 기준 그대로");
-  assert.match(layout, /performance\.now\(\) - pointerAt < 600/u);
-  assert.match(layout, /header\.contains\(target\) \|\| target\.classList\.contains\("skip-link"\) \|\| target\.closest\("dialog\[open\]"\)/u);
-  assert.match(layout, /attempts >= 3/u);
-  assert.match(layout, /target\.closest\("label"\) \?\? target/u, "숨긴 라디오는 감싼 라벨 기준");
+  assert.match(styles, /\.admin-tabbar \{ position: fixed; inset: auto 0 0;[^}]*padding-bottom: env\(safe-area-inset-bottom\);/u);
+  assert.match(styles, /\.admin-tabbar a,\r?\n\.admin-tabbar button \{[^}]*min-height: 56px;/u, "아래 탭 56px(CD1)");
+  // 탭 높이 56px + 8px. 본문 끝은 80px 띄우고, 첫 화면·사무소 편집의 아래 고정 저장 줄도 탭 위(56px + 10px)에 둔다.
+  assert.match(
+    styles,
+    /@media \(max-width: 979px\) \{[^@]*html \{ scroll-padding-bottom: calc\(64px \+ env\(safe-area-inset-bottom\)\); \}[^@]*\.admin-main \{ padding-bottom: calc\(80px \+ env\(safe-area-inset-bottom\)\); \}[^@]*\.admin-editor__actions \{ bottom: calc\(66px \+ env\(safe-area-inset-bottom\)\); \}/u,
+  );
+  assert.match(styles, /@media \(min-width: 980px\) \{[^@]*\.admin-top,\r?\n\s*\.admin-subtabs,\r?\n\s*\.admin-tabbar \{ display: none; \}/u, "PC는 왼쪽 목록만");
+  assert.doesNotMatch(styles, /\.admin-top \{[^}]*position: (?:sticky|fixed)/u, "위 제목 줄은 고정하지 않음");
+  assert.doesNotMatch(styles, /^html \{[^}]*scroll-padding-top/mu, "문서 전체 위 여백은 쓰지 않음(회귀 1회차 S2)");
+  assert.match(styles, /:root \{ --admin-sticky-height: 0px;/u, "위에 고정되는 줄이 없어 0");
+  assert.match(styles, /#admin-main \{ scroll-margin-top: var\(--admin-sticky-height\); \}/u, "건너뛰기 링크 대상");
+  assert.match(styles, /\[data-manual-form\], \[data-history-preview\] \{ scroll-margin-top: var\(--admin-sticky-height\); \}/u, "스크립트로 옮기는 매물 편집 폼·변경 이력 미리보기(회귀 2회차 S3)");
+  assert.match(styles, /\.admin-subtabs a:focus-visible,\r?\n\.admin-tabbar :focus-visible \{ outline-offset: -3px; \}/u, "잘리는 포커스 테두리는 안쪽에");
+  assert.doesNotMatch(layout, /window\.scrollBy|attempts >= 3|const header =/u, "고정 머리글 포커스 보정 스크립트는 없앰(위에 고정되는 줄 없음)");
+  assert.match(layout, /<dialog class="admin-sheet" aria-labelledby="admin-sheet-title" data-admin-menu-sheet>/u);
+  assert.match(layout, /<button type="button" aria-haspopup="dialog" data-admin-menu-open>/u);
+  assert.match(layout, /openButton\.addEventListener\("click", \(\) => sheet\.showModal\(\)\);/u);
+  assert.match(layout, /window\.addEventListener\("pagehide", \(\) => sheet\.close\(\)\);/u, "뒤로 가기로 돌아왔을 때 전체 메뉴 창이 열린 채 남지 않게");
+  assert.match(layout, /sheet\.addEventListener\("click", \(event\) => \{\r?\n\s*if \(event\.target !== sheet\) return;[^}]*event\.clientX < box\.left[^}]*\) sheet\.close\(\);/u, "창 바깥 바탕을 누르면 닫고 창 안 여백은 그대로");
   assert.doesNotMatch(layout, /admin-write-ready|AdminApiError|fetch\(/u, "세션·쓰기 흐름은 건드리지 않음");
+});
+
+test("관리자 화면도 한글 낱말 가운데서 줄을 바꾸지 않고, 매물 표는 짧은 열을 한 줄로 두어 표만 가로로 밀린다(보드 46번)", async () => {
+  const styles = await readSource("src/styles/admin.css");
+  assert.match(styles, /^\.admin-body \{ word-break: keep-all; overflow-wrap: anywhere; \}/mu, "공개 화면(global.css)과 같은 값을 관리자 전체에");
+  assert.match(styles, /^\.admin-body :where\(td, th\) \{ overflow-wrap: break-word; \}/mu, "표 칸은 열이 낱말보다 좁아지지 않게");
+  assert.match(styles, /@media \(min-width: 641px\) \{\r?\n\s*\.admin-table th,\r?\n\s*\.admin-table td:not\(\[data-label="매물명"\]\) \{ white-space: nowrap; \}\r?\n\s*\.admin-table th:first-child \{ width: 100%; \}/u, "짧은 열은 한 줄, 매물명 열이 남는 폭을 씀");
+  assert.match(styles, /^\.admin-table-wrap \{ overflow-x: auto;/mu, "넓어진 표는 표만 가로로 밀림");
+});
+
+test("관리자 화면의 공개 색 이름(--ds-*)은 공개 화면(global.css)과 같은 이름·값이다", async () => {
+  const [globalStyles, adminStyles] = await Promise.all([readSource("src/styles/global.css"), readSource("src/styles/admin.css")]);
+  const tokens = (block) => Object.fromEntries([...block.matchAll(/(--ds-[a-z0-9-]+):\s*([^;]+);/gu)].map(([, name, value]) => [name, value.trim().toLowerCase()]));
+  const publicBlock = globalStyles.match(/:where\(body:not\(\.admin-body\)\) \{([^}]*)\}/u)?.[1] ?? "";
+  const adminBlock = adminStyles.match(/^\.admin-body \{([^}]*--ds-[^}]*)\}/mu)?.[1] ?? "";
+  assert.equal(Object.keys(tokens(publicBlock)).length, 8, "공개 화면 색 이름 8개");
+  assert.deepEqual(tokens(adminBlock), tokens(publicBlock), "한쪽만 바꾸면 관리자·공개 화면 색이 어긋남");
 });
 
 test("관리자 탭 미리 그리기는 업무 도구 4화면만 prerender, 나머지 관리자는 prefetch하고 저장·인증·내려받기 링크와 공개 화면은 뺀다", async () => {
@@ -200,19 +221,19 @@ test("안내 문자 화면은 받는 사람 없는 sms 주소와 복사 실패 �
   assert.match(page, /buildSmsHref\(message\.text, link\.dataset\.messageSms === "ampersand" \? "ampersand" : "query"\)/u);
   assert.match(page, /자동 복사가 막혔습니다/u);
   assert.match(page, /손님 이름·전화번호·주민등록번호·계좌 비밀번호는 넣지 마세요/u);
-  // 복사가 막혀 미리보기로 갈 때 위쪽이 고정 머리글에 가리지 않게 직접 옮긴다(보드 35번). 선택·안내 문구는 그대로
+  // 복사가 막혀 미리보기로 갈 때 위쪽이 화면 위로 잘리지 않게 직접 옮긴다(보드 35번). 선택·안내 문구는 그대로
   assert.match(page, /preview\.focus\(\{ preventScroll: true \}\);\r?\n\s*preview\.select\(\);/u);
-  assert.match(page, /if \(previewBox\.top < \(Number\.parseFloat\(getComputedStyle\(preview\)\.scrollMarginTop\) \|\| 0\)\) preview\.scrollIntoView\(\{ block: "start", behavior \}\);/u, "위쪽이 머리글 여백보다 위면 머리글 아래로");
+  assert.match(page, /if \(previewBox\.top < \(Number\.parseFloat\(getComputedStyle\(preview\)\.scrollMarginTop\) \|\| 0\)\) preview\.scrollIntoView\(\{ block: "start", behavior \}\);/u, "위쪽이 위 여백보다 위면 여백 아래로");
   assert.match(page, /else if \(previewBox\.bottom > window\.innerHeight\) preview\.scrollIntoView\(\{ block: "nearest", behavior \}\);/u, "화면 아래로 벗어나면 보이게");
   const styles = await readSource("src/styles/admin.css");
-  assert.match(styles, /\[data-message-preview\] \{ scroll-margin-top: calc\(var\(--admin-sticky-height\) \+ 8px\); \}/u, "보정 스크립트와 같은 머리글 아래 8px");
+  assert.match(styles, /\[data-message-preview\] \{ scroll-margin-top: calc\(var\(--admin-sticky-height\) \+ 8px\); \}/u, "위 고정 줄 아래 8px");
 });
 
-test("휴대폰 폭 가로로 미는 줄은 키보드로 간 링크만 그 줄 안에서 가로로 밀고 문서는 세로로 움직이지 않는다(보드 34번)", async () => {
+test("휴대폰 폭 가로로 미는 줄(업무 도구·네이버 매물 작은 탭)은 키보드로 간 링크만 그 줄 안에서 가로로 밀고 문서는 세로로 움직이지 않는다(보드 34번)", async () => {
   const layout = await readSource("src/layouts/AdminLayout.astro");
-  assert.match(layout, /const strips = "\.admin-subnav__nav, \.work-tool-nav";/u);
+  assert.match(layout, /const strips = "\.admin-subtabs";/u);
   assert.match(layout, /!target\.matches\(":focus-visible"\) \|\| performance\.now\(\) - stripPointerAt < 600\) return;/u, "마우스·손가락으로 누를 때는 밀지 않음");
   assert.match(layout, /strip\.scrollBy\(\{ left: delta, behavior: stripMotion\.matches \? "auto" : "smooth" \}\)/u, "줄의 가로 위치만 바꿈");
-  const stripBlock = layout.slice(layout.indexOf("const strips ="), layout.indexOf("const header ="));
+  const stripBlock = layout.slice(layout.indexOf("const strips ="), layout.indexOf("</script>", layout.indexOf("const strips =")));
   assert.doesNotMatch(stripBlock, /scrollIntoView|window\.scroll/u, "문서 세로 스크롤을 건드리지 않음");
 });

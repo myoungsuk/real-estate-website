@@ -1,7 +1,6 @@
 ---
 import AdminIcon from "../../../components/admin/AdminIcon.astro";
 import WorkLegalBasis from "../../../components/admin/WorkLegalBasis.astro";
-import WorkToolNav from "../../../components/admin/WorkToolNav.astro";
 import legalRules from "../../../data/work/legal-rules.json";
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 import { ICS_ALARM_OPTIONS, MAX_ALARMS_PER_EVENT } from "../../../lib/work/ics.mjs";
@@ -23,8 +22,6 @@ const ruleIds = [...legalRules.deadlineRules.map((rule) => rule.id), legalRules.
       <h1>계약 일정 계산</h1>
       <span class="admin-stage-badge">저장하지 않음</span>
     </header>
-
-    <WorkToolNav />
 
     <p class="work-doc__lead">기한은 계약일을 첫날로 세어 더 이른 날짜로 보여 줍니다. 주말이어도 미루지 않으며, 공휴일은 직접 확인하세요.</p>
 

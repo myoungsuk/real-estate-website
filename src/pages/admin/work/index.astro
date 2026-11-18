@@ -1,6 +1,5 @@
 ---
 import AdminIcon from "../../../components/admin/AdminIcon.astro";
-import AdminSubnav from "../../../components/admin/AdminSubnav.astro";
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 
 const tools = [
@@ -27,15 +26,6 @@ const tools = [
   },
 ] as const;
 
-const subnavGroups = [
-  {
-    items: [
-      { href: "/admin/work/", label: "업무 도구 처음", icon: "home" as const, tone: "blue" },
-      ...tools.map((tool) => ({ href: tool.href, label: tool.title, icon: tool.icon, tone: tool.tone })),
-    ],
-  },
-];
-
 const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
 ---
 
@@ -43,15 +33,6 @@ const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
   title="업무 도구 | 행복한부동산 관리자"
   description="중개보수 계산, 안내 문자, 계약 일정 계산을 모은 관리자 업무 도구입니다."
 >
-  <AdminSubnav slot="aside" title="업무 도구" icon="tools" tone="rose" searchLabel="도구 이름 찾기" groups={subnavGroups}>
-    <Fragment slot="footer">
-      <p class="admin-subnav__note">
-        <AdminIcon name="shield" size={15} />
-        입력값은 저장하거나 보내지 않습니다.
-      </p>
-    </Fragment>
-  </AdminSubnav>
-
   <div class="work-ui work-home">
     <header class="work-home__header">
       <div>
