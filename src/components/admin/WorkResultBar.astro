@@ -1,0 +1,92 @@
+---
+// 휴대폰·태블릿(979px 이하)에서 화면 아래 탭 바로 위에 붙는 결과 막대(사용자 선택 2026-11-18 CD1, F6-2).
+// 결과 칸의 값(중개보수 합계·안내 문자 글자 수)을 옮겨 보여 주고, 복사는 결과 칸의 원래 복사 단추를 누른다.
+// 계산·문장·복사 코드는 바꾸지 않으며, 입력값을 저장하거나 서버로 보내지 않는다.
+// 글자는 결과 칸에 이미 있어 화면 읽기 도구에는 숨기고 단추만 읽힌다. 복사 알림은 결과 칸의 원래 알림(role="status")이 읽는다.
+interface Props {
+  tool: "fee" | "message";
+}
+
+const { tool } = Astro.props;
+const copyLabel = tool === "fee" ? "결과 복사" : "문장 복사";
+---
+
+<div class="work-result-bar" data-work-result-bar={tool} hidden>
+  <div class="work-result-bar__text" aria-hidden="true">
+    <span data-work-result-bar-label></span>
+    <strong data-work-result-bar-value></strong>
+  </div>
+  <button class="work-result-bar__copy" type="button" data-work-result-bar-copy>{copyLabel}</button>
+</div>
+
+<script>
+  type ResultTool = {
+    root: string;
+    copy: string;
+    status: string;
+    ready: (root: HTMLElement) => boolean;
+    label: (root: HTMLElement) => string;
+    value: (root: HTMLElement) => string;
+  };
+
+  const resultTools: Record<string, ResultTool> = {
+    fee: {
+      root: "[data-fee-tool]",
+      copy: "[data-fee-copy]",
+      status: "[data-fee-copy-status]",
+      ready: (root) => {
+        const result = root.querySelector<HTMLElement>("[data-fee-result]");
+        return Boolean(result && !result.hidden && root.querySelector('[data-fee-out="total"]')?.textContent?.trim());
+      },
+      // 좁은 막대용 짧은 이름표. 결과 칸 이름표("보수(…)"·"합계(부가세 포함, …)")와 같은 말을 쓴다.
+      label: (root) => (/부가세 포함/u.test(root.querySelector('[data-fee-out="total-label"]')?.textContent ?? "") ? "합계·부가세 포함" : "보수"),
+      value: (root) => root.querySelector('[data-fee-out="total"]')?.textContent?.trim() ?? "",
+    },
+    message: {
+      root: "[data-message-tool]",
+      copy: "[data-message-copy]",
+      status: "[data-message-status]",
+      ready: (root) => Boolean(root.querySelector<HTMLTextAreaElement>("[data-message-preview]")?.value.trim()),
+      label: () => "보낼 문장",
+      // 막대에는 글자 수만("233자"). 바이트 설명은 결과 칸에 그대로 있다.
+      value: (root) => root.querySelector("[data-message-count]")?.textContent?.split("·")[0].trim() ?? "",
+    },
+  };
+
+  const bar = document.querySelector<HTMLElement>("[data-work-result-bar]");
+  const resultTool = bar ? resultTools[bar.dataset.workResultBar ?? ""] : undefined;
+  const toolRoot = resultTool ? document.querySelector<HTMLElement>(resultTool.root) : null;
+  const copy = resultTool && toolRoot ? toolRoot.querySelector<HTMLButtonElement>(resultTool.copy) : null;
+  const status = resultTool && toolRoot ? toolRoot.querySelector<HTMLElement>(resultTool.status) : null;
+  const label = bar?.querySelector<HTMLElement>("[data-work-result-bar-label]");
+  const value = bar?.querySelector<HTMLElement>("[data-work-result-bar-value]");
+  const button = bar?.querySelector<HTMLButtonElement>("[data-work-result-bar-copy]");
+
+  if (bar && resultTool && toolRoot && copy && status && label && value && button) {
+    const buttonText = button.textContent ?? "";
+    let copiedTimer = 0;
+    const sync = () => {
+      const ready = resultTool.ready(toolRoot);
+      bar.hidden = !ready;
+      if (!ready) return;
+      label.textContent = resultTool.label(toolRoot);
+      value.textContent = resultTool.value(toolRoot);
+    };
+    // 복사 성공(원래 알림 문구가 성공으로 바뀜)이면 막대 단추 글자를 2초 동안 "복사함"으로 바꾼다.
+    // 연달아 누르면 앞 타이머를 지우고 2초를 다시 센다. 실패하거나 알림이 지워지면(입력을 고침) 바로 원래 글자로 돌린다.
+    const showCopied = () => {
+      window.clearTimeout(copiedTimer);
+      const copied = status.dataset.state === "success" && Boolean(status.textContent?.trim());
+      button.textContent = copied ? "복사함" : buttonText;
+      if (copied) copiedTimer = window.setTimeout(() => { button.textContent = buttonText; }, 2000);
+    };
+    // 원래 복사 단추를 누른다. 알림 문구·자동 복사가 막혔을 때의 직접 복사 칸은 그 단추가 그대로 처리한다.
+    button.addEventListener("click", () => copy.click());
+    new MutationObserver(sync).observe(toolRoot, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["hidden"] });
+    new MutationObserver(showCopied).observe(status, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["data-state"] });
+    // 안내 문자 미리보기는 value로 바뀌어 DOM 변화가 없으므로 입력 뒤에도 맞춘다(화면 스크립트가 먼저 갱신하도록 다음 차례에).
+    toolRoot.addEventListener("input", () => window.setTimeout(sync, 0));
+    toolRoot.addEventListener("change", () => window.setTimeout(sync, 0));
+    sync();
+  }
+</script>

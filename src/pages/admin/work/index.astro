@@ -42,19 +42,28 @@ const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
         <h1>업무 도구</h1>
         <p class="work-home__lead">상담과 계약 준비에 쓰는 계산·문구 도구입니다.</p>
       </div>
-      <ul class="work-home__quick" aria-label="자주 쓰는 도구">
+    </header>
+
+    {/* 지금 쓸 수 있는 도구 3개를 맨 위에 크게(사용자 선택 2026-11-18 CD1, F6-2). 보이는 순서와 키보드 순서가 같게 마크업 순서로 둔다. */}
+    <section class="work-home__tools" aria-labelledby="work-tools-title">
+      <h2 id="work-tools-title" class="sr-only">도구 바로가기</h2>
+      <ul>
         {tools.map((tool) => (
           <li>
-            <a class="work-home__quick-link" href={tool.href}>
-              <span class="work-round-icon" data-tone={tool.tone}>
-                <AdminIcon name={tool.icon} size={15} />
+            <a class="work-tool-row" href={tool.href}>
+              <span class="work-round-icon work-round-icon--large" data-tone={tool.tone}>
+                <AdminIcon name={tool.icon} size={20} />
               </span>
-              {tool.title}
+              <span class="work-tool-row__text">
+                <strong>{tool.title}</strong>
+                <span>{tool.description}</span>
+              </span>
+              <AdminIcon name="chevron-right" size={18} />
             </a>
           </li>
         ))}
       </ul>
-    </header>
+    </section>
 
     <p class="work-home__notice">
       <AdminIcon name="shield" size={18} />
@@ -125,26 +134,6 @@ const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
         </section>
       </div>
     </div>
-
-    <section class="work-home__tools" aria-labelledby="work-tools-title">
-      <h2 id="work-tools-title">도구 바로가기</h2>
-      <ul>
-        {tools.map((tool) => (
-          <li>
-            <a class="work-tool-row" href={tool.href}>
-              <span class="work-round-icon work-round-icon--large" data-tone={tool.tone}>
-                <AdminIcon name={tool.icon} size={20} />
-              </span>
-              <span class="work-tool-row__text">
-                <strong>{tool.title}</strong>
-                <span>{tool.description}</span>
-              </span>
-              <AdminIcon name="chevron-right" size={18} />
-            </a>
-          </li>
-        ))}
-      </ul>
-    </section>
   </div>
 
   <script>

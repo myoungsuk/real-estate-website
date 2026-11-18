@@ -1,5 +1,6 @@
 ---
 import AdminIcon from "../../../components/admin/AdminIcon.astro";
+import WorkResultBar from "../../../components/admin/WorkResultBar.astro";
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 import { MESSAGE_DEAL_TYPES, MESSAGE_TEMPLATES, MESSAGE_VARIANTS } from "../../../lib/work/message-templates.mjs";
 ---
@@ -145,18 +146,19 @@ import { MESSAGE_DEAL_TYPES, MESSAGE_TEMPLATES, MESSAGE_VARIANTS } from "../../.
         <label class="work-output__label" for="message-preview">보낼 문장</label>
         <textarea id="message-preview" class="work-preview" rows="16" readonly data-message-preview></textarea>
         <small class="work-output__count" aria-live="polite" data-message-count></small>
+        {/* 복사·문자 앱 단추는 미리보기 바로 아래(결과 칸 안)에 둔다(사용자 선택 2026-11-18 CD1, F6-2). */}
+        <div class="work-doc__action">
+          <button class="work-primary-button" type="button" data-message-copy>문장 복사</button>
+          <div class="work-doc__secondary">
+            <a class="work-secondary-button" href="sms:" data-message-sms="query">문자 앱 열기</a>
+            <a class="work-secondary-button" href="sms:" data-message-sms="ampersand">문자 앱 열기(iPhone에서 본문이 비면)</a>
+          </div>
+          <p class="admin-form-status" role="status" aria-live="polite" data-message-status></p>
+        </div>
         <p class="work-help">문자 앱은 받는 사람이 빈 채로 열립니다. 길이 제한은 통신사마다 달라 막지 않습니다.</p>
       </section>
-
-      <div class="work-doc__action">
-        <button class="work-primary-button" type="button" data-message-copy>문장 복사</button>
-        <div class="work-doc__secondary">
-          <a class="work-secondary-button" href="sms:" data-message-sms="query">문자 앱 열기</a>
-          <a class="work-secondary-button" href="sms:" data-message-sms="ampersand">문자 앱 열기(iPhone에서 본문이 비면)</a>
-        </div>
-        <p class="admin-form-status" role="status" aria-live="polite" data-message-status></p>
-      </div>
     </div>
+    <WorkResultBar tool="message" />
   </div>
 
   <script>
@@ -249,6 +251,9 @@ import { MESSAGE_DEAL_TYPES, MESSAGE_TEMPLATES, MESSAGE_VARIANTS } from "../../.
 
         root.addEventListener("input", update);
         root.addEventListener("change", update);
+        // Chromium은 읽기 전용 textarea로 포커스가 옮겨 갈 때(Tab·focus()) 화면을 스크롤하지 않아, 휴대폰에서 미리보기 위쪽이 화면 위로 잘린 채 남는다.
+        // scroll-margin(위)과 scroll-padding(아래 탭·결과 막대 높이)을 지키는 scrollIntoView로 칸을 보이는 곳까지 옮긴다(PR #55와 같은 방법).
+        preview.addEventListener("focus", () => preview.scrollIntoView({ block: "nearest" }));
         copyButton.addEventListener("click", async () => {
           try {
             await navigator.clipboard.writeText(preview.value);
