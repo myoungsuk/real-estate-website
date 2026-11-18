@@ -542,7 +542,7 @@
 .work-tool-row__text span { color: var(--admin-muted); font-size: 1rem; line-height: 1.5; }
 .work-round-icon--large { width: 40px; height: 40px; }
 
-/* 문구·계산 도구 화면(제목 옆 원형 기호, 왼쪽 "항목 이름 | 입력" 줄, 오른쪽 결과 칸, 아래 큰 단추). */
+/* 문구·계산 도구 화면(제목 옆 원형 기호, 왼쪽 "항목 이름 | 입력" 줄, 오른쪽 결과 칸과 그 안의 복사 단추, 979px 이하 결과 막대). */
 .work-doc { max-width: 1040px; margin-inline: auto; }
 .work-doc__header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 14px; }
 .work-round-icon--title { width: 44px; height: 44px; }
