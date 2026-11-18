@@ -24,7 +24,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
-          fetch-depth: 2
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -47,17 +47,12 @@ jobs:
             --output "${RUNNER_TEMP}/indexnow-urls.txt"
           url_count="$(awk 'NF { count += 1 } END { print count + 0 }' "${RUNNER_TEMP}/indexnow-urls.txt")"
           echo "url_count=${url_count}" >> "${GITHUB_OUTPUT}"
-      - name: Calculate expected search marker
+      # 뒤 커밋(매일 매물 동기화 등)이 먼저 배포돼 search 값이 달라져도, 운영이 이 커밋을 포함하면 알린다.
+      - name: Wait for Production commit marker
         if: steps.plan.outputs.url_count != '0'
-        id: marker
-        shell: bash
-        run: echo "expected=$(node scripts/deployment-marker.mjs print search)" >> "${GITHUB_OUTPUT}"
-      - name: Wait for Production search marker
-        if: steps.plan.outputs.url_count != '0'
-        run: >-
-          node scripts/verify-production-deployment.mjs
-          --scope search
-          --expected "${{ steps.marker.outputs.expected }}"
+        env:
+          INDEXED_COMMIT: ${{ github.event.workflow_run.head_sha }}
+        run: node scripts/verify-production-commit.mjs --commit "$INDEXED_COMMIT"
       - name: Verify published IndexNow key
         if: steps.plan.outputs.url_count != '0'
         run: node scripts/indexnow.mjs verify-key

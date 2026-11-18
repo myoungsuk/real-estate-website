@@ -74,7 +74,7 @@ test("운영 반영 확인은 master push마다 읽기 권한으로 source commi
   assert.match(workflow, /node scripts\/verify-production-commit\.mjs --commit "\$PUSHED_COMMIT"/u);
 });
 
-test("IndexNow 알림은 성공한 master CI와 Production search marker 뒤에만 실행된다", async () => {
+test("IndexNow 알림은 성공한 master CI와 그 커밋을 포함한 Production 배포 뒤에만 실행된다", async () => {
   const workflow = await readWorkflow("notify-indexnow.yml");
   assertPinnedOfficialActions(workflow);
   assert.match(workflow, /workflow_run:[\s\S]*workflows: \[CI\][\s\S]*types: \[completed\]/u);
@@ -84,9 +84,13 @@ test("IndexNow 알림은 성공한 master CI와 Production search marker 뒤에�
   assert.match(workflow, /workflow_run\.event == 'push'/u);
   assert.match(workflow, /workflow_run\.head_branch == 'master'/u);
 
-  const markerIndex = workflow.indexOf("- name: Wait for Production search marker");
+  const markerIndex = workflow.indexOf("- name: Wait for Production commit marker");
   const keyIndex = workflow.indexOf("- name: Verify published IndexNow key");
   const notifyIndex = workflow.indexOf("- name: Notify Naver IndexNow");
   assert.ok(markerIndex > 0 && markerIndex < keyIndex && keyIndex < notifyIndex);
-  assert.match(workflow, /--scope search/u);
+  // 후속 커밋 판정(git merge-base)에 전체 이력이 필요하다.
+  assert.match(workflow, /fetch-depth: 0/u);
+  assert.match(workflow, /INDEXED_COMMIT: \$\{\{ github\.event\.workflow_run\.head_sha \}\}/u);
+  assert.match(workflow, /node scripts\/verify-production-commit\.mjs --commit "\$INDEXED_COMMIT"/u);
+  assert.doesNotMatch(workflow, /--scope search/u);
 });

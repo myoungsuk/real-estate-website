@@ -8,7 +8,7 @@
 - Google Search Console Domain 속성의 DNS 소유 확인과 `sitemap-index.xml` 제출을 완료했습니다. sitemap은 성공 상태이며 홈·사무소·단지·매물·블로그 등 일부 핵심 URL의 Google 색인을 확인했습니다.
 - 네이버 서치어드바이저 사이트 소유 확인, `sitemap-index.xml` 제출, 홈·매물 목록·단지 목록 수집 요청을 완료했습니다. 사이트 간단 진단의 접속·robots·로봇 메타·제목·설명·Open Graph 항목은 정상입니다.
 - 네이버 일반 검색의 실제 색인은 아직 확인되지 않았습니다. 제출 완료와 실제 색인은 별개이므로 며칠 간격으로 다시 확인합니다.
-- 향후 `master`의 공개 URL 변경은 성공한 CI와 Cloudflare Production `search` marker 확인 뒤 네이버 IndexNow로 자동 알립니다. 2026-08-28 첫 운영 실행은 커밋 `c625c76`의 관련 URL 14개를 골라 Production marker `5dad9d34…`와 공개키를 확인한 뒤 네이버 `HTTP 200` 응답으로 완료했습니다.
+- 향후 `master`의 공개 URL 변경은 성공한 CI와, 운영 배포가 그 커밋을 포함했다는 확인(Cloudflare Production marker의 `source.commit`이 같거나 후속 커밋) 뒤 네이버 IndexNow로 자동 알립니다. 2026-08-28 첫 운영 실행은 커밋 `c625c76`의 관련 URL 14개를 골라 Production marker `5dad9d34…`와 공개키를 확인한 뒤 네이버 `HTTP 200` 응답으로 완료했습니다.
 
 ## 사전 확인
 
@@ -45,7 +45,8 @@ Cloudflare에서 DNS를 관리한다면 Domain 속성의 DNS TXT 인증을 우�
 - 공개키: `public/4e63ed9293cf0b859764be32c769f7b26336ebb71489cd6d9ff3f58a811e27a3.txt`
 - URL 계획·검증·제출: `scripts/indexnow.mjs`
 - 자동 실행: `.github/workflows/notify-indexnow.yml`
-- 실행 조건: `master` push의 CI 성공 → 변경 URL 계획 → Cloudflare Production `search` marker 일치 → 공개키 확인 → 네이버 IndexNow 제출
+- 실행 조건: `master` push의 CI 성공 → 변경 URL 계획 → Cloudflare Production marker의 `source.commit`이 그 커밋이거나 후속 커밋 → 공개키 확인 → 네이버 IndexNow 제출
+- 2026-11-19 변경: 전에는 `search` scope 값이 같아야 통과했습니다. 매일 매물 동기화처럼 뒤 커밋이 먼저 배포되면 앞 커밋 알림이 30분 뒤 실패하고 그 몫의 주소가 제출되지 않았습니다(2026-11-19 실행 44335176806, 주소 15개). 지금은 운영이 그 커밋을 포함하면 제출합니다.
 - 권한: GitHub `contents: read`만 사용하며 Secret이나 쓰기 토큰을 사용하지 않음
 - 공개키가 사이트 루트의 기본 위치에 있으므로 제출 본문에는 선택 항목인 `keyLocation`을 넣지 않습니다. 공개키 확인 단계는 실제 루트 URL을 직접 검사합니다.
 
