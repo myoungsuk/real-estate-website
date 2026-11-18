@@ -13,12 +13,15 @@ const {
 ---
 
 <section class="section section--soft">
-  <div class="shell contact-panel">
-    <div><p class="eyebrow">상담 안내</p><h2>{title}</h2><p>{description}</p></div>
-    <div class="contact-panel__actions">
-      <a class="button button--primary" href={phoneHref}>{office.mobile}</a>
-      <a class="button button--secondary" href={smsHref}>문자로 문의하기</a>
-      <a class="button button--kakao" href={kakaoHref} target="_blank" rel="noopener noreferrer">카카오톡 상담</a>
+  <div class="shell">
+    <div class="contact-box">
+      <h2>{title}</h2>
+      <p>{description}</p>
+      <div class="contact-box__row">
+        <a class="contact-box__call" href={phoneHref}>전화 {office.mobile}</a>
+        <a href={smsHref}>문자로 문의하기</a>
+        <a class="contact-box__kakao" href={kakaoHref} target="_blank" rel="noopener noreferrer">카카오톡 상담</a>
+      </div>
     </div>
   </div>
 </section>

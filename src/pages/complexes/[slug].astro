@@ -17,6 +17,9 @@ export function getStaticPaths() {
 const { complex } = Astro.props;
 const title = complex.seo.title;
 const description = complex.seo.description;
+const introEyebrow = complex.eyebrow.split(/\s+/u).includes(complex.mark)
+  ? `${complex.areaName} · ${complex.eyebrow}`
+  : `${complex.areaName} · ${complex.eyebrow} ${complex.mark}`;
 const relatedContents = getPublishedExternalContentsByIds(complex.relatedContentIds);
 const relatedListings = selectComplexListings(naverListings, complex.slug, matchPublishedComplexByListingTitle);
 const relatedListingPreview = createComplexListingPreview(relatedListings);
@@ -66,7 +69,7 @@ const verificationLabels = {
   ]}
   inlineGlobalStyles
 >
-  <PageIntro eyebrow={`${complex.areaName} · ${complex.eyebrow} ${complex.mark}`} title={complex.name} description={complex.summary} />
+  <PageIntro eyebrow={introEyebrow} title={complex.name} description={complex.summary} />
 
   <section class="section">
     <div class="shell complex-story">
@@ -99,15 +102,14 @@ const verificationLabels = {
   </section>
 
   <section class="section section--soft" aria-labelledby="complex-listing-summary-heading">
-    <div class="shell contact-panel">
-      <div>
-        <p class="eyebrow">현재 공개 매물</p>
+    <div class="shell">
+      <div class="contact-box">
         <h2 id="complex-listing-summary-heading">현재 등록된 {complex.name} 매물 {relatedListings.length}건</h2>
         <p>매물 목록 업데이트 {naverListingsUpdatedAt.replaceAll("-", ".")} 기준입니다. 가격·면적·층·방향을 바로 비교해 보세요.</p>
-      </div>
-      <div class="contact-panel__actions">
-        <a class="button button--primary" href={`/properties/?complex=${complex.slug}`}>{complex.name} 현재 매물 보기</a>
-        <a class="button button--secondary" href="#contact">{complex.name} 조건 상담</a>
+        <div class="contact-box__row contact-box__row--two">
+          <a class="contact-box__call" href={`/properties/?complex=${complex.slug}`}>{complex.name} 현재 매물 보기</a>
+          <a href="#contact">{complex.name} 조건 상담</a>
+        </div>
       </div>
     </div>
   </section>
