@@ -1,0 +1,146 @@
+/* 단지 목록·상세(F3, DESIGN.md "상가 유리창 매물판"). 이 두 화면에만 인라인으로 들어가 다른 화면·관리자 CSS는 그대로다. 여러 화면이 같이 쓰는 클래스를 이 화면에서만 홈 방향으로 맞춘다. */
+
+/* 칸 제목: 머리표 대신 태그, 남색 제목, 설명은 회색이 아닌 본문색 */
+.eyebrow,
+.content-section-heading > p {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  margin: 0 0 10px;
+  padding: 2px 10px;
+  border-radius: 2px;
+  color: var(--ds-navy);
+  background: var(--ds-paper-2);
+  font-size: 0.875rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* 바탕이 종이색이 아닌 구역에서는 태그를 종이색으로 */
+.section--soft .eyebrow,
+.section--navy .content-section-heading > p {
+  background: var(--ds-paper);
+}
+
+.content-section-heading {
+  justify-items: start;
+  text-align: left;
+}
+
+.content-section-heading > p::before {
+  content: none;
+}
+
+.section-heading h2,
+.content-section-heading h2,
+.complex-story__copy h2,
+.complex-faq-layout h2,
+.complex-sources h2 {
+  color: var(--ds-navy);
+  font-size: clamp(1.625rem, 7.5vw, 2.25rem);
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.035em;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.complex-faq-layout h2 {
+  margin-bottom: 12px;
+}
+
+.section-heading > p {
+  color: var(--ds-ink);
+}
+
+/* 남색 띠 구역(단지 사진 카드·핵심 포인트) → 종이 구역. 남색은 상담 상자에만 */
+.section--navy {
+  color: var(--ds-ink);
+  background: var(--ds-paper-2);
+}
+
+.section--navy :focus-visible {
+  outline-color: var(--focus-ring);
+}
+
+/* 생활권 안내 카드 */
+.info-card,
+.info-card--featured {
+  padding: 20px;
+  border: 1px solid var(--ds-edge);
+  border-radius: 2px;
+  color: var(--ds-ink);
+  background: var(--ds-paper);
+}
+
+.info-card--featured {
+  border: 1.5px solid var(--ds-navy);
+}
+
+.info-card > span,
+.info-card--featured > span {
+  color: var(--ds-navy);
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 800;
+}
+
+.info-card h3,
+.info-card--featured h3 {
+  margin: 10px 0 8px;
+  color: var(--ds-navy);
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.info-card p,
+.info-card--featured p {
+  color: var(--ds-ink);
+}
+
+/* 본문 단추(머리 "전화 상담" 단추는 main 밖이라 그대로 장미색) */
+main .button {
+  min-height: 52px;
+  border-radius: 2px;
+  box-shadow: none;
+}
+
+main .button--primary,
+main .button--primary:hover {
+  color: var(--ds-paper);
+  border-color: var(--ds-ink);
+  background: var(--ds-ink);
+}
+
+main .button--secondary,
+main .button--secondary:hover {
+  color: var(--ds-navy);
+  border: 1.5px solid var(--ds-navy);
+  background: var(--ds-paper);
+}
+
+/* 매물 0건 칸 */
+.empty-state {
+  border-color: var(--ds-edge);
+  border-radius: 2px;
+  background: var(--ds-paper);
+}
+
+.empty-state__number {
+  color: var(--ds-edge);
+}
+
+.empty-state h3 {
+  color: var(--ds-navy);
+}
+
+.empty-state p {
+  color: var(--ds-ink);
+}
+
+/* 단지 사진 카드 제목: "4블/록"처럼 단어 가운데서 끊기지 않게 띄어쓰기 자리에서 줄을 바꾼다 */
+.complex-index-card h2 {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
