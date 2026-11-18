@@ -543,13 +543,15 @@ const description = "대전 동구에서 직접 확인한 매매·전세·월세
     .filter-panel__fields { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: end; }
     .filter-range,
     .filter-panel__actions { grid-column: span 2; }
-    .compare-tray { bottom: 16px; grid-template-columns: 1fr auto; align-items: center; }
-    :global(html:has(:focus-within ~ .compare-tray:not([hidden]))) { scroll-padding-bottom: calc(16px + var(--compare-tray-height, 96px) + 8px); }
+    .compare-tray { grid-template-columns: 1fr auto; align-items: center; }
   }
 
   @media (min-width: 1024px) {
     .filter-panel__fields { grid-template-columns: repeat(4, minmax(0, 1fr)); }
     .filter-range { grid-column: span 2; }
     .filter-panel__actions { grid-column: span 2; align-self: end; }
+    /* 하단 연락 막대는 1024px 미만에서만 보이므로(global.css), 그 위 76px에 띄우던 상자를 막대가 사라지는 1024px부터 아래 16px로 내린다(768 ~ 1023px에서 막대 뒤로 숨지 않게). */
+    .compare-tray { bottom: 16px; }
+    :global(html:has(:focus-within ~ .compare-tray:not([hidden]))) { scroll-padding-bottom: calc(16px + var(--compare-tray-height, 96px) + 8px); }
   }
 </style>
