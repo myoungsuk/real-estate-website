@@ -71,7 +71,7 @@
 .admin-deployment-guide__grid { display: grid; gap: 12px; }
 .admin-deployment-guide article { padding: 17px; border: 1px solid #e1e5e8; border-radius: 13px; background: #f8f9fa; }
 .admin-deployment-guide strong { color: #17344f; font-size: 0.88rem; }
-.admin-deployment-guide p { margin: 7px 0 0; color: #687781; font-size: 0.8rem; }
+.admin-deployment-guide article p { margin: 7px 0 0; color: #687781; font-size: 0.8rem; }
 
 .admin-history-panel { display: grid; gap: 18px; margin-bottom: 18px; }
 .admin-history-panel > .admin-panel__heading,
