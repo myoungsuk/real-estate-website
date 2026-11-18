@@ -10,6 +10,7 @@ const stage0Files = async () => [
   ...await listFiles("src/lib/work", ".mjs"),
   ...await listFiles("src/pages/admin/work", ".astro"),
   "src/components/admin/WorkLegalBasis.astro",
+  "src/components/admin/WorkResultBar.astro",
   "src/components/admin/AdminIcon.astro",
   // 업무 도구 화면을 감싸는 관리자 공용 틀(메뉴·전체 메뉴 창 스크립트)도 같은 규칙을 지킨다.
   "src/layouts/AdminLayout.astro",
@@ -140,12 +141,49 @@ test("휴대폰 아래 탭은 화면 아래에 고정되고 본문 끝·키보�
   assert.doesNotMatch(layout, /admin-write-ready|AdminApiError|fetch\(/u, "세션·쓰기 흐름은 건드리지 않음");
 });
 
-test("관리자 화면도 한글 낱말 가운데서 줄을 바꾸지 않고, 매물 표는 짧은 열을 한 줄로 두어 표만 가로로 밀린다(보드 46번)", async () => {
+test("관리자 화면도 한글 낱말 가운데서 줄을 바꾸지 않고, 매물 현황은 1220px까지 세 줄 카드, 1221px 이상은 짧은 열을 한 줄로 둔 표다(보드 46번·F6-2)", async () => {
   const styles = await readSource("src/styles/admin.css");
   assert.match(styles, /^\.admin-body \{ word-break: keep-all; overflow-wrap: anywhere; \}/mu, "공개 화면(global.css)과 같은 값을 관리자 전체에");
   assert.match(styles, /^\.admin-body :where\(td, th\) \{ overflow-wrap: break-word; \}/mu, "표 칸은 열이 낱말보다 좁아지지 않게");
-  assert.match(styles, /@media \(min-width: 641px\) \{\r?\n\s*\.admin-table th,\r?\n\s*\.admin-table td:not\(\[data-label="매물명"\]\) \{ white-space: nowrap; \}\r?\n\s*\.admin-table th:first-child \{ width: 100%; \}/u, "짧은 열은 한 줄, 매물명 열이 남는 폭을 씀");
+  assert.match(styles, /@media \(min-width: 1221px\) \{\r?\n\s*\.admin-table th,\r?\n\s*\.admin-table td:not\(\[data-label="매물명"\]\) \{ white-space: nowrap; \}\r?\n\s*\.admin-table th:first-child \{ width: 100%; \}/u, "1221px 이상 표: 짧은 열은 한 줄, 매물명 열이 남는 폭을 씀");
   assert.match(styles, /^\.admin-table-wrap \{ overflow-x: auto;/mu, "넓어진 표는 표만 가로로 밀림");
+  // 641 ~ 1220px에서 표가 가로로 밀리던 것을 없앤다(F6-2). 표를 카드로 바꾸는 규칙과 세 줄 배치가 같은 1220px 경계를 쓴다.
+  assert.match(styles, /@media \(max-width: 1220px\) \{\r?\n\s*\.admin-table-wrap \{ overflow: visible; \}/u, "1220px까지 표 감싼 칸은 가로로 밀리지 않음");
+  assert.match(styles, /@media \(max-width: 1220px\) \{\r?\n\s*\.admin-table \{ max-width: 720px; \}\r?\n\s*\.admin-table tr \{[^}]*"name name name price"[^}]*"type trade date date"[^}]*"check check check action";/u, "1220px까지 세 줄 카드, 넓은 화면은 카드 목록 폭 720px까지");
+  assert.doesNotMatch(styles, /@media \(m(?:in|ax)-width: 64[01]px\) \{[^@]*\.admin-table/u, "표 규칙에 옛 640px 경계가 남지 않음");
+  assert.doesNotMatch(styles, /@media \(m(?:in|ax)-width: 11(?:79|80)px\) \{[^@]*\.admin-table/u, "1180 ~ 1220px에서도 표가 밀려 올린 옛 1179/1180px 경계가 남지 않음(사용자 결정 2026-11-18)");
+});
+
+test("업무 도구 결과 막대는 979px 이하에서 아래 탭 바로 위에 붙고, 막대가 보이면 본문 끝·포커스 여백을 두 막대 높이만큼 늘리며, 복사는 원래 단추를 누른다(사용자 선택 2026-11-18 CD1·F6-2)", async () => {
+  const [styles, bar, fee, messages] = await Promise.all([
+    readSource("src/styles/admin.css"),
+    readSource("src/components/admin/WorkResultBar.astro"),
+    readSource("src/pages/admin/work/fee.astro"),
+    readSource("src/pages/admin/work/messages.astro"),
+  ]);
+  assert.match(styles, /^\.work-result-bar \{ display: none; \}/mu, "PC는 막대를 쓰지 않음");
+  assert.match(styles, /@media \(max-width: 979px\) \{\r?\n\s*\.work-result-bar \{[^}]*position: fixed;[^}]*inset: auto 0 calc\(56px \+ env\(safe-area-inset-bottom\)\);[^}]*z-index: 99;[^}]*min-height: 56px;/u, "아래 탭(56px, z-index 100) 바로 위");
+  assert.match(styles, /\.work-result-bar\[hidden\] \{ display: none; \}/u);
+  // 아래 탭 56px + 결과 막대 56px + 8px. 본문 끝은 136px 띄운다(막대가 없을 때는 64px·80px 그대로).
+  assert.match(styles, /html:has\(\.work-result-bar:not\(\[hidden\]\)\) \{ scroll-padding-bottom: calc\(120px \+ env\(safe-area-inset-bottom\)\); \}/u);
+  assert.match(styles, /html:has\(\.work-result-bar:not\(\[hidden\]\)\) \.admin-main \{ padding-bottom: calc\(136px \+ env\(safe-area-inset-bottom\)\); \}/u);
+  assert.match(bar, /<div class="work-result-bar__text" aria-hidden="true">/u, "결과 칸에 이미 있는 글자는 화면 읽기 도구에 다시 읽히지 않게");
+  assert.match(bar, /button\.addEventListener\("click", \(\) => copy\.click\(\)\);/u, "복사는 결과 칸의 원래 단추가 처리");
+  assert.match(bar, /window\.clearTimeout\(copiedTimer\);/u, "연달아 눌러도 \"복사함\" 타이머가 꼬이지 않게");
+  assert.doesNotMatch(bar, /navigator\.clipboard/u, "막대는 직접 복사하지 않음");
+  assert.match(styles, /\.work-ui \.admin-form-status:empty \{ position: absolute; width: 1px; height: 1px;[^}]*clip: rect\(0 0 0 0\);/u, "빈 알림 칸은 화면에서만 숨겨 첫 복사 알림도 화면 읽기 도구가 읽음");
+  assert.doesNotMatch(styles, /\.admin-form-status:empty \{ display: none; \}/u);
+  assert.match(styles, /\.work-ui \.work-check input \{ scroll-margin-block: 32px; \}/u, "여러 줄 체크 칸 이름표·포커스 테두리가 아래 탭에 가리지 않게(360px)");
+  assert.match(fee, /<WorkResultBar tool="fee" \/>/u);
+  assert.match(messages, /<WorkResultBar tool="message" \/>/u);
+  // 결과 칸 안 순서: 합계 → 내역 → 복사 단추(마크업 순서가 보이는 순서·키보드 순서)
+  const feeOutput = fee.match(/<section class="work-output"[\s\S]*?<\/section>/u)?.[0] ?? "";
+  assert.ok(feeOutput.indexOf('class="work-total"') < feeOutput.indexOf('class="work-facts"'), "합계가 내역보다 먼저");
+  assert.ok(feeOutput.indexOf('class="work-facts"') < feeOutput.indexOf("data-fee-copy "), "복사 단추는 결과 칸 안, 내역 뒤");
+  const messageOutput = messages.match(/<section class="work-output"[\s\S]*?<\/section>/u)?.[0] ?? "";
+  assert.ok(messageOutput.indexOf("data-message-count") < messageOutput.indexOf("data-message-copy"), "복사 단추는 미리보기 글자 수 바로 뒤");
+  assert.match(styles, /^\.work-output \.work-doc__action \.work-secondary-button \{ flex-basis: 320px; \}/mu, "좁은 결과 칸(넓은 화면 포함)에서 문자 앱 단추 두 개는 세로로 쌓여 한 줄씩(사용자 결정 2026-11-18)");
+  assert.match(messages, /preview\.addEventListener\("focus", \(\) => preview\.scrollIntoView\(\{ block: "nearest" \}\)\);/u, "Tab으로 간 미리보기가 화면 위로 잘리지 않게(날개-2 TU-23)");
 });
 
 test("관리자 화면의 공개 색 이름(--ds-*)은 공개 화면(global.css)과 같은 이름·값이다", async () => {

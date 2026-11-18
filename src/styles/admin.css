@@ -332,6 +332,11 @@
 
 @media (max-width: 640px) {
   .admin-panel__heading--list { display: grid; }
+}
+
+/* 매물 현황 표는 1220px까지 카드로 바꾼다(F6-2: 641 ~ 1220px에서 표가 가로로 밀리던 것을 없앰). 1221px 이상은 표 그대로.
+   처음 경계 1179px로는 1180 ~ 1220px에서 표가 1 ~ 41px 밀려 경계를 1220px로 올렸다(사용자 결정 2026-11-18). */
+@media (max-width: 1220px) {
   .admin-table-wrap { overflow: visible; }
   .admin-table,
   .admin-table tbody,
@@ -505,10 +510,6 @@
 .work-home__meta { margin: 0 0 6px; color: var(--admin-muted); font-size: 1rem; font-weight: 750; }
 .work-home h1 { margin: 0; color: var(--admin-ink); font-size: clamp(1.8rem, 3.6vw, 2.3rem); font-weight: 900; letter-spacing: -0.035em; }
 .work-home__lead { margin: 6px 0 0; color: var(--admin-muted); font-size: 1rem; }
-.work-home__quick { display: flex; flex-wrap: wrap; gap: 2px; margin: 0; padding: 0; list-style: none; }
-.work-home__quick-link { display: inline-flex; align-items: center; gap: 7px; min-height: 44px; padding: 0 13px 0 4px; border: 5px solid transparent; border-radius: 999px; color: var(--admin-text); background: #fff; background-clip: padding-box; box-shadow: inset 0 0 0 1px #dfe3e8; font-size: 0.94rem; font-weight: 800; }
-.work-home__quick-link:hover { background-color: #f2f4f6; }
-.work-home__quick-link .work-round-icon { width: 24px; height: 24px; }
 .work-home__notice { display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 12px 14px; border-radius: 12px; color: #6b4a12; background: #fff7e6; font-size: 1rem; font-weight: 750; line-height: 1.55; }
 .work-home__notice .admin-icon { flex: 0 0 auto; margin-top: 2px; }
 .work-home__grid { display: grid; gap: 12px; }
@@ -596,7 +597,8 @@
 .work-ui .work-total span { color: #33507f; font-size: 0.94rem; }
 .work-ui .work-total strong { color: var(--admin-blue-dark); }
 .work-ui .work-notes { margin-top: 12px; color: var(--admin-muted); }
-.work-ui .admin-form-status:empty { display: none; }
+/* 빈 알림 칸은 자리를 차지하지 않게 화면에서만 숨기고 접근성 트리에는 남긴다. display: none이면 글이 들어가며 칸이 새로 나타나 화면 읽기 도구가 첫 알림("복사했습니다")을 놓칠 수 있다(F6-2). */
+.work-ui .admin-form-status:empty { position: absolute; width: 1px; height: 1px; margin: 0; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .work-doc__action { grid-area: action; display: grid; gap: 8px; padding: 14px 0 6px; }
 .work-primary-button { width: 100%; min-height: 52px; padding: 12px 18px; border: 0; border-radius: 10px; color: #fff; background: var(--admin-blue); font-size: 1.05rem; font-weight: 900; cursor: pointer; }
 .work-primary-button:hover:not(:disabled) { background: var(--admin-blue-dark); }
@@ -633,10 +635,9 @@
 }
 
 /* 관리 화면 모양(사용자 선택 2026-11-18 CD1): 공개 화면 새 디자인과 같은 색 이름(--ds-*)·모서리 2px·회색 대신 본문색·기기 기본 고딕.
-   업무 도구 본문(.work-ui)의 색·모서리는 다음 단계(F6-2)에서 바꾸므로 색 변수는 관리 화면에서만 바꾼다.
-   :has()를 모르는 오래된 브라우저에서는 관리 화면 바탕·색이 예전 값으로 보인다. */
-.admin-body:not(:has(.work-ui)) { background: var(--ds-paper); }
-.admin-body:not(:has(.work-ui)) .admin-main {
+   F6-2부터 업무 도구 4화면(.work-ui)도 같은 바탕·색 변수를 쓴다(업무 도구 모양은 아래 "업무 도구 모양" 덩어리). */
+.admin-body { background: var(--ds-paper); }
+.admin-body .admin-main {
   --admin-blue: var(--ds-navy);
   --admin-blue-dark: var(--ds-navy);
   --admin-ink: var(--ds-ink);
@@ -773,10 +774,11 @@
 .admin-table__title { color: var(--ds-navy); font-weight: 800; }
 .admin-table a.admin-table__title { text-decoration-color: var(--ds-field-edge); }
 .admin-table td small { color: var(--ds-ink-soft); font-size: 0.875rem; }
-/* 641px 이상: 머리줄과 짧은 열(유형·거래·가격·등록일·마지막 확인·관리)은 줄을 바꾸지 않고, 매물명 열이 남는 폭을 모두 쓴다(첫 열 width 100%).
+/* 1221px 이상(표): 머리줄과 짧은 열(유형·거래·가격·등록일·마지막 확인·관리)은 줄을 바꾸지 않고, 매물명 열이 남는 폭을 모두 쓴다(첫 열 width 100%).
    관리 열은 직접 등록 매물의 "선택·확인 완료"가 한 줄에 들어가는 폭(8.5rem)을 지킨다.
-   표가 칸보다 넓어지면 표만 가로로 밀린다(.admin-table-wrap overflow-x: auto, 줄 안 링크로 키보드 이동). 화면 전체는 넘치지 않는다. */
-@media (min-width: 641px) {
+   표가 칸보다 넓어지면 표만 가로로 밀린다(.admin-table-wrap overflow-x: auto, 줄 안 링크로 키보드 이동). 화면 전체는 넘치지 않는다.
+   1220px 이하는 아래 "매물 현황(카드)" 규칙으로 한 매물을 세 줄 카드로 보인다. */
+@media (min-width: 1221px) {
   .admin-table th,
   .admin-table td:not([data-label="매물명"]) { white-space: nowrap; }
   .admin-table th:first-child { width: 100%; }
@@ -792,10 +794,7 @@
 .admin-review-select input { inline-size: 20px; block-size: 20px; accent-color: var(--ds-navy); }
 .admin-review-select:has(input:disabled) { color: var(--ds-ink-soft); }
 
-/* 업무 도구 본문은 모양을 그대로 두되, 14px보다 작은 법령 근거 글자만 키운다 */
-.work-legal-basis { font-size: 0.875rem; }
-
-@media (max-width: 640px) {
+@media (max-width: 1220px) {
   .admin-table tr { border-top-color: var(--ds-edge); }
   .admin-table td::before { color: var(--ds-ink-soft); font-size: 0.875rem; }
   .admin-review-source { justify-self: end; margin-right: 0; }
@@ -817,7 +816,7 @@
 .admin-dash-group--system { display: grid; gap: 12px; }
 .admin-dash-group--system .admin-roadmap { margin: 0; }
 
-/* 매물 현황(휴대폰): 한 매물을 세 줄 카드로(매물명·가격 / 유형·거래·등록일 / 마지막 확인·관리) */
+/* 매물 현황(휴대폰): 확인 요약·찾기 칸을 좁은 화면에 맞춘다. 한 매물을 세 줄 카드로(매물명·가격 / 유형·거래·등록일 / 마지막 확인·관리) 보이는 규칙은 아래 1220px 덩어리. */
 @media (max-width: 640px) {
   .admin-listing-review-summary { gap: 0; border: 1px solid var(--ds-edge); border-radius: 2px; background: var(--ds-paper); }
   .admin-listing-review-summary > div { display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 2px 12px; padding: 12px 14px; border: 0; border-radius: 0; }
@@ -828,7 +827,12 @@
   .admin-field--search { grid-column: 1 / -1; }
   .admin-filter-reset { align-self: end; }
   .admin-field select { padding-inline: 10px 6px; }
+}
 
+/* 매물 현황(카드, 1220px 이하): 휴대폰과 같은 세 줄 카드. 641px 이상에서도 카드 모양은 같게 두고,
+   넓은 화면에서 매물명과 가격이 멀어지지 않게 카드 목록 폭만 720px까지로 줄인다(읽는 순서는 최근 등록순 그대로 한 줄씩). */
+@media (max-width: 1220px) {
+  .admin-table { max-width: 720px; }
   .admin-table tr {
     display: grid;
     grid-template-columns: auto auto minmax(0, 1fr) auto;
@@ -864,4 +868,114 @@
   .admin-dash-group--system .admin-roadmap ol { grid-template-columns: 1fr; gap: 0; }
   .admin-dash-group--system .admin-roadmap li { grid-template-columns: 38px 1fr; gap: 14px; min-height: 64px; }
   .admin-dash-group--system .admin-roadmap li:not(:last-child)::after { top: 34px; right: auto; bottom: 0; left: 16px; width: 1px; height: auto; }
+}
+
+/* 업무 도구 모양(사용자 선택 2026-11-18 CD1, F6-2): 관리 화면과 같은 색 이름(--ds-*)·모서리 2px.
+   둥근 색 그림 → 남색 그림, 알약 고르기 → 같은 폭 칸(고른 칸은 남색 바탕 + ✓), 파란 단추 → 검정 단추, 파란 합계 상자 → 남색 테두리 종이.
+   처음 화면은 지금 쓸 수 있는 도구 3개를 맨 위에 크게 두고(마크업 순서도 같음), 아직 빈 달력·할 일은 아래로 둔다.
+   계산 결과는 합계 → 내역 → 복사 단추 순서로 결과 칸 안에 둔다(마크업 순서). 포커스 테두리는 지금 값(--focus-ring)을 그대로 쓴다. */
+.work-round-icon { border-radius: 2px; color: var(--ds-navy); background: var(--ds-paper-2); }
+.work-round-icon--title { color: var(--ds-paper); background: var(--ds-navy); }
+
+.work-home h1,
+.work-doc__header h1 { color: var(--ds-navy); font-weight: 800; }
+.work-home__meta { color: var(--ds-ink-soft); font-size: 1rem; }
+.work-home__lead,
+.work-doc__lead { color: var(--ds-ink); }
+.work-home__notice { border-left: 3px solid var(--ds-navy); border-radius: 0; color: var(--ds-ink); background: var(--ds-paper-2); font-weight: 700; }
+
+.work-card { border-color: var(--ds-edge); border-radius: 2px; background: var(--ds-paper); }
+.work-card__head h2 { color: var(--ds-navy); font-weight: 800; }
+.work-card__empty { color: var(--ds-ink); }
+.work-card__link { display: inline-flex; align-items: center; min-height: 44px; color: var(--ds-navy); text-decoration: underline; text-underline-offset: 5px; }
+.work-calendar__nav button { border-radius: 2px; color: var(--ds-navy); }
+.work-calendar__nav button:hover { background: var(--ds-paper-2); }
+.work-calendar__table th { color: var(--ds-ink-soft); }
+.work-calendar__day { width: 34px; height: 34px; border-radius: 2px; }
+/* 오늘: 남색 칸 + 굵기(글자로도 "오늘 일정"에 날짜가 나옴) */
+.work-calendar__day.is-today { color: var(--ds-paper); background: var(--ds-navy); }
+
+.work-home__tools ul { gap: 10px; }
+.work-tool-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 14px; min-height: 88px; padding: 16px; border: 1.5px solid var(--ds-navy); border-radius: 2px; color: var(--ds-ink); background: var(--ds-paper); }
+.work-tool-row:hover { background: var(--ds-paper-2); }
+.work-tool-row .work-round-icon--large { width: 48px; height: 48px; color: var(--ds-paper); background: var(--ds-navy); }
+.work-tool-row__text strong { color: var(--ds-navy); font-size: 1.25rem; font-weight: 800; }
+.work-tool-row__text span { color: var(--ds-ink); }
+
+.work-form__section h3,
+.work-output h2 { color: var(--ds-navy); font-weight: 800; }
+.work-row__label { color: var(--ds-ink); }
+.work-row__control small { color: var(--ds-ink-soft); }
+.work-ui .work-row input[type="text"],
+.work-ui .work-row input[type="date"],
+.work-ui .work-row select,
+.work-ui .work-row textarea { border-color: var(--ds-field-edge); border-radius: 2px; background-color: var(--ds-paper); }
+.work-ui .work-row input[data-fee-amount] { min-height: 56px; font-size: 1.25rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.work-ui .work-amount-hint { color: var(--ds-navy); font-size: 1rem; font-weight: 800; }
+.work-ui .work-segment { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; padding: 0; gap: 6px; border-radius: 0; background: transparent; }
+.work-ui .work-segment .work-choice { justify-content: center; min-height: 48px; border: 1.5px solid var(--ds-field-edge); border-radius: 2px; color: var(--ds-ink); background: var(--ds-paper); text-align: center; }
+.work-ui .work-segment .work-choice:has(input:checked) { border-color: var(--ds-navy); color: var(--ds-paper); background: var(--ds-navy); box-shadow: none; font-weight: 800; }
+.work-ui .work-check { border-color: var(--ds-field-edge); border-radius: 2px; color: var(--ds-ink); background: var(--ds-paper); }
+.work-ui .work-check input { accent-color: var(--ds-navy); }
+/* Tab으로 체크 칸에 가면 브라우저는 체크 상자만 화면 안(아래 탭 여백 64px 위)에 맞추는데, 포커스 테두리는 여러 줄 이름표 전체에 그려져
+   상자보다 최대 21px(+ 테두리 5px) 더 나온다. 상자 위아래 여백을 32px 더 두어 360px에서도 이름표·테두리가 아래 탭에 가리지 않게 한다(F6-2). */
+.work-ui .work-check input { scroll-margin-block: 32px; }
+.work-ui .work-help { border-left: 3px solid var(--ds-edge); border-radius: 0; color: var(--ds-ink); background: var(--ds-paper-2); }
+.work-doc__notice { border-left: 4px solid var(--ds-navy); border-radius: 2px; color: var(--ds-ink); background: var(--ds-paper-2); font-weight: 700; }
+.work-doc__notice .admin-icon { color: var(--ds-navy); }
+
+.work-output { border-color: var(--ds-edge); }
+.work-ui .work-facts { border-top-color: var(--ds-edge); }
+.work-ui .work-facts dt { color: var(--ds-ink-soft); }
+.work-ui .work-facts dd { font-variant-numeric: tabular-nums; }
+.work-ui .work-total { margin: 0 0 14px; border: 2px solid var(--ds-navy); border-radius: 2px; background: var(--ds-paper); }
+.work-ui .work-total span { color: var(--ds-ink); font-size: 1rem; }
+.work-ui .work-total strong { color: var(--ds-navy); font-size: clamp(2rem, 6vw, 2.5rem); font-weight: 900; font-variant-numeric: tabular-nums; }
+.work-output .work-doc__action { margin: 0 0 16px; }
+.work-output .work-doc__action .work-secondary-button { min-height: 48px; }
+/* 안내 문자 결과 칸의 "문자 앱 열기" 두 단추: 긴 이름("문자 앱 열기(iPhone에서 본문이 비면)")이 한 줄에 들어가는 폭(약 310px)보다 좁게 나란히 서면
+   글자가 2 ~ 3줄로 꺾이므로, 결과 칸이 648px(320 + 간격 8 + 320)보다 좁으면 세로로 쌓는다(사용자 결정 2026-11-18, F6-2).
+   화면 폭 675px 이하(휴대폰·600px대)와 980px 이상 넓은 화면(결과 칸 272 ~ 454px)은 세로, 결과 칸이 넓은 676 ~ 979px은 지금처럼 나란히. */
+.work-output .work-doc__action .work-secondary-button { flex-basis: 320px; }
+.work-primary-button { border-radius: 2px; color: var(--ds-paper); background: var(--ds-ink); font-weight: 800; }
+.work-primary-button:hover:not(:disabled) { background: var(--ds-navy); }
+.work-secondary-button { border: 1.5px solid var(--ds-navy); border-radius: 2px; color: var(--ds-navy); background: var(--ds-paper); font-size: 1rem; }
+.work-legal-basis { border-top-color: var(--ds-edge); color: var(--ds-ink-soft); font-size: 0.875rem; }
+
+@media (min-width: 640px) {
+  .work-ui .work-segment { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); }
+}
+
+@media (min-width: 900px) {
+  .work-tool-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto 1fr; align-items: start; min-height: 168px; padding: 20px; }
+  .work-tool-row .work-round-icon--large { grid-column: 1; }
+  .work-tool-row__text { grid-column: 1 / -1; }
+  .work-tool-row > .admin-icon { grid-column: 2; grid-row: 1; justify-self: end; }
+}
+
+/* 결과 막대(WorkResultBar, 979px 이하): 화면 아래 탭(56px) 바로 위에 붙여 결과 요약(합계·글자 수)과 복사 단추를 둔다.
+   결과가 없으면 숨겨 아래 탭만 보인다. PC(980px 이상)는 결과 칸이 입력 칸 옆에 붙어 있어 쓰지 않는다.
+   막대가 보이는 동안은 본문 끝·키보드 포커스가 두 막대(56px + 56px) 뒤로 숨지 않게 여백을 늘린다. */
+.work-result-bar { display: none; }
+@media (max-width: 979px) {
+  .work-result-bar {
+    position: fixed;
+    inset: auto 0 calc(56px + env(safe-area-inset-bottom));
+    z-index: 99;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 56px;
+    padding: 6px 12px;
+    border-top: 2px solid var(--ds-navy);
+    border-bottom: 1px solid var(--ds-edge);
+    background: var(--ds-paper);
+  }
+  .work-result-bar[hidden] { display: none; }
+  .work-result-bar__text { display: grid; flex: 1; min-width: 0; }
+  .work-result-bar__text span { overflow: hidden; color: var(--ds-ink-soft); font-size: 0.875rem; font-weight: 700; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+  .work-result-bar__text strong { color: var(--ds-navy); font-size: 1.25rem; font-weight: 900; font-variant-numeric: tabular-nums; line-height: 1.2; }
+  .work-result-bar__copy { flex: 0 0 auto; min-height: 44px; padding: 0 16px; border: 0; border-radius: 2px; color: var(--ds-paper); background: var(--ds-ink); font: inherit; font-weight: 800; cursor: pointer; }
+  html:has(.work-result-bar:not([hidden])) { scroll-padding-bottom: calc(120px + env(safe-area-inset-bottom)); }
+  html:has(.work-result-bar:not([hidden])) .admin-main { padding-bottom: calc(136px + env(safe-area-inset-bottom)); }
 }

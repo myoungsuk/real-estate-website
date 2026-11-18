@@ -1,6 +1,7 @@
 ---
 import AdminIcon from "../../../components/admin/AdminIcon.astro";
 import WorkLegalBasis from "../../../components/admin/WorkLegalBasis.astro";
+import WorkResultBar from "../../../components/admin/WorkResultBar.astro";
 import legalRules from "../../../data/work/legal-rules.json";
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 import { FEE_DEAL_TYPES, PROPERTY_KINDS } from "../../../lib/work/brokerage-fee.mjs";
@@ -150,6 +151,10 @@ const amountFields = [
       <section class="work-output" aria-labelledby="fee-result-title">
         <h2 id="fee-result-title">계산 결과</h2>
         <div data-fee-result hidden>
+          <div class="work-total">
+            <span data-fee-out="total-label">합계(한쪽 의뢰인 기준)</span>
+            <strong data-fee-out="total"></strong>
+          </div>
           <dl class="work-facts">
             <div><dt>거래금액</dt><dd data-fee-out="amount"></dd></div>
             <div data-fee-out-row="explanation"><dt>계산 근거</dt><dd data-fee-out="explanation"></dd></div>
@@ -159,10 +164,6 @@ const amountFields = [
             <div data-fee-out-row="agreed"><dt>협의 요율 금액</dt><dd data-fee-out="agreed"></dd></div>
             <div data-fee-out-row="vat"><dt>부가세(10%) 별도</dt><dd data-fee-out="vat"></dd></div>
           </dl>
-          <div class="work-total">
-            <span data-fee-out="total-label">합계(한쪽 의뢰인 기준)</span>
-            <strong data-fee-out="total"></strong>
-          </div>
           <ul class="work-notes" data-fee-notes></ul>
         </div>
         <div class="work-output__empty">
@@ -171,16 +172,17 @@ const amountFields = [
           </span>
           <p class="work-message" role="status" aria-live="polite" data-fee-message></p>
         </div>
+        {/* 복사 단추는 결과 바로 아래(결과 칸 안)에 둔다(사용자 선택 2026-11-18 CD1, F6-2). */}
+        <div class="work-doc__action">
+          <button class="work-primary-button" type="button" data-fee-copy disabled>계산 결과 복사</button>
+          <p class="admin-form-status" role="status" aria-live="polite" data-fee-copy-status></p>
+          <textarea class="work-copy-fallback" rows="10" readonly aria-label="복사할 결과 문장" data-fee-copy-fallback hidden></textarea>
+        </div>
       </section>
-
-      <div class="work-doc__action">
-        <button class="work-primary-button" type="button" data-fee-copy disabled>계산 결과 복사</button>
-        <p class="admin-form-status" role="status" aria-live="polite" data-fee-copy-status></p>
-        <textarea class="work-copy-fallback" rows="10" readonly aria-label="복사할 결과 문장" data-fee-copy-fallback hidden></textarea>
-      </div>
     </div>
 
     <WorkLegalBasis ruleIds={legalRules.brokerageFeeRules.map((rule) => rule.id)} />
+    <WorkResultBar tool="fee" />
   </div>
 
   <script>
