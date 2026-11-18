@@ -141,7 +141,7 @@ npm run sync:external:dry-run
 - `src/data/external-links.json` → 자동화 전 공식 블로그 128건·일반 영상 40건과 2026-08-26 확인한 공식 Shorts 32건을 기준으로 누적되는 원문 링크·자체 썸네일·최신순 카드
 - `src/layouts/BaseLayout.astro` → 페이지별 title, description, canonical, robots, JSON-LD와 공개 하위 페이지 `BreadcrumbList`. 홈은 `WebSite`와 `RealEstateAgent`·`LocalBusiness`를 고정 `@id`로 연결한 단일 `@graph`를 제공
 - `src/pages/robots.txt.ts`, `llms.txt.ts`, sitemap integration → 검색 로봇 안내
-- `scripts/indexnow.mjs`, `.github/workflows/notify-indexnow.yml` → 성공한 `master` CI의 변경 URL 계획 → Production `search` marker·공개키 확인 → 네이버 IndexNow 알림
+- `scripts/indexnow.mjs`, `.github/workflows/notify-indexnow.yml` → 성공한 `master` CI의 변경 URL 계획 → 운영 `/deployment-marker.json`의 `source.commit`이 그 커밋이거나 후속 커밋인지·공개키 확인 → 네이버 IndexNow 알림
 - `.github/workflows/verify-production-deploy.yml` → `scripts/verify-production-commit.mjs` → `master` push 커밋이 운영 `/deployment-marker.json`의 `source.commit`과 같거나 그 조상이 될 때까지 확인 → 시간 초과 시 Action 실패(GitHub 실패 알림)
 - `/admin/` → 관리자 대시보드와 관리 API 연결 상태
 - `/admin/deployment/` → 마지막 관리자 저장 commit·resource digest와 Production marker v2를 비교한 배포 중·공개 완료·최신 배포 포함·지연·확인 불가 상태
@@ -216,7 +216,7 @@ npm run sync:external:dry-run
 - Google Search Console과 네이버 Search Advisor의 소유 확인 파일은 원본 이름과 내용을 유지해 `public/`에 둔다.
 - 실제 검색 등록과 색인 요청은 배포·도메인·운영자 공개 검수 후 수행한다.
 - 홈을 제외한 공개 HTML은 실제 화면 계층과 같은 절대 URL의 `BreadcrumbList`를 제공한다.
-- 성공한 `master` push의 공개 페이지 변경은 Production `search` marker 확인 뒤 네이버 IndexNow에 알린다. 공개키는 비밀정보가 아니며, sitemap·수집 요청을 대체하거나 색인을 보장한다고 표현하지 않는다.
+- 성공한 `master` push의 공개 페이지 변경은 운영 배포가 그 커밋을 포함했는지(`source.commit`이 같거나 후속 커밋) 확인한 뒤 네이버 IndexNow에 알린다. 공개키는 비밀정보가 아니며, sitemap·수집 요청을 대체하거나 색인을 보장한다고 표현하지 않는다.
 
 ## Cloudflare 배포
 
@@ -232,7 +232,7 @@ npm run sync:external:dry-run
 - `.github/workflows/sync-bank-listings.yml`도 매일 00:10 KST와 수동 실행을 지원하며 같은 read-validation/write-publish 권한 분리를 사용한다. 공개 목록만 조회하고 `.github/bank-listing-sync-state.json`, `.github/listing-review-state.json`, `src/data/naver-listings.json`만 하나의 Git 커밋으로 변경한다.
 - Cloudflare Workers Builds는 GitHub `myoungsuk/real-estate-website`의 `master`에 연결되어 있으며, `master` 푸시 시 Production을 자동 빌드·배포한다.
 - Production 빌드는 `PUBLIC_SITE_URL=https://leaderscityhappy.com`, `PUBLIC_ALLOW_INDEXING=true`를 사용한다.
-- `npm run build`는 공개 `deployment-marker.json` v2에 Workers Builds·GitHub Actions source commit/branch, 허용 관리자 JSON별 정규화 SHA-256 digest와 검색 대상·Bank·외부 콘텐츠·scheduler scope hash를 생성한다. 기존 v1 scope reader는 2026-09-30까지 호환한다. 동기화와 IndexNow 워크플로는 push 후 해당 scope가 운영 URL과 일치할 때까지 확인하며 불일치·시간 초과를 실패로 표시한다.
+- `npm run build`는 공개 `deployment-marker.json` v2에 Workers Builds·GitHub Actions source commit/branch, 허용 관리자 JSON별 정규화 SHA-256 digest와 검색 대상·Bank·외부 콘텐츠·scheduler scope hash를 생성한다. 기존 v1 scope reader는 2026-09-30까지 호환한다. 동기화 워크플로는 push 후 해당 scope가 운영 URL과 일치할 때까지 확인하며 불일치·시간 초과를 실패로 표시한다. IndexNow 워크플로는 2026-11-19부터 scope 대신 `source.commit`이 같거나 후속 커밋인지로 확인한다(뒤 커밋이 먼저 배포돼 `search` 값이 바뀌면 앞 커밋 알림이 실패하던 문제).
 - `wrangler.jsonc`의 `CF_VERSION_METADATA` binding은 인증된 관리자에게 현재 Worker version ID·생성 시각만 제공하며 Secret·태그·관리자 이메일은 반환하지 않는다.
 - `wrangler.jsonc`의 `WORK_DB` D1 binding(`leaderscity-work`)과 `WORK_FILES` R2 binding(`leaderscity-work-files`)은 운영 Worker를 중개업무 도구의 업무 자료 저장소와 파일 저장소에 연결한다. 켜기 값(`WORK_TOOLS_ENABLED`·`WORK_AI_ENABLED`)은 Worker Secret으로만 등록한다.
 - `.github/workflows/verify-production-deploy.yml`은 `master` push마다 `contents: read` 권한과 비밀값 없이 실행한다. 운영 `/deployment-marker.json`의 `source.commit`이 push 커밋과 같거나, push 커밋을 포함한 `master`의 후속 커밋이 될 때까지 10초 간격으로 최대 30분 확인하고, 시간이 지나면 실패로 끝나 GitHub 실패 알림을 남긴다. Cloudflare 알림(Platform Notifications)에는 Workers Builds 실패 항목이 없어 이 방식으로 빌드 실패·미실행을 감지한다. Workers Builds의 빌드 감시 경로는 포함 `*`, 제외 `node_modules/**`·`.git/`이고 프리뷰 브랜치 빌드는 꺼져 있다(2026-11-16 대시보드 확인). 따라서 `master`에 커밋되는 변경은 모두 Production 빌드를 시작해야 하며, 감시 경로를 바꾸면 이 워크플로가 거짓 실패를 낼 수 있으므로 함께 검토한다. 배포·롤백·재실행은 하지 않는다. `GITHUB_TOKEN`으로 push하는 동기화 커밋에서는 GitHub 정책상 실행되지 않으며, 동기화 워크플로는 자체 scope marker를 확인한다. 후속 커밋 판정의 `git fetch`는 자격 증명 없이 하므로 저장소를 비공개로 바꾸면 이 워크플로를 다시 설계한다.
