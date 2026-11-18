@@ -1,7 +1,6 @@
 ---
 import AdminIcon from "../../../components/admin/AdminIcon.astro";
 import WorkLegalBasis from "../../../components/admin/WorkLegalBasis.astro";
-import WorkToolNav from "../../../components/admin/WorkToolNav.astro";
 import legalRules from "../../../data/work/legal-rules.json";
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 import { FEE_DEAL_TYPES, PROPERTY_KINDS } from "../../../lib/work/brokerage-fee.mjs";
@@ -27,8 +26,6 @@ const amountFields = [
       <h1>중개보수 계산</h1>
       <span class="admin-stage-badge">저장하지 않음</span>
     </header>
-
-    <WorkToolNav />
 
     <p class="work-doc__lead">물건·거래 종류를 고르고 금액을 넣으면 한쪽 의뢰인 기준 상한 보수가 바로 나옵니다. 1원 미만은 버립니다.</p>
 

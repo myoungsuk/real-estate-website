@@ -2,6 +2,7 @@
 import "../styles/global.css";
 import "../styles/admin.css";
 import AdminIcon, { type AdminIconName } from "../components/admin/AdminIcon.astro";
+import AdminMenu from "../components/admin/AdminMenu.astro";
 import { office } from "../lib/site";
 
 interface Props {
@@ -11,7 +12,6 @@ interface Props {
 
 const { title, description } = Astro.props;
 const pathname = Astro.url.pathname;
-const hasAside = Astro.slots.has("aside");
 
 const navigation = [
   { href: "/admin/", label: "대시보드", shortLabel: "홈" },
@@ -24,20 +24,73 @@ const navigation = [
   { href: "/admin/history/", label: "변경 이력·복원", shortLabel: "이력" },
 ];
 
-// 맨 위 메뉴 줄의 원형 그림 기호와 바탕색. 그림은 이 사무소용으로 새로 그린 선 그림이다.
-const navigationIcons: Record<string, { icon: AdminIconName; tone: string }> = {
-  "/admin/": { icon: "dashboard", tone: "navy" },
-  "/admin/work/": { icon: "tools", tone: "rose" },
-  "/admin/listings/": { icon: "building", tone: "teal" },
-  "/admin/content/": { icon: "page", tone: "gold" },
-  "/admin/external-links/": { icon: "play", tone: "rose" },
-  "/admin/complexes/": { icon: "map", tone: "teal" },
-  "/admin/deployment/": { icon: "cloud", tone: "navy" },
-  "/admin/history/": { icon: "history", tone: "gold" },
+// 메뉴 그림 기호. 그림은 이 사무소용으로 새로 그린 선 그림이다.
+const navigationIcons: Record<string, AdminIconName> = {
+  "/admin/": "dashboard",
+  "/admin/work/": "tools",
+  "/admin/listings/": "building",
+  "/admin/content/": "page",
+  "/admin/external-links/": "play",
+  "/admin/complexes/": "map",
+  "/admin/deployment/": "cloud",
+  "/admin/history/": "history",
 };
 
+// 관리자 공용 틀(사용자 선택 2026-11-18 C+D 17:24:07·CD1 17:55:44): 맨 위 메뉴 줄과 화면별 왼쪽 목록을 하나로 합쳤다.
+// PC(980px 이상)는 왼쪽 고정 목록 하나, 휴대폰은 위 제목 줄(고정하지 않음) + 업무 도구·네이버 매물 작은 탭 + 아래 탭 4개 + 전체 메뉴 창.
+// 메뉴 묶음(PC 왼쪽 목록·휴대폰 전체 메뉴 창). navigation의 모든 메뉴가 한 묶음에 한 번씩 들어간다.
+const navigationGroups = [
+  { label: "업무", hrefs: ["/admin/", "/admin/work/", "/admin/listings/"] },
+  { label: "홈페이지 글", hrefs: ["/admin/content/", "/admin/external-links/", "/admin/complexes/"] },
+  { label: "확인", hrefs: ["/admin/deployment/", "/admin/history/"] },
+];
+
+// 아래 단계가 있는 구역. 지금 구역이면 PC 왼쪽 목록에서 펼치고, 휴대폰은 위 제목 줄 아래 작은 탭으로 보여 준다.
+const navigationSubItems: Record<string, { href: string; label: string }[]> = {
+  "/admin/work/": [
+    { href: "/admin/work/", label: "업무 도구 처음" },
+    { href: "/admin/work/fee/", label: "중개보수 계산" },
+    { href: "/admin/work/messages/", label: "안내 문자" },
+    { href: "/admin/work/schedule/", label: "계약 일정" },
+  ],
+  "/admin/listings/": [
+    { href: "/admin/listings/", label: "매물 현황" },
+    { href: "/admin/listings/editor/", label: "매물 등록·동기화" },
+  ],
+};
+
+// 휴대폰 아래 탭(자주 쓰는 3개, 네 번째는 전체 메뉴 단추).
+const tabItems = [
+  { href: "/admin/", label: "홈" },
+  { href: "/admin/work/", label: "업무 도구" },
+  { href: "/admin/listings/", label: "매물" },
+];
+
+const currentPath = pathname.endsWith("/") ? pathname : `${pathname}/`;
 const isCurrentPath = (href: string) =>
-  href === "/admin/" ? pathname === href : pathname.startsWith(href);
+  href === "/admin/" ? currentPath === href : currentPath.startsWith(href);
+// 지금 화면이면 "page", 지금 화면이 그 아래 단계면 "true"(지금 구역)로 알린다. 화면 표시도 이 값으로 나눈다.
+const currentState = (href: string): "page" | "true" | undefined => (currentPath === href ? "page" : isCurrentPath(href) ? "true" : undefined);
+const currentSection = navigation.find((item) => isCurrentPath(item.href));
+const currentSubItems = currentSection ? navigationSubItems[currentSection.href] : undefined;
+
+const menuGroups = navigationGroups.map((group) => ({
+  label: group.label,
+  items: group.hrefs.map((href) => {
+    const item = navigation.find((entry) => entry.href === href);
+    const subItems = navigationSubItems[href];
+    return {
+      href,
+      label: item?.label ?? href,
+      icon: navigationIcons[href],
+      // 아래 단계가 있는 메뉴는 아래 단계 쪽에 "page"를 두고, 위 메뉴는 지금 구역("true")만 알린다.
+      current: subItems ? (isCurrentPath(href) ? ("true" as const) : undefined) : currentState(href),
+      sub: subItems && isCurrentPath(href)
+        ? subItems.map((sub) => ({ ...sub, current: currentPath === sub.href ? ("page" as const) : undefined }))
+        : undefined,
+    };
+  }),
+}));
 
 // 관리자 탭 미리 그리기(Speculation Rules). 메뉴에 0.2초 머물면(휴대폰은 화면에 보이는 링크 기준) 브라우저가 다음 화면을 미리 준비한다.
 // 서버 요청이 없는 단계 0 업무 도구 4화면만 이름으로 적어 화면 전체를 미리 그리고(prerender), 나머지 관리자 화면은 HTML만 미리 받는다(prefetch, 스크립트 실행 없음).
@@ -72,135 +125,112 @@ const speculationRules = {
     <a class="skip-link" href="#admin-main">관리자 본문으로 바로가기</a>
 
     <div class="admin-shell" data-admin-app>
-      <header class="admin-topnav">
-        <a class="admin-topnav__brand" href="/admin/" aria-label="리더스시티행복한공인중개사사무소 관리자 홈">
+      <header class="admin-side">
+        <a class="admin-side__brand" href="/admin/" aria-label="리더스시티행복한공인중개사사무소 관리자 홈">
           <span class="admin-brand__mark" aria-hidden="true">
             <img src="/images/brand/leaders-city-happy-logo.webp" alt="" width="1000" height="800" />
           </span>
-          <span class="admin-topnav__brand-text">
+          <span class="admin-side__brand-text">
             <strong>{office.brandName}</strong>
             <small>공인중개사사무소 · 관리자 시스템</small>
           </span>
         </a>
 
-        <nav class="admin-topnav__nav" aria-label="관리자 메뉴">
-          <button class="admin-topnav__scroll admin-topnav__scroll--prev" type="button" data-admin-nav-scroll="-1" hidden>
-            <AdminIcon name="chevron-left" size={18} />
-            <span class="sr-only">메뉴 앞쪽 보기</span>
-          </button>
-          <ul class="admin-topnav__list" data-admin-nav-list>
-            {navigation.map((item) => {
-              const visual = navigationIcons[item.href];
-              return (
-                <li>
-                  <a class="admin-topnav__item" href={item.href} aria-current={isCurrentPath(item.href) ? "page" : undefined}>
-                    <span class="admin-topnav__icon" data-tone={visual.tone}>
-                      <AdminIcon name={visual.icon} size={15} />
-                    </span>
-                    <span>{item.label}</span>
-                  </a>
-                </li>
-              );
-            })}
-            <li>
-              <span class="admin-topnav__item admin-topnav__item--future">
-                FAQ·후기 <small>준비 중</small>
-              </span>
-            </li>
-          </ul>
-          <button class="admin-topnav__scroll admin-topnav__scroll--next" type="button" data-admin-nav-scroll="1" hidden>
-            <AdminIcon name="chevron-right" size={18} />
-            <span class="sr-only">메뉴 뒤쪽 보기</span>
-          </button>
-        </nav>
+        <AdminMenu label="관리자 메뉴" groups={menuGroups} />
 
-        <div class="admin-topnav__tools">
-          <span class="admin-topnav__badge">
-            <AdminIcon name="shield" size={15} />
-            Access 보호
-          </span>
-          <a class="admin-topnav__public" href="/">
+        <div class="admin-side__foot">
+          <p>Access 보호 영역입니다. 저장은 별도 GitHub 연결이 필요합니다.</p>
+          <a class="admin-public-link" href="/">
             공개 홈페이지
             <AdminIcon name="external" size={15} />
           </a>
         </div>
       </header>
 
-      <div class:list={["admin-shell__body", { "admin-shell__body--split": hasAside }]}>
-        {hasAside && (
-          <div class="admin-shell__aside">
-            <slot name="aside" />
-          </div>
+      <div class="admin-shell__body">
+        <header class="admin-top">
+          <a class="admin-top__home" href="/admin/" aria-label="리더스시티행복한공인중개사사무소 관리자 홈">
+            <span class="admin-brand__mark" aria-hidden="true">
+              <img src="/images/brand/leaders-city-happy-logo.webp" alt="" width="1000" height="800" />
+            </span>
+          </a>
+          <p class="admin-top__title">{currentSection?.label ?? "관리자"}</p>
+          <a class="admin-top__public" href="/">
+            <AdminIcon name="external" size={18} />
+            <span class="sr-only">공개 홈페이지</span>
+          </a>
+        </header>
+
+        {currentSection && currentSubItems && (
+          <nav class="admin-subtabs" aria-label={`${currentSection.label} 메뉴`}>
+            <ul>
+              {currentSubItems.map((item) => (
+                <li>
+                  <a href={item.href} aria-current={currentPath === item.href ? "page" : undefined}>{item.label}</a>
+                </li>
+              ))}
+            </ul>
+          </nav>
         )}
+
         <main class="admin-main" id="admin-main" tabindex="-1">
           <slot />
         </main>
       </div>
     </div>
 
+    <nav class="admin-tabbar" aria-label="자주 쓰는 메뉴">
+      <ul>
+        {tabItems.map((item) => (
+          <li>
+            <a href={item.href} aria-current={currentState(item.href)}>
+              <span class="admin-tabbar__icon" aria-hidden="true"><AdminIcon name={navigationIcons[item.href]} size={20} /></span>
+              <span>{item.label}</span>
+            </a>
+          </li>
+        ))}
+        <li>
+          <button type="button" aria-haspopup="dialog" data-admin-menu-open>
+            <span class="admin-tabbar__icon admin-tabbar__icon--menu" aria-hidden="true"></span>
+            <span>전체 메뉴</span>
+          </button>
+        </li>
+      </ul>
+    </nav>
+
+    <dialog class="admin-sheet" aria-labelledby="admin-sheet-title" data-admin-menu-sheet>
+      <div class="admin-sheet__head">
+        <strong id="admin-sheet-title">전체 메뉴</strong>
+        <button type="button" data-admin-menu-close>닫기</button>
+      </div>
+      <AdminMenu label="전체 메뉴" groups={menuGroups} />
+      <a class="admin-public-link" href="/">
+        공개 홈페이지
+        <AdminIcon name="external" size={15} />
+      </a>
+    </dialog>
+
     <script>
-      // 맨 위 메뉴 줄이 화면보다 길면 앞뒤 넘기기 단추를 보여 주고, 지금 화면 메뉴가 보이도록 줄을 옮긴다.
-      const list = document.querySelector<HTMLElement>("[data-admin-nav-list]");
-      const scrollButtons = [...document.querySelectorAll<HTMLButtonElement>("[data-admin-nav-scroll]")];
-
-      if (list && scrollButtons.length === 2) {
-        const [prevButton, nextButton] = scrollButtons;
-        const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-
-        const updateButtons = () => {
-          const maxScroll = list.scrollWidth - list.clientWidth;
-          const state = new Map([
-            [prevButton, list.scrollLeft <= 4],
-            [nextButton, list.scrollLeft >= maxScroll - 4],
-          ]);
-          // 보여야 할 단추를 먼저 보이게 한 뒤, 포커스를 가진 단추가 숨겨지면 반대쪽 단추(없으면 첫 메뉴)로 포커스를 옮긴다.
-          state.forEach((hide, button) => {
-            if (!hide) button.hidden = false;
-          });
-          state.forEach((hide, button) => {
-            if (!hide || button.hidden) return;
-            if (document.activeElement === button) {
-              const other = button === prevButton ? nextButton : prevButton;
-              const fallback = other.hidden ? list.querySelector<HTMLElement>("a") : other;
-              fallback?.focus({ preventScroll: true });
-            }
-            button.hidden = true;
-          });
-        };
-
-        const current = list.querySelector<HTMLElement>('[aria-current="page"]');
-        if (current) {
-          const offset = current.offsetLeft - (list.clientWidth - current.offsetWidth) / 2;
-          list.scrollLeft = Math.max(0, offset);
-        }
-
-        // Tab으로 간 메뉴가 줄 끝·넘기기 단추·오른쪽 흐림에 가리지 않게, 단추 폭만큼 여유를 두고 줄을 바로 옮긴다.
-        list.addEventListener("focusin", (event) => {
-          const item = (event.target as HTMLElement | null)?.closest<HTMLElement>(".admin-topnav__item");
-          if (!item) return;
-          const gap = window.matchMedia("(min-width: 768px)").matches ? 56 : 32;
-          const left = item.offsetLeft - gap;
-          const right = item.offsetLeft + item.offsetWidth + gap;
-          if (left < list.scrollLeft) list.scrollLeft = Math.max(0, left);
-          else if (right > list.scrollLeft + list.clientWidth) list.scrollLeft = right - list.clientWidth;
+      // 휴대폰 전체 메뉴 창. 열기·닫기만 맡는다(Esc로도 닫힘). 메뉴 링크로 다른 화면에 갔다가 뒤로 가기로 돌아왔을 때 창이 열린 채 남지 않게 떠날 때 닫는다.
+      const sheet = document.querySelector<HTMLDialogElement>("[data-admin-menu-sheet]");
+      const openButton = document.querySelector<HTMLButtonElement>("[data-admin-menu-open]");
+      if (sheet && openButton) {
+        openButton.addEventListener("click", () => sheet.showModal());
+        sheet.querySelector<HTMLButtonElement>("[data-admin-menu-close]")?.addEventListener("click", () => sheet.close());
+        window.addEventListener("pagehide", () => sheet.close());
+        // 창 바깥 어두운 바탕을 누르면 닫는다. 창 안 여백을 누른 것(같은 dialog가 대상)은 창 상자 안이므로 닫지 않는다.
+        sheet.addEventListener("click", (event) => {
+          if (event.target !== sheet) return;
+          const box = sheet.getBoundingClientRect();
+          if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) sheet.close();
         });
-
-        scrollButtons.forEach((button) => {
-          button.addEventListener("click", () => {
-            const direction = Number(button.dataset.adminNavScroll);
-            list.scrollBy({ left: direction * list.clientWidth * 0.7, behavior: reduceMotion.matches ? "auto" : "smooth" });
-          });
-        });
-        list.addEventListener("scroll", updateButtons, { passive: true });
-        window.addEventListener("resize", updateButtons);
-        updateButtons();
       }
 
-      // 휴대폰 폭의 가로로 미는 줄(왼쪽 목록이 위로 온 줄, 업무 도구 밑줄 탭)에서 키보드로 간 링크가 줄 옆으로 잘리면, 그 줄만 가로로 민다(보드 34번).
+      // 휴대폰 폭의 가로로 미는 줄(업무 도구·네이버 매물 작은 탭)에서 키보드로 간 링크가 줄 옆으로 잘리면, 그 줄만 가로로 민다(보드 34번).
       // Chromium은 링크가 조금이라도 보이면 줄을 밀지 않는다. scrollIntoView는 문서까지 세로로 움직일 수 있어 줄의 가로 위치만 바꾼다.
       // 마우스·손가락으로 누를 때는 밀지 않는다. 누르는 사이 줄이 움직이면 손을 뗀 자리가 다른 링크가 되어 엉뚱한 화면으로 갈 수 있기 때문이다.
       {
-        const strips = ".admin-subnav__nav, .work-tool-nav";
+        const strips = ".admin-subtabs";
         const stripMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
         let stripPointerAt = -Infinity;
         document.addEventListener("pointerdown", () => {
@@ -218,64 +248,6 @@ const speculationRules = {
           if (box.left < bounds.left + gap) delta = box.left - bounds.left - gap;
           else if (box.right > bounds.right - gap) delta = Math.min(box.right - bounds.right + gap, box.left - bounds.left - gap);
           if (delta !== 0) strip.scrollBy({ left: delta, behavior: stripMotion.matches ? "auto" : "smooth" });
-        });
-      }
-
-      // 위 메뉴 줄은 모든 폭에서 화면 위에 고정된다(사용자 선택 2026-11-16 16:59:58, 좁은 화면은 브랜드 줄이 올라가고 메뉴 줄만 남음).
-      // 문서 전체 scroll-padding-top은 쓰지 않으므로(머리글 안 Tab 때 문서가 튀는 문제), 앞으로 Tab·Shift+Tab·처음으로 돌아오기
-      // 모두 이 스크립트가 맡는다. 키보드 포커스(:focus-visible 또는 글 입력류)가 머리글에 가리면, 스크롤이 멈춘 뒤 머리글 아래 8px까지 바로 내린다.
-      // Chromium의 날짜 칸(input[type=date])은 키보드로 들어가도 :focus-visible이 아니므로 글 입력류는 따로 본다(회귀 2회차 S4).
-      // 건너뛰기 링크 대상(#admin-main)은 CSS scroll-margin-top으로 머리글 아래에 온다.
-      // 마우스 클릭(포커스 표시 없음)·머리글 안·건너뛰기 링크·열린 확인 창 안은 건드리지 않는다.
-      const header = document.querySelector<HTMLElement>(".admin-topnav");
-      if (header) {
-        // 글 입력 칸은 마우스로 눌러도 :focus-visible이 되고 글 입력류는 따로 보정하므로, 방금 누른 뒤의 포커스는 따로 거른다.
-        let pointerAt = -Infinity;
-        const textEntry =
-          "textarea, select, input:not([type=button]):not([type=submit]):not([type=reset]):not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]):not([type=image]):not([type=hidden])";
-        document.addEventListener("pointerdown", () => {
-          pointerAt = performance.now();
-        }, { capture: true, passive: true });
-        document.addEventListener("focusin", (event) => {
-          const target = event.target as HTMLElement | null;
-          if (!target || target === document.body || !(target.matches(":focus-visible") || target.matches(textEntry))) return;
-          if (performance.now() - pointerAt < 600) return;
-          if (header.contains(target) || target.classList.contains("skip-link") || target.closest("dialog[open]")) return;
-          // 안쪽 스크롤 목록의 항목처럼 화면을 내려도 제자리일 수 있는 경우를 위해 세 번까지만 고친다(끝없이 스크롤하지 않게).
-          let attempts = 0;
-          let settleTimer = 0;
-          const correct = () => {
-            if (document.activeElement !== target || attempts >= 3) return;
-            // 화면에서 숨긴 라디오·체크 상자는 감싼 라벨을 기준으로 잰다.
-            const box = (target.closest("label") ?? target).getBoundingClientRect();
-            if (box.width === 0 && box.height === 0) return;
-            const limit = header.getBoundingClientRect().bottom + 8;
-            // 남은 화면보다 큰 칸(긴 글 상자)은 브라우저가 맞춘 커서 위치를 그대로 둔다.
-            if (box.height > window.innerHeight - limit - 8) return;
-            if (box.top >= limit) return;
-            attempts += 1;
-            window.scrollBy({ top: box.top - limit, behavior: "instant" });
-          };
-          // 부드러운 스크롤 중간 위치로 재지 않게, 마지막 스크롤 뒤 0.1초가 지나면 확인한다(스크롤이 없으면 0.1초 뒤 한 번).
-          const settle = () => {
-            window.clearTimeout(settleTimer);
-            settleTimer = window.setTimeout(correct, 100);
-          };
-          const stop = () => {
-            window.removeEventListener("scroll", settle);
-            window.removeEventListener("wheel", userMoved);
-            window.removeEventListener("touchmove", userMoved);
-          };
-          // 사람이 휠·손가락으로 움직이면 남은 확인도 지우고 바로 멈춘다.
-          const userMoved = () => {
-            window.clearTimeout(settleTimer);
-            stop();
-          };
-          window.addEventListener("scroll", settle, { passive: true });
-          window.addEventListener("wheel", userMoved, { passive: true });
-          window.addEventListener("touchmove", userMoved, { passive: true });
-          settle();
-          window.setTimeout(stop, 1000);
         });
       }
     </script>

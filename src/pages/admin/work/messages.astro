@@ -1,6 +1,5 @@
 ---
 import AdminIcon from "../../../components/admin/AdminIcon.astro";
-import WorkToolNav from "../../../components/admin/WorkToolNav.astro";
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 import { MESSAGE_DEAL_TYPES, MESSAGE_TEMPLATES, MESSAGE_VARIANTS } from "../../../lib/work/message-templates.mjs";
 ---
@@ -17,8 +16,6 @@ import { MESSAGE_DEAL_TYPES, MESSAGE_TEMPLATES, MESSAGE_VARIANTS } from "../../.
       <h1>안내 문자 만들기</h1>
       <span class="admin-stage-badge">저장하지 않음</span>
     </header>
-
-    <WorkToolNav />
 
     <p class="work-doc__lead">빈 칸은 대괄호 자리표시로 남습니다. 복사하거나 문자 앱을 연 뒤 손님 번호를 직접 골라 보내세요.</p>
     <p class="work-doc__notice">
@@ -258,8 +255,8 @@ import { MESSAGE_DEAL_TYPES, MESSAGE_TEMPLATES, MESSAGE_VARIANTS } from "../../.
             status.textContent = "✓ 문장을 복사했습니다. 문자·카카오톡에 붙여 넣으세요.";
             status.dataset.state = "success";
           } catch {
-            // 글상자가 조금이라도 보이면 브라우저가 스크롤하지 않아 위쪽이 고정 머리글에 가리므로, 직접 머리글 아래로 옮긴다(보드 35번).
-            // block "nearest"는 글상자가 화면 안에 있으면 머리글 뒤에 걸쳐도 움직이지 않아(768px 확인), 위쪽이 머리글 여백(admin.css scroll-margin)보다 위일 때만 "start"로 맞춘다.
+            // 글상자가 조금이라도 보이면 브라우저가 스크롤하지 않아 위쪽이 화면 위로 잘린 채 남으므로, 직접 위 여백 아래로 옮긴다(보드 35번).
+            // block "nearest"는 글상자가 화면 안에 있으면 머리글 뒤에 걸쳐도 움직이지 않아(768px 확인), 위쪽이 위 여백(admin.css scroll-margin)보다 위일 때만 "start"로 맞춘다.
             preview.focus({ preventScroll: true });
             preview.select();
             const previewBox = preview.getBoundingClientRect();
