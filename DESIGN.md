@@ -10,7 +10,7 @@ colors:
   glass: "#C9D3D6"
   glass-deep: "#9FB0B5"
   stamp-red: "#B3261E"
-  focus-teal: "#0B5C73"
+  focus-teal: "#075B74"
   kakao-yellow: "#FEE500"
 typography:
   display:
@@ -99,7 +99,7 @@ components:
 - **glass `#C9D3D6`**: 유리창 덧칠, 게시판 구역 바탕.
 - **stamp-red `#B3261E`**: **등록일 도장에만** 쓴다.
 - **kakao-yellow `#FEE500`**: 카카오톡 버튼에만.
-- **focus-teal `#0B5C73`**: 키보드 포커스 외곽선 3px.
+- **focus-teal `#075B74`**: 키보드 포커스 외곽선 3px.
 
 ### Named Rules
 
