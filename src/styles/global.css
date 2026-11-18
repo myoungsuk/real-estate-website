@@ -22,6 +22,8 @@
 *, *::before, *::after { box-sizing: border-box; }
 
 html { scroll-behavior: smooth; }
+/* 휴대폰 하단 상담 막대(fixed, 약 69px + 홈 막대 여백) 뒤로 키보드 포커스가 숨지 않게, 막대가 있는 화면에서만 아래 스크롤 여백을 둔다. 막대가 사라지는 1024px 이상은 0(아래 미디어 쿼리). */
+html:has(.contact-bar) { scroll-padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
 
 body {
   margin: 0;
@@ -682,6 +684,7 @@ h3 { font-size: 1.35rem; }
   .hero { min-height: 720px; display: grid; align-items: center; }
   .site-footer { padding-bottom: 54px; }
   .contact-bar { display: none; }
+  html:has(.contact-bar) { scroll-padding-bottom: 0; }
   .listing-grid { grid-template-columns: repeat(3, 1fr); }
   .filter-panel { grid-template-columns: repeat(4, minmax(0, 1fr)) auto; }
   .filter-panel .button { width: auto; }
