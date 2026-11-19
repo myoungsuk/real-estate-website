@@ -62,6 +62,7 @@
 | 영업시간 | 평일 09:00~20:00, 토요일 09:00~18:00, 일요일 휴무(예약 상담 가능) |
 | 주차 | 리더스시티5블록 단지 내 상가 주차장 이용 가능 |
 | 카카오톡 상담 | https://pf.kakao.com/_nxmabn/chat |
+| 인스타그램 | https://www.instagram.com/readers.45_real.estate/ (머리 메뉴·홈 '블로그·유튜브 새 글' 칸 아래 바로가기, 홈 `sameAs`. 2026-11-19 사용자 제공) |
 | 네이버 등록 매물 | `src/data/naver-listings.json`의 개별 공개 매물 카드와 `src/data/office.json`의 중개사 매물 지도 링크 |
 | 실제 도메인 | https://leaderscityhappy.com |
 | 전문 지역 | 대전광역시 동구 전역(천동·신흥동과 리더스시티 포함) |
@@ -130,7 +131,7 @@ npm run sync:external:dry-run
 ## 핵심 모듈과 화면 흐름
 
 - `src/data/home-content.json` → `src/lib/content.ts` → 홈 대표·사무소·리더스시티·신흥 SK뷰 상담 범위 설명과 사진
-- `src/data/office.json` → `src/lib/site.ts` → 헤더·푸터·사무소·오시는 길·네이버 등록 매물 링크·구조화 데이터
+- `src/data/office.json` → `src/lib/site.ts` → 헤더(인스타그램 바로가기 포함)·푸터·사무소·오시는 길·네이버 등록 매물 링크·구조화 데이터
 - `src/data/listings.json` → `src/lib/listings.ts` → 매물 목록 필터와 공개 상세 정적 생성
 - `src/data/naver-listings.json` → `src/lib/naver-listings.ts` → 사진 없는 네이버 공개 매물 카드·홈 6건 단위 페이징·거래/유형/단지/가격/면적 필터·최근 등록/가격 낮은·높은/면적 작은·큰 정렬·관심 매물·최대 3개 비교·비저장 문의 문장·외부 상세 링크. 부동산뱅크 `등록기간` 시작일은 `registeredAt`으로 저장하고 최근 등록순을 기본값으로 사용한다.
 - 부동산뱅크 공개 사무소 목록 → `scripts/sync-bank-listings.mjs` → EUC-KR 공개 HTML의 현재 페이지 전체 파싱·네이버 ID 기준 갱신·직전 부동산뱅크 기준선에서 사라진 항목 삭제·다른 공급처 항목 보존 → `naver-listings.json`. 정상 수집 뒤 `.github/listing-review-state.json`의 Bank `lastSeenAt`만 함께 갱신하며 경고 기준은 `.github/listing-review-policy.json`의 승인된 값만 사용한다. 기준이 `null`이면 경고 기능을 정상 비활성화하고 날짜 경과만으로 매물을 자동 종료·숨김 처리하지 않는다. 2026-08-26 1:1 문의의 본인 매물·하루 1회 허용 범위만 사용하며 로그인·상세·네이버 페이지는 조회하지 않는다.

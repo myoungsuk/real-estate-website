@@ -45,7 +45,7 @@ const structuredData = {
       image: Astro.site ? new URL(homeContent.broker.portrait.src, Astro.site).toString() : undefined,
       logo: Astro.site ? new URL("/images/brand/leaders-city-happy-logo.png", Astro.site).toString() : undefined,
       hasMap: office.naverPlaceUrl,
-      sameAs: [office.naverPlaceUrl, office.naverBlogUrl, office.youtubeUrl],
+      sameAs: [office.naverPlaceUrl, office.naverBlogUrl, office.youtubeUrl, office.instagramUrl],
       identifier: [
         { "@type": "PropertyValue", name: "중개사무소 등록번호", value: office.registrationNumber },
         { "@type": "PropertyValue", name: "사업자등록번호", value: office.businessNumber },
@@ -232,6 +232,10 @@ const structuredData = {
           <h3 id="youtube-heading">유튜브</h3>
           <ExternalContentList items={homeYoutubeContents} emptyLabel="공개할 일반 영상을 준비하고 있습니다." pageSize={6} categoryLabel="유튜브 일반 영상" paginate={false} hoverPreview variant="note" />
           <a class="home-more" href="/youtube/">유튜브 전체 보기</a>
+        </div>
+        <div class="home-notes__group" id="instagram">
+          <h3 id="instagram-heading">인스타그램</h3>
+          <a class="home-more" href={office.instagramUrl} target="_blank" rel="noopener noreferrer">인스타그램에서 보기 <span aria-hidden="true">↗</span><span class="sr-only">(새 창)</span></a>
         </div>
       </div>
     </div>

@@ -380,6 +380,8 @@ test("공개 헤더와 상담 화면은 전체 상호·분리된 콘텐츠·FAQ 
   assert.match(navigation, /href: "\/blog\/"/);
   assert.match(navigation, /href: "\/youtube\/"/);
   assert.match(navigation, /FAQ·상담/);
+  assert.match(navigation, /href: "\/youtube\/", label: "유튜브" \},\r?\n  \{ href: office\.instagramUrl, label: "인스타그램", external: true \}/u, "인스타그램은 유튜브 바로 뒤 바깥 링크");
+  assert.match(header, /item\.external \? \(\s*<a href=\{item\.href\} target="_blank" rel="noopener noreferrer">[\s\S]*?<span class="sr-only">\(새 창\)<\/span>/u, "바깥 링크는 새 창 안내");
   assert.match(
     navigation,
     /href: "\/office\/", label: "사무소 소개"[\s\S]*href: "\/complexes\/", label: "아파트 소개"[\s\S]*href: "\/properties\/", label: "매물"/,
