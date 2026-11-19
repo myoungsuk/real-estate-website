@@ -3,6 +3,7 @@ import {
   calculateAdminResourceDigest,
   normalizeAdminResourceJson,
 } from "../src/lib/admin-resource-digest.mjs";
+import { findSensitiveStrings } from "../scripts/content-validation.mjs";
 
 export class GithubContentError extends Error {
   constructor(code, message, status, upstreamStatus = null) {
@@ -19,6 +20,7 @@ const decoder = new TextDecoder();
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 const MAX_IMAGE_DIMENSION = 1600;
 const MAX_IMAGE_PIXELS = MAX_IMAGE_DIMENSION * MAX_IMAGE_DIMENSION;
+const MAX_IMAGE_NAME_ATTEMPTS = 5;
 const MAX_HISTORY_LIMIT = 10;
 const COMMIT_SHA_PATTERN = /^[a-f0-9]{40}$/u;
 const mediaCategories = new Set(["listing", "blog", "youtube", "office", "area", "instagram"]);
@@ -582,6 +584,17 @@ export async function writeAdminResource(resource, data, sha, env, options = {})
   };
 }
 
+// 사진 파일 이름은 36진수 시각(시간순으로 정렬됨)과 무작위 8자리로 만든다. 10진수 13자리 시각은 7번째 자리가 1 ~ 4이면
+// 주민등록번호 검사에 걸려, 사진은 저장되는데 그 경로를 넣은 콘텐츠 저장이 실패했다. 공개 경로가 콘텐츠와 같은 민감정보 검사
+// (승인 연락처 예외 없이)를 통과할 때만 쓰고, 정해진 횟수 안에 못 만들면 GitHub에 쓰기 전에 멈춘다.
+function createAdminImagePath(category) {
+  for (let attempt = 0; attempt < MAX_IMAGE_NAME_ATTEMPTS; attempt += 1) {
+    const filePath = `public/images/content/${category}/${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}.webp`;
+    if (findSensitiveStrings(filePath.replace(/^public/u, ""), { path: "media", office: null }).length === 0) return filePath;
+  }
+  throw new GithubContentError("MEDIA_NAME_UNAVAILABLE", "사진 파일 이름을 만들지 못했습니다. 다시 올려 주세요.", 500);
+}
+
 export async function uploadAdminImage({ category, dataUrl }, env, fetcher = fetch) {
   if (!mediaCategories.has(category)) {
     throw new GithubContentError("MEDIA_CATEGORY_DENIED", "허용되지 않은 이미지 분류입니다.", 400);
@@ -599,8 +612,7 @@ export async function uploadAdminImage({ category, dataUrl }, env, fetcher = fet
   }
   validateWebpBytes(bytes);
   const config = getGithubConfig(env);
-  const fileName = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}.webp`;
-  const filePath = `public/images/content/${category}/${fileName}`;
+  const filePath = createAdminImagePath(category);
   const payload = await githubRequest(
     `/contents/${filePath.split("/").map(encodeURIComponent).join("/")}`,
     {
