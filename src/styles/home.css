@@ -400,6 +400,13 @@
   aspect-ratio: 1 / 1;
 }
 
+/* 썸네일 링크(grid)의 줄 높이가 사진 높이를 따라가서 height: 100%가 칸 높이로 계산되지 않는다.
+   세로 사진(릴스 표지 9:16)이 원래 비율로 커진 뒤 위쪽만 보이므로, 사진 자체를 정사각으로 정해 가운데를 자른다. */
+.content-note--instagram .content-card__thumbnail img {
+  aspect-ratio: 1 / 1;
+  height: auto;
+}
+
 /* 미리보기 표시가 카드 누름 영역을 가로막지 않게 */
 .content-note .content-card__preview-label {
   pointer-events: none;
