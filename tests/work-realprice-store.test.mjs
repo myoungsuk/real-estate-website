@@ -224,6 +224,37 @@ test("TK-16 저장 40건인 달에 15건만 오면 보류(held_count 15, 거래 
   assert.equal(shrink.deleted, 14);
 });
 
+test("TK-16·TK-55 저장이 1건 이상인 달에 0건이 오면 건수와 상관없이 한 번 보류, 0건이 다시 오면 그때 지움, 그사이 원래 건수가 다시 오면 옛 거래는 처음 채우기 표시 그대로", async () => {
+  for (const stored of [1, 10, 19, 40]) {
+    const { database, db } = freshDb({ d1Meta: true });
+    await seedMonth(db);
+    await apply(db, database, saleItems(stored));
+    const firstSeen = rows(database, "SELECT first_seen_at FROM rt_trades LIMIT 1")[0].first_seen_at;
+    const held = await apply(db, database, [], { nowMs: NOW + HOUR });
+    assert.equal(held.outcome, "held", `저장 ${stored}건`);
+    let month = monthRow(database);
+    assert.deepEqual([month.status, month.held_count, month.row_count, month.last_error], ["held", 0, stored, "RT_HELD_DROP"], `저장 ${stored}건`);
+    assert.equal(rows(database, "SELECT COUNT(*) AS n FROM rt_trades")[0].n, stored, "보류 중에는 지우지 않음");
+
+    // 일시적인 0건 뒤 원래 자료가 다시 오면: 보류가 풀리고 옛 거래는 그대로(새로 들어옴이 되지 않음).
+    const back = await apply(db, database, saleItems(stored), { nowMs: NOW + 2 * HOUR });
+    assert.deepEqual([back.outcome, back.inserted, back.deleted], ["ok", 0, 0], `저장 ${stored}건`);
+    assert.deepEqual(rows(database, "SELECT DISTINCT is_backfill, first_seen_at FROM rt_trades"), [{ is_backfill: 1, first_seen_at: firstSeen }]);
+
+    // 0건이 두 번 이어서 오면 그때 반영(모두 지움).
+    await apply(db, database, [], { nowMs: NOW + 3 * HOUR });
+    const confirmed = await apply(db, database, [], { nowMs: NOW + 4 * HOUR });
+    assert.deepEqual([confirmed.outcome, confirmed.deleted], ["ok", stored], `저장 ${stored}건`);
+    month = monthRow(database);
+    assert.deepEqual([month.status, month.row_count, month.held_count], ["ok", 0, null]);
+  }
+  // 저장이 0건인 달에 0건이 오면 보류 없이 ok(처음 받기·원래 없는 달).
+  const { database, db } = freshDb({ d1Meta: true });
+  await seedMonth(db);
+  assert.equal((await apply(db, database, [])).outcome, "ok");
+  assert.equal((await apply(db, database, [], { nowMs: NOW + HOUR })).outcome, "ok");
+});
+
 test("빈 면적·빈 단지명 행은 버리고 dropped_count에 세며, 버린 비율이 5%를 넘을 때만 갱신 상태 경고(B-2)", async () => {
   const { database, db } = freshDb({ d1Meta: true });
   await seedMonth(db);

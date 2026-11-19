@@ -399,7 +399,7 @@ test("TK-31 성공·실패·처리 중 예외 Cron 뒤 Worker 로그·실행 결
     outputs.push(internal);
     assert.deepEqual(log.at(-1), { event: "realprice_cron", level: "warn", run: internal.run, code: "RT_INTERNAL" });
     const month = monthRow(database, "sale", "202611");
-    assert.deepEqual([month.last_error, month.attempts, month.next_due_at], ["RT_INTERNAL", 0, iso(at + 30 * MINUTE)], "예외 뒤 정리: 그 달은 30분 뒤(중단 횟수로 세지 않음)");
+    assert.deepEqual([month.last_error, month.attempts, month.next_due_at], ["RT_INTERNAL", 1, iso(at + 30 * MINUTE)], "예외 뒤 정리: 그 달은 30분 뒤, attempts는 그대로(연속 횟수로 셈, 49.3 ③)");
     assert.deepEqual(rows(database, "SELECT outcome, error_code FROM rt_fetch_runs WHERE seq = ?", internal.run), [{ outcome: "failed", error_code: "RT_INTERNAL" }]);
     assert.equal(rows(database, "SELECT lease_until FROM worker_leases")[0].lease_until, iso(0), "임대 반납");
     assert.equal(rows(database, "SELECT COUNT(*) AS n FROM rt_trades")[0].n, 0, "실패한 batch는 아무것도 남기지 않음");
@@ -442,4 +442,66 @@ test("D1 meta가 없는 결과(흉내 끔)여도 하루 사용량은 추정 쓰�
   const [usage] = rows(database, "SELECT * FROM rt_daily_usage");
   assert.equal(usage.rows_written, result.rowsWritten);
   assert.equal(result.rowsWritten, 10 * 2 + 2 + 3, "넣기 10건 × 2 + 달 상태·사용량 2 + 끝 batch 3");
+});
+
+test("TK-22 받을 차례가 없으면 읽기만 하고 D1 쓰기 0행(batch 0번, 바뀐 행 0), rt_fetch_runs 기록 없음, 외부 요청 0번", async () => {
+  const { database, db } = freshDb({ d1Meta: true });
+  await seedAllDone(db, database);
+  const tables = rows(database, "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").map((row) => row.name);
+  const dump = () => JSON.stringify(tables.map((name) => rows(database, `SELECT * FROM ${name}`)));
+  const before = dump();
+  const changesBefore = rows(database, "SELECT total_changes() AS n")[0].n;
+  const statementsBefore = db.stats.statements;
+  const { fetcher, calls } = portal();
+  const log = [];
+  const result = await cron(cronEnv(db), { fetcher, log });
+  assert.equal(result.outcome, "idle");
+  assert.equal(calls.length, 0, "외부 요청 0번");
+  assert.deepEqual(db.stats.batches, [], "batch 0번");
+  assert.equal(rows(database, "SELECT total_changes() AS n")[0].n, changesBefore, "바뀐 행 0(넣기·고치기·지우기 없음)");
+  assert.equal(dump(), before, "모든 표 그대로(사용량·임대·실행 기록 포함)");
+  assert.equal(rows(database, "SELECT COUNT(*) AS n FROM rt_fetch_runs")[0].n, 0);
+  assert.equal(db.stats.statements - statementsBefore, 4, "읽기 4문장(구조 번호·달·오늘 사용량·설정)");
+  assert.deepEqual(log, [], "할 일이 없으면 로그도 없음");
+});
+
+test("처리 중 예외(RT_INTERNAL)도 끊김처럼 attempts를 세어 같은 달이 3번 연속이면 갱신 상태 경고 RT_INTERNAL(달 단위), 성공하면 0으로 돌아감", async () => {
+  const { database, db } = freshDb({ d1Meta: true });
+  await seedAllDone(db, database);
+  database.prepare("DELETE FROM rt_trades").run();
+  const { fetcher } = portal({ "sale:202611": saleMonthItems("202611", 1200) });
+  // 반영 batch(넣기 2문장 + 상태·사용량 2문장)만 실패시킨다. 시작·정리 batch는 3문장 이하라 그대로 된다.
+  const exploding = { ...db, prepare: db.prepare, batch: async (statements) => {
+    if (statements.length > 3) throw new Error("batch failed");
+    return db.batch(statements);
+  } };
+  let at = NOW;
+  for (let round = 1; round <= 3; round += 1) {
+    makeDue(database, "sale", "202611", { at });
+    const result = await cron(cronEnv(exploding), { now: at, fetcher });
+    assert.deepEqual([result.outcome, result.code], ["internal_error", "RT_INTERNAL"], `${round}번째`);
+    const month = monthRow(database, "sale", "202611");
+    assert.deepEqual([month.status, month.last_error, month.attempts, month.next_due_at], ["failed", "RT_INTERNAL", round, iso(at + 30 * MINUTE)], `${round}번째`);
+    const warnings = (await status(db, at)).warnings;
+    const internal = warnings.find((item) => item.code === "RT_INTERNAL");
+    assert.deepEqual(internal, round === 3 ? { code: "RT_INTERNAL", count: 1, months: ["sale:202611"] } : undefined, `${round}번째: 3번 연속일 때만 경고`);
+    assert.equal(warnings.some((item) => item.code === "RT_ABORTED"), false, "끊김 경고와 따로 셈");
+    at += 31 * MINUTE;
+  }
+  const ok = await cron(cronEnv(db), { now: at, fetcher });
+  assert.equal(ok.outcome, "ok");
+  const month = monthRow(database, "sale", "202611");
+  assert.deepEqual([month.status, month.attempts, month.last_error], ["ok", 0, null]);
+  assert.equal((await status(db, at)).warnings.some((item) => item.code === "RT_INTERNAL"), false);
+});
+
+test("실행 기록의 끝 시각은 끝 batch를 만들 때 시계를 다시 읽은 값(시작 시각과 다름)", async () => {
+  const { database, db } = freshDb({ d1Meta: true });
+  const { fetcher } = portal({ "sale:202611": saleMonthItems("202611", 3) });
+  let clock = NOW;
+  const result = await runRealpriceCron(cronEnv(db), { now: () => (clock += 1500), fetcher, log: () => {}, randomUUID: nextUuid });
+  assert.equal(result.outcome, "ok");
+  const [run] = rows(database, "SELECT started_at, finished_at FROM rt_fetch_runs");
+  assert.equal(run.started_at, iso(NOW + 1500), "시작 시각은 실행 첫 시계");
+  assert.ok(run.finished_at > run.started_at, `끝 ${run.finished_at} > 시작 ${run.started_at}`);
 });

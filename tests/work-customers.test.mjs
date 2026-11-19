@@ -31,6 +31,13 @@ test("0002는 원격 D1에 이미 적용됐으니 고치지 말고 0003 새 파�
     "migrations/work/0002_deal_schedule_inputs.sql이 바뀌었습니다. 0002는 2026-11-17 원격 D1에 적용됐으므로 되돌리고, 구조를 바꾸려면 0003_*.sql을 새로 만드세요.");
 });
 
+test("0003은 원격 D1에 이미 적용됐으니 고치지 말고 0004 새 파일로 만드세요(0003 지문 고정)", async () => {
+  const sql = await readFile(new URL("../migrations/work/0003_public_realprice.sql", import.meta.url), "utf8");
+  const digest = createHash("sha256").update(sql.replace(/\r\n/gu, "\n"), "utf8").digest("hex");
+  assert.equal(digest, "8dcbf692b4a33a4ac252934d6c9098d74b94de9fca7e467cdafb5fcc957ca468",
+    "migrations/work/0003_public_realprice.sql이 바뀌었습니다. 0003은 원격에 적용됐으니 0004로 만드세요(2026-11-19 원격 D1 적용).");
+});
+
 test("동시 작업: 손님·메모를 고치는 사이 다른 관리자가 같은 밀리초에 먼저 고쳐도(같은 version·같은 시각) 내 수정은 409이고 감사 행이 남지 않는다", async () => {
   const { database, db } = freshDb();
   const env = workEnv(db);

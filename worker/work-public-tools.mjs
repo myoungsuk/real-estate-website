@@ -1,11 +1,13 @@
 // 업무 도구 단계 P(공개 자료 도구) API. work-api.mjs의 handleWorkApi()가 단계 2 켜기 값 확인 **전에** 이 파일로 넘긴다(설계서 22.2절).
-// - 경로: /work/public-tools/session, /work/realprice/*(P1-b는 status·refresh), /work/blog/*(P3 전까지 늘 503 BLOG_DISABLED).
-// - 순서: 단계 P 켜기 값 → 구조 번호 → (쓰기) Origin·CSRF → 입력 → 처리 → 감사(realprice.refresh만).
+// - 경로: /work/public-tools/session, /work/realprice/*(status·refresh·trades·complexes·watch), /work/blog/*(P3 전까지 늘 503 BLOG_DISABLED).
+// - 순서: 단계 P 켜기 값 → 구조 번호 → (쓰기) Origin·CSRF → 입력 → 처리 → 감사(쓰기인 realprice.refresh·realprice.watch.update만).
 // - 꺼진 기능의 거부는 D1에 쓰지 않고 Worker 로그에 HMAC 작업자 ID만 남긴다(단계 2와 같음).
 // - work-api.mjs와 서로 import한다. 서로의 내보내기는 요청을 처리할 때만 쓰므로(모듈을 읽을 때 쓰지 않음) 순환 import가 문제되지 않는다.
 import { parseAdminAllowedOrigins } from "./admin-security.mjs";
 import { maskEmail } from "./admin-audit.mjs";
+import { jsonResponse } from "./http.mjs";
 import { REALPRICE_RETRY_POLICY } from "./realprice-fetch.mjs";
+import { listRealpriceTrades, readRealpriceWatch, saveRealpriceWatch, searchRealpriceComplexes } from "./realprice-query.mjs";
 import { readRealpriceStatus, refreshStatements } from "./realprice-store.mjs";
 import { WorkApiError, createWorkCsrfToken, hasD1, validateWorkJsonWrite } from "./work-security.mjs";
 import { writeBatchWithAudit } from "./work-audit.mjs";
@@ -38,6 +40,15 @@ const disabledError = () => new WorkApiError("REALPRICE_DISABLED", "실거래가
 const configMissingError = () => new WorkApiError("REALPRICE_CONFIG_MISSING", "실거래가 도구 설정이 완료되지 않았습니다.", 503);
 const methodNotAllowed = (allow) => Object.assign(new WorkApiError("METHOD_NOT_ALLOWED", "허용되지 않은 요청 방식입니다.", 405), { allow });
 const notFound = () => new WorkApiError("NOT_FOUND", "요청한 업무 자료를 찾지 못했습니다.", 404);
+
+// 하루 읽기 끝 상한(429 RT_READ_BUDGET): 공통 오류 봉투에 retryAt(다음 한국 시각 09:00)을 더하고 Retry-After 머리줄을 단다(22.9절).
+function readBudgetResponse(requestId, error, now) {
+  const seconds = Math.max(1, Math.ceil((Date.parse(error.retryAt) - now) / 1000));
+  return jsonResponse(
+    { ok: false, error: { code: error.code, message: error.message, retryable: true, retryAt: error.retryAt }, requestId },
+    { status: 429, headers: { "X-Request-Id": requestId, "Retry-After": String(seconds) } },
+  );
+}
 
 // 구조 번호 확인(8.4절과 같은 규칙). 맞으면 null, 아니면 오류 응답.
 async function checkSchema(context) {
@@ -134,9 +145,25 @@ async function handleRealprice(context) {
       });
       return workSuccess({ queuedMonths: refresh.queuedMonths, estimatedMinutes: refresh.estimatedMinutes }, requestId);
     }
+    // 목록·단지 찾기는 읽은 행 수를 rt_daily_usage에 더하고, 하루 읽기 끝 상한을 넘으면 429로 거절한다(22.7절). 감사는 쓰지 않는다.
+    if (route === "/realprice/trades") {
+      if (method !== "GET") throw methodNotAllowed("GET");
+      return workSuccess(await listRealpriceTrades(db, new URL(request.url).searchParams, { nowMs: now }), requestId);
+    }
+    if (route === "/realprice/complexes") {
+      if (method !== "GET") throw methodNotAllowed("GET");
+      return workSuccess(await searchRealpriceComplexes(db, new URL(request.url).searchParams, { nowMs: now }), requestId);
+    }
+    if (route === "/realprice/watch") {
+      // 보기는 20행 이하만 읽어 사용량에 더하지 않고 끝 상한 날에도 200이다. 저장은 version guard와 감사를 같은 batch에 넣는다.
+      if (method === "GET") return workSuccess(await readRealpriceWatch(db), requestId);
+      if (method !== "PUT") throw methodNotAllowed("GET, PUT");
+      return workSuccess(await saveRealpriceWatch(db, body, { nowMs: now, actorEmail: actor.email, requestId }), requestId);
+    }
     throw notFound();
   } catch (error) {
     if (error instanceof WorkApiError) {
+      if (error.code === "RT_READ_BUDGET" && error.retryAt) return readBudgetResponse(requestId, error, now);
       return workError(requestId, error, error.status === 405 ? { Allow: error.allow ?? "GET" } : {});
     }
     return workError(requestId, new WorkApiError("STORAGE_UNAVAILABLE", "업무 자료를 처리하지 못했습니다.", 503, true));
