@@ -24,6 +24,10 @@
 html { scroll-behavior: smooth; }
 /* 휴대폰 하단 상담 막대(fixed, 약 69px + 홈 막대 여백) 뒤로 키보드 포커스가 숨지 않게, 막대가 있는 화면에서만 아래 스크롤 여백을 둔다. 막대가 사라지는 1024px 이상은 0(아래 미디어 쿼리). */
 html:has(.contact-bar) { scroll-padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
+/* 위 고정 머리(sticky, 폭·글자 크기에 따라 75 ~ 138px) 밑으로 키보드 포커스(특히 Shift+Tab)와 #앵커 이동이 숨지 않게, 머리가 있는 공개 화면에서만 위 스크롤 여백을 머리 높이 + 8px로 둔다.
+   높이는 SiteHeader 스크립트가 잰 값, 없으면 글자 크기에 맞춘 대체값(글자 100 ~ 200%에서 잰 머리 높이 이상). 포커스가 머리 안에 있을 때는 빼서, 아래로 스크롤한 채 메뉴 단추 등에 포커스가 가도 문서가 맨 위로 튀지 않게 한다.
+   이미 앵커 여백(scroll-margin-top)을 둔 곳은 이 값만큼 빼서(아래) 이동 위치를 전과 같게 둔다. */
+html:has(.site-header:not(:focus-within)) { --site-header-scroll-offset: calc(var(--site-header-height, max(83px, 4.4rem)) + 8px); scroll-padding-top: var(--site-header-scroll-offset); }
 
 body {
   margin: 0;
@@ -445,7 +449,7 @@ h3 { font-size: 1.35rem; }
 .content-card__body > p:not(.content-card__source) { display: -webkit-box; overflow: hidden; color: var(--muted); -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
 .content-card__link { align-self: end; min-height: 44px; display: inline-flex; align-items: center; margin-top: auto; color: var(--navy-800); font-weight: 800; }
 .content-card[hidden] { display: none; }
-.content-card-grid { scroll-margin-top: 100px; }
+.content-card-grid { scroll-margin-top: max(0px, calc(100px - var(--site-header-scroll-offset, 0px))); }
 .content-pagination { display: flex; flex-wrap: nowrap; justify-content: center; align-items: center; gap: 10px; margin-top: 34px; }
 .content-pagination[hidden] { display: none !important; }
 .content-pagination__pages { min-width: 0; display: flex; flex: 0 1 auto; flex-wrap: nowrap; justify-content: flex-start; gap: 7px; padding: 6px; overflow-x: auto; scrollbar-width: thin; }
@@ -491,7 +495,7 @@ h3 { font-size: 1.35rem; }
 .listing-card--naver { min-width: 0; display: flex; flex-direction: column; border: 1px solid var(--ds-edge); border-radius: 2px; color: var(--ds-ink); background: var(--ds-paper); box-shadow: 0 2px 3px rgba(20, 20, 20, 0.08), 0 10px 22px rgba(20, 20, 20, 0.1); }
 .listing-card--naver .listing-card__body { min-height: 100%; display: flex; flex: 1; flex-direction: column; padding: 18px 18px 8px; }
 .listing-card--naver .listing-card__link { margin-top: auto; }
-.listing-grid--home { scroll-margin-top: 100px; }
+.listing-grid--home { scroll-margin-top: max(0px, calc(100px - var(--site-header-scroll-offset, 0px))); }
 .property-detail h1 { max-width: 860px; }
 .property-detail__price { margin: 20px 0 42px; color: var(--rose-dark); font-family: Georgia, "Noto Serif KR", serif; font-size: clamp(2rem, 5vw, 3.5rem); font-weight: 700; }
 .property-gallery { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(280px, 86%); gap: 12px; margin-bottom: 38px; padding-bottom: 12px; overflow-x: auto; scroll-snap-type: inline mandatory; }
@@ -506,7 +510,7 @@ h3 { font-size: 1.35rem; }
 .faq-guide__mark { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; color: var(--white); background: var(--rose-dark); font-family: Georgia, serif; font-size: 1.15rem; font-weight: 800; }
 .faq-guide strong { display: block; margin: 1px 0 7px; color: var(--navy-950); }
 .faq-guide p { margin: 0; color: var(--muted); font-size: 1rem; line-height: 1.75; }
-.faq-category-nav { scroll-margin-top: 110px; margin: 28px 0 38px; padding: clamp(20px, 4vw, 28px); border: 1px solid var(--line); border-radius: 22px; background: var(--ivory); }
+.faq-category-nav { scroll-margin-top: max(0px, calc(110px - var(--site-header-scroll-offset, 0px))); margin: 28px 0 38px; padding: clamp(20px, 4vw, 28px); border: 1px solid var(--line); border-radius: 22px; background: var(--ivory); }
 .faq-category-nav__heading { margin-bottom: 18px; }
 .faq-category-nav__heading h3 { margin: 0; font-size: clamp(1.25rem, 3vw, 1.6rem); }
 .faq-category-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
@@ -520,7 +524,7 @@ h3 { font-size: 1.35rem; }
 .faq-category-grid small { margin-top: 3px; color: var(--muted); font-size: 0.875rem; }
 .faq-category-link__arrow { grid-area: arrow; align-self: center; color: var(--rose-dark); font-weight: 900; }
 .faq-category-groups { display: grid; gap: 52px; }
-.faq-category-section { scroll-margin-top: 110px; }
+.faq-category-section { scroll-margin-top: max(0px, calc(110px - var(--site-header-scroll-offset, 0px))); }
 .faq-category-section__heading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 14px 24px; align-items: end; margin-bottom: 18px; padding-bottom: 16px; border-bottom: 2px solid var(--navy-950); }
 .faq-category-section__heading h3 { margin: 0; font-size: clamp(1.3rem, 3vw, 1.75rem); word-break: keep-all; }
 .faq-category-section__meta { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; color: var(--muted); font-size: 0.875rem; font-weight: 750; }
