@@ -47,6 +47,13 @@ const pathname = Astro.url.pathname;
   const button = header?.querySelector<HTMLButtonElement>("[data-menu-button]");
   const menu = header?.querySelector<HTMLElement>("[data-menu]");
 
+  // 머리 높이(폭·글자 크기에 따라 달라짐)를 CSS 변수로 넘겨, 위 스크롤 여백(global.css scroll-padding-top)을 머리 높이에 맞춘다.
+  if (header && "ResizeObserver" in window) {
+    new ResizeObserver(() => {
+      document.documentElement.style.setProperty("--site-header-height", `${Math.ceil(header.getBoundingClientRect().height)}px`);
+    }).observe(header);
+  }
+
   if (button && menu) {
     const closeMenu = () => {
       button.setAttribute("aria-expanded", "false");
