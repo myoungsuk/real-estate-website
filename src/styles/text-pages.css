@@ -84,7 +84,7 @@ main .button--secondary:hover {
   color: var(--ds-ink);
 }
 
-/* 블로그·유튜브 카드: 평평한 종이 칸, 떠오름 없음 */
+/* 블로그·유튜브 카드: 평평한 종이 칸. 떠오름은 정밀 포인터에서만(바로 아래 미디어 쿼리) */
 .content-card {
   border-color: var(--ds-edge);
   border-radius: 2px;
@@ -96,6 +96,30 @@ main .button--secondary:hover {
 .content-card:hover {
   transform: none;
   box-shadow: none;
+}
+
+/* 정밀 포인터로 올리면 홈 새 글 썸네일처럼 카드가 3px 떠오른다(사용자 2026-11-19). 카드가 올라가도 커서가 아래 가장자리에서
+   떨리지 않게 카드 아래에 투명 띠(::after)를 붙이고, 띠가 잘리지 않게 이 조건에서만 카드의 바깥 잘라내기를 푼다(썸네일은 자기 칸이 자른다). */
+@media (prefers-reduced-motion: no-preference) and (hover: hover) and (pointer: fine) {
+  .content-card {
+    position: relative;
+    overflow: visible;
+    transition: transform 0.18s ease-out, box-shadow 0.18s ease-out;
+  }
+
+  .content-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 12px 24px rgba(20, 20, 20, 0.14);
+  }
+
+  .content-card:hover::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    right: 0;
+    left: 0;
+    height: 4px;
+  }
 }
 
 .content-card__media,
@@ -200,7 +224,7 @@ main .button--secondary:hover {
 
 .content-pagination button:disabled {
   border-color: var(--ds-edge);
-  color: #8c897f;
+  color: #878b92;
   opacity: 1;
 }
 
