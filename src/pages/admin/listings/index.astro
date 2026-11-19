@@ -84,6 +84,7 @@ const formatDate = (value: string) => new Intl.DateTimeFormat("ko-KR", { year: "
   <script>
     import listingReviewState from "../../../../.github/listing-review-state.json";
     import {
+      getAdminSession,
       readAdminContent,
       writeAdminContent,
       type AdminResource,
@@ -180,8 +181,10 @@ const formatDate = (value: string) => new Intl.DateTimeFormat("ko-KR", { year: "
       }
     };
 
-    window.addEventListener("admin-write-ready", (event) => {
-      reviewWriteEnabled = (event as CustomEvent<{ writeEnabled: boolean }>).detail.writeEnabled;
+    // 이 화면에는 AdminWriteGate가 없어 'admin-write-ready' 신호가 오지 않는다. getAdminSession()이 돌려주는 Promise(한 번 만들어 같이 씀)를 직접 기다려
+    // 저장 연결이 켜져 있을 때만 확인 완료 단추를 켠다. Promise는 결과를 간직하므로 세션 응답이 이 스크립트보다 먼저 와도 놓치지 않는다.
+    void getAdminSession().then((session) => {
+      reviewWriteEnabled = session.writeEnabled;
       if (!reviewWriteEnabled) return;
       void readAdminContent<ListingReviewState>("listing-review-state").then((current) => {
         reviewResource = current;
@@ -191,6 +194,9 @@ const formatDate = (value: string) => new Intl.DateTimeFormat("ko-KR", { year: "
         reviewWriteEnabled = false;
         if (reviewStatus) reviewStatus.textContent = "GitHub의 최신 재확인 상태를 불러오지 못했습니다.";
       });
+    }).catch((error) => {
+      // 세션을 받지 못하면(로그인 만료·로컬 화면 등) 단추는 꺼진 채로 두고 까닭을 보인다.
+      if (reviewStatus) reviewStatus.textContent = error instanceof Error ? error.message : "관리자 저장 연결 상태를 확인하지 못했습니다.";
     });
 
     reviewSelections.forEach((input) => input.addEventListener("change", updateReviewSelection));

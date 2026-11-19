@@ -296,3 +296,43 @@ test("미리 그리기 규칙은 관리자 화면에만 있고 공개 화면에�
   }
   assertNoBrowserErrors();
 });
+
+// 관리자 매물 목록의 '확인 완료'·'선택' 단추는 저장 연결(세션의 writeEnabled)이 켜져 있을 때만 켜진다.
+// 이 화면에는 AdminWriteGate가 없으므로 화면 스크립트가 getAdminSession()을 직접 기다린다(세션 응답이 빨라도 놓치지 않음).
+const listingReviewState = JSON.parse(readFileSync(new URL("../.github/listing-review-state.json", import.meta.url), "utf8"));
+for (const writeEnabled of [true, false]) {
+  test(`관리자 매물 목록의 확인 완료 단추는 저장 연결이 ${writeEnabled ? "켜져 있으면 켜진다" : "꺼져 있으면 꺼진 채로 둔다"}`, async ({ page }) => {
+    const assertNoBrowserErrors = failOnBrowserErrors(page);
+    const requests = { session: 0, content: 0 };
+    await page.route("**/api/admin/v1/session", (route) => {
+      requests.session += 1;
+      return route.fulfill({ json: { ok: true, data: { authenticated: true, administrator: "시험 관리자", authentication: "시험", writeEnabled, csrfToken: writeEnabled ? "test-csrf" : null } } });
+    });
+    await page.route("**/api/admin/v1/content/listing-review-state", (route) => {
+      requests.content += 1;
+      return route.fulfill({ json: { ok: true, data: { resource: "listing-review-state", sha: "test-sha", data: listingReviewState } } });
+    });
+    await page.goto("/admin/listings/");
+    const confirmButtons = page.locator("[data-listing-review-confirm]");
+    const selectedButton = page.locator("[data-listing-review-selected]");
+    expect(await confirmButtons.count(), "직접 등록 매물이 있어야 이 시험을 할 수 있음").toBeGreaterThan(0);
+    if (writeEnabled) {
+      await expect(confirmButtons.first()).toBeEnabled();
+      await expect(page.locator("[data-listing-review-confirm]:disabled")).toHaveCount(0);
+      await expect(page.locator("[data-listing-review-select]:disabled")).toHaveCount(0);
+      await expect(selectedButton, "고른 매물이 0건이면 묶음 단추는 꺼져 있음").toBeDisabled();
+      await page.locator("[data-listing-review-select]").first().check();
+      await expect(selectedButton).toBeEnabled();
+      await expect(selectedButton).toHaveText("선택 1건 확인 완료");
+      expect(requests.content, "최신 재확인 상태를 한 번 불러옴").toBe(1);
+    } else {
+      await page.waitForLoadState("networkidle");
+      await expect(page.locator("[data-listing-review-confirm]:enabled")).toHaveCount(0);
+      await expect(page.locator("[data-listing-review-select]:enabled")).toHaveCount(0);
+      await expect(selectedButton).toBeDisabled();
+      expect(requests.content, "저장 연결이 꺼져 있으면 재확인 상태를 부르지 않음").toBe(0);
+    }
+    expect(requests.session, "화면이 저장 연결 상태를 한 번 물어봄").toBe(1);
+    assertNoBrowserErrors();
+  });
+}
