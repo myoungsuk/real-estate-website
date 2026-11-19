@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { access, readFile } from "node:fs/promises";
+import { access, readFile, readdir } from "node:fs/promises";
 import test from "node:test";
 
 const readSource = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
@@ -319,6 +319,22 @@ test("외부 콘텐츠는 블로그와 유튜브를 나누고 일반 영상을 �
   assert.match(home, /publishedInstagramContents\.slice\(0, 6\)/);
   assert.match(home, /homeInstagramContents\.length > 0 && <ExternalContentList items=\{homeInstagramContents\}[^>]*paginate=\{false\}[^>]*variant="note"/u, "0건이면 목록 없이 바로가기만");
   assert.match(contentSource, /export type ExternalContentType = "blog" \| "youtube" \| "instagram";/u);
+});
+
+test("관리자 화면에서 'admin-write-ready' 신호를 듣는 화면은 그 신호를 보내는 AdminWriteGate를 함께 둔다", async () => {
+  const pagesDir = new URL("../src/pages/admin/", import.meta.url);
+  const files = (await readdir(pagesDir, { recursive: true })).map((name) => name.replaceAll("\\", "/")).filter((name) => name.endsWith(".astro"));
+  const listeners = [];
+  for (const name of files) {
+    const source = await readFile(new URL(name, pagesDir), "utf8");
+    if (!source.includes('addEventListener("admin-write-ready"')) continue;
+    listeners.push(name);
+    assert.match(source, /<AdminWriteGate\b/u, `${name}: 신호를 보내는 AdminWriteGate가 없으면 신호가 오지 않아 단추가 계속 꺼져 있음`);
+  }
+  assert.ok(listeners.length >= 4, "편집 화면 4곳(content·complexes·external-links·listings/editor)은 지금처럼 신호를 들음");
+  const listings = await readSource("src/pages/admin/listings/index.astro");
+  assert.doesNotMatch(listings, /addEventListener\("admin-write-ready"/u, "매물 목록에는 AdminWriteGate가 없으므로 신호를 기다리지 않음");
+  assert.match(listings, /void getAdminSession\(\)\.then\(\(session\) => \{\s*reviewWriteEnabled = session\.writeEnabled;/u, "매물 목록은 세션 결과를 직접 기다려 확인 완료 단추를 켬(신호 순서와 무관)");
 });
 
 test("네이버 매물 관리 화면은 검색·유형·재확인 필터와 기준 미설정 안전 상태를 제공한다", async () => {
