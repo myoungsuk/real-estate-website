@@ -1,3 +1,5 @@
+import { stripWebpMetadataFromDataUrl } from "./admin-webp-clean.mjs";
+
 interface ApiErrorBody {
   code?: string;
   message?: string;
@@ -431,7 +433,8 @@ export async function convertImageFileToWebp(file: File, maxSide = 1600, quality
   if (!context) throw new Error("이미지를 처리하지 못했습니다.");
   context.drawImage(bitmap, 0, 0, width, height);
   bitmap.close();
-  const dataUrl = canvas.toDataURL("image/webp", quality);
+  // 크롬은 원본에 없던 색 정보(ICCP) 조각을 넣고 서버는 메타데이터 조각을 거부하므로, 빼고 나서 크기를 잰다.
+  const dataUrl = stripWebpMetadataFromDataUrl(canvas.toDataURL("image/webp", quality));
   if (!dataUrl.startsWith("data:image/webp;base64,")) throw new Error("WebP 이미지 변환에 실패했습니다.");
   const approximateBytes = Math.ceil((dataUrl.length - dataUrl.indexOf(",") - 1) * 0.75);
   if (approximateBytes > 2 * 1024 * 1024) throw new Error("최적화 후 이미지가 2MB를 넘습니다. 더 작은 사진을 선택해 주세요.");
