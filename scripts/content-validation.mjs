@@ -81,6 +81,7 @@ const publicContentSchemas = Object.freeze({
     naverListingsUrl: valueSchema,
     naverBlogUrl: valueSchema,
     youtubeUrl: valueSchema,
+    instagramUrl: valueSchema,
     kakaoUrl: valueSchema,
   }),
   listings: arraySchema(objectSchema({
@@ -351,13 +352,22 @@ export function validateOffice(office) {
     errors.push("office.email: 올바른 이메일 주소가 필요합니다.");
   }
 
-  for (const key of ["naverPlaceUrl", "naverListingsUrl", "naverBlogUrl", "youtubeUrl", "kakaoUrl"]) {
+  for (const key of ["naverPlaceUrl", "naverListingsUrl", "naverBlogUrl", "youtubeUrl", "instagramUrl", "kakaoUrl"]) {
     try {
       const url = new URL(office?.[key]);
       if (url.protocol !== "https:") errors.push(`office.${key}: HTTPS만 허용합니다.`);
     } catch {
       errors.push(`office.${key}: 올바른 공개 URL이 필요합니다.`);
     }
+  }
+
+  // 인스타그램 바로가기는 머리 메뉴·홈에서 새 창으로 열리므로 공식 인스타그램 주소(https://www.instagram.com/ 아래)만 허용한다.
+  try {
+    if (new URL(office?.instagramUrl).origin !== "https://www.instagram.com") {
+      errors.push("office.instagramUrl: https://www.instagram.com/ 아래 주소만 허용합니다.");
+    }
+  } catch {
+    // 주소 형식 오류는 바로 위 반복 검사가 알린다.
   }
 
   if (!Array.isArray(office?.hours) || office.hours.length === 0) {
@@ -1008,7 +1018,7 @@ export function validateHomeContent(homeContent) {
 
 // 확정 공개 정보 9가지(저장소 CLAUDE.md "확정 공개 정보" 표). 사칭에 민감해 관리자 저장·변경 이력 복원으로 바뀌지 않게 고정한다
 // (2026-11-17 사용자 승인 17:53:04 "9가지 고정"). 바꿀 때는 개발 PR(사용자 승인)로 이 표와 CLAUDE.md를 함께 고친다.
-// 영업시간·주차·소개 문장·네이버·유튜브 링크는 바뀔 수 있어 고정하지 않는다. validateOffice와 따로 두어 가짜 사무소 자료로 하는 형식 시험에는 걸지 않는다.
+// 영업시간·주차·소개 문장·네이버·유튜브·인스타그램 링크는 바뀔 수 있어 고정하지 않는다. validateOffice와 따로 두어 가짜 사무소 자료로 하는 형식 시험에는 걸지 않는다.
 export const APPROVED_OFFICE_FACTS = Object.freeze({
   legalName: "리더스시티행복한공인중개사사무소",
   brandName: "리더스시티 행복한부동산",

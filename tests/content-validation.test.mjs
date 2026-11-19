@@ -253,6 +253,7 @@ test("확정된 사무소 정보와 영업시간을 허용한다", () => {
     naverListingsUrl: "https://fin.land.naver.com/map",
     naverBlogUrl: "https://blog.naver.com/",
     youtubeUrl: "https://www.youtube.com/",
+    instagramUrl: "https://www.instagram.com/test/",
     kakaoUrl: "https://pf.kakao.com/_test/chat",
   };
 
@@ -278,6 +279,7 @@ test("사무소 외부 링크의 HTTP 주소를 거부한다", () => {
     naverListingsUrl: "https://fin.land.naver.com/map",
     naverBlogUrl: "https://blog.naver.com/",
     youtubeUrl: "https://www.youtube.com/",
+    instagramUrl: "https://www.instagram.com/test/",
     kakaoUrl: "http://pf.kakao.com/_test/chat",
   };
 
@@ -465,12 +467,26 @@ test("확정 공개 정보 9가지는 승인값과 같아야 저장되고, 영�
     hours: office.hours.map((hour) => ({ ...hour, note: "가상 메모" })),
     naverBlogUrl: "https://blog.naver.com/example",
     youtubeUrl: "https://www.youtube.com/@example",
+    instagramUrl: "https://www.instagram.com/example/",
   };
   assert.deepEqual(validateApprovedOfficeFacts(editable), [], "고정하지 않는 칸");
   const forged = { ...office, mobile: "010-0000-0000" };
   assert.match(validateAdminResource("office", forged).join("\n"), /office\.mobile: 확정 공개 정보와 다릅니다/u, "한 종류만 보는 저장 경로");
   assert.match(validateAdminResource("office", forged, await currentAdminResources()).join("\n"), /office\.mobile: 확정 공개 정보와 다릅니다/u, "다른 자료와 함께 보는 저장 경로");
   assert.deepEqual(validateOffice({ ...office, mobile: "010-0000-0000" }).filter((error) => error.includes("확정 공개 정보")), [], "형식 검사(validateOffice)에는 걸지 않음");
+});
+
+test("사무소 인스타그램 주소는 https://www.instagram.com/ 아래 HTTPS 주소만 허용한다", async () => {
+  const office = await readRepoJson("src/data/office.json");
+  assert.equal(office.instagramUrl, "https://www.instagram.com/readers.45_real.estate/");
+  assert.deepEqual(validateOffice(office), []);
+  for (const instagramUrl of ["https://instagram.com/readers.45_real.estate/", "https://www.instagram.com.example.com/readers.45_real.estate/", "https://www.instagram.com:8443/readers.45_real.estate/"]) {
+    assert.match(validateOffice({ ...office, instagramUrl }).join("\n"), /office\.instagramUrl: https:\/\/www\.instagram\.com\/ 아래 주소만 허용합니다/u, instagramUrl);
+  }
+  assert.match(validateOffice({ ...office, instagramUrl: "http://www.instagram.com/readers.45_real.estate/" }).join("\n"), /office\.instagramUrl: HTTPS만 허용합니다/u);
+  const withoutInstagram = { ...office };
+  delete withoutInstagram.instagramUrl;
+  assert.match(validateOffice(withoutInstagram).join("\n"), /office\.instagramUrl: 올바른 공개 URL이 필요합니다/u, "빠지면 머리 메뉴 링크가 비므로 막음");
 });
 
 test("매물 단지 표기 6가지: 단지 이름만 바꾸면 저장을 막고, 옛 이름을 별칭에 넣으면 통과하며, 단지를 지우거나 준비 중으로 돌리는 것은 막지 않는다", async () => {

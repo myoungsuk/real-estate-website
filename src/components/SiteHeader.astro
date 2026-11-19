@@ -31,9 +31,15 @@ const pathname = Astro.url.pathname;
       <ul>
         {navigation.map((item) => (
           <li>
-            <a href={item.href} aria-current={isCurrentPath(pathname, item.href) ? "page" : undefined}>
-              {item.label}
-            </a>
+            {item.external ? (
+              <a href={item.href} target="_blank" rel="noopener noreferrer">
+                {item.label} <span aria-hidden="true">↗</span><span class="sr-only">(새 창)</span>
+              </a>
+            ) : (
+              <a href={item.href} aria-current={isCurrentPath(pathname, item.href) ? "page" : undefined}>
+                {item.label}
+              </a>
+            )}
           </li>
         ))}
       </ul>
