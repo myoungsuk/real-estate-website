@@ -137,6 +137,11 @@ main .button--secondary:hover {
   font-family: inherit;
 }
 
+/* 썸네일 키보드 포커스 고리(global.css)의 둥글기를 이 화면 카드 모서리 2px에 맞춘다 */
+.content-card__thumbnail:focus-visible {
+  border-radius: 1px 1px 0 0;
+}
+
 .content-card__preview-label {
   border-radius: 2px;
 }
