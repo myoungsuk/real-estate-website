@@ -175,6 +175,40 @@ test("dry-run은 신규 항목과 썸네일을 검증해도 파일을 변경하�
   await assert.rejects(() => readdir(join(root, "public")), /ENOENT/u);
 });
 
+test("관리자가 등록한 인스타그램 항목이 섞여 있어도 동기화는 멈추지 않고 그 항목을 그대로 둔다", async (t) => {
+  const instagram = {
+    id: "instagram-2026-08-20",
+    type: "instagram",
+    status: "published",
+    title: "운영자가 등록한 인스타그램 게시물",
+    summary: "운영자가 적은 설명",
+    url: "https://www.instagram.com/p/ABCdef_12-3/",
+    publishedAt: "2026-08-20",
+    thumbnail: { src: "/images/content/instagram/operator.webp", alt: "운영자가 올린 사진" },
+  };
+  const candidates = [...parseNaverBlogFeed(naverRss), ...parseYouTubeFeed(youtubeAtom, { channelId })];
+  assert.equal(planNewExternalContent([instagram], candidates).length, candidates.length, "인스타그램은 원본 ID 색인에서 건너뜀");
+  assert.throws(() => planNewExternalContent([{ ...instagram, id: candidates[0].id }], candidates), /충돌/u, "같은 ID 후보는 덮어쓰지 않고 멈춤");
+
+  for (const dryRun of [true, false]) {
+    const root = await makeSyncRoot(t, { current: [instagram] });
+    const result = await runExternalContentSync({
+      rootDir: root,
+      summaryPath: null,
+      dryRun,
+      fetcher: fixtureFetcher(),
+      fetchAttempts: 1,
+      youtubeChannelId: channelId,
+      now: new Date("2026-08-30T00:00:00Z"),
+      logger: { log() {}, warn() {} },
+    });
+    assert.deepEqual({ blog: result.blogNew, youtube: result.youtubeNew }, { blog: 1, youtube: 1 }, `dryRun=${dryRun}`);
+    const saved = JSON.parse(await readFile(join(root, "src", "data", "external-links.json"), "utf8"));
+    assert.deepEqual(saved.filter((item) => item.type === "instagram"), [instagram], `dryRun=${dryRun}: 인스타그램 항목이 그대로 남음`);
+    assert.equal(saved.length, dryRun ? 1 : 3, `dryRun=${dryRun}`);
+  }
+});
+
 test("동기화 결과는 공개 스키마와 금지 필드·민감 문자열을 함께 검증한다", () => {
   const item = buildExternalContentItem(parseNaverBlogFeed(naverRss)[0], null);
   const office = { mobile: "010-2790-8675", email: "office@example.com", address: "근린생활시설 105호" };

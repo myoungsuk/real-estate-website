@@ -316,6 +316,9 @@ export function planNewExternalContent(current, candidates, { blogId = NAVER_BLO
   const bySource = new Map();
   for (const item of current) {
     byId.set(item.id, item);
+    // 인스타그램은 관리자가 직접 등록하고 동기화 원본(네이버 RSS·YouTube Atom)이 없어 원본 ID 색인에서 뺀다.
+    // 그대로 두면 currentSourceId가 "지원하지 않는 유형"으로 멈춰 매시간 동기화 전체가 실패한다. ID 중복은 위 byId로 계속 막는다.
+    if (item.type === "instagram") continue;
     const sourceId = currentSourceId(item, blogId);
     const sourceKey = `${item.type}:${sourceId}`;
     if (bySource.has(sourceKey)) throw trustError(`기존 외부 콘텐츠 원본 ID가 중복됩니다: ${sourceKey}`);

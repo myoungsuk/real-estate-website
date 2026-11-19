@@ -21,7 +21,7 @@ const MAX_IMAGE_DIMENSION = 1600;
 const MAX_IMAGE_PIXELS = MAX_IMAGE_DIMENSION * MAX_IMAGE_DIMENSION;
 const MAX_HISTORY_LIMIT = 10;
 const COMMIT_SHA_PATTERN = /^[a-f0-9]{40}$/u;
-const mediaCategories = new Set(["listing", "blog", "youtube", "office", "area"]);
+const mediaCategories = new Set(["listing", "blog", "youtube", "office", "area", "instagram"]);
 
 function bytesToBase64(bytes) {
   let binary = "";

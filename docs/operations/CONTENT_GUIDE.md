@@ -5,7 +5,7 @@
 - 네이버 매물 확인: `/admin/listings/`
 - 부동산뱅크 가져오기·직접 등록: `/admin/listings/editor/`
 - 첫 화면·사무소·리더스시티 설명: `/admin/content/`
-- 네이버 블로그·유튜브: `/admin/external-links/`
+- 네이버 블로그·유튜브·인스타그램 게시물: `/admin/external-links/`
 - 대전 동구 지역·단지 설명: `/admin/complexes/`
 
 저장하면 GitHub에 커밋됩니다. Cloudflare Git 자동 배포 연결을 완료한 환경에서만 이어서 공개 화면에 반영됩니다. 저장 연결이 비활성화된 환경에서는 아래와 같이 파일을 직접 수정할 수 있습니다.
@@ -78,11 +78,12 @@
 
 ## 블로그·유튜브 카드
 
-`src/data/external-links.json`의 각 항목은 `id`, `type`, `status`, `title`, `summary`, `url`, `publishedAt`, `thumbnail`을 사용합니다. YouTube 항목은 `youtubeFormat`에 일반 영상은 `video`, Shorts는 `short`를 반드시 입력합니다. 블로그 항목에는 이 필드를 넣지 않습니다.
+`src/data/external-links.json`의 각 항목은 `id`, `type`, `status`, `title`, `summary`, `url`, `publishedAt`, `thumbnail`을 사용합니다. YouTube 항목은 `youtubeFormat`에 일반 영상은 `video`, Shorts는 `short`를 반드시 입력합니다. 블로그·인스타그램 항목에는 이 필드를 넣지 않습니다.
 
 - `status`가 `published`인 카드만 공개합니다.
-- 블로그는 `blog.naver.com`, 유튜브는 `youtube.com` 또는 `youtu.be`의 HTTPS 주소만 허용합니다.
-- 사무소 인스타그램은 게시물 카드 없이 바로가기만 둡니다. 주소는 `src/data/office.json`의 `instagramUrl`(`https://www.instagram.com/` 아래 HTTPS 주소만 허용)이며, 머리 메뉴 '인스타그램'과 홈 '블로그·유튜브 새 글' 칸의 유튜브 아래 '인스타그램에서 보기', 홈 구조화 데이터 `sameAs`에 쓰이고 새 창으로 열립니다. `external-links.json`에는 등록하지 않으며, 주소를 바꿀 때는 개발 PR로 `office.json`을 고칩니다.
+- 블로그는 `blog.naver.com`, 유튜브는 `youtube.com` 또는 `youtu.be`의 HTTPS 주소만 허용합니다. 인스타그램은 `www.instagram.com` 또는 `instagram.com`의 `/p/`·`/reel/` 게시물 주소만 허용합니다.
+- 사무소 인스타그램 계정 바로가기 주소는 `src/data/office.json`의 `instagramUrl`(`https://www.instagram.com/` 아래 HTTPS 주소만 허용)이며, 머리 메뉴 '인스타그램'과 홈 '블로그·유튜브 새 글' 칸의 인스타그램 묶음 아래 '인스타그램에서 보기', 홈 구조화 데이터 `sameAs`에 쓰이고 새 창으로 열립니다. 이 계정 주소는 `external-links.json`에 등록하지 않으며, 바꿀 때는 개발 PR로 `office.json`을 고칩니다.
+- 인스타그램 게시물 카드(2026-11-19 사용자 결정 "관리자에서 직접 등록"): 관리자 '블로그·유튜브·인스타그램' 화면의 '인스타그램' 카테고리에서 게시물 주소·사진·제목·짧은 설명·게시일을 직접 입력합니다. 콘텐츠 ID를 비워 두면 저장할 때 `instagram-게시일`로 채우고, 같은 ID가 이미 있으면 `-2`, `-3`…을 붙입니다(게시일도 비어 있으면 저장하지 않고 안내합니다). 주소는 `https://www.instagram.com/p/…/` 또는 `/reel/…/` 게시물 한 건만 받으며, 공유 주소 뒤의 `?igsh=…`는 저장할 때 자동으로 지웁니다. `정보 불러오기`는 쓰지 않고 사진을 꼭 직접 올립니다(홈에서 정사각형으로 잘려 보이므로 가운데에 중요한 내용이 오는 사진을 고릅니다). 공개 게시물 최신 6개가 홈 인스타그램 묶음에 사진 카드로 보이고, 공개 게시물이 없으면 바로가기만 보입니다. 자동 동기화는 인스타그램 항목을 만들거나 고치지 않습니다.
 - 관리자 화면의 `정보 불러오기`는 제목과 썸네일을 보조로 가져옵니다. 결과를 사람이 확인한 뒤 저장해야 합니다.
 - 썸네일을 불러오지 못하면 직접 올리고 의미 있는 사진 설명을 입력합니다.
 - 원문 전체를 복제하거나 권한 없는 이미지를 사용하지 않습니다.

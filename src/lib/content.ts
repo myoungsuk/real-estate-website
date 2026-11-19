@@ -6,7 +6,7 @@ export interface ContentImage {
   alt: string;
 }
 
-export type ExternalContentType = "blog" | "youtube";
+export type ExternalContentType = "blog" | "youtube" | "instagram";
 export type ExternalContentStatus = "draft" | "published";
 export type YoutubeContentFormat = "video" | "short";
 
@@ -53,6 +53,7 @@ export const publishedBlogContents = publishedExternalContents.filter((item) => 
 export const publishedYoutubeContents = publishedExternalContents.filter((item) => item.type === "youtube");
 export const publishedYoutubeVideoContents = publishedYoutubeContents.filter((item) => item.youtubeFormat === "video");
 export const publishedYoutubeShortsContents = publishedYoutubeContents.filter((item) => item.youtubeFormat === "short");
+export const publishedInstagramContents = publishedExternalContents.filter((item) => item.type === "instagram");
 
 export function getPublishedExternalContentsByIds(ids: string[]) {
   const byId = new Map(publishedExternalContents.map((item) => [item.id, item]));

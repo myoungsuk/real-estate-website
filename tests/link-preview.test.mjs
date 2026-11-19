@@ -9,6 +9,18 @@ test("네이버 블로그·유튜브 밖의 링크 미리보기를 차단한다"
   );
 });
 
+test("인스타그램은 링크 미리보기를 하지 않는다(허용 주소는 네이버 블로그·유튜브뿐)", async () => {
+  const fetcher = async () => { throw new Error("바깥 주소를 부르면 안 됩니다."); };
+  await assert.rejects(
+    fetchExternalLinkPreview({ type: "instagram", url: "https://www.instagram.com/p/ABCdef/" }, fetcher),
+    (error) => error.code === "PREVIEW_TYPE_INVALID" && error.status === 400,
+  );
+  await assert.rejects(
+    fetchExternalLinkPreview({ type: "blog", url: "https://www.instagram.com/p/ABCdef/" }, fetcher),
+    (error) => error.code === "PREVIEW_URL_DENIED" && error.status === 400,
+  );
+});
+
 test("네이버 블로그가 허용되지 않은 호스트로 리디렉션하면 차단한다", async () => {
   await assert.rejects(
     fetchExternalLinkPreview(

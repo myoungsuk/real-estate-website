@@ -138,6 +138,7 @@
 .admin-review-source { display: inline-flex; margin-right: 6px; padding: 3px 7px; border-radius: 999px; color: #176443; background: #ddf3e8; font-size: 0.66rem; font-weight: 900; }
 .admin-review-source--manual { color: #6d5330; background: #fff0da; }
 .admin-field { display: grid; gap: 6px; }
+.admin-field[hidden] { display: none; }
 .admin-field label { color: #53636f; font-size: 0.76rem; font-weight: 850; }
 .admin-field input,
 .admin-field select { width: 100%; min-height: 48px; padding: 10px 13px; border: 1px solid #c9d1d6; border-radius: 10px; color: #1b2935; background: #fff; }
@@ -303,6 +304,7 @@
   .admin-stage-badge,
   .admin-page-header .admin-primary-button { justify-self: end; }
   .admin-stat-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .admin-content-categories { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .admin-roadmap ol { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
   .admin-roadmap li { grid-template-columns: 1fr; gap: 12px; min-height: auto; }
   .admin-roadmap li:not(:last-child)::after { top: 16px; right: -14px; bottom: auto; left: 34px; width: auto; height: 1px; }

@@ -110,7 +110,7 @@ function getYoutubeVideoId(item: ExternalContent) {
             </>
           ) : (
             <div class="content-card__body">
-              <p class="content-card__source">{item.type === "blog" ? "NAVER BLOG" : item.youtubeFormat === "short" ? "YOUTUBE SHORTS" : "YOUTUBE VIDEO"}</p>
+              <p class="content-card__source">{item.type === "blog" ? "NAVER BLOG" : item.type === "instagram" ? "INSTAGRAM" : item.youtubeFormat === "short" ? "YOUTUBE SHORTS" : "YOUTUBE VIDEO"}</p>
               <h3><a href={item.url} target="_blank" rel="noopener noreferrer">{item.title}</a></h3>
               {formatContentDate(item.publishedAt) && <time datetime={item.publishedAt!}>{formatContentDate(item.publishedAt)}</time>}
               <p>{item.summary}</p>
@@ -126,7 +126,7 @@ function getYoutubeVideoId(item: ExternalContent) {
     </div>
     <p class="sr-only" role="status" aria-live="polite" aria-atomic="true" data-content-filter-status></p>
     {paginate && pageCount > 1 && (
-      <nav class="content-pagination" aria-label={`${categoryLabel ?? (items[0].type === "blog" ? "블로그" : "유튜브")} 페이지`} data-content-pagination>
+      <nav class="content-pagination" aria-label={`${categoryLabel ?? (items[0].type === "blog" ? "블로그" : items[0].type === "instagram" ? "인스타그램" : "유튜브")} 페이지`} data-content-pagination>
         <button type="button" data-content-prev aria-controls={gridId} aria-label="이전 페이지">‹</button>
         <div class="content-pagination__pages">
           {Array.from({ length: pageCount }, (_, index) => (
