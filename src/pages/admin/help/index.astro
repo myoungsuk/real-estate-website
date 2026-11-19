@@ -63,7 +63,9 @@ const quickLinks = [
                 <p><AdminHelpText text={block.text} /></p>
               </div>
             ) : block.type === "heading" ? (
-              <h4>{block.text}</h4>
+              section.level === 3
+                ? <h4 class="admin-help-block-title">{block.text}</h4>
+                : <h3 class="admin-help-block-title">{block.text}</h3>
             ) : block.type === "table" ? (
               <table class="admin-help-table">
                 <thead><tr>{block.head.map((cell) => <th scope="col">{cell}</th>)}</tr></thead>
