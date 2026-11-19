@@ -22,7 +22,7 @@ const WORK_TOOLS_DIR = new URL("../docs/work-tools/", import.meta.url);
 export const PROGRESS_DOCUMENT = new URL("리더스시티 행복한부동산 중개업무 도구 개발 진행 체크리스트.md", WORK_TOOLS_DIR);
 export const TEST_DOCUMENT = new URL("리더스시티 행복한부동산 중개업무 도구 테스트 체크리스트.md", WORK_TOOLS_DIR);
 
-export const TEST_GROUPS = Object.freeze(["T0", "TU", "T2", "TP", "T3", "T4", "TR", "TD"]);
+export const TEST_GROUPS = Object.freeze(["T0", "TU", "T2", "TP", "T3", "T4", "TK", "TR", "TD"]);
 // 점수표에 보이는 묶음 이름. 세는 규칙(시험 ID 앞부분)은 그대로 두고, 표에는 쉬운 말과 괄호 속 ID 앞부분을 함께 쓴다.
 export const TEST_GROUP_LABELS = Object.freeze({
   T0: "단계 0 계산·문구·일정 (T0)",
@@ -31,6 +31,7 @@ export const TEST_GROUP_LABELS = Object.freeze({
   TP: "개인정보 유출 검사 (TP)",
   T3: "단계 3 알림·모자이크 (T3)",
   T4: "단계 4 AI (T4)",
+  TK: "단계 P 공개 자료 도구 (TK)",
   TR: "기존 기능 유지 (TR)",
   TD: "배포 후 확인 (TD)",
 });
@@ -95,12 +96,13 @@ const emptyProgressCounts = () => ({ done: 0, active: 0, left: 0, waiting: 0 });
 const progressTotal = (counts) => counts.done + counts.active + counts.left + counts.waiting;
 
 // 진행 체크리스트: "## N. 단계 M — 제목" 절 안의 맨 앞(들여쓰기 없는) 체크 항목만 센다.
+// 장 번호 뒤 영문 소문자 1자(예: "## 8a.")와 단계 P(공개 자료 도구, 2026-11-19 보탬)도 센다.
 export function countProgress(text) {
   const { lines } = splitDocument(text);
   const stages = [];
   let current = null;
   for (const line of countableLines(lines, PROGRESS_MARKERS)) {
-    const heading = /^## \d+\. 단계 (\d+) — (.+)$/u.exec(line);
+    const heading = /^## \d+[a-z]?\. 단계 (\d+|P) — (.+)$/u.exec(line);
     if (heading) {
       current = { stage: heading[1], title: heading[2].trim(), ...emptyProgressCounts() };
       stages.push(current);
@@ -158,7 +160,7 @@ export function countTestScore(text) {
     if (!line.startsWith("|")) continue;
     const cells = splitTableCells(line);
     const first = cells[0] ?? "";
-    const match = /^(T0|TU|T2|TP|T3|T4|TR|TD)-\d+[a-z]?\b/u.exec(first);
+    const match = /^(T0|TU|T2|TP|T3|T4|TK|TR|TD)-\d+[a-z]?\b/u.exec(first);
     if (!match) continue;
     const id = match[0];
     if (seen.has(id)) throw new ProgressDocumentError(`시험 ID ${id}가 두 번 나옵니다.`);

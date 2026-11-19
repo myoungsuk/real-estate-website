@@ -1,0 +1,81 @@
+<response>
+<header>
+<resultCode>000</resultCode>
+<resultMsg>OK</resultMsg>
+</header>
+<body>
+<items>
+<item>
+<aptDong>101</aptDong>
+<aptNm>가상숲1단지</aptNm>
+<aptSeq> </aptSeq>
+<bonbun>0101</bonbun>
+<bubun>0000</bubun>
+<buildYear>2019</buildYear>
+<buyerGbn>개인</buyerGbn>
+<cdealDay> </cdealDay>
+<cdealType> </cdealType>
+<dealAmount>41,000</dealAmount>
+<dealDay>4</dealDay>
+<dealMonth>10</dealMonth>
+<dealYear>2026</dealYear>
+<dealingGbn>중개거래</dealingGbn>
+<estateAgentSggNm>대전 동구</estateAgentSggNm>
+<excluUseAr>84.97</excluUseAr>
+<floor>12</floor>
+<jibun>101</jibun>
+<landCd>1</landCd>
+<landLeaseholdGbn>N</landLeaseholdGbn>
+<rgstDate>26.10.30</rgstDate>
+<roadNm>가상로</roadNm>
+<roadNmBonbun>00007</roadNmBonbun>
+<roadNmBubun>00000</roadNmBubun>
+<roadNmCd>9999999</roadNmCd>
+<roadNmSeq>01</roadNmSeq>
+<roadNmSggCd>30110</roadNmSggCd>
+<roadNmbCd>0</roadNmbCd>
+<sggCd>30110</sggCd>
+<slerGbn>개인</slerGbn>
+<umdCd>99999</umdCd>
+<umdNm>가상동</umdNm>
+</item>
+<item>
+<aptDong>101</aptDong>
+<aptNm>가상숲1단지</aptNm>
+<aptSeq>30110-9001</aptSeq>
+<bonbun>0101</bonbun>
+<bubun>0000</bubun>
+<buildYear>2019</buildYear>
+<buyerGbn>개인</buyerGbn>
+<cdealDay> </cdealDay>
+<cdealType> </cdealType>
+<dealAmount>42,000</dealAmount>
+<dealDay>6</dealDay>
+<dealMonth>10</dealMonth>
+<dealYear>2026</dealYear>
+<dealingGbn>중개거래</dealingGbn>
+<estateAgentSggNm>대전 동구</estateAgentSggNm>
+<excluUseAr>84.97</excluUseAr>
+<floor>12</floor>
+<jibun>101</jibun>
+<landCd>1</landCd>
+<landLeaseholdGbn>N</landLeaseholdGbn>
+<rgstDate>26.10.30</rgstDate>
+<roadNm>가상로</roadNm>
+<roadNmBonbun>00007</roadNmBonbun>
+<roadNmBubun>00000</roadNmBubun>
+<roadNmCd>9999999</roadNmCd>
+<roadNmSeq>01</roadNmSeq>
+<roadNmSggCd>30110</roadNmSggCd>
+<roadNmbCd>0</roadNmbCd>
+<sggCd>30110</sggCd>
+<slerGbn>개인</slerGbn>
+<umdCd>99999</umdCd>
+<umdNm>가상동</umdNm>
+</item>
+</items>
+<numOfRows>1000</numOfRows>
+<pageNo>1</pageNo>
+<totalCount>2</totalCount>
+</body>
+</response>
