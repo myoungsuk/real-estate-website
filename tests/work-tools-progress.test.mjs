@@ -178,6 +178,38 @@ test("테스트 체크리스트: 잘못된 문서는 멈춘다(중복 ID, 결과
   assert.throws(() => countTestScore(testDocument(["| T0-01 [화면] [실기기] | 가 | 통과 |"])), /하나만/u);
 });
 
+test("단계 P: 진행 체크리스트의 \"## 8a. 단계 P — 제목\" 장과 테스트 체크리스트의 TK 시험을 센다(단계 P 첫 구현 PR)", () => {
+  const progress = progressDocument([
+    "## 8. 단계 5 — 운영",
+    "",
+    "## 8a. 단계 P — 공개 자료 도구",
+    "",
+    "- [x] 끝난 항목",
+    "- [ ] 🔒 관문",
+    "- [ ] 남은 항목",
+    "",
+    "## 8b. 단계 Q — 숫자도 P도 아닌 단계는 세지 않음",
+    "",
+    "- [ ] 세지 않는 항목",
+  ]);
+  const { stages, total } = countProgress(progress);
+  assert.deepEqual(stages.map((stage) => [stage.stage, stage.title, stage.done, stage.active, stage.left, stage.waiting]), [
+    ["5", "운영", 0, 0, 0, 0],
+    ["P", "공개 자료 도구", 1, 0, 1, 1],
+  ]);
+  assert.deepEqual(total, { done: 1, active: 0, left: 1, waiting: 1 });
+  const progressWritten = updateDocumentText(progress, "progress");
+  assert.match(progressWritten, /지금 하는 단계: 단계 P\(완료 1 \/ 3개/u);
+  assert.match(progressWritten, /^\| 단계 P · 공개 자료 도구 \| ███░░░░░░░ 33% \| 1 \| 0 \| 1 \| 1 \|$/mu);
+
+  assert.deepEqual(TEST_GROUPS.slice(TEST_GROUPS.indexOf("T4"), TEST_GROUPS.indexOf("TR") + 1), ["T4", "TK", "TR"], "TK는 T4와 TR 사이");
+  const rows = ["| TK-09 | 칸 변환 | 통과 |", "| TK-43 [수동] | 첫 확인 | 미실행 |", "| TK-41 [실기기] | 실기기 | 미실행 |"];
+  const score = countTestScore(testDocument(rows));
+  assert.deepEqual(score.groups.TK, { pass: 1, fail: 0, notRun: 2, notApplicable: 0 });
+  assert.deepEqual(score.layers["수동 확인"], { pass: 0, fail: 0, notRun: 1, notApplicable: 0 });
+  assert.match(updateDocumentText(testDocument(rows), "test"), /^\| 단계 P 공개 자료 도구 \(TK\) \| `███░░░░░░░ 33%` \| 1 \| 0 \| 2 \| 0 \|$/mu);
+});
+
 test("실제 두 문서의 표가 체크 항목·결과 칸과 같다(어긋나면 --write로 다시 쓴다)", async () => {
   for (const document of DEFAULT_DOCUMENTS) {
     const text = await readFile(document.url, "utf8");
