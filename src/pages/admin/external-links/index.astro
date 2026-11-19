@@ -93,6 +93,7 @@ const instagramContents = externalContents.filter((item) => item.type === "insta
     } from "../../../lib/admin-content-client";
     import { guardAdminFormChanges, reviewAdminContentChange } from "../../../lib/admin-content-review";
     import { suggestInstagramContentId } from "../../../lib/admin-external-id.mjs";
+    import { normalizeInstagramUrl } from "../../../lib/admin-instagram-url.mjs";
     import type { ExternalContent } from "../../../lib/content";
 
     const form = document.querySelector<HTMLFormElement>("[data-external-form]");
@@ -185,8 +186,7 @@ const instagramContents = externalContents.filter((item) => item.type === "insta
       if (thumbnailHint) thumbnailHint.textContent = isInstagram ? "게시물 사진을 직접 올려 주세요. 홈에서는 정사각형으로 보입니다." : "링크에서 썸네일을 못 불러온 경우 선택합니다.";
     };
 
-    // 인스타그램 공유 주소 뒤의 ?igsh=… 같은 꼬리(공유한 계정을 알려 줌)는 저장하지 않는다.
-    const normalizeInstagramUrl = (value: string) => value.replace(/[?#].*$/u, "");
+    // 인스타그램 주소는 저장 전에 normalizeInstagramUrl로 정리한다(?igsh=… 꼬리 지우기, /<계정이름>/p/<코드>/ → /p/<코드>/).
 
     const youtubeFormatFromInputUrl = (value: string) => {
       try {

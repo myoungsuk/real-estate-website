@@ -188,6 +188,20 @@ test("관리자 인스타그램: 메뉴 이름에 인스타그램을 넣고, 콘
   assert.match(editor, /idField\.required = !isInstagram/u, "인스타그램은 ID 칸을 비워도 저장 단계로 넘어감");
 });
 
+test("관리자 인스타그램: 계정 이름이 들어간 게시물 주소는 저장 전에 /p/·/reel/ 주소로 바꾼다", async () => {
+  const { normalizeInstagramUrl } = await import("../src/lib/admin-instagram-url.mjs");
+  const editor = await readSource("src/pages/admin/external-links/index.astro");
+  assert.equal(normalizeInstagramUrl("https://www.instagram.com/readers.45_real.estate/p/ABCdef_12-x/"), "https://www.instagram.com/p/ABCdef_12-x/");
+  assert.equal(normalizeInstagramUrl("https://www.instagram.com/readers.45_real.estate/reel/ABCdef/?igsh=abc123"), "https://www.instagram.com/reel/ABCdef/", "공유 꼬리도 같이 지움");
+  assert.equal(normalizeInstagramUrl("https://instagram.com/some_account/p/ABCdef"), "https://instagram.com/p/ABCdef/", "주소 뒤 / 없어도 바꿈");
+  assert.equal(normalizeInstagramUrl("https://www.instagram.com/p/ABCdef/?igsh=abc123"), "https://www.instagram.com/p/ABCdef/", "이미 /p/ 주소면 꼬리만 지움");
+  assert.equal(normalizeInstagramUrl("https://m.instagram.com/some_account/p/ABCdef/"), "https://m.instagram.com/some_account/p/ABCdef/", "m.instagram.com은 바꾸지 않음(콘텐츠 검사가 거부)");
+  assert.equal(normalizeInstagramUrl("https://example.com/some_account/p/ABCdef/"), "https://example.com/some_account/p/ABCdef/", "다른 도메인은 바꾸지 않음");
+  assert.equal(normalizeInstagramUrl("https://www.instagram.com/some_account/"), "https://www.instagram.com/some_account/", "계정 첫 화면 주소는 바꾸지 않음(콘텐츠 검사가 거부)");
+  assert.match(editor, /import \{ normalizeInstagramUrl \} from "\.\.\/\.\.\/\.\.\/lib\/admin-instagram-url\.mjs"/u);
+  assert.doesNotMatch(editor, /const normalizeInstagramUrl =/u, "화면 안에 따로 만든 함수 없이 같은 함수를 씀");
+});
+
 test("관리자 배포 상태 화면은 GitHub 저장과 Production digest 확인을 분리한다", async () => {
   const [layout, page, component, client, styles, config] = await Promise.all([
     readSource("src/layouts/AdminLayout.astro"),
