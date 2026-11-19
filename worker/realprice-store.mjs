@@ -16,7 +16,7 @@ export const REALPRICE_READ_WARN_RATIO = 0.8;
 export const REALPRICE_LEASE_NAME = "realprice-fetch";
 export const REALPRICE_LEASE_MS = 5 * 60 * 1000;
 export const REALPRICE_JSON_CHUNK = 1000;
-export const REALPRICE_HOLD_MIN_STORED = 20; // 저장 건수가 이 이상인데 새로 받은 건수가 절반보다 적으면 보류(22.6절 5)
+export const REALPRICE_HOLD_MIN_STORED = 20; // 저장 건수가 이 이상인데 새로 받은 건수가 절반보다 적으면 보류(22.6절 5). 0건 응답은 저장 1건 이상이면 보류
 export const REALPRICE_DROP_WARN_RATIO = 0.05; // 버린 수가 받은 건수의 5%를 넘으면 경고(2026-11-19 B-2)
 export const REALPRICE_ABORT_WARN_ATTEMPTS = 3; // 같은 달이 3번 연속 끊기면 경고(22.6절 6)
 export const REALPRICE_ABORT_RETRY_MS = 30 * 60 * 1000;
@@ -265,8 +265,10 @@ export async function applyRealpriceMonth(db, { month, fetched, nowMs, apiCalls 
   const newCount = built.rows.length;
   const storedCount = existingRows.length;
 
-  // 덜 온 응답 막기(22.6절 5): 저장 20건 이상인데 절반보다 적게 오면 보류. 다음 받기에 같은 건수가 다시 오면 그때 반영.
-  const sharpDrop = storedCount >= REALPRICE_HOLD_MIN_STORED && newCount * 2 < storedCount;
+  // 덜 온 응답 막기(22.6절 5): 저장 20건 이상인데 절반보다 적게 오거나, 저장이 1건 이상인데 0건이 오면(건수와 상관없이) 보류.
+  // 다음 받기에 같은 건수가 다시 오면 그때 반영한다(0건이 두 번 오면 그때 지움). 저장이 적은 달이 일시적인 0건 응답 한 번에
+  // 모두 지워졌다가 다시 들어와 옛 거래가 "새로 들어옴"으로 보이지 않게 한다(2026-11-19 PR #76 TR-11 49.3 ②).
+  const sharpDrop = storedCount > 0 && (newCount === 0 || (storedCount >= REALPRICE_HOLD_MIN_STORED && newCount * 2 < storedCount));
   const confirmed = month.status === "held" && month.held_count === newCount;
   const age = monthAge(kstMonth(nowMs), dealYmd);
   const nextDueAt = nextDueAfterSuccess(age, nowMs);
@@ -331,8 +333,12 @@ export function saleCoveredThrough(monthRows, currentYmd) {
 export function buildRealpriceWarnings({ monthRows, usage, hold, countCheck, nowMs, retryPolicy }) {
   const nowIso = iso(nowMs);
   const warnings = [];
-  const aborted = monthRows.filter((row) => row.attempts >= REALPRICE_ABORT_WARN_ATTEMPTS);
+  // 같은 달이 3번 연속 끝나지 못함: 마지막이 처리 중 예외면 RT_INTERNAL, 그 밖(끊김·실행 중)은 RT_ABORTED(22.6절 6).
+  const repeated = monthRows.filter((row) => row.attempts >= REALPRICE_ABORT_WARN_ATTEMPTS);
+  const internal = repeated.filter((row) => row.last_error === "RT_INTERNAL");
+  const aborted = repeated.filter((row) => row.last_error !== "RT_INTERNAL");
   if (aborted.length > 0) warnings.push({ code: "RT_ABORTED", count: aborted.length, months: warningMonths(aborted) });
+  if (internal.length > 0) warnings.push({ code: "RT_INTERNAL", count: internal.length, months: warningMonths(internal) });
   const held = monthRows.filter((row) => row.status === "held");
   if (held.length > 0) warnings.push({ code: "RT_HELD_DROP", count: held.length, months: warningMonths(held) });
   // B-2: 버린 수가 받은 건수(버리기 전 = 저장 + 버림)의 5%를 넘는 달.

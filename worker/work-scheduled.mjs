@@ -72,6 +72,9 @@ WHERE (kind, deal_ymd) IN (SELECT json_extract(value, '$[0]'), json_extract(valu
 const START_MONTH_SQL = `UPDATE rt_fetch_months SET attempts = attempts + 1, last_error = NULL
 WHERE kind = ?1 AND deal_ymd = ?2 AND next_due_at <= ?3 AND NOT (attempts > 0 AND last_error IS NULL)`;
 const FAIL_MONTH_SQL = "UPDATE rt_fetch_months SET status = 'failed', attempts = 0, last_error = ?1, next_due_at = ?2 WHERE kind = ?3 AND deal_ymd = ?4";
+// 처리 중 예외: 끊김(RT_ABORTED)과 같은 규칙으로 attempts를 그대로 두어 연속 횟수를 센다. 같은 달이 3번 연속이면 갱신 상태 경고
+// RT_INTERNAL이 된다(2026-11-19 PR #76 TR-11 49.3 ③). 다음 실행의 시작 표시가 attempts를 1 더 올리고, 성공·받기 오류로 끝나면 0이 된다.
+const INTERNAL_FAIL_MONTH_SQL = "UPDATE rt_fetch_months SET status = 'failed', last_error = 'RT_INTERNAL', next_due_at = ?1 WHERE kind = ?2 AND deal_ymd = ?3";
 const FINISH_RUN_SQL = `UPDATE rt_fetch_runs SET finished_at = ?2, months_done = ?3, api_calls = ?4, inserted = ?5, updated = ?6, deleted = ?7,
 rows_written = ?8, outcome = ?9, error_code = ?10 WHERE seq = ?1`;
 // 사용량 보정(실제 meta − 이미 더한 추정, 아직 더하지 않은 읽기·호출). 쓰기 행은 0 아래로 내려가지 않는다.
@@ -246,8 +249,10 @@ async function runInner(env, options, state) {
   const errorCode = fetchFailure ?? codes[0] ?? countCheck?.error ?? null;
   const outcome = fetchFailure ? "failed" : errorCode ? "partial" : "ok";
   const rowsWritten = (metaAvailable ? measuredWritten : estimatedRecorded) + FINAL_BATCH_ROWS;
+  // 끝 시각은 끝 batch를 만들 때 시계를 다시 읽는다(실행 시간을 D1 기록으로 볼 수 있게, 2026-11-19 49.3 ④).
+  const finishedIso = iso(typeof options.now === "function" ? options.now() : Date.now());
   const finalStatements = [
-    db.prepare(FINISH_RUN_SQL).bind(state.seq, nowIso, totals.months, totals.calls, totals.inserted, totals.updated, totals.deleted, rowsWritten, outcome, errorCode),
+    db.prepare(FINISH_RUN_SQL).bind(state.seq, finishedIso, totals.months, totals.calls, totals.inserted, totals.updated, totals.deleted, rowsWritten, outcome, errorCode),
   ];
   if (dailyCheck) {
     if (countCheck) finalStatements.push(upsertSettingStatement(db, REALPRICE_COUNT_CHECK_SETTING, { checkedAt: countCheck.checkedAt, diffs: countCheck.diffs, error: countCheck.error }, nowMs));
@@ -278,14 +283,14 @@ export async function runRealpriceCron(env, options = {}) {
   }
 }
 
-// 예외 뒤 정리(할 수 있는 만큼만): 받던 달은 30분 뒤 차례로(중단 횟수로 세지 않게 attempts 0), 실행 기록은 실패, 임대 반납.
+// 예외 뒤 정리(할 수 있는 만큼만): 받던 달은 30분 뒤 차례로(attempts는 그대로 두어 연속 횟수를 셈), 실행 기록은 실패, 임대 반납.
 async function cleanupAfterInternalError(env, options, state) {
   if (!state.lease) return;
   try {
     const db = options.db ?? env?.WORK_DB;
     const nowMs = typeof options.now === "function" ? options.now() : Date.now();
     const statements = [];
-    if (state.month) statements.push(db.prepare(FAIL_MONTH_SQL).bind("RT_INTERNAL", iso(nowMs + REALPRICE_ABORT_RETRY_MS), state.month.kind, state.month.deal_ymd));
+    if (state.month) statements.push(db.prepare(INTERNAL_FAIL_MONTH_SQL).bind(iso(nowMs + REALPRICE_ABORT_RETRY_MS), state.month.kind, state.month.deal_ymd));
     if (state.runStarted) statements.push(db.prepare("UPDATE rt_fetch_runs SET finished_at = ?2, outcome = 'failed', error_code = 'RT_INTERNAL' WHERE seq = ?1").bind(state.seq, iso(nowMs)));
     statements.push(db.prepare(RELEASE_SQL).bind(iso(0), REALPRICE_LEASE_NAME, state.lease.holder));
     await db.batch(statements);

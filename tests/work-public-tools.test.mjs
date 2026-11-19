@@ -209,7 +209,20 @@ test("갱신 상태는 읽기만(감사·사용량 쓰기 0) 하고 설계서 22
 test("TK-29 지금 다시 받기: 외부 요청 0번, 최근 4개월 12행이 지금 차례, estimatedMinutes 120(다른 달이 5건 기다려도 최근 달이 먼저라 같음), 감사 realprice.refresh 1건, 다음 Cron부터 1건씩", async () => {
   const { database, db } = freshDb({ d1Meta: true });
   const env = stagePEnv(db);
-  const empty = await work(env, "/realprice/refresh", { method: "POST", body: {} });
+  // 외부 요청 0번: 다시 받기 요청이 도는 동안 전역 fetch를 가로채 센다(PR #76 TR-11 49.4: 예전 assert는 늘 참이었음).
+  const originalFetch = globalThis.fetch;
+  const outbound = [];
+  globalThis.fetch = async (...args) => {
+    outbound.push(String(args[0]?.url ?? args[0]));
+    throw new Error("외부 요청 금지");
+  };
+  let empty;
+  try {
+    empty = await work(env, "/realprice/refresh", { method: "POST", body: {} });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  assert.deepEqual(outbound, [], "다시 받기 요청은 외부 요청을 보내지 않음");
   assert.equal(empty.status, 200, JSON.stringify(empty.json));
   assert.deepEqual(empty.json.data, { queuedMonths: 12, estimatedMinutes: 120 });
   assert.equal(rows(database, "SELECT COUNT(*) AS n FROM rt_fetch_months WHERE next_due_at = ?", iso(NOW))[0].n, 12);
@@ -225,7 +238,6 @@ test("TK-29 지금 다시 받기: 외부 요청 0번, 최근 4개월 12행이 �
   assert.deepEqual([bad.status, bad.json.error.code], [400, "VALIDATION_FAILED"]);
 
   const { fetcher, calls } = recordingFetcher(() => new Response("<response><header><resultCode>03</resultCode><resultMsg>NO DATA</resultMsg></header></response>", { status: 200 }));
-  assert.equal(calls.length, 0, "다시 받기 요청은 외부 요청을 보내지 않음");
   await runRealpriceCron(env, { now: () => later + 60_000, fetcher, log: () => {}, randomUUID: nextUuid });
   assert.equal(calls.length, 1, "다음 Cron에서 1건");
   const picked = new URL(calls[0].url).searchParams.get("DEAL_YMD");
