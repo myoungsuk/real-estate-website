@@ -107,6 +107,22 @@ Access가 적용된 배포 환경에서 다음을 확인한다.
 - 네이버 블로그·유튜브 링크 미리보기가 허용 도메인 밖으로 이동하지 않음
 - 응답에 토큰, Audience, 허용 이메일 원문이 없음
 
+## 중개업무 도구 실거래가 받기(단계 P, Cron)
+
+`wrangler.jsonc`의 `triggers.crons` `*/10 * * * *`는 관리자 업무 도구 실거래가 탭(단계 P)의 자료 받기다. 같은 Worker의 `scheduled`가 10분마다 공공데이터포털 아파트 실거래가 API 4개에서 대전 동구 자료를 1개월 1종류씩 받아 D1 `WORK_DB`의 `rt_*` 표에 차이만 반영한다. 켜기 값이 없으면 D1·외부 요청 없이 끝나고 로그도 남기지 않는다. 상세는 `docs/work-tools/` 설계서 22장이다.
+
+- Secret: 켜기 값 `WORK_REALPRICE_ENABLED`(정확히 `true`일 때만 켜짐)와 공공데이터포털 인증키 `MOLIT_RT_SERVICE_KEY`는 Worker Secret으로만 등록한다. 일반 변수로 넣으면 다음 배포 때 지워진다. 인증키는 운영자가 대시보드 또는 자기 터미널의 `npx wrangler secret put`으로 직접 입력하고, 대화·문서·저장소에 붙이지 않는다. 켜기 값만 있고 인증키·`ADMIN_CSRF_SECRET`(32자 이상)·허용 출처·D1 binding 가운데 하나가 빠졌으면 API는 503 `REALPRICE_CONFIG_MISSING`이고 Cron은 고정 코드 경고 로그만 남긴다.
+- 인증키 교체: 공공데이터포털에서 재발급한 뒤 운영자가 같은 이름의 Secret을 덮어쓴다. 키가 거부되면 받기를 모든 종류 1시간씩 미루므로, 교체 뒤 실거래가 화면의 다시 받기(`POST /api/admin/v1/work/realprice/refresh`)로 미룸을 지우고 최근 12개월을 다시 받는다.
+- 처음 켜는 순서: ① 사전 확인 3가지(Secret 목록에 `WORK_TOOLS_ENABLED`·`WORK_REALPRICE_ENABLED`가 없음, 같은 계정 다른 Worker의 Cron 수(한도 5개), Workers 관측 설정의 자동 추적(traces)이 꺼져 있음) ② 병합·자동 배포 뒤 marker와 대시보드 Triggers의 `*/10 * * * *` 확인 ③ 원격 D1 백업 `npx wrangler d1 export leaderscity-work --remote --output <저장소 밖 경로>` ④ `npx wrangler d1 migrations apply leaderscity-work --remote` 뒤 `settings.schema_version`이 `3`이고 `rt_` 표가 5개인지 확인 ⑤ 인증키 Secret 입력 ⑥ `WORK_REALPRICE_ENABLED=true` Secret 등록 ⑦ 10분 안 첫 실행 뒤 `/api/admin/v1/work/realprice/status`의 오늘 호출·쓰기·읽기량, Workers 로그의 Cron CPU 시간, 로그에 인증키 0건 확인. 원격 D1 적용과 켜기 값 등록은 각각 운영자 승인 뒤에 한다.
+- 배포 ~ 원격 적용 사이: 코드의 구조 번호(3)가 원격 D1(2)보다 앞서 단계 2 업무 도구 경로도 `WORK_SCHEMA_OUTDATED`가 된다. 단계 2 켜기 값 `WORK_TOOLS_ENABLED`가 없으면 그 전에 `WORK_DISABLED`라 보이지 않는다.
+- 롤백(먼저 쓰는 것부터)
+  - 실거래가만 이상함: Secret `WORK_REALPRICE_ENABLED`를 지우거나 `false`로 바꾼다. API는 503, Cron은 아무것도 하지 않고 자료는 그대로다.
+  - `0003` 적용 전 배포에 문제: 아직 켜기 전이므로 `git revert` 또는 직전 Cloudflare 배포로 되돌린다. 원격 D1은 구조 번호 2 그대로라 맞는다.
+  - `0003` 적용 뒤 코드를 되돌려야 함: 통째로 되돌리면 코드 2 < D1 3이라 단계 2 경로까지 `WORK_SCHEMA_AHEAD`가 된다. 켜기 값으로 먼저 막고, 꼭 되돌려야 하면 단계 P 경로·Cron만 빼고 구조 번호는 3으로 두는 되돌리기 커밋을 쓴다.
+  - Cron 자체 문제: `wrangler.jsonc`에서 `*/10 * * * *`를 빼고 다시 배포한다(배포 설정 시험도 함께 고친다).
+  - 자료가 틀림: 그 달의 `rt_fetch_months.next_due_at`을 지금으로 바꿔 다시 받는다. D1 Time Travel은 손님 자료까지 되돌리므로 쓰지 않는다.
+  - 하루 쓰기·읽기가 계정 한도에 가까움: 켜기 값을 끈다. 예산(쓰기 4만 행, 읽기 첫 상한 150만·끝 상한 250만 행)은 코드 상수라 바꾸려면 PR이 필요하다.
+
 ## 출시 전 확인
 
 - 홈·매물·단지·소개·오시는 길·404가 정상 응답하는지 확인

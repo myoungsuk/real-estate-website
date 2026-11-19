@@ -8,12 +8,13 @@ import { auditStatement, withViewAudit, writeBatchWithAudit } from "./work-audit
 import { routeWorkData } from "./work-customers.mjs";
 import { routeWorkDeals } from "./work-deals.mjs";
 import { routeWorkEvents } from "./work-events.mjs";
+import { handlePublicToolsApi, isPublicToolsRoute } from "./work-public-tools.mjs";
 
 // 기존 시험·다른 모듈이 쓰던 이름을 그대로 내보낸다(감사 도우미는 work-audit.mjs로 옮김).
 export { withViewAudit, writeBatchWithAudit };
 
 export const WORK_API_ROOT = "/api/admin/v1/work";
-export const WORK_SCHEMA_VERSION = 2; // migrations/work 0002(거래 일정 계산 입력 칸)까지
+export const WORK_SCHEMA_VERSION = 3; // migrations/work 0003(단계 P 공개 실거래 자료)까지. 단계 2와 단계 P가 같은 번호를 쓴다
 export const MAX_WORK_JSON_BYTES = 256 * 1024;
 const WRITE_METHODS = new Set(["POST", "PATCH", "PUT", "DELETE"]);
 const RAY_ID_PATTERN = /^[A-Za-z0-9-]{1,64}$/u;
@@ -22,7 +23,7 @@ export function isWorkApiPath(pathname) {
   return pathname === WORK_API_ROOT || pathname.startsWith(`${WORK_API_ROOT}/`);
 }
 
-function workSuccess(data, requestId) {
+export function workSuccess(data, requestId) {
   return jsonResponse({ ok: true, data, requestId }, { headers: { "X-Request-Id": requestId } });
 }
 
@@ -42,7 +43,7 @@ function workFileResponse({ body, contentType, filename }, requestId) {
   });
 }
 
-function workError(requestId, error, headers = {}) {
+export function workError(requestId, error, headers = {}) {
   return errorResponse({
     code: error.code,
     message: error.message,
@@ -70,7 +71,7 @@ export function logWorkAccessDenied(request, { requestId, reasonCode, warnLog = 
 }
 
 // 신원 있는 거부(Origin·CSRF·스키마 불일치)는 D1에 outcome=denied로 남긴다(업무 꺼짐은 Worker 로그만). 기록 실패는 거부 응답을 바꾸지 않는다.
-async function recordDenied(db, actor, env, request, requestId, now, reason, auditLog, { storeInD1 = true } = {}) {
+export async function recordDenied(db, actor, env, request, requestId, now, reason, auditLog, { storeInD1 = true } = {}) {
   try {
     const actorId = await getAuditActorId(actor.email, env.ADMIN_CSRF_SECRET);
     auditLog({ event: "work_denied", actorId, reason, requestId });
@@ -92,7 +93,7 @@ async function recordDenied(db, actor, env, request, requestId, now, reason, aud
   }
 }
 
-async function readSchemaVersion(db) {
+export async function readSchemaVersion(db) {
   let row;
   try {
     row = await db.prepare("SELECT value_json FROM settings WHERE key = ?").bind("schema_version").first();
@@ -112,7 +113,7 @@ async function readSchemaVersion(db) {
   return Number.isSafeInteger(value) ? value : null;
 }
 
-async function readWorkJsonBody(request) {
+export async function readWorkJsonBody(request) {
   const declared = Number(request.headers.get("Content-Length") ?? "");
   if (Number.isFinite(declared) && declared > MAX_WORK_JSON_BYTES) {
     throw new WorkApiError("PAYLOAD_TOO_LARGE", "요청 본문이 너무 큽니다.", 413);
@@ -150,6 +151,11 @@ export async function handleWorkApi(request, env, options = {}) {
   const url = new URL(request.url);
   const route = url.pathname.slice(WORK_API_ROOT.length) || "/";
   const method = request.method.toUpperCase();
+
+  // 단계 P(공개 자료 도구)는 단계 2 켜기 값과 따로 켠다. Access 재검증은 admin-api.mjs에서 이미 끝났다(설계서 22.2절).
+  if (isPublicToolsRoute(route)) {
+    return handlePublicToolsApi(request, env, { db, actor, requestId, now, auditLog, method, route });
+  }
 
   const state = getWorkConfigState(env, db);
   if (state === "config_missing") {

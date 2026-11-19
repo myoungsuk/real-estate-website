@@ -21,17 +21,38 @@ export const BACKUP = "backup@example.com";
 
 // node:sqlite를 D1과 같은 모양(prepare→bind→first/run/all, batch)으로 감싼다.
 // beforeNextBatch에 함수를 넣으면 다음 batch 직전에 한 번 실행한다(미리 읽은 뒤 다른 관리자가 쓰는 상황 재현용).
-export function createD1(database) {
+// 단계 P 시험용 선택 기능(기존 시험의 반환 모양은 그대로, 2026-11-19 P1-b):
+// - d1Meta: true면 run·batch 결과와 all 결과에 D1 모양 meta({ changes, rows_written, rows_read })를 붙인다.
+//   흉내 값이다. rows_written은 바뀐 행 수(색인 쓰기는 세지 못함), rows_read는 돌려준 행 수다. 실제 양은 로컬·원격 D1로 잰다.
+// - db.stats: 실행한 문장 수(statements)와 batch마다 담긴 문장 수(batches)를 센다(TK-58).
+export function createD1(database, { d1Meta = false } = {}) {
+  const stats = { statements: 0, batches: [] };
+  const metaOf = (result, rowsRead = 0) => ({ changes: Number(result?.changes ?? 0), rows_written: Number(result?.changes ?? 0), rows_read: rowsRead });
+  const runOne = (sql, values) => {
+    const result = database.prepare(sql).run(...values);
+    return d1Meta ? { ...result, meta: metaOf(result) } : result;
+  };
   const wrap = (sql, values = []) => ({
     bind: (...next) => wrap(sql, next),
-    first: async () => database.prepare(sql).get(...values) ?? null,
-    all: async () => ({ results: database.prepare(sql).all(...values).map((row) => ({ ...row })) }),
-    run: async () => database.prepare(sql).run(...values),
+    first: async () => {
+      stats.statements += 1;
+      return database.prepare(sql).get(...values) ?? null;
+    },
+    all: async () => {
+      stats.statements += 1;
+      const results = database.prepare(sql).all(...values).map((row) => ({ ...row }));
+      return d1Meta ? { results, meta: metaOf(null, results.length) } : { results };
+    },
+    run: async () => {
+      stats.statements += 1;
+      return runOne(sql, values);
+    },
     _sql: sql,
     _values: values,
   });
   const db = {
     beforeNextBatch: null,
+    stats,
     prepare: (sql) => wrap(sql),
     batch: async (statements) => {
       if (db.beforeNextBatch) {
@@ -39,9 +60,11 @@ export function createD1(database) {
         db.beforeNextBatch = null;
         await interleave();
       }
+      stats.statements += statements.length;
+      stats.batches.push(statements.length);
       database.exec("BEGIN");
       try {
-        const results = statements.map((statement) => database.prepare(statement._sql).run(...statement._values));
+        const results = statements.map((statement) => runOne(statement._sql, statement._values));
         database.exec("COMMIT");
         return results;
       } catch (error) {
@@ -53,11 +76,11 @@ export function createD1(database) {
   return db;
 }
 
-export function freshDb() {
+export function freshDb(options = {}) {
   const database = new DatabaseSync(":memory:");
   database.exec("PRAGMA foreign_keys = ON;");
   for (const sql of allMigrationSql) database.exec(sql);
-  return { database, db: createD1(database) };
+  return { database, db: createD1(database, options) };
 }
 
 export const rows = (database, sql, ...values) => database.prepare(sql).all(...values).map((row) => ({ ...row }));
