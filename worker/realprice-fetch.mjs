@@ -3,7 +3,7 @@
 // - 요청 1번 15초, 자동 재시도 없음(다음 Cron이 다시 받는다). 쪽 하나라도 실패하면 그 달 전체가 실패다.
 // - 인증키는 요청 주소에 들어가므로 결과 객체·오류에는 요청 주소·응답 본문·error.message를 담지 않는다.
 //   실패 결과는 { ok: false, code, httpStatus, calls }뿐이다(TK-31).
-// - 이 PR(P1-a)에서는 아무 곳에서도 부르지 않는다. D1 반영·Cron은 P1-b다.
+// - Cron(worker/work-scheduled.mjs)이 부른다. D1 반영은 worker/realprice-store.mjs다(P1-b).
 
 import { parseRealpriceXml, readRealpriceBody, RealpriceResponseError } from "./realprice-parse.mjs";
 
@@ -222,6 +222,8 @@ export async function fetchRealpriceMonth({
   let calls = 0;
   let totalCount = null;
   const items = [];
+  let firstItems = null;
+  let firstItemsText = null;
   for (let pageNo = 1; pageNo <= maxPages; pageNo += 1) {
     const requestUrl = buildRealpriceRequestUrl({ api, serviceKey, dealYmd, pageNo, numOfRows });
     calls += 1;
@@ -229,14 +231,24 @@ export async function fetchRealpriceMonth({
     if (fetched.failure) return failed(fetched.failure.code, fetched.failure.httpStatus, calls);
     const page = interpretPage(fetched.page);
     if (page.outcome === "error") return failed(page.code, fetched.httpStatus, calls);
+    // 쪽 번호를 지키지 않는 응답(다른 쪽을 돌려줌, 1쪽을 다시 줌)은 건수가 맞아도 같은 거래가 두 번 들어가므로 버린다(2026-11-19 B-1).
+    // 응답에 pageNo가 없으면 이 대조는 건너뛰고 아래 "1쪽과 똑같은 쪽" 대조만 한다.
+    if (page.outcome === "ok" && fetched.page.pageNo !== null && fetched.page.pageNo !== pageNo) {
+      return failed(RT_RESPONSE_INVALID, fetched.httpStatus, calls);
+    }
     if (pageNo === 1) {
       if (page.outcome === "empty") return { ok: true, api, dealYmd, totalCount: 0, items: [], calls };
       totalCount = page.totalCount;
+      firstItems = page.items;
       // 요청한 쪽 크기로도 상한 안에 다 받을 수 없으면 더 부르지 않는다.
       if (totalCount > numOfRows * maxPages) return failed(RT_COUNT_MISMATCH, fetched.httpStatus, calls);
     } else if (page.outcome === "ok" && page.totalCount !== totalCount) {
       // 받는 도중 건수가 바뀌면 덜 받거나 겹쳐 받을 수 있다.
       return failed(RT_COUNT_MISMATCH, fetched.httpStatus, calls);
+    } else if (page.outcome === "ok" && page.items.length > 0 && page.items.length === firstItems.length) {
+      // 2쪽 이상이 1쪽과 똑같으면 쪽 번호를 무시하고 1쪽을 다시 준 것으로 본다(B-1).
+      firstItemsText ??= JSON.stringify(firstItems);
+      if (JSON.stringify(page.items) === firstItemsText) return failed(RT_RESPONSE_INVALID, fetched.httpStatus, calls);
     }
     // 빈 쪽이면 더 받아도 늘지 않으므로 멈추고 건수를 대조한다.
     if (page.outcome === "empty" || page.items.length === 0) break;

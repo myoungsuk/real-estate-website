@@ -133,7 +133,7 @@
 
 ### 결정
 
-9. **공개 실거래 자료와 글 초안은 같은 D1(`WORK_DB`, `leaderscity-work`)에 둔다.** 표는 `rt_trades`·`rt_fetch_months`·`rt_fetch_runs`·`rt_daily_usage`·`rt_watch_complexes`(옛 자료 확인 결과에 따라 `rt_complex_keys`, 다음 빈 번호 마이그레이션, 예정 `0003`)와 `blog_drafts`(예정 `0004`)다. 손님 자료 표와 외래 키·조인을 두지 않고, 단계 2 전체 내보내기와 손님 삭제 범위에 넣지 않는다.
+9. **공개 실거래 자료와 글 초안은 같은 D1(`WORK_DB`, `leaderscity-work`)에 둔다.** 표는 `rt_trades`·`rt_fetch_months`·`rt_fetch_runs`·`rt_daily_usage`·`rt_watch_complexes`(마이그레이션 `0003`. 2026-11-19 키 첫 확인(TK-43)에서 옛 매매의 단지 번호 빈 값이 0건이어서 `rt_complex_keys`는 두지 않음)와 `blog_drafts`(예정 `0004`)다. 손님 자료 표와 외래 키·조인을 두지 않고, 단계 2 전체 내보내기와 손님 삭제 범위에 넣지 않는다.
 10. **단계 P는 단계 2와 따로 켠다.** 켜기 값은 Worker Secret `WORK_REALPRICE_ENABLED`·`WORK_BLOG_ENABLED`이고, `WORK_TOOLS_ENABLED`가 꺼져 있어도 동작한다. 반대로 단계 P를 켜도 손님 자료 API는 열리지 않는다. 경로는 `/api/admin/v1/work/public-tools/session`, `/work/realprice/*`, `/work/blog/*`이고 Access·JWT 재검증·Origin·CSRF는 결정 3과 같다.
 11. **공공데이터포털은 Worker의 Cron만 부른다.** 인증키는 Worker Secret `MOLIT_RT_SERVICE_KEY`에만 두고 운영자가 직접 입력한다. 브라우저와 국토교통부 실거래가 공개시스템 화면은 부르지 않는다. Cron 하나(`*/10 * * * *`)가 받을 차례 표대로 한 번에 조금씩 받아 D1에 반영하고, 하루 D1 쓰기는 4만 행까지 쓰고, 읽기는 150만 행에서 신고가 계산·과거 채우기를 끄고 250만 행(계정 무료 한도의 절반)에서 목록 조회를 거절한다(같은 계정 D1 무료 한도 하루 쓰기 10만 행·읽기 500만 행의 나머지를 단계 2 손님 자료에 남김). 글 초안에는 매분 Cron을 더하지 않는다(업무 도구 설계서 DEC-WT-36, 2026-11-19 결정).
 12. **글 초안은 결정 5·6·7의 OpenAI 호출 방식을 그대로 쓴다.** OpenAI로는 공개 자료와 운영자가 화면에 넣은 명시사항만 보내고 손님 자료는 보내지 않는다. 명시사항 블록은 AI가 아니라 코드가 붙이며, 사람이 확인하고 복사한다. 자동 게시는 하지 않는다. AI 사용량과 하루·월 한도는 단계 4와 같은 `ai_usage_daily`·`settings`에 합친다(`0001`에 이미 있는 표). 글 초안은 단계 4의 `ai_jobs`가 아니라 `blog_drafts`에 둔다. `ai_jobs`는 `0001`의 종류 CHECK에 글 초안이 없고, 원격에 적용한 마이그레이션은 고치지 않기 때문이다.

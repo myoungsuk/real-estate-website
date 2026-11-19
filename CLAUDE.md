@@ -11,7 +11,7 @@
 - Cloudflare Workers Static Assets와 관리 API를 같은 Worker로 배포한다.
 - `/api/admin/*`만 Worker 코드가 먼저 처리하고 나머지 공개 요청은 정적 자산으로 제공한다.
 - 관리 API는 Cloudflare Access, 허용 이메일 2개, Email OTP와 JWT 재검증으로 보호한다.
-- 공개 홈페이지에는 DB, 자체 비밀번호, 서버 저장형 상담 게시판을 두지 않는다. 관리자 전용 중개업무 도구(단계 2)는 D1·R2에 연결돼 있으나 켜기 값을 등록하기 전에는 꺼져 있다. FAQ 상담 작성 화면과 매물 문의 문장 도우미는 입력값을 서버로 보내거나 영구 저장하지 않고, 이용자가 직접 복사해 문자·카카오톡 앱에서 전송한다.
+- 공개 홈페이지에는 DB, 자체 비밀번호, 서버 저장형 상담 게시판을 두지 않는다. 관리자 전용 중개업무 도구(단계 2 손님 자료, 단계 P 공개 실거래 자료)는 D1·R2에 연결돼 있으나 켜기 값을 등록하기 전에는 꺼져 있다. FAQ 상담 작성 화면과 매물 문의 문장 도우미는 입력값을 서버로 보내거나 영구 저장하지 않고, 이용자가 직접 복사해 문자·카카오톡 앱에서 전송한다.
 - 운영자는 Access 보호 관리자 화면 또는 승인된 JSON·사진 파일에서 공개 콘텐츠를 수정하고 GitHub에 반영한다.
 - 전화·문자·공식 외부 채널로 상담을 연결한다.
 
@@ -155,12 +155,13 @@ npm run sync:external:dry-run
 - `/admin/external-links/` → 네이버 블로그·유튜브·인스타그램을 분리한 관리 카테고리(인스타그램은 정보 불러오기 없이 사진 직접 등록, 공유 주소의 물음표 뒤 꼬리 제거), 유튜브 일반 영상·Shorts 형식 선택, 카테고리별 건수·검색·링크 미리보기·썸네일
 - `/admin/complexes/` → 리더스시티 전체 비교 콘텐츠와 대전 동구 지역·단지 소개·사진·면적·공급·생활환경·시설 상태·FAQ·관련 콘텐츠·복수 출처·확인일
 - `/admin/work/`·`fee/`·`messages/`·`schedule/` → 관리자 전용 중개업무 도구 단계 0. `src/data/work/legal-rules.json`(공개 법령 요율·기한·판정 기준과 출처) → `src/lib/work/*.mjs` 순수 함수 → 중개보수 계산·안내 문자·계약 일정·`.ics`. 입력값은 저장·서버 전송·URL·브라우저 저장소에 넣지 않고, 법령 데이터는 `validateLegalRules()`로 빌드 전 검증한다. 상세는 `docs/work-tools/`.
+- Worker Cron(`*/10 * * * *`) → `worker/work-scheduled.mjs` → 공공데이터포털 아파트 실거래가 API 4개에서 대전 동구 자료를 10분마다 1개월 1종류씩 받아 `worker/realprice-store.mjs`가 D1 `rt_*` 표에 차이만 반영한다(단계 P, 켜기 값 `WORK_REALPRICE_ENABLED`가 없으면 D1·외부 요청 없이 끝남). 자료는 `src/data/`·`dist/`에 넣지 않는다. 상세는 `docs/work-tools/` 설계서 22장.
 - 관리자 저장 화면 → `src/lib/admin-content-diff.mjs` 공개 필드 diff·민감 문자열 가림 → `src/lib/admin-content-review.ts` 변경 전후·영향 화면 확인과 dirty 이탈 경고 → 서버 사전 검증 → 최종 저장
 - 관리자 저장 성공 → commit SHA·정규화 JSON SHA-256 digest·저장 시각을 브라우저에 안전하게 기억 → `/api/admin/v1/deployment-status`가 같은 Worker의 Production `deployment-marker.json`과 비교 → 공개 반영 상태 표시
 - 관리자 복원 → `/api/admin/v1/content-history/:resource`에서 현재 branch 이력·과거 blob 확인 → 현재 전체 허용 JSON과 교차 검증 → `/api/admin/v1/content/restore`가 `force: false` 새 commit 생성 → 일반 배포 상태 추적. Cloudflare 전체 롤백과 혼합하지 않는다.
 - `/api/admin/*` → `worker/index.mjs` → Access JWT·허용 이메일·Origin·CSRF 검증 → `POST /api/admin/v1/content/validate`는 쓰기 없이 같은 branch-tip snapshot과 전체 후보를 교차 검증 → 실제 저장은 요청된 JSON blob을 같은 base tree의 단일 commit으로 저장하고 non-force ref CAS로 갱신. WebP는 별도 허용 경로의 Contents API로 저장
 
-공개 화면의 DB·TR 흐름은 없다. 관리자 중개업무 도구만 D1·R2를 쓰며 켜기 전에는 꺼져 있다(`docs/work-tools/`). 관리 API의 콘텐츠 쓰기는 `ADMIN_WRITE_ENABLED=true`와 CSRF·GitHub Secret이 모두 있을 때만 활성화되며, 기본 로컬·Preview 설정은 fail closed다. 브라우저 JavaScript는 공개 화면의 모바일 메뉴·매물 페이징·필터·정렬·관심 ID·비교·비저장 문의 문장과 관리자 폼·WebP 변환에 사용한다. 고객 관심 상태는 공개 매물 ID만 같은 브라우저에 저장하며, 상담 입력은 `localStorage`·URL·서버 요청에 넣지 않는다.
+공개 화면의 DB·TR 흐름은 없다. 관리자 중개업무 도구만 D1·R2를 쓰며(단계 P는 공개 실거래 자료만) 켜기 전에는 꺼져 있다(`docs/work-tools/`). 공공데이터포털은 Worker만 부르고 브라우저는 부르지 않는다. 관리 API의 콘텐츠 쓰기는 `ADMIN_WRITE_ENABLED=true`와 CSRF·GitHub Secret이 모두 있을 때만 활성화되며, 기본 로컬·Preview 설정은 fail closed다. 브라우저 JavaScript는 공개 화면의 모바일 메뉴·매물 페이징·필터·정렬·관심 ID·비교·비저장 문의 문장과 관리자 폼·WebP 변환에 사용한다. 고객 관심 상태는 공개 매물 ID만 같은 브라우저에 저장하며, 상담 입력은 `localStorage`·URL·서버 요청에 넣지 않는다.
 
 ## 공개·비공개 데이터 경계
 
@@ -235,7 +236,8 @@ npm run sync:external:dry-run
 - Production 빌드는 `PUBLIC_SITE_URL=https://leaderscityhappy.com`, `PUBLIC_ALLOW_INDEXING=true`를 사용한다.
 - `npm run build`는 공개 `deployment-marker.json` v2에 Workers Builds·GitHub Actions source commit/branch, 허용 관리자 JSON별 정규화 SHA-256 digest와 검색 대상·Bank·외부 콘텐츠·scheduler scope hash를 생성한다. 기존 v1 scope reader는 2026-09-30까지 호환한다. 동기화 워크플로는 push 후 해당 scope가 운영 URL과 일치할 때까지 확인하며 불일치·시간 초과를 실패로 표시한다. IndexNow 워크플로는 2026-11-19부터 scope 대신 `source.commit`이 같거나 후속 커밋인지로 확인한다(뒤 커밋이 먼저 배포돼 `search` 값이 바뀌면 앞 커밋 알림이 실패하던 문제).
 - `wrangler.jsonc`의 `CF_VERSION_METADATA` binding은 인증된 관리자에게 현재 Worker version ID·생성 시각만 제공하며 Secret·태그·관리자 이메일은 반환하지 않는다.
-- `wrangler.jsonc`의 `WORK_DB` D1 binding(`leaderscity-work`)과 `WORK_FILES` R2 binding(`leaderscity-work-files`)은 운영 Worker를 중개업무 도구의 업무 자료 저장소와 파일 저장소에 연결한다. 켜기 값(`WORK_TOOLS_ENABLED`·`WORK_AI_ENABLED`)은 Worker Secret으로만 등록한다.
+- `wrangler.jsonc`의 `WORK_DB` D1 binding(`leaderscity-work`)과 `WORK_FILES` R2 binding(`leaderscity-work-files`)은 운영 Worker를 중개업무 도구의 업무 자료 저장소와 파일 저장소에 연결한다. 켜기 값(`WORK_TOOLS_ENABLED`·`WORK_AI_ENABLED`·`WORK_REALPRICE_ENABLED`)과 공공데이터포털 인증키 `MOLIT_RT_SERVICE_KEY`는 Worker Secret으로만 등록한다.
+- `wrangler.jsonc`의 `triggers.crons` `*/10 * * * *`는 단계 P 실거래가 받기이며, 켜기 값이 없으면 D1·외부 요청 없이 끝난다.
 - `.github/workflows/verify-production-deploy.yml`은 `master` push마다 `contents: read` 권한과 비밀값 없이 실행한다. 운영 `/deployment-marker.json`의 `source.commit`이 push 커밋과 같거나, push 커밋을 포함한 `master`의 후속 커밋이 될 때까지 10초 간격으로 최대 30분 확인하고, 시간이 지나면 실패로 끝나 GitHub 실패 알림을 남긴다. Cloudflare 알림(Platform Notifications)에는 Workers Builds 실패 항목이 없어 이 방식으로 빌드 실패·미실행을 감지한다. Workers Builds의 빌드 감시 경로는 포함 `*`, 제외 `node_modules/**`·`.git/`이고 프리뷰 브랜치 빌드는 꺼져 있다(2026-11-16 대시보드 확인). 따라서 `master`에 커밋되는 변경은 모두 Production 빌드를 시작해야 하며, 감시 경로를 바꾸면 이 워크플로가 거짓 실패를 낼 수 있으므로 함께 검토한다. 배포·롤백·재실행은 하지 않는다. `GITHUB_TOKEN`으로 push하는 동기화 커밋에서는 GitHub 정책상 실행되지 않으며, 동기화 워크플로는 자체 scope marker를 확인한다. 후속 커밋 판정의 `git fetch`는 자격 증명 없이 하므로 저장소를 비공개로 바꾸면 이 워크플로를 다시 설계한다.
 - 기존 Cloudflare Pages 프로젝트 `real-estate-website`는 운영 도메인 연결 없이 롤백용으로 유지한다. Production 분기 `master`만 `https://real-estate-website-dnv.pages.dev`에 자동 배포하고, 2026-11-16부터 미리보기 브랜치 배포는 "없음"으로 꺼 두었다(이미 만들어진 미리보기 배포는 남아 있음). 이 사본을 운영 경로나 관리자 화면 접속에 쓰지 않는다. 2026-11-16부터 사본 주소 전체(`real-estate-website-dnv.pages.dev`와 미리보기 주소 `*.real-estate-website-dnv.pages.dev`)는 Cloudflare Access 앱 2개로 막아, 운영 관리자와 같은 재사용 정책(허용 이메일 2개, One-time PIN)으로 로그인해야만 열린다. 되돌리려면 두 앱을 지우고 Pages "프리뷰 제한"을 끈다.
 - `master` 푸시 후에는 deployment marker와 Cloudflare 새 배포 버전, 운영 URL 반영을 확인한다. 자동 배포가 진행 중인 동안 중복 수동 배포를 실행하지 않는다.
@@ -250,7 +252,7 @@ npm run sync:external:dry-run
 - C/C++식 조건부 컴파일 매크로는 없다.
 - 공개 빌드 환경 분기는 `PUBLIC_SITE_URL`, `PUBLIC_ALLOW_INDEXING`을 사용한다.
 - 외부 콘텐츠 동기화는 공개 설정 `YOUTUBE_CHANNEL_ID`를 GitHub Actions Repository Variable로 사용한다. API Key나 Secret으로 취급하지 않는다.
-- 관리 API 환경은 `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD`, `ADMIN_ALLOWED_EMAILS`, `ADMIN_WRITE_ENABLED`, `ADMIN_ALLOWED_ORIGINS`, `ADMIN_CSRF_SECRET`, `GITHUB_CONTENTS_TOKEN`, `GITHUB_REPOSITORY`, `GITHUB_BRANCH`를 사용한다. `ADMIN_ALLOWED_ORIGINS` 미설정 시 운영 원점 `https://leaderscityhappy.com`만 관리자 쓰기를 허용한다.
+- 관리 API 환경은 `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD`, `ADMIN_ALLOWED_EMAILS`, `ADMIN_WRITE_ENABLED`, `ADMIN_ALLOWED_ORIGINS`, `ADMIN_CSRF_SECRET`, `GITHUB_CONTENTS_TOKEN`, `GITHUB_REPOSITORY`, `GITHUB_BRANCH`를 사용한다. `ADMIN_ALLOWED_ORIGINS` 미설정 시 운영 원점 `https://leaderscityhappy.com`만 관리자 쓰기를 허용한다. 업무 도구는 여기에 `WORK_TOOLS_ENABLED`·`WORK_AI_ENABLED`·`WORK_REALPRICE_ENABLED`·`MOLIT_RT_SERVICE_KEY`(Secret)을 더 쓴다.
 - GitHub 토큰은 Fine-grained token으로 저장소 한 개의 Contents Read/Write만 허용하고 Cloudflare Secret에만 둔다.
 - 소스와 콘텐츠는 UTF-8, LF, 2칸 들여쓰기를 따른다.
 - 공개 사진은 권한과 개인정보를 확인하고 EXIF·GPS를 제거한 WebP/AVIF 최적화본을 우선한다.

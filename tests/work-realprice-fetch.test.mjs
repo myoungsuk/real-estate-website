@@ -238,6 +238,28 @@ test("TK-15: 모은 항목 수가 totalCount와 다르거나 받는 도중 total
   assert.deepEqual(planRealpriceRetry(RT_COUNT_MISMATCH, NOW).scope, "month");
 });
 
+test("TK-15(B-1): 쪽 번호를 지키지 않는 응답 — 응답 pageNo가 요청과 다르거나 2쪽 이상이 1쪽과 똑같으면 RT_RESPONSE_INVALID", async () => {
+  const items = Array.from({ length: 2000 }, (_, n) => saleDetailItem(n));
+  const firstPage = items.slice(0, 1000);
+  const cases = {
+    "1쪽을 두 번 줌(응답 pageNo 1)": () => xmlResponse(realpriceXml({ items: firstPage, totalCount: 2000, pageNo: 1 })),
+    "1쪽을 두 번 줌(응답 pageNo는 요청대로)": (url, { pageNo }) => xmlResponse(realpriceXml({ items: firstPage, totalCount: 2000, pageNo })),
+    "2쪽 내용이지만 응답 pageNo 3": (url, { pageNo }) => xmlResponse(realpriceXml({ items: items.slice((pageNo - 1) * 1000, pageNo * 1000), totalCount: 2000, pageNo: pageNo === 2 ? 3 : pageNo })),
+  };
+  for (const [name, respond] of Object.entries(cases)) {
+    const { fetcher } = recordingFetcher(respond, requestedUrls);
+    const result = await month({ fetcher });
+    assert.deepEqual([result.ok, result.code, result.calls], [false, RT_RESPONSE_INVALID, 2], name);
+  }
+  // 응답에 pageNo가 없으면 쪽 번호 대조는 건너뛰고(1쪽과 똑같은 쪽 대조는 함) 정상 쪽은 그대로 받는다.
+  const withoutPageNo = (xml) => xml.replace(/<pageNo>[0-9]+<[/]pageNo>/u, "");
+  const noEcho = recordingFetcher((url, { pageNo }) => xmlResponse(withoutPageNo(realpriceXml({ items: items.slice((pageNo - 1) * 1000, pageNo * 1000), totalCount: 2000, pageNo }))), requestedUrls);
+  const accepted = await month({ fetcher: noEcho.fetcher });
+  assert.deepEqual([accepted.ok, accepted.items.length, accepted.calls], [true, 2000, 2]);
+  const duplicateNoEcho = recordingFetcher(() => xmlResponse(withoutPageNo(realpriceXml({ items: firstPage, totalCount: 2000 }))), requestedUrls);
+  assert.equal((await month({ fetcher: duplicateNoEcho.fetcher })).code, RT_RESPONSE_INVALID, "pageNo가 없어도 1쪽과 똑같은 2쪽은 버림");
+});
+
 const RESULT_CODE_EXPECTATIONS = [
   [["01", "02", "04", "05", "99", "23"], RT_UPSTREAM_FAILED, "month", "2026-11-19T03:30:00.000Z", false],
   [["10", "11"], RT_REQUEST_INVALID, "kind", "2026-11-19T09:00:00.000Z", true],
@@ -476,11 +498,23 @@ test("거래 ID 서명: 단지 고유번호가 없으면 법정동+지번+단지
   assert.equal(tradeSignatureSource(rent), "rent|2026-10-05|가상동+101+가상숲1단지|8497||297680000|0");
 });
 
+test("TK-13(B-3): 서명이 같고 동만 다른 두 건은 한 건에 해제·등기일이 붙어도 순번이 서로 바뀌지 않는다", async () => {
+  const base = saleDetailItem(8);
+  const dong101 = { ...base, aptDong: "101" };
+  const dong102 = { ...base, aptDong: "102" };
+  const keyByDong = async (items) => Object.fromEntries((await buildTradeRows({ kind: "sale", dealYmd: "202610", items })).rows.map((row) => [row.apt_dong, row.trade_key]));
+  const before = await keyByDong([dong101, dong102]);
+  assert.equal(new Set(Object.values(before)).size, 2, "같은 서명 2행");
+  const after = await keyByDong([dong102, { ...dong101, cdealType: "O", cdealDay: "26.10.25", rgstDate: "26.10.30" }]);
+  assert.deepEqual(after, before, "101동에 해제·등기일이 붙어도 101동은 그대로 순번 0");
+});
+
 // ── 첫 확인 스크립트(scripts/realprice-probe.mjs, TK-43용) ──
 
-test("첫 확인 스크립트: 기본 계획은 16번, 출력에는 칸 이름·코드·건수·형식 모양만 있고 키·주소·본문은 없다", async () => {
+test("첫 확인 스크립트: 기본 계획은 17번(쪽 번호 확인 포함), 출력에는 칸 이름·코드·건수·형식 모양만 있고 키·주소·본문은 없다", async () => {
   const plan = defaultProbePlan(NOW);
-  assert.equal(plan.length, 16);
+  assert.equal(plan.length, 17);
+  assert.deepEqual(plan.at(-1), { label: "쪽 번호 확인(매매 상세 지난달 2쪽, 10건씩)", api: "sale", dealYmd: "202610", numOfRows: 10, pageNo: 2, compareWith: "sale 지난달" });
   assert.deepEqual(plan.filter((step) => step.api === "sale" && step.dealYmd.endsWith("06")).map((step) => step.dealYmd), ["200606", "200706", "200806", "200906", "201006", "201106", "201206", "201306", "201406", "201506"]);
   assert.ok(plan.some((step) => step.api === "rent" && step.dealYmd === "201101"));
   assert.deepEqual(plan.filter((step) => step.numOfRows === 9999).length, 1);
@@ -503,8 +537,10 @@ test("첫 확인 스크립트: 기본 계획은 16번, 출력에는 칸 이름·
     return xmlResponse(fixtures[api]);
   }, requestedUrls);
   const report = await runRealpriceProbe({ serviceKey: FAKE_SERVICE_KEY, fetcher, now: NOW });
-  assert.equal(calls.length, 16);
-  assert.equal(report.results.length, 16);
+  assert.equal(calls.length, 17);
+  assert.equal(report.results.length, 17);
+  assert.equal(report.results.at(-1).pageCheck, "비교할 자료 부족(큰 쪽 3건, 20건 이상 필요)");
+  assert.equal(new URL(calls.at(-1).url).searchParams.get("pageNo"), "2");
   const serialized = JSON.stringify(report);
   assert.ok(!serialized.includes(FAKE_SERVICE_KEY) && !serialized.includes("serviceKey") && !serialized.includes("apis.data.go.kr"), "키·요청 주소 없음");
   assert.ok(!serialized.includes("가상숲1단지") && !serialized.includes("가상로"), "단지명·도로명 같은 본문 값 없음");
@@ -522,6 +558,26 @@ test("첫 확인 스크립트: 기본 계획은 16번, 출력에는 칸 이름·
   assert.deepEqual([envelope.outcome, envelope.reasonCode, envelope.mapped.code], ["오류 봉투", "30", RT_KEY_INVALID]);
 });
 
+test("첫 확인 스크립트(B-1): 쪽 번호 확인은 10건씩 나눈 2쪽을 1,000건 응답의 11 ~ 20번째와 견주고 값은 남기지 않는다", async () => {
+  const items = Array.from({ length: 30 }, (_, n) => saleDetailItem(n));
+  const plan = defaultProbePlan(NOW).filter((step) => step.label === "sale 지난달" || step.compareWith);
+  assert.equal(plan.length, 2);
+  const cases = [
+    [items.slice(10, 20), "2쪽 = 큰 쪽의 11 ~ 20번째(쪽 번호를 지킴)"],
+    [items.slice(0, 10), "2쪽 = 1쪽(쪽 번호를 무시함)"],
+    [items.slice(5, 15), "어느 쪽과도 같지 않음(쪽 크기마다 정렬이 다를 수 있음, 추가 확인 필요)"],
+  ];
+  for (const [secondPage, expected] of cases) {
+    const { fetcher, calls } = recordingFetcher((url) => (new URL(url).searchParams.get("numOfRows") === "10"
+      ? xmlResponse(realpriceXml({ items: secondPage, totalCount: 30, pageNo: 2, numOfRows: 10 }))
+      : xmlResponse(realpriceXml({ items, totalCount: 30 }))), requestedUrls);
+    const report = await runRealpriceProbe({ serviceKey: FAKE_SERVICE_KEY, fetcher, now: NOW, plan });
+    assert.equal(calls.length, 2);
+    assert.deepEqual([report.results[1].requestedPage, report.results[1].pageNo, report.results[1].pageCheck], [2, 2, expected]);
+    assert.ok(!JSON.stringify(report).includes("가상단지"), "단지명 값 없음");
+  }
+});
+
 test("첫 확인 스크립트: Encoding 키(%)·빈 키는 부르기 전에 멈추고, 응답에 키가 섞여 오면 결과를 남기지 않는다", async () => {
   const { fetcher, calls } = recordingFetcher(() => xmlResponse(realpriceXml({ resultMsg: FAKE_SERVICE_KEY, items: [] })), requestedUrls);
   await assert.rejects(runRealpriceProbe({ serviceKey: "ZZKEY%2B7F3A", fetcher, now: NOW }), /Decoding 키/u);
@@ -536,17 +592,42 @@ test("첫 확인 스크립트: Encoding 키(%)·빈 키는 부르기 전에 멈�
 
 // ── 맨 끝: 이 파일에서 나간 모든 요청과 결과 ──
 
-test("TK-32·TK-31(부분): 가짜 fetcher가 받은 요청 주소는 모두 4개 주소 안이고, 받기 결과에는 키 표식이 0건이다", () => {
-  assert.ok(requestedUrls.length > 50, `검사한 요청 ${requestedUrls.length}개`);
-  for (const value of requestedUrls) {
+test("TK-32·TK-31(부분): 가짜 fetcher가 받은 요청 주소는 모두 4개 주소 안이고, 받기 결과에는 키 표식이 0건이다", async () => {
+  // 이 시험만 골라 돌려도 되게 스스로 받기를 돌려 주소·결과를 모은다(2026-11-19 B-4). 앞 시험들이 모은 것도 함께 검사한다.
+  const ownUrls = [];
+  const ownResults = [];
+  const pages = pagedSaleResponses({ total: 2350, pageSize: 1000 });
+  const escapeUrl = (url) => url.replace(/&/gu, "&amp;");
+  const scenarios = [
+    (url, { pageNo }) => xmlResponse(pages[pageNo - 1]),
+    (url, { pageNo }) => (pageNo === 2 ? new Response(`busy ${url}`, { status: 503 }) : xmlResponse(pages[pageNo - 1])),
+    (url) => { throw new TypeError(`연결 실패 ${url}`); },
+    (url) => new Response(null, { status: 302, headers: { Location: url } }),
+    (url) => xmlResponse(realpriceXml({ resultMsg: escapeUrl(url), items: [] })),
+    ...["01", "03", "10", "12", "20", "22", "29", "31"].map((code) => (url) => xmlResponse(realpriceHeaderOnlyXml(code, escapeUrl(url)))),
+    ...[400, 401, 403, 404, 429, 500].map((status) => (url) => new Response(`오류 ${url}`, { status })),
+  ];
+  for (const api of ["sale", "rent", "presale"]) {
+    for (const respond of scenarios) {
+      const { fetcher } = recordingFetcher(respond, ownUrls);
+      ownResults.push(await fetchRealpriceMonth({ api, dealYmd: "202610", serviceKey: FAKE_SERVICE_KEY, fetcher }));
+    }
+  }
+  const counting = recordingFetcher(() => xmlResponse(realpriceXml({ items: [], totalCount: 7 })), ownUrls);
+  ownResults.push(await fetchRealpriceTotalCount({ api: "saleBasic", dealYmd: "202610", serviceKey: FAKE_SERVICE_KEY, fetcher: counting.fetcher }));
+  assert.ok(ownUrls.length > 50, `이 시험이 보낸 요청 ${ownUrls.length}개`);
+  assert.ok(ownResults.length > 40, `이 시험이 모은 결과 ${ownResults.length}개`);
+  assert.ok(ownResults.some((result) => result.ok && result.items?.length === 2350) && ownResults.some((result) => !result.ok));
+  const allUrls = [...ownUrls, ...requestedUrls];
+  const allResults = [...ownResults, ...collectedResults];
+  for (const value of allUrls) {
     const url = new URL(value);
     assert.ok(REALPRICE_ENDPOINTS.includes(`${url.origin}${url.pathname}`), `허용 주소 밖: ${url.origin}${url.pathname}`);
     assert.ok(!url.hostname.includes("rt.molit.go.kr"), "국토교통부 실거래가 공개시스템 화면 주소 없음");
     assert.equal(url.searchParams.get("LAWD_CD"), "30110");
   }
   assert.equal(REALPRICE_ENDPOINTS.length, 4);
-  assert.ok(collectedResults.length > 40, `검사한 결과 ${collectedResults.length}개`);
-  for (const result of collectedResults) {
+  for (const result of allResults) {
     for (const text of [JSON.stringify(result), String(result), JSON.stringify(Object.entries(result))]) {
       assert.ok(!text.includes(FAKE_SERVICE_KEY), "키 표식 0건");
       assert.ok(!/serviceKey/iu.test(text), "serviceKey 0건");

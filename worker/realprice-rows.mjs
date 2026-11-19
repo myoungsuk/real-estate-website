@@ -184,19 +184,22 @@ async function sha256Hex(value) {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-// 같은 서명 안에서 순번을 정하는 정렬 기준: 서명에 넣지 않은 칸 전부(바뀌는 칸 먼저). 지역 설정과 상관없이 코드 단위로 비교한다.
+// 같은 서명 안에서 순번을 정하는 정렬 기준: 서명에 넣지 않은 칸 전부. 지역 설정과 상관없이 코드 단위로 비교한다.
+// 바뀌지 않는 칸(동·건축연도·이름 칸·중개 구분·덧붙임)을 먼저, 나중에 붙는 칸(해제·해제일·등기일)을 뒤에 둔다.
+// 서명이 같고 동만 다른 두 건 가운데 하나에 해제가 붙어도 순번이 서로 바뀌지 않게 하기 위해서다(2026-11-19 B-3).
+// 동이 비어 있다가 등기 뒤에 붙는 경우는 여전히 바뀔 수 있다(화면 결과는 같음, 설계서 22.6절 2).
 function variableFieldsKey(row) {
   return JSON.stringify([
-    row.cancelled,
-    row.cancelled_on ?? "",
-    row.registered_on ?? "",
     row.apt_dong ?? "",
-    row.dealing_gbn ?? "",
-    row.extra_json,
     row.build_year ?? "",
     row.apt_nm,
     row.umd_nm,
     row.jibun,
+    row.dealing_gbn ?? "",
+    row.extra_json,
+    row.cancelled,
+    row.cancelled_on ?? "",
+    row.registered_on ?? "",
   ]);
 }
 

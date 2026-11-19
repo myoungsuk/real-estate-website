@@ -1,5 +1,5 @@
 // 단계 P 실거래가 첫 확인(TK-43): 공공데이터포털 API 4개의 실제 응답 모양을 재고, 설계서 22.4·22.5·22.16절을 확정할 숫자만 남긴다.
-// 운영자 PC에서 인증키를 발급받은 뒤 한 번 실행한다(호출 16번, 공공데이터포털 하루 한도 10,000번의 1% 미만).
+// 운영자 PC에서 인증키를 발급받은 뒤 한 번 실행한다(호출 17번, 공공데이터포털 하루 한도 10,000번의 1% 미만).
 //
 // 실행 방법(인증키는 공공데이터포털 "일반 인증키(Decoding)"를 넣는다. 화면에 보이지 않게 입력되고, 끝나면 지운다)
 //
@@ -42,7 +42,9 @@ const previousMonth = (now) => {
   return `${date.getUTCFullYear()}${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
 };
 
-// 기본 호출 계획(16번): 매매 상세 2006 ~ 2015년 해마다 6월(aptSeq 빈 비율), 4종류 지난달, 전월세 2011-01(0건 달 모양), numOfRows 9999 1번.
+// 기본 호출 계획(17번): 매매 상세 2006 ~ 2015년 해마다 6월(aptSeq 빈 비율), 4종류 지난달, 전월세 2011-01(0건 달 모양), numOfRows 9999 1번,
+// 쪽 번호 확인 1번(매매 상세 지난달을 10건씩 나눈 2쪽이 "sale 지난달" 1,000건 응답의 11 ~ 20번째와 같은지, 2026-11-19 B-1).
+export const PAGE_CHECK_ROWS = 10;
 export function defaultProbePlan(now = new Date()) {
   const recent = previousMonth(now);
   const plan = [];
@@ -50,7 +52,19 @@ export function defaultProbePlan(now = new Date()) {
   for (const api of ["sale", "saleBasic", "rent", "presale"]) plan.push({ label: `${api} 지난달`, api, dealYmd: recent, numOfRows: 1000 });
   plan.push({ label: "전월세 2011-01(0건 달 모양)", api: "rent", dealYmd: "201101", numOfRows: 1000 });
   plan.push({ label: "numOfRows 9999 시험", api: "sale", dealYmd: recent, numOfRows: 9999 });
+  plan.push({ label: "쪽 번호 확인(매매 상세 지난달 2쪽, 10건씩)", api: "sale", dealYmd: recent, numOfRows: PAGE_CHECK_ROWS, pageNo: 2, compareWith: "sale 지난달" });
   return plan;
+}
+
+// 쪽 번호 확인: 작은 쪽(numOfRows건)의 2쪽을 같은 달 큰 쪽 응답과 견준다. 값은 남기지 않고 판정 문장만 남긴다.
+export function comparePageCheck(pageItems, referenceItems, size = PAGE_CHECK_ROWS) {
+  if (!Array.isArray(referenceItems) || referenceItems.length < size * 2) {
+    return `비교할 자료 부족(큰 쪽 ${Array.isArray(referenceItems) ? referenceItems.length : 0}건, ${size * 2}건 이상 필요)`;
+  }
+  const text = JSON.stringify(pageItems ?? []);
+  if (text === JSON.stringify(referenceItems.slice(size, size * 2))) return `2쪽 = 큰 쪽의 ${size + 1} ~ ${size * 2}번째(쪽 번호를 지킴)`;
+  if (text === JSON.stringify(referenceItems.slice(0, size))) return "2쪽 = 1쪽(쪽 번호를 무시함)";
+  return "어느 쪽과도 같지 않음(쪽 크기마다 정렬이 다를 수 있음, 추가 확인 필요)";
 }
 
 const shape = (value) => value.replace(/\d/gu, "9").replace(/[가-힣]/gu, "가").replace(/[A-Za-z]/gu, "A");
@@ -102,11 +116,13 @@ function summarizeItems(items) {
 
 const safeMessage = (value) => (typeof value === "string" && /^[A-Za-z0-9 _.\-]{1,80}$/u.test(value) ? value : value == null ? null : "(형식 밖, 남기지 않음)");
 
-async function probeOne(step, { serviceKey, fetcher, timeoutMs }) {
+async function probeOne(step, { serviceKey, fetcher, timeoutMs, itemsByLabel }) {
   const result = { label: step.label, api: step.api, dataId: REALPRICE_APIS[step.api].dataId, dealYmd: step.dealYmd, requestedRows: step.numOfRows };
+  const pageNo = step.pageNo ?? 1;
+  if (pageNo !== 1) result.requestedPage = pageNo;
   let response;
   try {
-    response = await fetcher(buildRealpriceRequestUrl({ api: step.api, serviceKey, dealYmd: step.dealYmd, pageNo: 1, numOfRows: step.numOfRows }), {
+    response = await fetcher(buildRealpriceRequestUrl({ api: step.api, serviceKey, dealYmd: step.dealYmd, pageNo, numOfRows: step.numOfRows }), {
       method: "GET",
       redirect: "manual",
       headers: { Accept: "application/xml" },
@@ -145,6 +161,9 @@ async function probeOne(step, { serviceKey, fetcher, timeoutMs }) {
     numOfRowsEcho: page.numOfRows,
     itemCount: page.items?.length ?? null,
   });
+  // 항목 값은 결과에 넣지 않고, 쪽 번호 확인에서 견줄 때만 메모리에 둔다.
+  if (page.items) itemsByLabel?.set(step.label, page.items);
+  if (step.compareWith) result.pageCheck = comparePageCheck(page.items, itemsByLabel?.get(step.compareWith), step.numOfRows);
   if (page.items && page.items.length > 0) {
     result.fieldNames = [...new Set(page.items.flatMap((item) => Object.keys(item)))].sort();
     result.fields = summarizeItems(page.items);
@@ -162,7 +181,8 @@ export async function runRealpriceProbe({ serviceKey, fetcher = fetch, plan, now
   if (serviceKey.includes("%")) throw new Error("인증키에 %가 들어 있습니다. 공공데이터포털의 Encoding 키가 아니라 Decoding 키를 넣으세요.");
   const steps = plan ?? defaultProbePlan(now);
   const results = [];
-  for (const step of steps) results.push(await probeOne(step, { serviceKey, fetcher, timeoutMs }));
+  const itemsByLabel = new Map();
+  for (const step of steps) results.push(await probeOne(step, { serviceKey, fetcher, timeoutMs, itemsByLabel }));
   const report = { probedAt: now.toISOString(), lawdCd: "30110", calls: steps.length, results };
   const serialized = JSON.stringify(report);
   if (serialized.includes(serviceKey) || serialized.includes(encodeURIComponent(serviceKey)) || /serviceKey=/iu.test(serialized)) {
@@ -191,7 +211,7 @@ if (isDirectRun) {
     const report = await runRealpriceProbe({ serviceKey: process.env[PROBE_KEY_ENV] });
     await writeFile(resolve(out), `${JSON.stringify(report, null, 2)}\n`, "utf8");
     for (const result of report.results) {
-      console.log(`${result.label}: HTTP ${result.httpStatus ?? "-"}, ${result.outcome}, 코드 ${result.resultCode ?? result.reasonCode ?? "-"}, totalCount ${result.totalCount ?? "-"}, 받은 ${result.itemCount ?? "-"}건`);
+      console.log(`${result.label}: HTTP ${result.httpStatus ?? "-"}, ${result.outcome}, 코드 ${result.resultCode ?? result.reasonCode ?? "-"}, totalCount ${result.totalCount ?? "-"}, 받은 ${result.itemCount ?? "-"}건${result.pageCheck ? `, ${result.pageCheck}` : ""}`);
     }
     console.log(`결과 파일: ${resolve(out)} (호출 ${report.calls}번)`);
   } catch (error) {

@@ -21,6 +21,7 @@ import { createWorkCsrfToken, getWorkConfigState, verifyWorkCsrfToken } from "..
 
 const migrationSql = await readFile(new URL("../migrations/work/0001_init.sql", import.meta.url), "utf8");
 const migration0002Sql = await readFile(new URL("../migrations/work/0002_deal_schedule_inputs.sql", import.meta.url), "utf8");
+const migration0003Sql = await readFile(new URL("../migrations/work/0003_public_realprice.sql", import.meta.url), "utf8");
 const ORIGIN = "https://leaderscityhappy.com";
 const TEAM = "https://leaderscityhappy.cloudflareaccess.com";
 const AUD = "test-audience";
@@ -55,12 +56,15 @@ function createD1(database) {
   };
 }
 
-// 업무 시험 DB: 지금 코드의 구조 번호(0002까지)와 맞게 마이그레이션을 차례로 적용한다. F 시험은 0001만 따로 본다.
+// 업무 시험 DB: 지금 코드의 구조 번호(0003까지)와 맞게 마이그레이션을 차례로 적용한다. F 시험은 0001만 따로 본다.
 function freshDb({ only0001 = false } = {}) {
   const database = new DatabaseSync(":memory:");
   database.exec("PRAGMA foreign_keys = ON;");
   database.exec(migrationSql);
-  if (!only0001) database.exec(migration0002Sql);
+  if (!only0001) {
+    database.exec(migration0002Sql);
+    database.exec(migration0003Sql);
+  }
   return { database, db: createD1(database) };
 }
 
@@ -215,7 +219,8 @@ test("C. 스키마 번호가 낮거나 없으면 503 WORK_SCHEMA_OUTDATED, 높�
     ["값 깨짐({)", (database) => database.exec("UPDATE settings SET value_json = '{' WHERE key = 'schema_version'"), "WORK_SCHEMA_OUTDATED"],
     ["숫자 아님(\"2\")", (database) => database.exec("UPDATE settings SET value_json = '\"2\"' WHERE key = 'schema_version'"), "WORK_SCHEMA_OUTDATED"],
     ["1(0002 적용 전)", (database) => database.exec("UPDATE settings SET value_json = '1' WHERE key = 'schema_version'"), "WORK_SCHEMA_OUTDATED"],
-    ["3", (database) => database.exec("UPDATE settings SET value_json = '3' WHERE key = 'schema_version'"), "WORK_SCHEMA_AHEAD"],
+    ["2(0003 적용 전)", (database) => database.exec("UPDATE settings SET value_json = '2' WHERE key = 'schema_version'"), "WORK_SCHEMA_OUTDATED"],
+    ["4", (database) => database.exec("UPDATE settings SET value_json = '4' WHERE key = 'schema_version'"), "WORK_SCHEMA_AHEAD"],
   ]) {
     const { database, db } = freshDb();
     setup(database);
@@ -423,7 +428,7 @@ test("F. 0001_init.sql은 테이블 12개·색인 14개·구조 번호 1을 만�
 });
 
 test("G. 업무 Worker 코드는 준비된 문장만 쓰고 SQL에 값을 이어 붙이지 않는다", async () => {
-  const files = (await readdir(new URL("../worker/", import.meta.url))).filter((name) => name.startsWith("work-") && name.endsWith(".mjs"));
+  const files = (await readdir(new URL("../worker/", import.meta.url))).filter((name) => (name.startsWith("work-") || name.startsWith("realprice-")) && name.endsWith(".mjs"));
   assert.ok(files.length >= 2);
   for (const name of files) {
     const source = await readFile(new URL(`../worker/${name}`, import.meta.url), "utf8");
@@ -440,13 +445,14 @@ test("G. maskEmail·getAuditActorId를 옮긴 뒤에도 같은 입력에 같은 
   assert.match(await getAuditActorId("owner@example.com", SECRET), /^[A-Za-z0-9_-]{16}$/u);
 });
 
-test("G. 배포 설정은 D1 WORK_DB 하나와 R2 WORK_FILES 하나만 두고 vars·Cron을 넣지 않는다(켜기 값 덮어쓰기·처리 함수 없는 Cron 방지)", async () => {
+test("G. 배포 설정은 D1 WORK_DB 하나와 R2 WORK_FILES 하나만 두고 vars를 넣지 않으며 Cron은 단계 P 실거래가 */10 하나만 둔다(켜기 값 덮어쓰기·처리 함수 없는 Cron 방지)", async () => {
   const raw = await readFile(new URL("../wrangler.jsonc", import.meta.url), "utf8");
   const config = JSON.parse(raw.replace(/^\s*\/\/.*$/gmu, ""));
   assert.deepEqual(config.d1_databases, [{ binding: "WORK_DB", database_name: "leaderscity-work", database_id: config.d1_databases[0].database_id, migrations_dir: "migrations/work" }]);
   assert.match(config.d1_databases[0].database_id, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u);
   assert.equal("vars" in config, false, "vars에 켜기 값 기본값을 두면 배포 때마다 다시 쓰임(켜기 값은 Secret으로 등록, 설계서 16.1)");
-  assert.equal("triggers" in config, false, "scheduled 처리 함수를 만드는 PR에서 Cron을 넣음");
+  assert.deepEqual(config.triggers, { crons: ["*/10 * * * *"] }, "Cron은 처리 함수가 있는 단계 P 실거래가 받기 하나만(단계 2·4 Cron은 그 PR에서 더함)");
+  assert.equal("observability" in config, false, "Workers 자동 추적(traces)을 켜지 않음(요청 주소에 인증키가 들어감, TK-34)");
   assert.deepEqual(config.r2_buckets, [{ binding: "WORK_FILES", bucket_name: "leaderscity-work-files" }], "파일 저장소는 이 이름의 버킷 하나만(공개 주소·사용자 도메인 없음은 버킷 설정에서 확인)");
   assert.equal(getWorkConfigState({ WORK_DB: { prepare() {}, batch() {} }, WORK_FILES: { put() {}, get() {}, delete() {} }, ADMIN_CSRF_SECRET: SECRET }), "disabled", "D1·R2 바인딩이 있어도 WORK_TOOLS_ENABLED가 없으면 꺼짐");
 });
