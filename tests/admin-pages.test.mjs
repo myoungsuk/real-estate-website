@@ -138,6 +138,13 @@ test("관리자 편집 화면은 부동산뱅크 가져오기와 네이버 매�
   assert.match(externalEditor, /thumbnailFile/);
   assert.match(externalEditor, /data-external-category="blog"/);
   assert.match(externalEditor, /data-external-category="youtube"/);
+  assert.match(externalEditor, /data-external-category="instagram"/);
+  assert.match(externalEditor, /<option value="instagram">인스타그램<\/option>/u);
+  assert.match(externalEditor, /previewButton\.hidden = isInstagram/u, "인스타그램은 '정보 불러오기'를 숨김(링크 미리보기 허용 주소는 블로그·유튜브뿐)");
+  assert.match(externalEditor, /url: type === "instagram" \? normalizeInstagramUrl\(/u, "공유 꼬리(?igsh=)를 지우고 저장");
+  assert.match(externalEditor, /type === "instagram" && !thumbnail/u, "사진 없이 저장하지 않음");
+  assert.match(externalEditor, /<h1>블로그·유튜브·인스타그램 관리<\/h1>/u, "화면 제목에 인스타그램(2026-11-19 사용자 결정)");
+  assert.match(externalEditor, /<span aria-current="page">블로그·유튜브·인스타그램<\/span>/u, "이동 경로도 같은 이름");
   assert.match(externalEditor, /name="youtubeFormat"/);
   assert.match(externalEditor, /data-external-search/);
   assert.match(complexEditor, /writeAdminContent\("complexes"/);
@@ -161,6 +168,24 @@ test("관리자 편집 화면은 부동산뱅크 가져오기와 네이버 매�
   assert.match(complexEditor, /name="amenityGroups"/);
   assert.match(complexEditor, /name="relatedContentIds"/);
   assert.match(complexEditor, /name="sources"/);
+});
+
+test("관리자 인스타그램: 메뉴 이름에 인스타그램을 넣고, 콘텐츠 ID를 비우면 instagram-게시일로 채운다", async () => {
+  const { suggestInstagramContentId } = await import("../src/lib/admin-external-id.mjs");
+  const [layout, editor] = await Promise.all([
+    readSource("src/layouts/AdminLayout.astro"),
+    readSource("src/pages/admin/external-links/index.astro"),
+  ]);
+  assert.match(layout, /href: "\/admin\/external-links\/", label: "블로그·유튜브·인스타그램"/u);
+  assert.equal(suggestInstagramContentId("2026-11-19", ["naver-blog-p5468300-1", "youtube-abc"]), "instagram-2026-11-19");
+  assert.equal(suggestInstagramContentId("2026-11-19", ["instagram-2026-11-19"]), "instagram-2026-11-19-2");
+  assert.equal(suggestInstagramContentId("2026-11-19", ["instagram-2026-11-19", "instagram-2026-11-19-2", "instagram-2026-11-19-4"]), "instagram-2026-11-19-3");
+  assert.match(suggestInstagramContentId("2026-11-19", ["instagram-2026-11-19"]), /^[a-z0-9]+(?:-[a-z0-9]+)*$/u, "ID 칸 pattern·검사 규칙(kebab-case)에 맞음");
+  assert.equal(suggestInstagramContentId("", []), null, "게시일이 없으면 날짜를 지어내지 않음");
+  assert.equal(suggestInstagramContentId("2026-1-9", []), null);
+  assert.match(editor, /type === "instagram" && !field\("id"\)!\.value\.trim\(\)/u, "직접 넣은 ID는 그대로 둠");
+  assert.match(editor, /suggestInstagramContentId\(field\("publishedAt"\)!\.value, resource\.data\.filter\(\(item\) => item\.id !== originalId\)/u, "고치는 중인 자기 ID는 겹침으로 세지 않음");
+  assert.match(editor, /idField\.required = !isInstagram/u, "인스타그램은 ID 칸을 비워도 저장 단계로 넘어감");
 });
 
 test("관리자 배포 상태 화면은 GitHub 저장과 Production digest 확인을 분리한다", async () => {
@@ -277,6 +302,9 @@ test("외부 콘텐츠는 블로그와 유튜브를 나누고 일반 영상을 �
   assert.match(privacy, /youtube-nocookie\.com/);
   assert.match(home, /publishedBlogContents\.slice\(0, 9\)/);
   assert.match(home, /publishedYoutubeVideoContents\.slice\(0, 6\)/);
+  assert.match(home, /publishedInstagramContents\.slice\(0, 6\)/);
+  assert.match(home, /homeInstagramContents\.length > 0 && <ExternalContentList items=\{homeInstagramContents\}[^>]*paginate=\{false\}[^>]*variant="note"/u, "0건이면 목록 없이 바로가기만");
+  assert.match(contentSource, /export type ExternalContentType = "blog" \| "youtube" \| "instagram";/u);
 });
 
 test("네이버 매물 관리 화면은 검색·유형·재확인 필터와 기준 미설정 안전 상태를 제공한다", async () => {

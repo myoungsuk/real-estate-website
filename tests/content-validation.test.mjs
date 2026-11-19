@@ -397,6 +397,56 @@ test("블로그와 유튜브 콘텐츠는 공개 상태와 자체 이미지 경�
   assert.match(validateExternalLinks([{ ...links[0], youtubeFormat: "video" }]).join("\n"), /블로그 콘텐츠/);
 });
 
+test("인스타그램 콘텐츠는 게시물 주소(/p/·/reel/)·썸네일 필수·youtubeFormat 금지를 검증한다", async () => {
+  const post = {
+    id: "instagram-2026-11-19",
+    type: "instagram",
+    status: "published",
+    title: "리더스시티 산책길",
+    summary: "공개 승인 요약",
+    url: "https://www.instagram.com/p/ABCdef_12-3/",
+    publishedAt: "2026-11-19",
+    thumbnail: { src: "/images/content/instagram/admin-upload.webp", alt: "리더스시티 산책길 사진" },
+  };
+  assert.deepEqual(validateExternalLinks([post]), []);
+  for (const url of ["https://instagram.com/p/ABCdef/", "https://www.instagram.com/reel/ABCdef", "https://www.instagram.com/reel/ABCdef/"]) {
+    assert.deepEqual(validateExternalLinks([{ ...post, url }]), [], url);
+  }
+  for (const url of [
+    "http://www.instagram.com/p/ABCdef/",
+    "https://www.instagram.com/readers.45_real.estate/",
+    "https://www.instagram.com/p/ABCdef/?igsh=abc123",
+    "https://www.instagram.com/p/ABCdef/#comments",
+    "https://www.instagram.com/p/ABCdef/?",
+    "https://www.instagram.com.example.com/p/ABCdef/",
+    "https://m.instagram.com/p/ABCdef/",
+    "https://www.instagram.com:8443/p/ABCdef/",
+    "https://user@www.instagram.com/p/ABCdef/",
+    "https://www.instagram.com/stories/readers/123/",
+    "https://www.instagram.com/p/ABCdef/extra/",
+    "https://www.instagram.com/p/",
+    "https://blog.naver.com/p5468300/123",
+  ]) {
+    assert.match(validateExternalLinks([{ ...post, url }]).join("\n"), /url: 인스타그램 게시물 주소/u, url);
+  }
+  assert.match(validateExternalLinks([{ ...post, thumbnail: null }]).join("\n"), /thumbnail: 공개 이미지가 필요합니다/u, "사진이 카드 본문이라 썸네일 필수");
+  assert.match(validateExternalLinks([{ ...post, thumbnail: { src: "https://scontent.cdninstagram.com/a.jpg", alt: "사진" } }]).join("\n"), /thumbnail\.src: \/images\//u, "인스타그램 서버 사진 주소를 그대로 쓰지 않음");
+  assert.match(validateExternalLinks([{ ...post, youtubeFormat: "video" }]).join("\n"), /youtubeFormat: 인스타그램 콘텐츠에는 사용할 수 없습니다/u);
+  assert.match(validateExternalLinks([{ ...post, type: "tiktok" }]).join("\n"), /type: blog·youtube·instagram만 허용합니다/u);
+  assert.match(validateExternalLinks([{ ...post, type: "blog" }]).join("\n"), /네이버 블로그 주소만 허용합니다/u, "인스타그램 주소를 블로그 종류로 넣으면 막음");
+  assert.deepEqual(
+    validateExternalLinks([{ ...post, type: "youtube", youtubeFormat: "video", url: "https://www.youtube.com/watch?v=I05mw0iCFnM", thumbnail: null }]),
+    [],
+    "블로그·유튜브는 지금처럼 썸네일 없이도 저장",
+  );
+  // 금지 필드·민감 문자열·스키마 밖 필드 검사는 인스타그램 항목에도 그대로 걸린다(관리자 저장 경로 포함).
+  assert.match(findUnexpectedKeys("externalLinks", [{ ...post, ownerHandle: "someone" }]).join("\n"), /externalLinks\[0\]\.ownerHandle/u);
+  assert.match(findBannedKeys([{ ...post, clientPhone: "010" }]).join("\n"), /clientPhone/u);
+  assert.match(findSensitiveStrings([{ ...post, summary: "문의 010-1111-2222" }], { office: { mobile: "010-2790-8675", email: "office@example.com", address: "105호" } }).join("\n"), /휴대전화번호/u);
+  assert.match(validateAdminResource("external-links", [{ ...post, url: "https://www.instagram.com/p/ABCdef/?igsh=abc123" }]).join("\n"), /인스타그램 게시물 주소/u, "관리자 저장 전 검증");
+  assert.match(validateAdminResource("external-links", [{ ...post, url: "https://www.instagram.com/p/ABCdef/?igsh=abc123" }], await currentAdminResources()).join("\n"), /인스타그램 게시물 주소/u, "다른 자료와 함께 보는 저장 경로");
+});
+
 test("홈 대표·사무소·지역 소개 문구와 이미지를 검증한다", () => {
   const homeContent = {
     broker: { eyebrow: "대표", headline: "신뢰", lead: "안내", portrait: { src: "/images/office/representative.webp", alt: "대표" } },

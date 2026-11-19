@@ -395,6 +395,11 @@
   border-color: var(--home-navy);
 }
 
+/* 인스타그램 게시물 사진은 1:1·4:5가 많아 정사각 칸에 보인다(16:9로 자르면 위아래가 크게 잘림) */
+.content-note--instagram .content-card__media {
+  aspect-ratio: 1 / 1;
+}
+
 /* 미리보기 표시가 카드 누름 영역을 가로막지 않게 */
 .content-note .content-card__preview-label {
   pointer-events: none;

@@ -11,7 +11,7 @@ const allowedComplexSourceKinds = new Set(["official", "public-data", "operator"
 const allowedComplexAmenityVerifications = new Set(["official", "operator-confirmed", "historical-plan", "check-required"]);
 const allowedComplexLivingCategories = new Set(["transport", "education", "daily-life", "nature"]);
 const complexSeoMaximumLengths = Object.freeze({ title: 70, description: 180 });
-const allowedExternalContentTypes = new Set(["blog", "youtube"]);
+const allowedExternalContentTypes = new Set(["blog", "youtube", "instagram"]);
 const allowedYoutubeContentFormats = new Set(["video", "short"]);
 const allowedExternalContentStatuses = new Set(["draft", "published"]);
 const allowedFaqCategories = new Set([
@@ -917,12 +917,15 @@ export function validateExternalLinks(externalLinks) {
     if (!isKebabCase(link.id)) errors.push(`${path}.id: 영문 kebab-case가 필요합니다.`);
     if (ids.has(link.id)) errors.push(`${path}.id: 중복 ID입니다.`);
     ids.add(link.id);
-    if (!allowedExternalContentTypes.has(link.type)) errors.push(`${path}.type: blog 또는 youtube만 허용합니다.`);
+    if (!allowedExternalContentTypes.has(link.type)) errors.push(`${path}.type: blog·youtube·instagram만 허용합니다.`);
     if (link.type === "youtube" && !allowedYoutubeContentFormats.has(link.youtubeFormat)) {
       errors.push(`${path}.youtubeFormat: video 또는 short만 허용합니다.`);
     }
     if (link.type === "blog" && link.youtubeFormat !== undefined) {
       errors.push(`${path}.youtubeFormat: 블로그 콘텐츠에는 사용할 수 없습니다.`);
+    }
+    if (link.type === "instagram" && link.youtubeFormat !== undefined) {
+      errors.push(`${path}.youtubeFormat: 인스타그램 콘텐츠에는 사용할 수 없습니다.`);
     }
     if (!allowedExternalContentStatuses.has(link.status)) errors.push(`${path}.status: draft 또는 published만 허용합니다.`);
     for (const key of ["title", "summary"]) {
@@ -937,11 +940,23 @@ export function validateExternalLinks(externalLinks) {
       if (link.type === "youtube" && !["youtube.com", "www.youtube.com", "youtu.be"].includes(url.hostname)) {
         errors.push(`${path}.url: 유튜브 주소만 허용합니다.`);
       }
+      // 인스타그램은 관리자가 직접 등록하는 게시물 한 건의 주소(/p/·/reel/)만 받는다.
+      // 공유 주소 뒤의 ?igsh=… 같은 꼬리는 공유한 계정을 알려 주므로 물음표·# 뒤 꼬리가 있으면 받지 않는다(관리자 화면이 저장 전에 지운다).
+      if (link.type === "instagram" && (
+        !["https://www.instagram.com", "https://instagram.com"].includes(url.origin)
+        || url.username !== ""
+        || url.password !== ""
+        || /[?#]/u.test(link.url)
+        || !/^\/(?:p|reel)\/[A-Za-z0-9_-]+\/?$/u.test(url.pathname)
+      )) {
+        errors.push(`${path}.url: 인스타그램 게시물 주소(https://www.instagram.com/p/… 또는 /reel/…, 물음표 뒤 꼬리 없이)만 허용합니다.`);
+      }
     } catch {
       errors.push(`${path}.url: 올바른 URL이 아닙니다.`);
     }
     if (!isIsoDateOrNull(link.publishedAt)) errors.push(`${path}.publishedAt: YYYY-MM-DD 또는 null이어야 합니다.`);
-    errors.push(...validateImage(link.thumbnail, `${path}.thumbnail`));
+    // 인스타그램은 사진이 카드 본문이라 썸네일을 꼭 둔다(블로그·유튜브는 썸네일 없이 기호 칸으로 보일 수 있음).
+    errors.push(...validateImage(link.thumbnail, `${path}.thumbnail`, { required: link.type === "instagram" }));
   });
   return errors;
 }

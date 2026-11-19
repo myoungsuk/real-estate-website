@@ -5,17 +5,18 @@ import { externalContents } from "../../../lib/content";
 
 const blogContents = externalContents.filter((item) => item.type === "blog");
 const youtubeContents = externalContents.filter((item) => item.type === "youtube");
+const instagramContents = externalContents.filter((item) => item.type === "instagram");
 ---
 
 <AdminLayout
-  title="블로그·유튜브 관리 | 행복한부동산 관리자"
-  description="네이버 블로그와 유튜브 카드의 링크, 제목, 설명과 썸네일을 관리합니다."
+  title="블로그·유튜브·인스타그램 관리 | 행복한부동산 관리자"
+  description="네이버 블로그·유튜브·인스타그램 카드의 링크, 제목, 설명과 썸네일을 관리합니다."
 >
   <div class="admin-page-header admin-page-header--compact">
     <div>
-      <nav class="admin-breadcrumbs" aria-label="현재 위치"><a href="/admin/">대시보드</a><span>/</span><span aria-current="page">블로그·유튜브</span></nav>
-      <h1>블로그·유튜브 관리</h1>
-      <p>링크에서 제목과 썸네일을 불러오고, 불러오지 못한 사진은 직접 올릴 수 있습니다.</p>
+      <nav class="admin-breadcrumbs" aria-label="현재 위치"><a href="/admin/">대시보드</a><span>/</span><span aria-current="page">블로그·유튜브·인스타그램</span></nav>
+      <h1>블로그·유튜브·인스타그램 관리</h1>
+      <p>블로그·유튜브는 링크에서 제목과 썸네일을 불러오고, 불러오지 못한 사진은 직접 올릴 수 있습니다. 인스타그램은 사진을 직접 올립니다.</p>
     </div>
     <a class="admin-text-link" href="/blog/">공개 블로그 보기 <span aria-hidden="true">↗</span></a>
   </div>
@@ -33,6 +34,11 @@ const youtubeContents = externalContents.filter((item) => item.type === "youtube
       <strong><span data-external-category-count="youtube">{youtubeContents.length}</span>건</strong>
       <small>영상 링크·설명·썸네일 관리</small>
     </button>
+    <button type="button" aria-pressed="false" data-external-category="instagram">
+      <span>인스타그램</span>
+      <strong><span data-external-category-count="instagram">{instagramContents.length}</span>건</strong>
+      <small>게시물 링크·설명·사진 직접 등록</small>
+    </button>
   </nav>
 
   <div class="admin-editor-layout">
@@ -43,7 +49,7 @@ const youtubeContents = externalContents.filter((item) => item.type === "youtube
       <div class="admin-content-list" data-external-list>
         {externalContents.map((item) => (
           <article data-external-item-type={item.type} data-external-search-value={`${item.title} ${item.url}`.toLocaleLowerCase("ko-KR")} hidden={item.type !== "blog"}>
-            <div><span>{item.type === "blog" ? "블로그" : item.youtubeFormat === "short" ? "YouTube Shorts" : "유튜브 영상"}</span><strong>{item.title}</strong><small>{item.status === "published" ? "공개" : "작성 중"}</small></div>
+            <div><span>{item.type === "blog" ? "블로그" : item.type === "instagram" ? "인스타그램" : item.youtubeFormat === "short" ? "YouTube Shorts" : "유튜브 영상"}</span><strong>{item.title}</strong><small>{item.status === "published" ? "공개" : "작성 중"}</small></div>
             <button type="button" data-external-edit={item.id} data-write-control disabled>수정</button>
           </article>
         ))}
@@ -55,7 +61,7 @@ const youtubeContents = externalContents.filter((item) => item.type === "youtube
       <div class="admin-panel__heading"><div><p class="admin-eyebrow">카드 편집</p><h2 data-external-form-title>새 블로그</h2></div></div>
       <input type="hidden" name="originalId" />
       <div class="admin-form-grid admin-form-grid--single">
-        <div class="admin-field"><label for="external-type">종류</label><select id="external-type" name="type" data-write-control disabled><option value="blog">네이버 블로그</option><option value="youtube">유튜브</option></select></div>
+        <div class="admin-field"><label for="external-type">종류</label><select id="external-type" name="type" data-write-control disabled><option value="blog">네이버 블로그</option><option value="youtube">유튜브</option><option value="instagram">인스타그램</option></select></div>
         <div class="admin-field" data-youtube-format-field hidden><label for="external-youtube-format">유튜브 형식</label><select id="external-youtube-format" name="youtubeFormat" data-write-control disabled><option value="video">일반 영상</option><option value="short">YouTube Shorts</option></select><small>Shorts 주소를 불러오면 자동으로 Shorts를 선택합니다.</small></div>
         <div class="admin-field"><label for="external-status">공개 상태</label><select id="external-status" name="status" data-write-control disabled><option value="draft">작성 중</option><option value="published">공개</option></select><small>공개 상태만 홈페이지에 표시됩니다.</small></div>
         <div class="admin-field"><label for="external-url">원문 링크</label><div class="admin-input-action"><input id="external-url" name="url" type="url" placeholder="https://blog.naver.com/... 또는 유튜브 영상 주소" required data-write-control disabled /><button type="button" data-external-preview data-write-control disabled>정보 불러오기</button></div></div>
@@ -63,7 +69,7 @@ const youtubeContents = externalContents.filter((item) => item.type === "youtube
         <div class="admin-field"><label for="external-title">제목</label><input id="external-title" name="title" required data-write-control disabled /></div>
         <div class="admin-field"><label for="external-summary">짧은 설명</label><textarea id="external-summary" name="summary" rows="4" required data-write-control disabled></textarea></div>
         <div class="admin-field"><label for="external-date">게시일</label><input id="external-date" name="publishedAt" type="date" data-write-control disabled /></div>
-        <div class="admin-field"><label for="external-thumbnail">썸네일 직접 업로드</label><input id="external-thumbnail" name="thumbnailFile" type="file" accept="image/jpeg,image/png,image/webp" data-write-control disabled /><small>링크에서 썸네일을 못 불러온 경우 선택합니다.</small></div>
+        <div class="admin-field"><label for="external-thumbnail">썸네일 직접 업로드</label><input id="external-thumbnail" name="thumbnailFile" type="file" accept="image/jpeg,image/png,image/webp" data-write-control disabled /><small data-external-thumbnail-hint>링크에서 썸네일을 못 불러온 경우 선택합니다.</small></div>
         <div class="admin-field"><label for="external-thumbnail-alt">썸네일 설명</label><input id="external-thumbnail-alt" name="thumbnailAlt" placeholder="예: 리더스시티 전세 안내 썸네일" data-write-control disabled /></div>
         <figure class="admin-media-preview" data-external-thumbnail-preview hidden><img alt="등록할 썸네일 미리보기" /></figure>
       </div>
@@ -86,6 +92,7 @@ const youtubeContents = externalContents.filter((item) => item.type === "youtube
       type AdminResource,
     } from "../../../lib/admin-content-client";
     import { guardAdminFormChanges, reviewAdminContentChange } from "../../../lib/admin-content-review";
+    import { suggestInstagramContentId } from "../../../lib/admin-external-id.mjs";
     import type { ExternalContent } from "../../../lib/content";
 
     const form = document.querySelector<HTMLFormElement>("[data-external-form]");
@@ -105,13 +112,16 @@ const youtubeContents = externalContents.filter((item) => item.type === "youtube
     const youtubeFormatField = document.querySelector<HTMLElement>("[data-youtube-format-field]");
     const previewFigure = document.querySelector<HTMLElement>("[data-external-thumbnail-preview]");
     const previewImage = previewFigure?.querySelector<HTMLImageElement>("img");
+    const thumbnailHint = document.querySelector<HTMLElement>("[data-external-thumbnail-hint]");
     let resource: AdminResource<ExternalContent[]> | null = null;
     let previewDataUrl: string | null = null;
-    let activeType: ExternalContent["type"] = new URLSearchParams(window.location.search).get("category") === "youtube" ? "youtube" : "blog";
+    let fileObjectUrl: string | null = null;
+    const requestedCategory = new URLSearchParams(window.location.search).get("category");
+    let activeType: ExternalContent["type"] = requestedCategory === "youtube" || requestedCategory === "instagram" ? requestedCategory : "blog";
     const dirtyGuard = guardAdminFormChanges(form);
 
     const field = (name: string) => form?.elements.namedItem(name) as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | null;
-    const categoryName = (type: ExternalContent["type"]) => type === "blog" ? "블로그" : "유튜브";
+    const categoryName = (type: ExternalContent["type"]) => type === "blog" ? "블로그" : type === "youtube" ? "유튜브" : "인스타그램";
     const updateCategoryCounts = () => {
       if (!resource) return;
       categoryCountElements.forEach((element) => {
@@ -142,7 +152,7 @@ const youtubeContents = externalContents.filter((item) => item.type === "youtube
         article.dataset.externalItemType = item.type;
         article.dataset.externalSearchValue = `${item.title} ${item.url}`.toLocaleLowerCase("ko-KR");
         const info = document.createElement("div");
-        const type = document.createElement("span"); type.textContent = item.type === "blog" ? "블로그" : item.youtubeFormat === "short" ? "YouTube Shorts" : "유튜브 영상";
+        const type = document.createElement("span"); type.textContent = item.type === "blog" ? "블로그" : item.type === "instagram" ? "인스타그램" : item.youtubeFormat === "short" ? "YouTube Shorts" : "유튜브 영상";
         const title = document.createElement("strong"); title.textContent = item.title;
         const state = document.createElement("small"); state.textContent = item.status === "published" ? "공개" : "작성 중";
         const button = document.createElement("button"); button.type = "button"; button.dataset.externalEdit = item.id; button.textContent = "수정";
@@ -163,6 +173,21 @@ const youtubeContents = externalContents.filter((item) => item.type === "youtube
       if (youtubeFormatField) youtubeFormatField.hidden = field("type")?.value !== "youtube";
     };
 
+    // 인스타그램은 로그인 없이 제목·사진을 불러올 수 없어 '정보 불러오기'를 숨기고 사진을 직접 올린다(링크 미리보기 허용 주소는 블로그·유튜브뿐).
+    const syncInstagramFields = () => {
+      const isInstagram = field("type")?.value === "instagram";
+      if (previewButton) previewButton.hidden = isInstagram;
+      field("url")?.setAttribute("placeholder", isInstagram ? "https://www.instagram.com/p/... 또는 /reel/... 게시물 주소" : "https://blog.naver.com/... 또는 유튜브 영상 주소");
+      field("id")?.setAttribute("placeholder", isInstagram ? "비워 두면 instagram-게시일로 채웁니다" : "예: blog-cheondong-2026-01");
+      // 인스타그램은 ID 칸을 비워도 저장 단계로 넘어가 instagram-게시일로 채운다(아래 submit). 다른 종류는 지금처럼 꼭 입력한다.
+      const idField = field("id") as HTMLInputElement | null;
+      if (idField) idField.required = !isInstagram;
+      if (thumbnailHint) thumbnailHint.textContent = isInstagram ? "게시물 사진을 직접 올려 주세요. 홈에서는 정사각형으로 보입니다." : "링크에서 썸네일을 못 불러온 경우 선택합니다.";
+    };
+
+    // 인스타그램 공유 주소 뒤의 ?igsh=… 같은 꼬리(공유한 계정을 알려 줌)는 저장하지 않는다.
+    const normalizeInstagramUrl = (value: string) => value.replace(/[?#].*$/u, "");
+
     const youtubeFormatFromInputUrl = (value: string) => {
       try {
         return new URL(value).pathname.split("/").filter(Boolean)[0] === "shorts" ? "short" : null;
@@ -182,6 +207,7 @@ const youtubeContents = externalContents.filter((item) => item.type === "youtube
       previewDataUrl = null;
       showThumbnail(null);
       syncYoutubeFormatField();
+      syncInstagramFields();
       setAdminFormStatus(statusMessage, "링크와 공개 문구를 입력해 주세요.");
       dirtyGuard.markSaved();
     };
@@ -210,6 +236,7 @@ const youtubeContents = externalContents.filter((item) => item.type === "youtube
       previewDataUrl = null;
       showThumbnail(item.thumbnail?.src ?? null);
       syncYoutubeFormatField();
+      syncInstagramFields();
       setAdminFormStatus(statusMessage, "수정할 내용을 확인해 주세요.");
       dirtyGuard.markSaved();
     };
@@ -226,6 +253,14 @@ const youtubeContents = externalContents.filter((item) => item.type === "youtube
     categoryButtons.forEach((button) => button.addEventListener("click", () => setActiveCategory(button.dataset.externalCategory as ExternalContent["type"])))
     searchInput?.addEventListener("input", applyListFilter);
     field("type")?.addEventListener("change", syncYoutubeFormatField);
+    field("type")?.addEventListener("change", syncInstagramFields);
+    // 직접 고른 사진도 저장 전에 미리 본다(이 브라우저 안에서만 보이고, 저장할 때 WebP로 바꿔 올린다).
+    field("thumbnailFile")?.addEventListener("change", () => {
+      if (fileObjectUrl) URL.revokeObjectURL(fileObjectUrl);
+      const file = (field("thumbnailFile") as HTMLInputElement | null)?.files?.[0];
+      fileObjectUrl = file ? URL.createObjectURL(file) : null;
+      if (fileObjectUrl) showThumbnail(fileObjectUrl);
+    });
     newButton?.addEventListener("click", resetForm);
     setActiveCategory(activeType, false);
     resetForm();
@@ -265,15 +300,28 @@ const youtubeContents = externalContents.filter((item) => item.type === "youtube
         if (file || previewDataUrl) thumbnail = { src: "/images/content/blog/pending-admin-review.webp", alt: field("thumbnailAlt")?.value.trim() ?? "" };
         else if (thumbnail && field("thumbnailAlt")?.value.trim()) thumbnail = { ...thumbnail, alt: field("thumbnailAlt")!.value.trim() };
         const type = field("type")!.value as ExternalContent["type"];
+        if (type === "instagram" && !thumbnail) {
+          setAdminFormStatus(statusMessage, "인스타그램 게시물은 사진을 직접 올려 주세요.", "error");
+          return;
+        }
+        // 인스타그램 콘텐츠 ID를 비워 두면 instagram-게시일(같은 ID가 있으면 -2, -3…)로 채운다. 직접 넣은 값은 그대로 둔다.
+        if (type === "instagram" && !field("id")!.value.trim()) {
+          const suggestedId = suggestInstagramContentId(field("publishedAt")!.value, resource.data.filter((item) => item.id !== originalId).map((item) => item.id));
+          if (!suggestedId) {
+            setAdminFormStatus(statusMessage, "콘텐츠 ID를 비워 두면 게시일로 만듭니다. 게시일을 넣거나 ID를 직접 적어 주세요.", "error");
+            return;
+          }
+          field("id")!.value = suggestedId;
+        }
         const createNext = (nextThumbnail: ExternalContent["thumbnail"]) => {
-          const nextItem: ExternalContent = { id: field("id")!.value.trim(), type, ...(type === "youtube" ? { youtubeFormat: field("youtubeFormat")!.value as ExternalContent["youtubeFormat"] } : {}), status: field("status")!.value as ExternalContent["status"], title: field("title")!.value.trim(), summary: field("summary")!.value.trim(), url: field("url")!.value.trim(), publishedAt: field("publishedAt")!.value || null, thumbnail: nextThumbnail };
+          const nextItem: ExternalContent = { id: field("id")!.value.trim(), type, ...(type === "youtube" ? { youtubeFormat: field("youtubeFormat")!.value as ExternalContent["youtubeFormat"] } : {}), status: field("status")!.value as ExternalContent["status"], title: field("title")!.value.trim(), summary: field("summary")!.value.trim(), url: type === "instagram" ? normalizeInstagramUrl(field("url")!.value.trim()) : field("url")!.value.trim(), publishedAt: field("publishedAt")!.value || null, thumbnail: nextThumbnail };
           return originalId ? resource!.data.map((item) => item.id === originalId ? nextItem : item) : [...resource!.data, nextItem];
         };
         const reviewCandidate = createNext(thumbnail);
         const confirmed = await reviewAdminContentChange({
           changes: [{ resource: "external-links", sha: resource.sha, data: reviewCandidate }],
           beforeByResource: { "external-links": resource.data },
-          impactPages: [type === "blog" ? "블로그 목록" : "유튜브 목록", "홈 외부 콘텐츠"],
+          impactPages: type === "instagram" ? ["홈 외부 콘텐츠"] : [type === "blog" ? "블로그 목록" : "유튜브 목록", "홈 외부 콘텐츠"],
         });
         if (!confirmed) {
           setAdminFormStatus(statusMessage, "저장을 취소했습니다. 입력한 내용은 그대로 유지됩니다.");

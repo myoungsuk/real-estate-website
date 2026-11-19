@@ -62,7 +62,7 @@
 | 영업시간 | 평일 09:00~20:00, 토요일 09:00~18:00, 일요일 휴무(예약 상담 가능) |
 | 주차 | 리더스시티5블록 단지 내 상가 주차장 이용 가능 |
 | 카카오톡 상담 | https://pf.kakao.com/_nxmabn/chat |
-| 인스타그램 | https://www.instagram.com/readers.45_real.estate/ (머리 메뉴·홈 '블로그·유튜브 새 글' 칸 아래 바로가기, 홈 `sameAs`. 2026-11-19 사용자 제공) |
+| 인스타그램 | https://www.instagram.com/readers.45_real.estate/ (머리 메뉴·홈 '블로그·유튜브 새 글' 칸 아래 바로가기, 홈 `sameAs`. 2026-11-19 사용자 제공. 관리자가 직접 등록한 공개 게시물은 같은 칸에 정사각 카드 최신 6개, 0건이면 바로가기만 — 2026-11-19 사용자 결정 "관리자에서 직접 등록") |
 | 네이버 등록 매물 | `src/data/naver-listings.json`의 개별 공개 매물 카드와 `src/data/office.json`의 중개사 매물 지도 링크 |
 | 실제 도메인 | https://leaderscityhappy.com |
 | 전문 지역 | 대전광역시 동구 전역(천동·신흥동과 리더스시티 포함) |
@@ -139,7 +139,7 @@ npm run sync:external:dry-run
 - `src/data/complexes.json` → 대전 동구 주요 단지의 alias·SEO·단위 자료 안내·사진·기본 사실·면적별 세대 구성·공급 구성·생활환경·시설 확인 상태·FAQ·관련 콘텐츠·복수 출처와 목록·상세 정적 생성. 신흥 SK뷰는 공식 합계·운영자 직접 촬영 사진·공개 문구 승인을 반영해 `published`로 공개하며 상세·사이트맵·매물 단지 필터에 포함
 - `src/lib/complexes.ts`, `src/lib/complex-matching.mjs` → 공개 단지 순서 파생, NFKC·공백·구분기호 정규화와 긴 접두어 우선 매물 제목 매칭. 매칭되지 않은 매물은 숨기지 않음
 - 공식 Naver RSS·YouTube Atom → `scripts/sync-external-content.mjs` → `src/data/external-links.json` 신규 `published` 항목과 자체 WebP 썸네일. YouTube alternate URL의 `/shorts/`는 `youtubeFormat: short`, 그 밖의 개별 영상은 `video`로 분류하며 기존 항목은 append-only로 보존. 한 출처의 일시 장애는 3회 이내 재시도 후 경고와 함께 건너뛰고 정상 출처만 반영하며, 두 출처 모두 장애이거나 출처·채널·XML·ID 신뢰 검증이 실패하면 전체 실행을 중단
-- `src/data/external-links.json` → 자동화 전 공식 블로그 128건·일반 영상 40건과 2026-08-26 확인한 공식 Shorts 32건을 기준으로 누적되는 원문 링크·자체 썸네일·최신순 카드
+- `src/data/external-links.json` → 자동화 전 공식 블로그 128건·일반 영상 40건과 2026-08-26 확인한 공식 Shorts 32건을 기준으로 누적되는 원문 링크·자체 썸네일·최신순 카드. 관리자가 직접 등록하는 인스타그램 게시물(`type: instagram`, `/p/`·`/reel/` 주소, 썸네일 필수)도 같은 파일에 두며 홈 인스타그램 묶음에만 정사각 카드 최신 6개로 표시하고, 동기화는 이 항목을 건너뛰고 보존한다
 - `src/layouts/BaseLayout.astro` → 페이지별 title, description, canonical, robots, JSON-LD와 공개 하위 페이지 `BreadcrumbList`. 홈은 `WebSite`와 `RealEstateAgent`·`LocalBusiness`를 고정 `@id`로 연결한 단일 `@graph`를 제공
 - `src/pages/robots.txt.ts`, `llms.txt.ts`, sitemap integration → 검색 로봇 안내
 - `scripts/indexnow.mjs`, `.github/workflows/notify-indexnow.yml` → 성공한 `master` CI의 변경 URL 계획 → 운영 `/deployment-marker.json`의 `source.commit`이 그 커밋이거나 후속 커밋인지·공개키 확인 → 네이버 IndexNow 알림
@@ -152,7 +152,7 @@ npm run sync:external:dry-run
 - `/blog/`, `/youtube/` → 지역 콘텐츠를 원문 종류별로 분리하고, 유튜브는 일반 영상을 기본으로 `일반 영상·Shorts 보기`를 전환하며 독립 페이지에서 6개 단위로 탐색
 - `/faq/` → 승인된 공개 FAQ 38개를 8개 카테고리 바로가기·구역별 아코디언으로 표시하고 서버에 저장하지 않는 문자 상담 작성 화면
 - `/admin/content/` → 홈 대표·사무소·리더스시티 설명과 대표 사진
-- `/admin/external-links/` → 네이버 블로그·유튜브를 분리한 관리 카테고리, 유튜브 일반 영상·Shorts 형식 선택, 카테고리별 건수·검색·링크 미리보기·썸네일
+- `/admin/external-links/` → 네이버 블로그·유튜브·인스타그램을 분리한 관리 카테고리(인스타그램은 정보 불러오기 없이 사진 직접 등록, 공유 주소의 물음표 뒤 꼬리 제거), 유튜브 일반 영상·Shorts 형식 선택, 카테고리별 건수·검색·링크 미리보기·썸네일
 - `/admin/complexes/` → 리더스시티 전체 비교 콘텐츠와 대전 동구 지역·단지 소개·사진·면적·공급·생활환경·시설 상태·FAQ·관련 콘텐츠·복수 출처·확인일
 - `/admin/work/`·`fee/`·`messages/`·`schedule/` → 관리자 전용 중개업무 도구 단계 0. `src/data/work/legal-rules.json`(공개 법령 요율·기한·판정 기준과 출처) → `src/lib/work/*.mjs` 순수 함수 → 중개보수 계산·안내 문자·계약 일정·`.ics`. 입력값은 저장·서버 전송·URL·브라우저 저장소에 넣지 않고, 법령 데이터는 `validateLegalRules()`로 빌드 전 검증한다. 상세는 `docs/work-tools/`.
 - 관리자 저장 화면 → `src/lib/admin-content-diff.mjs` 공개 필드 diff·민감 문자열 가림 → `src/lib/admin-content-review.ts` 변경 전후·영향 화면 확인과 dirty 이탈 경고 → 서버 사전 검증 → 최종 저장
@@ -188,8 +188,8 @@ npm run sync:external:dry-run
 - 사진·후기·대표 약력·단지 수치는 출처와 공개 승인을 확인한다.
 - 승인 콘텐츠가 없으면 가짜 샘플을 만들지 않고 빈 상태 또는 준비 중으로 표시한다.
 - 외부 글·영상의 원문이나 권한 없는 이미지를 복제하지 않고 짧은 설명과 원문 링크를 쓴다.
-- 외부 콘텐츠는 고유 ID·`draft|published`·게시일·자체 저장 썸네일을 사용하고, 네이버 블로그·유튜브 허용 도메인만 등록한다. YouTube 항목은 `youtubeFormat: video|short`를 반드시 기록한다.
-- 공식 RSS 동기화는 네이버 블로그 ID `p5468300`과 Repository Variable `YOUTUBE_CHANNEL_ID`의 고정 채널만 허용하고 신규 항목만 `published`로 추가한다. 기존 수동 수정값과 피드에 없는 항목은 덮어쓰거나 삭제하지 않는다.
+- 외부 콘텐츠는 고유 ID·`draft|published`·게시일·자체 저장 썸네일을 사용하고, 네이버 블로그·유튜브 허용 도메인과 인스타그램 게시물 주소(`www.instagram.com`·`instagram.com`의 `/p/`·`/reel/`, 물음표·`#` 꼬리 없이)만 등록한다. 인스타그램 항목은 썸네일이 필수다. YouTube 항목은 `youtubeFormat: video|short`를 반드시 기록한다.
+- 공식 RSS 동기화는 네이버 블로그 ID `p5468300`과 Repository Variable `YOUTUBE_CHANNEL_ID`의 고정 채널만 허용하고 신규 항목만 `published`로 추가한다. 기존 수동 수정값과 피드에 없는 항목, 관리자가 등록한 인스타그램 항목은 덮어쓰거나 삭제하지 않는다.
 - 홈과 지역 콘텐츠는 최신순으로 정렬하고 블로그는 페이지당 9개를 표시한다. 홈의 유튜브는 일반 영상 최신 6개만 표시한다. `/youtube/`는 전체 혼합 필터 없이 일반 영상을 기본으로 `일반 영상·Shorts 보기`를 제공하고 선택 형식을 페이지당 6개씩 데스크톱 3열·태블릿 2열·모바일 1열로 표시한다. 필터를 바꾸면 1페이지로 돌아간다.
 - 홈의 대표·사무소·리더스시티·신흥 SK뷰 상담 범위 설명은 `home-content.json`에서 관리한다.
 - 홈 문구 칸별 최대 글자 수, 확정 공개 정보 9가지(법적 상호·브랜드명·대표·연락처·이메일·주소·등록번호·사업자등록번호·카카오톡 상담 주소) 고정, 매물 단지 표기 6가지 연결은 콘텐츠 검사(`scripts/content-validation.mjs`)가 관리자 저장 전·빌드·동기화 검증에서 같이 막는다. 확정 공개 정보를 바꿀 때는 개발 PR로 그 값과 '확정 공개 정보' 표를 함께 고친다.

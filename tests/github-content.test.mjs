@@ -542,6 +542,29 @@ test("이미지 업로드는 WebP 데이터와 허용 분류만 받는다", asyn
   );
 });
 
+test("이미지 업로드 분류 instagram은 public/images/content/instagram/ 아래 새 파일 하나만 만든다", async () => {
+  const urls = [];
+  const result = await uploadAdminImage(
+    { category: "instagram", dataUrl: webpDataUrl(validWebpBytes) },
+    env,
+    async (url, init) => {
+      urls.push(String(url));
+      assert.equal(init.method, "PUT");
+      return Response.json({ commit: { sha: "image-commit-sha" } });
+    },
+  );
+  assert.match(result.src, /^\/images\/content\/instagram\/\d+-[0-9a-f]{8}\.webp$/u);
+  assert.equal(urls.length, 1);
+  assert.match(urls[0], /\/contents\/public\/images\/content\/instagram\/\d+-[0-9a-f]{8}\.webp$/u);
+  for (const category of ["Instagram", "instagram/../blog", "instagram ", "content", "work"]) {
+    await assert.rejects(
+      uploadAdminImage({ category, dataUrl: webpDataUrl(validWebpBytes) }, env, async () => { throw new Error("GitHub를 부르면 안 됩니다."); }),
+      (error) => error.code === "MEDIA_CATEGORY_DENIED",
+      category,
+    );
+  }
+});
+
 test("이미지 업로드는 구조와 크기가 유효한 WebP만 GitHub로 전달한다", async () => {
   assert.deepEqual(validateWebpBytes(validAlphaWebpBytes), { width: 2, height: 3 });
   let requestBody = null;

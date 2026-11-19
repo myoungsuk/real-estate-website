@@ -3,7 +3,7 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 import ExternalContentList from "../components/ExternalContentList.astro";
 import HomeWindowHero from "../components/HomeWindowHero.astro";
 import NaverListingPager from "../components/NaverListingPager.astro";
-import { homeContent, publishedBlogContents, publishedYoutubeVideoContents } from "../lib/content";
+import { homeContent, publishedBlogContents, publishedInstagramContents, publishedYoutubeVideoContents } from "../lib/content";
 import { featuredComplexes, getComplexFact } from "../lib/complexes";
 import { naverListings } from "../lib/naver-listings";
 import { getResponsivePublicImageSrcSet } from "../lib/responsive-images";
@@ -14,6 +14,7 @@ const title = "대전 동구 지역 전문 행복한부동산 | 리더스시티�
 const description = "리더스시티5블록 단지 내 행복한부동산입니다. 리더스시티 4·5블록과 신흥 SK뷰를 중심으로 천동·신흥동의 매매·전세·월세를 백진옥 대표 공인중개사가 직접 상담합니다.";
 const homeBlogContents = publishedBlogContents.slice(0, 9);
 const homeYoutubeContents = publishedYoutubeVideoContents.slice(0, 6);
+const homeInstagramContents = publishedInstagramContents.slice(0, 6);
 const getHomeComplexFact = (
   complex: (typeof featuredComplexes)[number],
   labels: string[],
@@ -235,6 +236,8 @@ const structuredData = {
         </div>
         <div class="home-notes__group" id="instagram">
           <h3 id="instagram-heading">인스타그램</h3>
+          {/* 관리자가 직접 등록한 공개 게시물이 있을 때만 사진 격자를 보인다. 없으면 빈 상태 문구 없이 바로가기만 둔다 */}
+          {homeInstagramContents.length > 0 && <ExternalContentList items={homeInstagramContents} pageSize={6} categoryLabel="인스타그램" paginate={false} variant="note" />}
           <a class="home-more" href={office.instagramUrl} target="_blank" rel="noopener noreferrer">인스타그램에서 보기 <span aria-hidden="true">↗</span><span class="sr-only">(새 창)</span></a>
         </div>
       </div>
