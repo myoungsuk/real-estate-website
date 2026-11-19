@@ -1,5 +1,6 @@
 ---
 import AdminContentHistory from "../../../components/admin/AdminContentHistory.astro";
+import AdminPageHelp from "../../../components/admin/AdminPageHelp.astro";
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 ---
 
@@ -20,6 +21,8 @@ import AdminLayout from "../../../layouts/AdminLayout.astro";
     </div>
     <span class="admin-stage-badge">2단계 확인 · force 금지</span>
   </div>
+
+  <AdminPageHelp page="/admin/history/" />
 
   <AdminContentHistory />
 

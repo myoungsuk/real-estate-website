@@ -1,5 +1,6 @@
 ---
 import AdminIcon from "../../../components/admin/AdminIcon.astro";
+import AdminPageHelp from "../../../components/admin/AdminPageHelp.astro";
 import WorkLegalBasis from "../../../components/admin/WorkLegalBasis.astro";
 import WorkResultBar from "../../../components/admin/WorkResultBar.astro";
 import legalRules from "../../../data/work/legal-rules.json";
@@ -29,6 +30,8 @@ const amountFields = [
     </header>
 
     <p class="work-doc__lead">물건·거래 종류를 고르고 금액을 넣으면 한쪽 의뢰인 기준 상한 보수가 바로 나옵니다. 1원 미만은 버립니다.</p>
+
+    <AdminPageHelp page="/admin/work/fee/" />
 
     <div class="work-tool work-doc__layout" data-fee-tool>
       <section class="work-form" aria-labelledby="fee-input-title">

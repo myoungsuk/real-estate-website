@@ -1,4 +1,5 @@
 ---
+import AdminPageHelp from "../../../components/admin/AdminPageHelp.astro";
 import AdminWriteGate from "../../../components/admin/AdminWriteGate.astro";
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 import { complexes } from "../../../lib/complexes";
@@ -13,6 +14,8 @@ import { complexes } from "../../../lib/complexes";
     </div>
     <a class="admin-text-link" href="/complexes/">공개 단지정보 보기 <span aria-hidden="true">↗</span></a>
   </div>
+
+  <AdminPageHelp page="/admin/complexes/" />
 
   <AdminWriteGate />
 

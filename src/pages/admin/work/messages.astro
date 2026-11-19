@@ -1,5 +1,6 @@
 ---
 import AdminIcon from "../../../components/admin/AdminIcon.astro";
+import AdminPageHelp from "../../../components/admin/AdminPageHelp.astro";
 import WorkResultBar from "../../../components/admin/WorkResultBar.astro";
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 import { MESSAGE_DEAL_TYPES, MESSAGE_TEMPLATES, MESSAGE_VARIANTS } from "../../../lib/work/message-templates.mjs";
@@ -19,6 +20,8 @@ import { MESSAGE_DEAL_TYPES, MESSAGE_TEMPLATES, MESSAGE_VARIANTS } from "../../.
     </header>
 
     <p class="work-doc__lead">빈 칸은 대괄호 자리표시로 남습니다. 복사하거나 문자 앱을 연 뒤 손님 번호를 직접 골라 보내세요.</p>
+
+    <AdminPageHelp page="/admin/work/messages/" />
     <p class="work-doc__notice">
       <AdminIcon name="shield" size={18} />
       <span>손님 이름·전화번호·주민등록번호·계좌 비밀번호는 넣지 마세요. 계좌 정보는 이 화면에서만 쓰고 저장하지 않습니다.</span>

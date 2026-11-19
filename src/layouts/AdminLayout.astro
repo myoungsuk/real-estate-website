@@ -22,6 +22,7 @@ const navigation = [
   { href: "/admin/complexes/", label: "지역·단지 설명", shortLabel: "지역" },
   { href: "/admin/deployment/", label: "배포 상태", shortLabel: "배포" },
   { href: "/admin/history/", label: "변경 이력·복원", shortLabel: "이력" },
+  { href: "/admin/help/", label: "사용 안내", shortLabel: "안내" },
 ];
 
 // 메뉴 그림 기호. 그림은 이 사무소용으로 새로 그린 선 그림이다.
@@ -34,6 +35,7 @@ const navigationIcons: Record<string, AdminIconName> = {
   "/admin/complexes/": "map",
   "/admin/deployment/": "cloud",
   "/admin/history/": "history",
+  "/admin/help/": "help",
 };
 
 // 관리자 공용 틀(사용자 선택 2026-11-18 C+D 17:24:07·CD1 17:55:44): 맨 위 메뉴 줄과 화면별 왼쪽 목록을 하나로 합쳤다.
@@ -42,7 +44,7 @@ const navigationIcons: Record<string, AdminIconName> = {
 const navigationGroups = [
   { label: "업무", hrefs: ["/admin/", "/admin/work/", "/admin/listings/"] },
   { label: "홈페이지 글", hrefs: ["/admin/content/", "/admin/external-links/", "/admin/complexes/"] },
-  { label: "확인", hrefs: ["/admin/deployment/", "/admin/history/"] },
+  { label: "확인", hrefs: ["/admin/deployment/", "/admin/history/", "/admin/help/"] },
 ];
 
 // 아래 단계가 있는 구역. 지금 구역이면 PC 왼쪽 목록에서 펼치고, 휴대폰은 위 제목 줄 아래 작은 탭으로 보여 준다.

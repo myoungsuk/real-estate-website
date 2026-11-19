@@ -1,4 +1,5 @@
 ---
+import AdminPageHelp from "../../../components/admin/AdminPageHelp.astro";
 import AdminWriteGate from "../../../components/admin/AdminWriteGate.astro";
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 import { externalContents } from "../../../lib/content";
@@ -20,6 +21,8 @@ const instagramContents = externalContents.filter((item) => item.type === "insta
     </div>
     <a class="admin-text-link" href="/blog/">공개 블로그 보기 <span aria-hidden="true">↗</span></a>
   </div>
+
+  <AdminPageHelp page="/admin/external-links/" />
 
   <AdminWriteGate />
 

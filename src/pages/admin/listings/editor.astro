@@ -1,4 +1,5 @@
 ---
+import AdminPageHelp from "../../../components/admin/AdminPageHelp.astro";
 import AdminWriteGate from "../../../components/admin/AdminWriteGate.astro";
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 import { naverPropertyTypes } from "../../../lib/naver-listings";
@@ -17,6 +18,8 @@ import { office } from "../../../lib/site";
     </div>
     <a class="admin-text-link" href={office.naverListingsUrl} target="_blank" rel="noopener noreferrer">네이버 공개 매물 확인 <span aria-hidden="true">↗</span></a>
   </div>
+
+  <AdminPageHelp page="/admin/listings/editor/" />
 
   <AdminWriteGate />
 
