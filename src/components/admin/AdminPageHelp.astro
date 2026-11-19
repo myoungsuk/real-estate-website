@@ -1,0 +1,29 @@
+---
+// 관리 화면 제목 아래 '이 화면 사용법' 상자(보드 62번, 사용자 결정 2026-11-19 13:34:39). 처음에는 접혀 있고 브라우저 저장소를 쓰지 않는다.
+// 문구는 src/lib/admin-help.mjs 한 곳에서 가져오고, 자세한 설명은 '사용 안내'(/admin/help/)의 같은 화면 칸으로 연결한다.
+import { getAdminPageHelp } from "../../lib/admin-help.mjs";
+import AdminHelpText from "./AdminHelpText.astro";
+import AdminIcon from "./AdminIcon.astro";
+
+interface Props {
+  page: string;
+}
+
+const help = getAdminPageHelp(Astro.props.page);
+---
+
+<details class="admin-page-help">
+  <summary>
+    <AdminIcon name="help" size={20} />
+    <span>이 화면 사용법</span>
+  </summary>
+  <div class="admin-page-help__body">
+    <ol>
+      {help.steps.map((step) => <li><AdminHelpText text={step} /></li>)}
+    </ol>
+    {help.cautions.map((caution) => (
+      <p class="admin-page-help__caution"><strong>주의</strong> <AdminHelpText text={caution} /></p>
+    ))}
+    <a class="admin-page-help__more" href={`/admin/help/#${help.anchor}`}>자세한 안내 보기</a>
+  </div>
+</details>

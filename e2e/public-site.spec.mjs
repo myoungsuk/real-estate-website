@@ -360,3 +360,91 @@ test("관리자 사진: 실제 크롬 canvas WebP에서 메타데이터 조각�
     expect(validateWebpBytes(cleaned), withAlpha ? "알파 있는 그림" : "알파 없는 그림").toEqual({ width: 64, height: 48 });
   }
 });
+
+// 관리 화면 '이 화면 사용법' 상자와 '사용 안내'(보드 62번, 사용자 결정 2026-11-19 13:34:39·14:03:46). 휴대폰(갤럭시) 폭에서 먼저 본다.
+test("관리 화면 사용법 상자는 접혀 있다가 열리고, 자세한 안내의 같은 화면 칸으로 간다", async ({ page }) => {
+  const assertNoBrowserErrors = failOnBrowserErrors(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/admin/work/fee/");
+  const box = page.locator("details.admin-page-help");
+  await expect(box).toHaveCount(1);
+  await expect(box).not.toHaveAttribute("open", /.*/u);
+  const summary = box.locator("summary");
+  await expect(summary).toHaveText("이 화면 사용법");
+  const summaryBox = await summary.boundingBox();
+  expect(summaryBox.height, "누름 영역 44px 이상").toBeGreaterThanOrEqual(44);
+  await expect(box.locator("ol > li").first()).toBeHidden();
+
+  await summary.focus();
+  await page.keyboard.press("Enter");
+  await expect(box).toHaveAttribute("open", "");
+  const focus = await summary.evaluate((element) => {
+    const style = getComputedStyle(element);
+    const width = Number.parseFloat(style.outlineWidth) + Math.max(0, Number.parseFloat(style.outlineOffset));
+    const rect = element.getBoundingClientRect();
+    const clipped = [];
+    for (let parent = element.parentElement; parent && parent !== document.body; parent = parent.parentElement) {
+      const parentStyle = getComputedStyle(parent);
+      if (parentStyle.overflowX === "visible" && parentStyle.overflowY === "visible") continue;
+      const outer = parent.getBoundingClientRect();
+      if (rect.left - width < outer.left || rect.right + width > outer.right || rect.top - width < outer.top) clipped.push(parent.className);
+    }
+    return { outline: style.outlineStyle, width, clipped, inViewport: rect.left - width >= 0 && rect.right + width <= window.innerWidth };
+  });
+  expect(focus.outline, "키보드 포커스 테두리").toBe("solid");
+  expect(focus.clipped, "포커스 테두리를 자르는 칸 없음").toEqual([]);
+  expect(focus.inViewport, "포커스 테두리가 화면 안").toBe(true);
+
+  const steps = box.locator("ol > li");
+  expect(await steps.count()).toBeGreaterThanOrEqual(3);
+  await expect(steps.first()).toBeVisible();
+  const texts = await box.locator("li, .admin-page-help__caution, .admin-page-help__more").evaluateAll((elements) => elements.map((element) => {
+    const style = getComputedStyle(element);
+    return { size: Number.parseFloat(style.fontSize), color: style.color };
+  }));
+  for (const text of texts) {
+    expect(text.size, "글자 16px 이상").toBeGreaterThanOrEqual(16);
+    expect(["rgb(20, 20, 20)", "rgb(19, 42, 62)"], "회색이 아닌 본문색·남색").toContain(text.color);
+  }
+  const more = box.locator(".admin-page-help__more");
+  await expect(more).toHaveAttribute("href", "/admin/help/#work-fee");
+  expect((await more.boundingBox()).height).toBeGreaterThanOrEqual(44);
+  await more.click();
+  await expect(page).toHaveURL(/\/admin\/help\/#work-fee$/u);
+  await expect(page.locator("#work-fee h3")).toHaveText("중개보수 계산");
+  await expect(page.locator("#work-fee")).toBeInViewport();
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex,nofollow,noarchive");
+  await expect(page.locator('.admin-menu a[href="/admin/help/"]').first()).toHaveAttribute("aria-current", "page");
+  await expect(page.locator("#admin-main img"), "사진 없이 글만").toHaveCount(0);
+  assertNoBrowserErrors();
+});
+
+test("관리 화면 13곳은 사용법 상자를 연 채로 360·390·768·1280px에서 가로로 넘치지 않는다", async ({ page }) => {
+  await page.route("**/api/admin/**", (route) => route.fulfill({ status: 503, json: { ok: false, error: { code: "TEST_OFFLINE", message: "시험 중에는 관리 API를 부르지 않습니다." } } }));
+  const paths = [
+    "/admin/", "/admin/work/", "/admin/work/fee/", "/admin/work/messages/", "/admin/work/schedule/", "/admin/listings/", "/admin/listings/editor/",
+    "/admin/content/", "/admin/external-links/", "/admin/complexes/", "/admin/deployment/", "/admin/history/", "/admin/help/",
+  ];
+  for (const width of [360, 390, 768, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const path of paths) {
+      await page.goto(path);
+      const boxes = await page.evaluate(() => {
+        const list = [...document.querySelectorAll("details.admin-page-help")];
+        list.forEach((details) => { details.open = true; });
+        return list.length;
+      });
+      expect(boxes, `${path}: 상자 수`).toBe(path === "/admin/help/" ? 0 : 1);
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      expect(overflow, `${path} ${width}px 가로 넘침`).toBeLessThanOrEqual(1);
+    }
+  }
+});
+
+test("사용 안내는 사이트맵·llms.txt에 나오지 않는다", async ({ request }) => {
+  for (const path of ["/llms.txt", "/sitemap-index.xml", "/sitemap-0.xml"]) {
+    const response = await request.get(path);
+    if (response.status() === 404) continue;
+    expect(await response.text(), path).not.toContain("/admin/");
+  }
+});

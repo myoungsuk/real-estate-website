@@ -981,3 +981,61 @@
   html:has(.work-result-bar:not([hidden])) { scroll-padding-bottom: calc(120px + env(safe-area-inset-bottom)); }
   html:has(.work-result-bar:not([hidden])) .admin-main { padding-bottom: calc(136px + env(safe-area-inset-bottom)); }
 }
+
+/* '이 화면 사용법' 상자와 '사용 안내' 화면(보드 62번, 사용자 결정 2026-11-19 13:34:39·14:03:46: 제목 아래 접힌 상자, 관리자 안 '사용 안내', 사진 없이 글만).
+   글자는 16px 이상·본문색(회색 작은 글자 없음), 누름 영역 44px 이상, 포커스 테두리는 공용 :focus-visible(바깥 3px)을 그대로 쓴다.
+   상자를 감싼 칸에 overflow를 두지 않아 테두리가 잘리지 않는다. 열고 닫을 때 움직임은 없다. */
+.admin-page-help { margin: 0 0 24px; border: 1px solid var(--ds-edge); border-left: 4px solid var(--ds-navy); border-radius: 2px; color: var(--ds-ink); background: var(--ds-paper-2); }
+.work-doc .admin-page-help { margin-top: 16px; }
+.work-home .admin-page-help { margin: 0; }
+.admin-page-help > summary { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 8px 14px; color: var(--ds-navy); font-size: 1rem; font-weight: 800; cursor: pointer; list-style: none; }
+.admin-page-help > summary::-webkit-details-marker { display: none; }
+/* 열림·닫힘 표시: 글자 오른쪽 꺾쇠(닫힘 ∨, 열림 ∧). 상태는 details가 화면 읽기 프로그램에 알린다. */
+.admin-page-help > summary::after { content: ""; flex: 0 0 auto; width: 9px; height: 9px; margin: 0 4px 4px auto; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); }
+.admin-page-help[open] > summary::after { margin-bottom: -4px; transform: rotate(-135deg); }
+.admin-page-help__body { padding: 0 16px 14px; }
+.admin-page-help__body ol { display: grid; gap: 8px; margin: 0; padding-left: 1.5em; }
+.admin-page-help__body li,
+.admin-page-help__caution { font-size: 1rem; line-height: 1.6; }
+.admin-page-help__body strong { color: var(--ds-navy); font-weight: 800; }
+.admin-page-help__caution { margin: 12px 0 0; }
+.admin-page-help__caution > strong:first-child { margin-right: 4px; color: var(--ds-stamp); }
+.admin-page-help__more { display: inline-flex; align-items: center; min-height: 44px; margin-top: 4px; color: var(--ds-navy); font-size: 1rem; font-weight: 800; text-decoration: underline; text-underline-offset: 3px; }
+
+.admin-help-toc { max-width: 840px; margin: 0 0 28px; padding: 14px 16px; border: 1px solid var(--ds-edge); border-radius: 2px; background: var(--ds-paper-2); }
+.admin-help-toc h2 { margin: 18px 0 4px; color: var(--ds-navy); font-size: 1.125rem; font-weight: 800; }
+.admin-help-toc h2:first-child { margin-top: 0; }
+.admin-help-toc ul { margin: 0; padding: 0; list-style: none; }
+.admin-help-toc a { display: inline-flex; align-items: center; min-height: 44px; color: var(--ds-navy); font-size: 1rem; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.admin-help-toc__groups > li { padding-top: 10px; }
+.admin-help-toc__group { margin: 0; color: var(--ds-ink); font-size: 1rem; font-weight: 800; }
+.admin-help-toc__sub { padding-left: 16px; }
+/* 차례가 길어 넓은 화면에서는 두 단으로 나눈다(묶음은 단 사이에서 끊지 않음). 묶음 사이 간격은 padding이라 단이 바뀌는 곳에서도 위가 맞는다. */
+@media (min-width: 768px) {
+  .admin-help-toc__groups { columns: 2; column-gap: 32px; }
+  .admin-help-toc__groups > li { break-inside: avoid; }
+}
+.admin-help-group { max-width: 840px; margin-top: 40px; padding-top: 16px; border-top: 2px solid var(--ds-navy); }
+.admin-help-group__label { margin: 0; color: var(--ds-navy); font-size: 1rem; font-weight: 800; }
+.admin-help-section { margin-top: 20px; color: var(--ds-ink); }
+.admin-help-section h2 { margin: 0 0 10px; color: var(--ds-navy); font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; }
+.admin-help-section h3 { margin: 28px 0 10px; color: var(--ds-navy); font-size: 1.25rem; font-weight: 800; }
+.admin-help-section h4 { margin: 20px 0 8px; color: var(--ds-ink); font-size: 1.0625rem; font-weight: 800; }
+.admin-help-section p,
+.admin-help-section li,
+.admin-help-section th,
+.admin-help-section td { font-size: 1rem; line-height: 1.7; }
+.admin-help-section p { margin: 10px 0; }
+.admin-help-section ol,
+.admin-help-section ul { display: grid; gap: 8px; margin: 10px 0; padding-left: 1.5em; }
+.admin-help-section strong { color: var(--ds-navy); font-weight: 800; }
+.admin-help-note { margin: 14px 0; padding: 12px 14px; border-left: 4px solid var(--ds-navy); border-radius: 2px; background: var(--ds-paper-2); }
+.admin-help-note p { margin: 0; }
+.admin-help-note p + p { margin-top: 4px; }
+.admin-help-note .admin-help-note__title { color: var(--ds-navy); font-weight: 800; }
+.admin-help-table { width: 100%; margin: 14px 0; border-collapse: collapse; table-layout: fixed; }
+.admin-help-table th,
+.admin-help-table td { padding: 10px 8px; border-top: 1px solid var(--ds-edge); text-align: left; vertical-align: top; }
+.admin-help-table thead th { border-top: 0; border-bottom: 2px solid var(--ds-navy); color: var(--ds-navy); font-weight: 800; }
+.admin-help-table th:first-child,
+.admin-help-table td:first-child { width: 42%; }

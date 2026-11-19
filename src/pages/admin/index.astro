@@ -1,5 +1,6 @@
 ---
 import AdminApiStatus from "../../components/admin/AdminApiStatus.astro";
+import AdminPageHelp from "../../components/admin/AdminPageHelp.astro";
 import AdminLayout from "../../layouts/AdminLayout.astro";
 import { naverListings, naverListingsUpdatedAt } from "../../lib/naver-listings";
 import { buildListingReviewQueue } from "../../lib/listing-review.mjs";
@@ -36,6 +37,8 @@ const reviewQueue = buildListingReviewQueue(
     </div>
     <span class="admin-stage-badge">2단계 · 콘텐츠 관리</span>
   </div>
+
+  <AdminPageHelp page="/admin/" />
 
   <section class="admin-dash-group admin-dash-group--todo">
     <h2 class="admin-dash-label">지금 할 일</h2>

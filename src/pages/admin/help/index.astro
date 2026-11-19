@@ -1,0 +1,84 @@
+---
+import AdminHelpText from "../../../components/admin/AdminHelpText.astro";
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import { ADMIN_HELP_GUIDE } from "../../../lib/admin-help.mjs";
+
+// 관리자 '사용 안내'(보드 62번, 사용자 결정 2026-11-19 13:34:39·14:03:46). 2026-11-19 대장 안내서를 사진 없이 글만 옮겼다.
+// 각 관리 화면의 '이 화면 사용법' 상자가 이 화면의 같은 칸(id)으로 연결한다. 문구는 src/lib/admin-help.mjs에서 고친다.
+const quickLinks = [
+  { href: "#external-links-instagram", label: "인스타그램 게시물을 홈에 올리기" },
+  { href: "#deployment", label: "저장한 내용이 홈에 나왔는지 보기" },
+  { href: "#history", label: "잘못 고친 것을 예전으로 되돌리기" },
+];
+---
+
+<AdminLayout
+  title="사용 안내 | 행복한부동산 관리자"
+  description="관리자 화면을 메뉴 순서대로 쓰는 방법을 글로 정리한 안내입니다."
+>
+  <div class="admin-page-header admin-page-header--compact">
+    <div>
+      <nav class="admin-breadcrumbs" aria-label="현재 위치"><a href="/admin/">대시보드</a><span aria-hidden="true">/</span><span aria-current="page">사용 안내</span></nav>
+      <h1>관리자 사용 안내</h1>
+      <p>홈페이지 글과 매물을 휴대폰에서 직접 고치는 방법입니다. 메뉴 순서대로 적었습니다.</p>
+    </div>
+  </div>
+
+  <nav class="admin-help-toc" aria-labelledby="admin-help-quick-title">
+    <h2 id="admin-help-quick-title">자주 하는 일</h2>
+    <ul>
+      {quickLinks.map((link) => <li><a href={link.href}>{link.label}</a></li>)}
+    </ul>
+    <h2>차례</h2>
+    <ul class="admin-help-toc__groups">
+      {ADMIN_HELP_GUIDE.map((group) => (
+        <li>
+          <p class="admin-help-toc__group">{group.label}</p>
+          <ul>
+            {group.sections.map((section) => (
+              <li class={section.level === 3 ? "admin-help-toc__sub" : undefined}><a href={`#${section.id}`}>{section.title}</a></li>
+            ))}
+          </ul>
+        </li>
+      ))}
+    </ul>
+  </nav>
+
+  {ADMIN_HELP_GUIDE.map((group) => (
+    <div class="admin-help-group">
+      <p class="admin-help-group__label">{group.label}</p>
+      {group.sections.map((section) => (
+        <section class="admin-help-section" id={section.id} aria-labelledby={`${section.id}-title`}>
+          {section.level === 3
+            ? <h3 id={`${section.id}-title`}>{section.title}</h3>
+            : <h2 id={`${section.id}-title`}>{section.title}</h2>}
+          {section.blocks.map((block) => (
+            block.type === "steps" ? (
+              <ol>{block.items.map((item) => <li><AdminHelpText text={item} /></li>)}</ol>
+            ) : block.type === "list" ? (
+              <ul>{block.items.map((item) => <li><AdminHelpText text={item} /></li>)}</ul>
+            ) : block.type === "note" ? (
+              <div class="admin-help-note">
+                <p class="admin-help-note__title">{block.title}</p>
+                <p><AdminHelpText text={block.text} /></p>
+              </div>
+            ) : block.type === "heading" ? (
+              <h4>{block.text}</h4>
+            ) : block.type === "table" ? (
+              <table class="admin-help-table">
+                <thead><tr>{block.head.map((cell) => <th scope="col">{cell}</th>)}</tr></thead>
+                <tbody>
+                  {block.rows.map((row) => (
+                    <tr>{row.map((cell) => <td><AdminHelpText text={cell} /></td>)}</tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p><AdminHelpText text={block.text} /></p>
+            )
+          ))}
+        </section>
+      ))}
+    </div>
+  ))}
+</AdminLayout>

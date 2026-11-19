@@ -1,0 +1,12 @@
+---
+// 사용법 문구 한 줄. 작은따옴표로 적은 화면 이름(단추·칸 이름)만 따옴표 없이 굵게 보여 준다(문구는 src/lib/admin-help.mjs).
+import { splitHelpText } from "../../lib/admin-help.mjs";
+
+interface Props {
+  text: string;
+}
+
+const parts = splitHelpText(Astro.props.text);
+---
+
+{parts.map((part) => (part.label ? <strong>{part.text}</strong> : part.text))}

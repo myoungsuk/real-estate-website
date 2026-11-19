@@ -1,5 +1,6 @@
 ---
 import AdminIcon from "../../../components/admin/AdminIcon.astro";
+import AdminPageHelp from "../../../components/admin/AdminPageHelp.astro";
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 
 const tools = [
@@ -43,6 +44,8 @@ const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
         <p class="work-home__lead">상담과 계약 준비에 쓰는 계산·문구 도구입니다.</p>
       </div>
     </header>
+
+    <AdminPageHelp page="/admin/work/" />
 
     {/* 지금 쓸 수 있는 도구 3개를 맨 위에 크게(사용자 선택 2026-11-18 CD1, F6-2). 보이는 순서와 키보드 순서가 같게 마크업 순서로 둔다. */}
     <section class="work-home__tools" aria-labelledby="work-tools-title">

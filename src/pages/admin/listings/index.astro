@@ -1,4 +1,5 @@
 ---
+import AdminPageHelp from "../../../components/admin/AdminPageHelp.astro";
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 import { naverListings, naverPropertyTypes, naverTradeNames, type NaverListing } from "../../../lib/naver-listings";
 import { buildListingReviewQueue } from "../../../lib/listing-review.mjs";
@@ -40,6 +41,8 @@ const formatDate = (value: string) => new Intl.DateTimeFormat("ko-KR", { year: "
     </div>
     <a class="admin-primary-button" href="/admin/listings/editor/">매물 등록·동기화</a>
   </div>
+
+  <AdminPageHelp page="/admin/listings/" />
 
   <p class="admin-inline-notice admin-inline-notice--ready"><span aria-hidden="true">i</span><span>부동산뱅크 공개 매물은 하루 1회 자동 동기화하며 엑셀은 보완용입니다. 그 밖의 네이버 매물은 직접 등록하고, 홈페이지에는 공개 정보와 네이버 개별 매물 링크만 표시합니다.</span></p>
 

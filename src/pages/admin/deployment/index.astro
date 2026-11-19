@@ -1,5 +1,6 @@
 ---
 import AdminDeploymentStatus from "../../../components/admin/AdminDeploymentStatus.astro";
+import AdminPageHelp from "../../../components/admin/AdminPageHelp.astro";
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 ---
 
@@ -18,6 +19,8 @@ import AdminLayout from "../../../layouts/AdminLayout.astro";
     </div>
     <span class="admin-stage-badge">3단계 · 배포 확인</span>
   </div>
+
+  <AdminPageHelp page="/admin/deployment/" />
 
   <AdminDeploymentStatus />
 
