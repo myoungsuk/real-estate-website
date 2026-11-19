@@ -1,5 +1,7 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
+import { stripWebpMetadataFromDataUrl } from "../src/lib/admin-webp-clean.mjs";
+import { validateWebpBytes } from "../worker/github-content.mjs";
 
 // 단지 이름·사실·사진 설명·홈 단지 목록은 운영자가 관리자 화면에서 바꾸는 값이라, 기대값을 글자로 적지 않고 같은 공개 JSON에서 읽는다.
 const readData = (name) => JSON.parse(readFileSync(new URL(`../src/data/${name}.json`, import.meta.url), "utf8"));
@@ -336,3 +338,25 @@ for (const writeEnabled of [true, false]) {
     assertNoBrowserErrors();
   });
 }
+
+// 관리자 사진 올리기: 실제 크롬 canvas가 만든 WebP(ICCP 색 정보 조각이 들어감)를 정리하면 서버 검사를 통과해야 한다.
+test("관리자 사진: 실제 크롬 canvas WebP에서 메타데이터 조각을 빼면 서버 검사를 통과한다", async ({ page }) => {
+  await page.goto("/");
+  for (const withAlpha of [false, true]) {
+    const dataUrl = await page.evaluate((alpha) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 64;
+      canvas.height = 48;
+      const context = canvas.getContext("2d");
+      context.fillStyle = "#17344f";
+      context.fillRect(0, 0, 64, 48);
+      context.fillStyle = "#b85d68";
+      context.fillRect(8, 8, 32, 24);
+      if (alpha) context.clearRect(40, 0, 24, 48);
+      return canvas.toDataURL("image/webp", 0.82);
+    }, withAlpha);
+    expect(dataUrl.startsWith("data:image/webp;base64,"), "크롬이 WebP를 만듦").toBe(true);
+    const cleaned = new Uint8Array(Buffer.from(stripWebpMetadataFromDataUrl(dataUrl).split(",")[1], "base64"));
+    expect(validateWebpBytes(cleaned), withAlpha ? "알파 있는 그림" : "알파 없는 그림").toEqual({ width: 64, height: 48 });
+  }
+});

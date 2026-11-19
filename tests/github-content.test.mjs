@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { ADMIN_RESOURCE_PATHS } from "../worker/admin-resource-validation.mjs";
+import { ADMIN_RESOURCE_PATHS, validateAdminResource } from "../worker/admin-resource-validation.mjs";
 import { calculateAdminResourceDigest } from "../src/lib/admin-resource-digest.mjs";
 import {
   readAdminResource,
@@ -553,9 +554,9 @@ test("이미지 업로드 분류 instagram은 public/images/content/instagram/ �
       return Response.json({ commit: { sha: "image-commit-sha" } });
     },
   );
-  assert.match(result.src, /^\/images\/content\/instagram\/\d+-[0-9a-f]{8}\.webp$/u);
+  assert.match(result.src, /^\/images\/content\/instagram\/[0-9a-z]{8}-[0-9a-f]{8}\.webp$/u);
   assert.equal(urls.length, 1);
-  assert.match(urls[0], /\/contents\/public\/images\/content\/instagram\/\d+-[0-9a-f]{8}\.webp$/u);
+  assert.match(urls[0], /\/contents\/public\/images\/content\/instagram\/[0-9a-z]{8}-[0-9a-f]{8}\.webp$/u);
   for (const category of ["Instagram", "instagram/../blog", "instagram ", "content", "work"]) {
     await assert.rejects(
       uploadAdminImage({ category, dataUrl: webpDataUrl(validWebpBytes) }, env, async () => { throw new Error("GitHub를 부르면 안 됩니다."); }),
@@ -563,6 +564,73 @@ test("이미지 업로드 분류 instagram은 public/images/content/instagram/ �
       category,
     );
   }
+});
+
+function instagramPost(src) {
+  return {
+    id: "instagram-2026-11-01",
+    type: "instagram",
+    status: "published",
+    title: "리더스시티 산책길",
+    summary: "공개 승인 요약",
+    url: "https://www.instagram.com/p/ABCdef_12-3/",
+    publishedAt: "2026-11-01",
+    thumbnail: { src, alt: "리더스시티 산책길 사진" },
+  };
+}
+
+test("사진 파일 이름은 옛 13자리 시각이 주민등록번호 모양이 되는 때에도 콘텐츠 저장 검사를 통과한다", async (t) => {
+  // 1795064165318의 7번째 자리는 4라서, 옛 이름(10진수 시각-무작위값)이면 앞 6자리-뒤 7자리 주민등록번호 모양이 된다.
+  const now = 1795064165318;
+  t.mock.method(Date, "now", () => now);
+  assert.match(
+    validateAdminResource("external-links", [instagramPost(`/images/content/instagram/${now}-0a1b2c3d.webp`)]).join("\n"),
+    /주민등록번호 형태의 민감정보/u,
+  );
+  const result = await uploadAdminImage(
+    { category: "instagram", dataUrl: webpDataUrl(validWebpBytes) },
+    env,
+    async () => Response.json({ commit: { sha: "image-commit-sha" } }),
+  );
+  assert.match(result.src, /^\/images\/content\/instagram\/mwn2uuh2-[0-9a-f]{8}\.webp$/u);
+  assert.deepEqual(validateAdminResource("external-links", [instagramPost(result.src)]), []);
+});
+
+test("사진 파일 이름이 민감정보 검사에 걸리면 다시 만들고, 5번 모두 걸리면 GitHub에 쓰기 전에 멈춘다", async (t) => {
+  // 36진수 시각 mw100000의 끝 6자리와 무작위값 1234567a가 이어지면 100000-1234567이 주민등록번호 모양이 된다.
+  t.mock.method(Date, "now", () => parseInt("mw100000", 36));
+  const ids = ["1234567a-0000-4000-8000-000000000000", "abcdef12-0000-4000-8000-000000000000"];
+  const randomUUID = t.mock.method(globalThis.crypto, "randomUUID", () => ids.shift());
+  const urls = [];
+  const result = await uploadAdminImage(
+    { category: "instagram", dataUrl: webpDataUrl(validWebpBytes) },
+    env,
+    async (url) => {
+      urls.push(String(url));
+      return Response.json({ commit: { sha: "image-commit-sha" } });
+    },
+  );
+  assert.equal(randomUUID.mock.callCount(), 2);
+  assert.equal(result.src, "/images/content/instagram/mw100000-abcdef12.webp");
+  assert.equal(urls.length, 1);
+  assert.match(urls[0], /\/contents\/public\/images\/content\/instagram\/mw100000-abcdef12\.webp$/u);
+  assert.deepEqual(validateAdminResource("external-links", [instagramPost(result.src)]), []);
+  assert.match(
+    validateAdminResource("external-links", [instagramPost("/images/content/instagram/mw100000-1234567a.webp")]).join("\n"),
+    /주민등록번호 형태의 민감정보/u,
+  );
+
+  randomUUID.mock.mockImplementation(() => "1234567a-0000-4000-8000-000000000000");
+  randomUUID.mock.resetCalls();
+  await assert.rejects(
+    uploadAdminImage(
+      { category: "instagram", dataUrl: webpDataUrl(validWebpBytes) },
+      env,
+      async () => { throw new Error("GitHub를 부르면 안 됩니다."); },
+    ),
+    (error) => error.code === "MEDIA_NAME_UNAVAILABLE" && error.status === 500,
+  );
+  assert.equal(randomUUID.mock.callCount(), 5);
 });
 
 test("이미지 업로드는 구조와 크기가 유효한 WebP만 GitHub로 전달한다", async () => {
@@ -628,4 +696,44 @@ test("이미지 업로드는 애니메이션과 EXIF, XMP, ICC 메타데이터 �
       (error) => error.code === "MEDIA_METADATA_DENIED",
     );
   }
+});
+
+test("관리자 사진: 크롬이 넣는 ICCP 조각을 브라우저에서 빼면 서버 WebP 검사를 통과한다", async () => {
+  const { stripWebpMetadata, stripWebpMetadataFromDataUrl } = await import("../src/lib/admin-webp-clean.mjs");
+  const chunksOf = (bytes) => {
+    const chunks = [];
+    for (let offset = 12; offset < bytes.length;) {
+      const size = new DataView(bytes.buffer, bytes.byteOffset).getUint32(offset + 4, true);
+      chunks.push([Buffer.from(bytes.subarray(offset, offset + 4)).toString("ascii"), bytes.slice(offset + 8, offset + 8 + size)]);
+      offset += 8 + size + (size % 2);
+    }
+    return chunks;
+  };
+  const webpFromChunks = (chunks) => chunks.reduce((bytes, [type, payload]) => appendWebpChunk(bytes, type, payload), Uint8Array.from(Buffer.from("RIFF\0\0\0\0WEBP", "binary")));
+  const vp8x = (flags) => Uint8Array.from([flags, 0, 0, 0, 1, 0, 0, 2, 0, 0]);
+  const iccp = new Uint8Array(456).fill(7);
+  const [[, vp8]] = chunksOf(validWebpBytes);
+  const [, [, alph], [, alphaVp8]] = chunksOf(validAlphaWebpBytes);
+  // 크롬 canvas.toDataURL("image/webp")가 원본과 상관없이 만드는 모양: VP8X ICC 표시(0x20, 알파면 0x30) + ICCP 456바이트 + 그림 조각
+  const chromeOpaque = webpFromChunks([["VP8X", vp8x(0x20)], ["ICCP", iccp], ["VP8 ", vp8]]);
+  const chromeAlpha = webpFromChunks([["VP8X", vp8x(0x30)], ["ICCP", iccp], ["ALPH", alph], ["VP8 ", alphaVp8]]);
+  for (const bytes of [chromeOpaque, chromeAlpha]) {
+    assert.throws(() => validateWebpBytes(bytes), (error) => error.code === "MEDIA_METADATA_DENIED", "정리하지 않으면 서버가 지금처럼 거부");
+  }
+  assert.deepEqual([...stripWebpMetadata(chromeOpaque)], [...webpFromChunks([["VP8X", vp8x(0x00)], ["VP8 ", vp8]])], "ICCP만 빠지고 ICC 표시가 꺼지고 RIFF 크기가 맞음");
+  assert.deepEqual(validateWebpBytes(stripWebpMetadata(chromeOpaque)), { width: 2, height: 3 });
+  assert.deepEqual([...stripWebpMetadata(chromeAlpha)], [...validAlphaWebpBytes], "알파 조각(ALPH)과 알파 표시 0x10은 그대로");
+  assert.deepEqual(validateWebpBytes(stripWebpMetadata(chromeAlpha)), { width: 2, height: 3 });
+  const withExifXmp = webpFromChunks([["VP8X", vp8x(0x1c)], ["EXIF", new Uint8Array(5).fill(1)], ["ALPH", alph], ["VP8 ", alphaVp8], ["XMP ", new Uint8Array(3).fill(2)]]);
+  assert.deepEqual([...stripWebpMetadata(withExifXmp)], [...validAlphaWebpBytes], "홀수 길이 EXIF·XMP도 덧붙인 0 바이트와 함께 빠지고 표시가 꺼짐");
+  assert.equal(stripWebpMetadata(validWebpBytes), validWebpBytes, "고칠 것이 없으면 그대로");
+  const broken = chromeOpaque.slice(0, chromeOpaque.length - 3);
+  assert.equal(stripWebpMetadata(broken), broken, "구조를 읽을 수 없으면 고치지 않음(서버가 거부)");
+  const animated = webpFromChunks([["VP8X", vp8x(0x22)], ["ICCP", iccp], ["ANIM", new Uint8Array(6)], ["VP8 ", vp8]]);
+  assert.throws(() => validateWebpBytes(stripWebpMetadata(animated)), (error) => error.code === "MEDIA_METADATA_DENIED", "애니메이션은 빼지 않아 지금처럼 거부");
+  assert.equal(stripWebpMetadataFromDataUrl(webpDataUrl(chromeAlpha)), webpDataUrl(validAlphaWebpBytes));
+  assert.equal(stripWebpMetadataFromDataUrl(webpDataUrl(validWebpBytes)), webpDataUrl(validWebpBytes));
+  assert.equal(stripWebpMetadataFromDataUrl("data:image/png;base64,AA=="), "data:image/png;base64,AA==");
+  const client = await readFile(new URL("../src/lib/admin-content-client.ts", import.meta.url), "utf8");
+  assert.match(client, /const dataUrl = stripWebpMetadataFromDataUrl\(canvas\.toDataURL\("image\/webp", quality\)\);/u, "관리자 사진 변환이 2MB 검사 전에 정리한 값을 씀");
 });

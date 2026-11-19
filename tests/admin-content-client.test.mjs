@@ -11,7 +11,9 @@ async function loadClient() {
       module: ts.ModuleKind.ESNext,
       target: ts.ScriptTarget.ES2022,
     },
-  }).outputText;
+  }).outputText
+    // data: 모듈은 상대 경로 import를 풀지 못하므로, 클라이언트가 가져오는 같은 폴더 .mjs를 절대 file 주소로 바꾼다.
+    .replace(/from "\.\/([^"]+\.mjs)"/gu, (_, file) => `from "${new URL(`../src/lib/${file}`, import.meta.url).href}"`);
   const encoded = Buffer.from(`${source}\n// test-module-${crypto.randomUUID()}`).toString("base64");
   return import(`data:text/javascript;base64,${encoded}`);
 }
