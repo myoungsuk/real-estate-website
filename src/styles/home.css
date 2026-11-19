@@ -1,11 +1,11 @@
 /* 홈 첫 화면 아래 구역(DESIGN.md "상가 유리창 매물판"). 홈에만 인라인으로 들어가 다른 화면 CSS 크기는 그대로다. */
 .home-sec {
-  --home-paper: #fbfaf6;
-  --home-paper-2: #f1eee6;
-  --home-edge: #e2ded3;
+  --home-paper: #ffffff;
+  --home-paper-2: #f1f3f5;
+  --home-edge: #e1e4e8;
   --home-ink: #141414;
   --home-navy: #132a3e;
-  --home-ink-soft: #4a4844;
+  --home-ink-soft: #46494f;
   padding: 44px 0;
   color: var(--home-ink);
   background: var(--home-paper);
