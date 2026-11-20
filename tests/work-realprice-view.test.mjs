@@ -3,7 +3,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   REALPRICE_COMPLEX_QUERY_MAX,
+  REALPRICE_MAJOR_DAYS,
+  REALPRICE_MAJOR_TOP,
   REALPRICE_RANGE_DEFAULT_MONTHS,
+  REALPRICE_TRADES_LIMIT_MAX,
   REALPRICE_RANGE_MAX_MONTHS,
   REALPRICE_TRADES_LIMIT_DEFAULT,
   REALPRICE_WATCH_MAX,
@@ -14,15 +17,21 @@ import {
   DEFAULT_REALPRICE_FILTERS,
   DONG_GU_UMD_NAMES,
   REALPRICE_PERIODS,
+  REALPRICE_VIEW_HIGH_PAGE_SIZE,
+  REALPRICE_VIEW_MAJOR_DAYS,
+  REALPRICE_VIEW_MAJOR_TOP,
   REALPRICE_VIEW_NAME_MAX,
   REALPRICE_VIEW_PAGE_SIZE,
   REALPRICE_VIEW_QUERY_MAX,
   REALPRICE_VIEW_WATCH_MAX,
+  activeFilterLine,
   apiErrorText,
   backfillBars,
+  chipText,
   backfillLine,
   cleanComplexQuery,
   dateText,
+  emptyView,
   filterSummary,
   isDefaultFilters,
   kindLabel,
@@ -218,4 +227,52 @@ test("지금 다시 받기 알림(TK-29): 끝 상한을 넘은 날은 Cron이 �
   assert.match(refreshDoneView(queued, usageOf(REALPRICE_DAILY_READ_HARD + 5), { nowMs: kst0800, statusAtMs: kst0800 }).notice, /한국 시각 오늘 오전 9시부터/u, "한국 08시 → 오늘 09시");
   assert.equal(refreshDoneView(queued, usageOf(REALPRICE_DAILY_READ_HARD), { nowMs: Date.parse("2026-11-19T00:10:00Z"), statusAtMs: Date.parse("2026-11-18T23:50:00Z") }).button, "다시 받는 중(약 2시간)", "화면을 연 뒤 UTC 날이 바뀌었으면 한도가 풀려 평소 문장");
   assert.equal(refreshDoneView(queued, null, { nowMs: NOW, statusAtMs: NOW }).button, "다시 받는 중(약 2시간)", "상태를 모르면 평소 문장");
+});
+
+test("P1-f 화면 상수는 서버와 같다(주요 거래 30일·상위 10건, 신고가만은 한 번에 100건 = 서버 상한)", () => {
+  assert.equal(REALPRICE_VIEW_MAJOR_DAYS, REALPRICE_MAJOR_DAYS);
+  assert.equal(REALPRICE_VIEW_MAJOR_TOP, REALPRICE_MAJOR_TOP);
+  assert.equal(REALPRICE_VIEW_HIGH_PAGE_SIZE, REALPRICE_TRADES_LIMIT_MAX);
+});
+
+test("P1-f 목록 요청: 찾는 말 q, 신고가만은 limit=100, 주요 거래는 view=major와 찾기·관심·평형·금액·법정동만", () => {
+  assert.equal(tradesQuery({ ...DEFAULT_REALPRICE_FILTERS, q: "  가상 숲 " }, { todayKst: TODAY }), "q=%EA%B0%80%EC%83%81+%EC%88%B2", "앞뒤 띄어쓰기만 지움(가운데는 서버가 뺌)");
+  assert.equal(tradesQuery({ ...DEFAULT_REALPRICE_FILTERS, highOnly: true }, { todayKst: TODAY }), "limit=100", "신고가만은 화면에서 거르므로 한 번에 100건");
+  assert.equal(tradesQuery({ ...DEFAULT_REALPRICE_FILTERS }, { todayKst: TODAY, major: true }), "view=major");
+  const major = new URLSearchParams(tradesQuery(
+    { ...DEFAULT_REALPRICE_FILTERS, q: "가상숲", period: "36", kind: "presale", excludeCancelled: false, excludeDirect: true, area: "middle", price: "over7", umd: "천동", highOnly: true },
+    { todayKst: TODAY, major: true, watch: true, cursor: "c1" },
+  ));
+  assert.deepEqual([...major.keys()], ["view", "q", "watch", "areaMin", "areaMax", "priceMin", "umd"], "기간·종류·해제·직거래·cursor·limit은 보내지 않음(서버가 400으로 막는 매개변수)");
+  assert.equal(major.get("q"), "가상숲");
+});
+
+test("P1-f 거르기 단추 글자와 '켜짐' 줄", () => {
+  assert.deepEqual(chipText("period", "3"), { text: "최근 3개월", set: false }, "기간 단추는 늘 기간 이름, 기본값이면 켜짐 아님");
+  assert.deepEqual(chipText("period", "36"), { text: "최근 3년", set: true });
+  assert.deepEqual(chipText("area", ""), { text: "평형", set: false });
+  assert.deepEqual(chipText("area", "middle"), { text: "60 ~ 85㎡", set: true });
+  assert.deepEqual(chipText("price", ""), { text: "금액", set: false });
+  assert.equal(activeFilterLine(DEFAULT_REALPRICE_FILTERS), "거르기 없음 · 해제 거래 뺌");
+  assert.equal(activeFilterLine({ ...DEFAULT_REALPRICE_FILTERS, q: "가상숲", area: "middle", highOnly: true, excludeCancelled: false }), "켜짐: '가상숲' · 60 ~ 85㎡ · 신고가만 · 해제 포함");
+  assert.equal(activeFilterLine(DEFAULT_REALPRICE_FILTERS, { major: true }), "최근 30일 매매 신고가 + 금액 상위 10건");
+  assert.equal(
+    activeFilterLine({ ...DEFAULT_REALPRICE_FILTERS, period: "36", kind: "presale", price: "over7" }, { major: true }),
+    "최근 30일 매매 신고가 + 금액 상위 10건 · 켜짐: 7억 초과",
+    "주요 거래는 서버가 정한 기간·종류를 켜짐 줄에 쓰지 않음",
+  );
+});
+
+test("P1-f 0건 안내: 까닭에 맞는 첫 단추(신고가만 끄기·기간 늘려 다시 찾기·찾는 말 지우기·거르기 초기화)", () => {
+  const actions = (view) => view.actions.map((action) => action.action);
+  assert.deepEqual(actions(emptyView({ ...DEFAULT_REALPRICE_FILTERS, highOnly: true }, { highUnavailable: true })), ["high-off"]);
+  const high = emptyView({ ...DEFAULT_REALPRICE_FILTERS, highOnly: true }, { loaded: 30 });
+  assert.equal(high.title, "불러온 30건 가운데 신고가가 없습니다");
+  assert.deepEqual(actions(high), ["high-off"]);
+  const q = emptyView({ ...DEFAULT_REALPRICE_FILTERS, q: "가상숲" });
+  assert.equal(q.title, "'가상숲' 거래가 최근 3개월에는 없습니다");
+  assert.deepEqual(q.actions, [{ action: "period-max", label: "최근 3년에서 다시 찾기" }, { action: "q-clear", label: "찾는 말 지우기" }]);
+  assert.deepEqual(actions(emptyView({ ...DEFAULT_REALPRICE_FILTERS, q: "가상숲", period: "36" })), ["q-clear"], "이미 가장 긴 기간이면 기간 단추 없음");
+  assert.deepEqual(actions(emptyView({ ...DEFAULT_REALPRICE_FILTERS, q: "가상숲" }, { major: true })), ["q-clear"], "주요 거래는 기간을 바꾸지 않음");
+  assert.deepEqual(actions(emptyView({ ...DEFAULT_REALPRICE_FILTERS, umd: "천동" })), ["reset"]);
 });

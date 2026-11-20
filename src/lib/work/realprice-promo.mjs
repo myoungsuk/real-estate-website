@@ -63,8 +63,46 @@ export function promoHref(ids) {
 export const isPromoSelectable = (item) => item?.cancelled !== true && PROMO_TRADE_ID_PATTERN.test(item?.tradeKey ?? "");
 
 export function selectionText(count) {
-  if (count === 0) return `홍보물에 넣을 거래를 고르세요(최대 ${PROMO_IDS_MAX}건)`;
-  return count >= PROMO_IDS_MAX ? `고른 거래 ${count}건(최대 ${PROMO_IDS_MAX}건)` : `고른 거래 ${count}건`;
+  if (count === 0) return `홍보물에 넣을 거래를 담으세요(최대 ${PROMO_IDS_MAX}건)`;
+  return count >= PROMO_IDS_MAX ? `담은 거래 ${count}건(최대 ${PROMO_IDS_MAX}건)` : `담은 거래 ${count}건`;
+}
+
+// '다 담기'(P1-f D안): 보이는 순서대로 이미 담은 거래와 해제 거래를 건너뛰고 남은 자리만큼 담는다(최대 PROMO_IDS_MAX건을 넘지 않음).
+// 돌려주는 값: add(새로 담을 거래, 보이는 순서), skippedCancelled(담는 동안 건너뛴 해제 거래 수).
+/** @param {any[]} visible @param {Set<string>} pickedKeys */
+export function takeVisible(visible, pickedKeys, max = PROMO_IDS_MAX) {
+  const room = Math.max(0, max - pickedKeys.size);
+  const add = [];
+  let skippedCancelled = 0;
+  for (const item of visible) {
+    if (add.length >= room) break;
+    if (pickedKeys.has(item.tradeKey)) continue;
+    if (!isPromoSelectable(item)) {
+      skippedCancelled += 1;
+      continue;
+    }
+    add.push(item);
+  }
+  return { add, skippedCancelled };
+}
+
+// '다 담기' 단추 글자: 다 찼으면 "6건 담음"(꺼짐), 담을 것이 없으면 꺼짐, 남은 자리보다 보이는 거래가 적으면 "보이는 n건 담기",
+// 많으면 "위에서 n건 담기". 이미 담은 거래가 있으면 "… n건 더 담기".
+/** @param {any[]} visible @param {Set<string>} pickedKeys */
+export function takeButtonView(visible, pickedKeys, max = PROMO_IDS_MAX) {
+  const room = max - pickedKeys.size;
+  if (room <= 0) return { text: `${max}건 담음`, disabled: true };
+  const candidates = visible.filter((item) => isPromoSelectable(item) && !pickedKeys.has(item.tradeKey)).length;
+  if (candidates === 0) return { text: pickedKeys.size > 0 ? "보이는 거래 다 담음" : "담을 거래 없음", disabled: true };
+  const count = Math.min(room, candidates);
+  const more = pickedKeys.size > 0 ? " 더" : "";
+  return { text: candidates <= room ? `보이는 ${count}건${more} 담기` : `위에서 ${count}건${more} 담기`, disabled: false };
+}
+
+// '다 담기' 뒤 알림(화면 읽기 프로그램에도 읽힘).
+export function takeResultText(added, skippedCancelled, total) {
+  const skipped = skippedCancelled > 0 ? ` 해제 거래 ${skippedCancelled}건은 건너뛰었습니다.` : "";
+  return `${added}건을 담았습니다.${skipped} ${selectionText(total)}.`;
 }
 
 // ── 서버 응답 → 쓸 거래·알림 ──
@@ -151,7 +189,27 @@ export const disclosureLines = (office) => [
   office.address,
   `연락처 ${office.mobile} · 등록번호 ${office.registrationNumber}`,
 ];
-export const hashtags = (items) => ["#대전동구", "#실거래가", ...new Set(items.map((item) => `#${item.umdName.replace(/\s+/gu, "")}`))];
+// 해시태그(P1-f, 2026-11-20 운영자 답 "10개 안팎·단지 이름 넣음"): 고정 4개 → 거래 종류 → #신고가(있을 때) → 법정동 최대 3개 →
+// 전용면적 최대 2개(#전용84, ㎡ 소수점 버림) → 단지 이름 최대 3개(띄어쓰기·기호 뺌). 겹치면 하나, 모두 PROMO_HASHTAGS_MAX개 안.
+// 개수가 넘치면 단지 이름은 지키고 전용면적 → 법정동 순으로 줄인다. 동 번호는 넣지 않는다.
+export const PROMO_HASHTAGS_BASE = Object.freeze(["#대전동구", "#동구아파트", "#대전아파트", "#아파트실거래가"]);
+export const PROMO_HASHTAGS_MAX = 15;
+const tagWord = (text) => String(text ?? "").normalize("NFKC").replace(/[^\p{L}\p{N}]/gu, "");
+const kindTag = (item) => {
+  if (item.kind === "sale") return "#아파트매매";
+  if (item.kind === "presale") return "#분양권";
+  return item.monthlyRentWon ? "#아파트월세" : "#아파트전세";
+};
+const firstTags = (words, count) => [...new Set(words.filter(Boolean).map((word) => `#${word}`))].slice(0, Math.max(0, count));
+export function hashtags(items) {
+  const must = [...PROMO_HASHTAGS_BASE, ...new Set(items.map(kindTag)), ...(anyHigh(items) ? ["#신고가"] : [])];
+  const names = firstTags(items.map((item) => tagWord(item.aptName)), 3);
+  let room = PROMO_HASHTAGS_MAX - must.length - names.length;
+  const dongs = firstTags(items.map((item) => tagWord(item.umdName)), Math.min(3, room));
+  room -= dongs.length;
+  const areas = firstTags(items.map((item) => `전용${Math.floor(Number(item.areaM2))}`), Math.min(2, room));
+  return [...new Set([...must, ...dongs, ...areas, ...names])];
+}
 const tradeBlock = (item) => [`${item.aptName}(${item.umdName}) ${kindLabel(item)} ${priceText(item)}`, metaLine(item), ...(isHigh(item) ? [`신고가 · ${prevText(item)}`] : [])];
 const compactLine = (item) => `- ${item.aptName} ${kindLabel(item)} ${priceText(item)}, 전용 ${areaText(item.areaM2)} ${floorText(item.floor)}, 계약 ${shortDate(item.dealDate)}${isHigh(item) ? " 신고가" : ""}`;
 const headLine = (items) => `[${PROMO_AREA_LABEL}] ${items.length === 1 ? promoTitle(items) : `${promoTitle(items)}(${monthsText(items)})`}`;
@@ -223,6 +281,34 @@ export const PROMO_TEXT_KINDS = Object.freeze([
   ["blog", "블로그"],
   ["kakao", "카카오톡"],
 ]);
+// 홍보물 화면 '어디에 올릴까요?' 순서(P1-f D안, 인스타그램이 처음 골라진 곳).
+export const PROMO_PLACES = Object.freeze([
+  ["instagram", "인스타그램"],
+  ["threads", "스레드"],
+  ["blog", "블로그"],
+  ["kakao", "카카오톡"],
+]);
+
+// 올릴 곳에 맞춘 순서 글 3줄(P1-f D안): ① 그림 저장 ② 글 복사(글자 수·해시태그 수) ③ 그 앱에서 붙여 넣기.
+// counted: textCount(kind, 글) 결과, cardCount: 카드 그림 장 수.
+/** @param {string} kind @param {{ cardCount?: number, counted: { count: number, limit: number | null, tags: number, over: boolean } }} options */
+export function promoSteps(kind, { cardCount = 1, counted }) {
+  const cards = cardCount > 1 ? `카드 그림 ${cardCount}장` : "카드 그림";
+  const image = kind === "blog"
+    ? `${cards}을 저장합니다(블로그 글에 사진으로 넣습니다).`
+    : kind === "kakao" ? `${cards}을 저장합니다(채팅에 사진으로 보냅니다).` : `${cards}을 휴대폰에 저장합니다.`;
+  const count = counted.count.toLocaleString("ko-KR");
+  const size = counted.limit === null ? `${count}자` : `${counted.limit.toLocaleString("ko-KR")}자 중 ${count}자`;
+  const over = counted.over ? ", 상한을 넘음" : "";
+  const text = kind === "instagram" ? `글을 복사합니다(해시태그 ${counted.tags}개 포함, ${size}${over}).` : `글을 복사합니다(${size}${over}).`;
+  const posts = {
+    instagram: "인스타그램 앱에서 새 게시물 → 저장한 그림 고르기 → 글 붙여 넣기.",
+    threads: "스레드 앱에서 새 스레드 → 저장한 그림 붙이기 → 글 붙여 넣기.",
+    blog: "블로그 글쓰기에서 첫 줄 '제목:' 뒤 글을 제목 칸에 넣고 → 저장한 그림 넣기 → 나머지 글 붙여 넣기.",
+    kakao: "카카오톡 1:1 채팅에서 저장한 그림을 사진으로 보내고 → 글 붙여 넣기.",
+  };
+  return { image, text, post: posts[kind] ?? posts.instagram };
+}
 
 // 글 4가지. 만들 수 없으면(promoBlockReason) null.
 export function promoTexts(input) {

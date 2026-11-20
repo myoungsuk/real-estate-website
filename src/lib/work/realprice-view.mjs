@@ -7,6 +7,9 @@ export const REALPRICE_VIEW_PAGE_SIZE = 30; // REALPRICE_TRADES_LIMIT_DEFAULT
 export const REALPRICE_VIEW_WATCH_MAX = 20; // REALPRICE_WATCH_MAX
 export const REALPRICE_VIEW_NAME_MAX = 40; // REALPRICE_WATCH_NAME_MAX
 export const REALPRICE_VIEW_QUERY_MAX = 30; // REALPRICE_COMPLEX_QUERY_MAX
+export const REALPRICE_VIEW_HIGH_PAGE_SIZE = 100; // REALPRICE_TRADES_LIMIT_MAX: '신고가만'을 켜면 한 번에 100건씩 받아 화면에서 거른다(P1-f)
+export const REALPRICE_VIEW_MAJOR_DAYS = 30; // REALPRICE_MAJOR_DAYS(주요 거래: 최근 30일 매매)
+export const REALPRICE_VIEW_MAJOR_TOP = 10; // REALPRICE_MAJOR_TOP(주요 거래: 금액 상위 10건)
 
 export const REALPRICE_PERIODS = Object.freeze([
   { value: "1", label: "최근 1개월", months: 1 },
@@ -22,18 +25,19 @@ export const REALPRICE_KIND_OPTIONS = Object.freeze([
   { value: "presale", label: "분양권" },
 ]);
 // 면적·금액 칸은 경계를 겹치지 않게 '초과 ~ 이하'로 나눈다(서버는 아래·위 값을 모두 포함해 비교한다).
+// chip: 거르기 단추(P1-f D안)에 보일 짧은 글자. 펼친 목록·화면 읽기 프로그램은 label(경계까지 쓴 글자)을 쓴다.
 export const REALPRICE_AREA_OPTIONS = Object.freeze([
-  { value: "", label: "전체" },
-  { value: "small", label: "60㎡ 이하", max: "60" },
-  { value: "middle", label: "60㎡ 초과 ~ 85㎡ 이하", min: "60.01", max: "85" },
-  { value: "large", label: "85㎡ 초과", min: "85.01" },
+  { value: "", label: "전체", chip: "평형" },
+  { value: "small", label: "60㎡ 이하", chip: "60㎡ 이하", max: "60" },
+  { value: "middle", label: "60㎡ 초과 ~ 85㎡ 이하", chip: "60 ~ 85㎡", min: "60.01", max: "85" },
+  { value: "large", label: "85㎡ 초과", chip: "85㎡ 초과", min: "85.01" },
 ]);
 export const REALPRICE_PRICE_OPTIONS = Object.freeze([
-  { value: "", label: "전체" },
-  { value: "to3", label: "3억 이하", max: 300_000_000 },
-  { value: "to5", label: "3억 초과 ~ 5억 이하", min: 300_000_001, max: 500_000_000 },
-  { value: "to7", label: "5억 초과 ~ 7억 이하", min: 500_000_001, max: 700_000_000 },
-  { value: "over7", label: "7억 초과", min: 700_000_001 },
+  { value: "", label: "전체", chip: "금액" },
+  { value: "to3", label: "3억 이하", chip: "3억 이하", max: 300_000_000 },
+  { value: "to5", label: "3억 초과 ~ 5억 이하", chip: "3 ~ 5억", min: 300_000_001, max: 500_000_000 },
+  { value: "to7", label: "5억 초과 ~ 7억 이하", chip: "5 ~ 7억", min: 500_000_001, max: 700_000_000 },
+  { value: "over7", label: "7억 초과", chip: "7억 초과", min: 700_000_001 },
 ]);
 // 대전 동구 법정동 45개(가나다순). 국토교통부 자료의 법정동 이름과 정확히 같아야 거를 수 있다.
 export const DONG_GU_UMD_NAMES = Object.freeze([
@@ -44,6 +48,7 @@ export const DONG_GU_UMD_NAMES = Object.freeze([
   "판암동", "하소동", "홍도동", "효동", "효평동",
 ]);
 
+// q: 찾기칸(단지 이름·법정동 이름), highOnly: '신고가만'(화면에서 거름). 둘 다 '모두 끄기'·'거르기 초기화'로 함께 끈다(P1-f).
 export const DEFAULT_REALPRICE_FILTERS = Object.freeze({
   period: "3",
   kind: "all",
@@ -52,6 +57,8 @@ export const DEFAULT_REALPRICE_FILTERS = Object.freeze({
   umd: "",
   excludeCancelled: true,
   excludeDirect: false,
+  q: "",
+  highOnly: false,
 });
 
 const optionOf = (options, value) => options.find((option) => option.value === value) ?? options[0];
@@ -81,9 +88,25 @@ export function shiftMonth(dateText, delta) {
 
 // 거르기 → GET /work/realprice/trades 매개변수. 끝 달(to)은 보내지 않아 서버의 이번 달(한국 시각)을 쓴다.
 // 기본 기간(3개월)은 시작 달도 보내지 않는다(서버 기본값과 같음). todayKst: "YYYY-MM-DD"(legal-dates.mjs todayInKorea).
-/** @param {Record<string, string | boolean>} filters @param {{ watch?: boolean, cursor?: string | null, todayKst: string }} options */
-export function tradesQuery(filters, { watch = false, cursor = null, todayKst }) {
+// 찾는 말(q)은 있을 때만, '신고가만'은 서버에 보내지 않고 쪽 크기만 100건으로 키운다(P1-f).
+// major(주요 거래): view=major와 찾는 말·면적·금액·법정동·관심 단지만 보낸다(기간·종류·해제·직거래·커서는 서버가 정함).
+/** @param {Record<string, string | boolean>} filters @param {{ watch?: boolean, cursor?: string | null, todayKst: string, major?: boolean }} options */
+export function tradesQuery(filters, { watch = false, cursor = null, todayKst, major = false }) {
   const params = new URLSearchParams();
+  const q = cleanComplexQuery(filters.q);
+  if (major) {
+    params.set("view", "major");
+    if (q) params.set("q", q);
+    if (watch) params.set("watch", "1");
+    const majorArea = optionOf(REALPRICE_AREA_OPTIONS, filters.area);
+    if (majorArea.min) params.set("areaMin", majorArea.min);
+    if (majorArea.max) params.set("areaMax", majorArea.max);
+    const majorPrice = optionOf(REALPRICE_PRICE_OPTIONS, filters.price);
+    if (majorPrice.min) params.set("priceMin", String(majorPrice.min));
+    if (majorPrice.max) params.set("priceMax", String(majorPrice.max));
+    if (filters.umd && DONG_GU_UMD_NAMES.includes(filters.umd)) params.set("umd", filters.umd);
+    return params.toString();
+  }
   const period = optionOf(REALPRICE_PERIODS, filters.period);
   if (period.value !== DEFAULT_REALPRICE_FILTERS.period) params.set("from", shiftMonth(todayKst, -(period.months - 1)));
   if (filters.kind !== "all") params.set("kind", optionOf(REALPRICE_KIND_OPTIONS, filters.kind).value);
@@ -97,8 +120,69 @@ export function tradesQuery(filters, { watch = false, cursor = null, todayKst })
   if (filters.umd && DONG_GU_UMD_NAMES.includes(filters.umd)) params.set("umd", filters.umd);
   if (!filters.excludeCancelled) params.set("cancelled", "include");
   if (filters.excludeDirect) params.set("direct", "exclude");
+  if (q) params.set("q", q);
+  if (filters.highOnly === true) params.set("limit", String(REALPRICE_VIEW_HIGH_PAGE_SIZE));
   if (cursor) params.set("cursor", cursor);
   return params.toString();
+}
+
+// ── 거르기 단추·켜짐 줄(P1-f D안) ──
+
+// 거르기 단추에 보일 짧은 글자와 켜짐 여부. 기간은 늘 그 기간 이름, 평형·금액은 고르기 전에는 "평형"·"금액".
+export function chipText(key, value) {
+  if (key === "period") return { text: optionOf(REALPRICE_PERIODS, value).label, set: value !== DEFAULT_REALPRICE_FILTERS.period };
+  const options = key === "area" ? REALPRICE_AREA_OPTIONS : REALPRICE_PRICE_OPTIONS;
+  const option = optionOf(options, value);
+  return { text: option.chip, set: option.value !== "" };
+}
+
+// 목록 위 '켜짐' 줄에 쓸 조건 이름(기본값과 다른 것). 주요 거래에서는 서버가 정한 조건(기간·종류·해제·직거래)을 빼고 쓴다.
+/** @param {Record<string, string | boolean>} filters @param {{ major?: boolean }} [options] */
+export function activeFilterParts(filters, { major = false } = {}) {
+  const parts = [];
+  const q = cleanComplexQuery(filters.q);
+  if (q) parts.push(`'${q}'`);
+  if (!major && filters.period !== DEFAULT_REALPRICE_FILTERS.period) parts.push(optionOf(REALPRICE_PERIODS, filters.period).label);
+  if (!major && filters.kind === "presale") parts.push("분양권만");
+  else if (!major && filters.kind !== "all") parts.push(optionOf(REALPRICE_KIND_OPTIONS, filters.kind).label);
+  if (filters.area) parts.push(optionOf(REALPRICE_AREA_OPTIONS, filters.area).chip);
+  if (filters.price) parts.push(optionOf(REALPRICE_PRICE_OPTIONS, filters.price).chip);
+  if (filters.umd) parts.push(String(filters.umd));
+  if (filters.highOnly === true) parts.push("신고가만");
+  if (!major && !filters.excludeCancelled) parts.push("해제 포함");
+  if (!major && filters.excludeDirect) parts.push("직거래 빼기");
+  return parts;
+}
+
+// '켜짐' 줄 글자. 주요 거래는 앞에 그 뜻을 쓴다.
+/** @param {Record<string, string | boolean>} filters @param {{ major?: boolean }} [options] */
+export function activeFilterLine(filters, { major = false } = {}) {
+  const parts = activeFilterParts(filters, { major });
+  const head = major ? `최근 ${REALPRICE_VIEW_MAJOR_DAYS}일 매매 신고가 + 금액 상위 ${REALPRICE_VIEW_MAJOR_TOP}건` : "";
+  if (parts.length === 0) return major ? head : "거르기 없음 · 해제 거래 뺌";
+  return major ? `${head} · 켜짐: ${parts.join(" · ")}` : `켜짐: ${parts.join(" · ")}`;
+}
+
+// 0건일 때 글자와 단추(P1-f). action: "high-off"('신고가만' 끄기)·"period-max"(최근 3년으로)·"q-clear"(찾는 말 지우기)·"reset"(모두 끄기).
+// loaded: 서버에서 받은 건수(신고가만으로 거르기 전), highUnavailable: 지금 신고가 판정을 할 수 없음.
+/** @param {Record<string, string | boolean>} filters @param {{ major?: boolean, loaded?: number, highUnavailable?: boolean }} [options] */
+export function emptyView(filters, { major = false, loaded = 0, highUnavailable = false } = {}) {
+  const q = cleanComplexQuery(filters.q);
+  const longest = REALPRICE_PERIODS.at(-1);
+  if (filters.highOnly === true && highUnavailable) {
+    return { title: "지금은 신고가를 가릴 수 없습니다", body: "매매 과거 자료를 채우는 중이거나 조회가 많은 날이라 신고가 표시를 껐습니다. '신고가만'을 끄면 거래를 모두 봅니다.", actions: [{ action: "high-off", label: "신고가만 끄기" }] };
+  }
+  if (filters.highOnly === true && loaded > 0) {
+    return { title: `불러온 ${loaded.toLocaleString("ko-KR")}건 가운데 신고가가 없습니다`, body: "더 지난 거래를 불러오거나 '신고가만'을 끄세요.", actions: [{ action: "high-off", label: "신고가만 끄기" }] };
+  }
+  const where = major ? `최근 ${REALPRICE_VIEW_MAJOR_DAYS}일 주요 거래` : optionOf(REALPRICE_PERIODS, filters.period).label;
+  if (q) {
+    const actions = [];
+    if (!major && filters.period !== longest.value) actions.push({ action: "period-max", label: `${longest.label}에서 다시 찾기` });
+    actions.push({ action: "q-clear", label: "찾는 말 지우기" });
+    return { title: `'${q}' 거래가 ${where}에는 없습니다`, body: major ? "주요 거래는 최근 30일 매매만 봅니다. '새 거래'에서 기간을 늘려 찾아보세요." : "기간을 늘리거나 찾는 말을 줄여 보세요.", actions };
+  }
+  return { title: "조건에 맞는 거래가 없습니다.", body: "기간을 늘리거나 거래 종류·법정동·금액 조건을 바꿔 보세요.", actions: [{ action: "reset", label: "거르기 초기화" }] };
 }
 
 // ── 거래 한 줄 표시 ──

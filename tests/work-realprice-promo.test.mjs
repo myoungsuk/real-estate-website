@@ -25,7 +25,15 @@ import {
   promoTexts,
   promoTitle,
   receivedText,
+  PROMO_HASHTAGS_MAX,
+  PROMO_PLACES,
+  PROMO_TEXT_KINDS,
+  hashtags,
+  promoSteps,
   selectionText,
+  takeButtonView,
+  takeResultText,
+  takeVisible,
   textCount,
 } from "../src/lib/work/realprice-promo.mjs";
 
@@ -76,9 +84,46 @@ test("목록 고르기: 해제 거래는 고를 수 없고, 주소는 같은 ID�
   assert.equal(promoHref([HIGH.tradeKey, HIGH2.tradeKey, HIGH.tradeKey]), `/admin/work/realprice/promo/?ids=${HIGH.tradeKey},${HIGH2.tradeKey}`);
   assert.equal(promoHref([]), null);
   assert.equal(promoHref(Array.from({ length: 7 }, (_, n) => key("sale", "202611", n))), null);
-  assert.equal(selectionText(0), "홍보물에 넣을 거래를 고르세요(최대 6건)");
-  assert.equal(selectionText(2), "고른 거래 2건");
-  assert.equal(selectionText(6), "고른 거래 6건(최대 6건)");
+  assert.equal(selectionText(0), "홍보물에 넣을 거래를 담으세요(최대 6건)");
+  assert.equal(selectionText(2), "담은 거래 2건");
+  assert.equal(selectionText(6), "담은 거래 6건(최대 6건)");
+});
+
+test("P1-f 다 담기: 보이는 순서대로 해제·이미 담은 거래를 건너뛰고 남은 자리만큼(6건 넘지 않음), 단추 글자는 보이는 수·남은 자리·담은 수에 맞춤", () => {
+  const trades = Array.from({ length: 9 }, (_, n) => sale({ tradeKey: key("sale", "202611", 10 + n), aptName: `가상숲${n}단지`, umdName: "천동", areaM2: 84.97, floor: 3, dealDate: "2026-11-10", priceWon: 300_000_000 }));
+  const cancelled = { ...trades[1], cancelled: true };
+  const visible = [trades[0], cancelled, ...trades.slice(2)];
+  const none = new Set();
+  assert.deepEqual(takeButtonView(visible, none), { text: "위에서 6건 담기", disabled: false }, "보이는 8건 > 남은 자리 6");
+  const first = takeVisible(visible, none);
+  assert.deepEqual(first.add.map((item) => item.tradeKey), [trades[0], ...trades.slice(2, 7)].map((item) => item.tradeKey), "해제 1건은 건너뛰고 6건");
+  assert.equal(first.skippedCancelled, 1);
+  assert.equal(takeResultText(6, 1, 6), "6건을 담았습니다. 해제 거래 1건은 건너뛰었습니다. 담은 거래 6건(최대 6건).");
+  const full = new Set(first.add.map((item) => item.tradeKey));
+  assert.deepEqual(takeButtonView(visible, full), { text: "6건 담음", disabled: true });
+  assert.deepEqual(takeVisible(visible, full).add, [], "다 차면 더 담지 않음");
+  const three = new Set([trades[0].tradeKey, trades[2].tradeKey, trades[3].tradeKey]);
+  assert.deepEqual(takeButtonView(visible, three), { text: "위에서 3건 더 담기", disabled: false });
+  assert.deepEqual(takeVisible(visible, three).add.map((item) => item.tradeKey), trades.slice(4, 7).map((item) => item.tradeKey), "이미 담은 것은 건너뜀");
+  assert.deepEqual(takeButtonView(trades.slice(0, 2), none), { text: "보이는 2건 담기", disabled: false }, "보이는 거래가 남은 자리보다 적음");
+  assert.deepEqual(takeButtonView(trades.slice(0, 2), new Set([trades[0].tradeKey])), { text: "보이는 1건 더 담기", disabled: false });
+  assert.deepEqual(takeButtonView([cancelled], none), { text: "담을 거래 없음", disabled: true }, "해제 거래만 보이면 꺼짐");
+  assert.deepEqual(takeButtonView([trades[0]], new Set([trades[0].tradeKey])), { text: "보이는 거래 다 담음", disabled: true });
+  assert.equal(takeResultText(2, 0, 5), "2건을 담았습니다. 담은 거래 5건.");
+});
+
+test("P1-f 해시태그: 고정 4개 → 거래 종류 → #신고가 → 법정동 3 → 전용면적 2 → 단지 이름 3, 겹치면 하나, 15개 안이고 넘치면 단지 이름을 지킴", () => {
+  assert.deepEqual(hashtags(THREE), ["#대전동구", "#동구아파트", "#대전아파트", "#아파트실거래가", "#아파트매매", "#신고가", "#천동", "#신흥동", "#전용84", "#전용59", "#가상숲1단지", "#가상숲2단지", "#가상들마을"]);
+  assert.deepEqual(hashtags([PLAIN]), ["#대전동구", "#동구아파트", "#대전아파트", "#아파트실거래가", "#아파트매매", "#신흥동", "#전용101", "#가상들마을"], "신고가가 아니면 #신고가 없음");
+  const spaced = { ...PLAIN, aptName: "가상 숲(2단지)", umdName: "신흥동" };
+  assert.deepEqual(hashtags([spaced]).at(-1), "#가상숲2단지", "띄어쓰기·괄호를 뺌");
+  const mixed = [MONTHLY, JEONSE, PRESALE, HIGH, HIGH2, PLAIN];
+  const tags = hashtags(mixed);
+  assert.ok(tags.length <= PROMO_HASHTAGS_MAX, tags.join(" "));
+  assert.deepEqual(tags.slice(4, 9), ["#아파트월세", "#아파트전세", "#분양권", "#아파트매매", "#신고가"], "거래 종류는 나온 순서대로 하나씩");
+  assert.deepEqual(tags.slice(-3), ["#가상숲2단지", "#가상센트럴", "#가상숲1단지"], "단지 이름 3개는 지킴");
+  assert.equal(new Set(tags).size, tags.length, "겹치지 않음");
+  for (const tag of tags) assert.doesNotMatch(tag, /\d+동$|\d+호/u, `동 번호·호수 없음: ${tag}`);
 });
 
 test("TK-38 글 4가지(가상 거래 3건): 출처·받은 시각·계약일 기준·신고 기한·해제 제외·명시사항 5항목, 동 번호 0, 층 숫자 그대로, 금액이 자료와 같음", () => {
@@ -98,7 +143,8 @@ test("TK-38 글 4가지(가상 거래 3건): 출처·받은 시각·계약일 �
     assert.ok(text.includes("2006년 1월 이후"), `${kind}: 비교 범위`);
   }
   assert.match(PROMO_HIGH_RULE, /2006년 1월 이후 매매와 비교/u);
-  assert.match(texts.instagram, /#대전동구 #실거래가 #천동 #신흥동$/u, "해시태그는 #대전동구 #실거래가 #(법정동)만");
+  assert.ok(texts.instagram.endsWith(`\n${hashtags(THREE).join(" ")}`), "인스타그램 끝에 해시태그 13개(P1-f)");
+  assert.equal(textCount("instagram", texts.instagram).tags, 13);
   assert.match(texts.blog, /^제목: 대전 동구 아파트 실거래 3건\(2026년 10 ~ 11월 계약\)/u);
   assert.match(texts.blog, /중개사무소 명칭: .+\n소재지: .+\n연락처: .+\n등록번호: .+\n대표 성명: .+$/u, "블로그 끝 명시사항 5줄");
   assert.ok(texts.threads.startsWith("[대전 동구 아파트 실거래가] 실거래 3건(2026년 10 ~ 11월 계약)"));
@@ -199,4 +245,19 @@ test("파일 이름은 날짜만(realprice-YYYYMMDD.png, 두 장이면 -1·-2), 
   assert.equal(promoFileName("2026-11-20"), "realprice-20261120.png");
   assert.equal(promoFileName("2026-11-20", 1, 2), "realprice-20261120-2.png");
   assert.equal(receivedText("2026-11-19T15:05:00.000Z"), "2026. 11. 20. 00:05");
+});
+
+test("P1-f 홍보물 순서 글: 올릴 곳 4가지(인스타그램 먼저)마다 ① 그림 저장 ② 글 복사(글자 수·해시태그 수) ③ 붙여 넣기", () => {
+  assert.deepEqual(PROMO_PLACES.map(([kind]) => kind), ["instagram", "threads", "blog", "kakao"], "인스타그램이 처음 골라진 곳");
+  assert.deepEqual([...PROMO_PLACES.map(([kind]) => kind)].sort(), [...PROMO_TEXT_KINDS.map(([kind]) => kind)].sort(), "글 종류와 같은 4가지");
+  const insta = promoSteps("instagram", { cardCount: 2, counted: { count: 1234, limit: 2200, tags: 13, over: false } });
+  assert.equal(insta.image, "카드 그림 2장을 휴대폰에 저장합니다.");
+  assert.equal(insta.text, "글을 복사합니다(해시태그 13개 포함, 2,200자 중 1,234자).");
+  assert.match(insta.post, /^인스타그램 앱에서 새 게시물/u);
+  const threads = promoSteps("threads", { counted: { count: 620, limit: 500, tags: 0, over: true } });
+  assert.equal(threads.image, "카드 그림을 휴대폰에 저장합니다.", "한 장이면 장 수를 쓰지 않음");
+  assert.equal(threads.text, "글을 복사합니다(500자 중 620자, 상한을 넘음).");
+  assert.match(promoSteps("blog", { counted: { count: 900, limit: null, tags: 0, over: false } }).text, /\(900자\)/u, "상한이 없는 글은 글자 수만");
+  assert.match(promoSteps("kakao", { counted: { count: 300, limit: null, tags: 0, over: false } }).image, /채팅에 사진으로 보냅니다/u);
+  assert.equal(promoSteps("unknown", { counted: { count: 1, limit: null, tags: 0, over: false } }).post, insta.post, "모르는 곳은 인스타그램 순서");
 });
