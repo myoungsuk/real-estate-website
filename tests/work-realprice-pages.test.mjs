@@ -7,7 +7,7 @@ import { REALPRICE_VIEW_PAGE_SIZE } from "../src/lib/work/realprice-view.mjs";
 
 const readSource = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 const PAGES = ["src/pages/admin/work/realprice/index.astro", "src/pages/admin/work/realprice/settings.astro", "src/pages/admin/work/realprice/promo.astro"];
-const SCRIPTS = ["src/lib/work-realprice-client.ts", "src/lib/work-realprice-dom.ts", "src/lib/work/realprice-view.mjs", "src/lib/work-realprice-card.ts", "src/lib/work/realprice-promo.mjs"];
+const SCRIPTS = ["src/lib/work-realprice-client.ts", "src/lib/work-realprice-dom.ts", "src/lib/work/realprice-view.mjs", "src/lib/work-realprice-card.ts", "src/lib/work/realprice-promo.mjs", "src/lib/work-card-draw.ts"];
 // 미디어 덩어리 하나(@media … { … })를 잘라 낸다. 안쪽 괄호가 한 겹인 이 파일의 규칙 모양을 기준으로 한다.
 const mediaBlocks = (css, query) => {
   const blocks = [];
@@ -110,9 +110,9 @@ test("D안: 모든 폭에서 상태 한 줄(문제 있을 때만 펼침)·찾기
   }
 });
 
-test("메뉴: 업무 도구 아래 단계에 '실거래가'를 더하고, 미리 그리기 prerender 목록과 업무 도구 첫 화면 도구 3개는 그대로(TK-37)", async () => {
+test("메뉴: 업무 도구 아래 단계에 '실거래가'를 더하고(2026-11-20 글 초안·홍보 종이가 뒤에 붙음), 미리 그리기 prerender 목록과 업무 도구 첫 화면 도구 3개는 그대로(TK-37)", async () => {
   const [layout, workIndex] = await Promise.all([readSource("src/layouts/AdminLayout.astro"), readSource("src/pages/admin/work/index.astro")]);
-  assert.match(layout, /\{ href: "\/admin\/work\/schedule\/", label: "계약 일정" \},\r?\n\s*\{ href: "\/admin\/work\/realprice\/", label: "실거래가" \},\r?\n\s*\{ href: "\/admin\/work\/blog\/", label: "글 초안" \},\r?\n\s*\],/u);
+  assert.match(layout, /\{ href: "\/admin\/work\/schedule\/", label: "계약 일정" \},\r?\n\s*\{ href: "\/admin\/work\/realprice\/", label: "실거래가" \},\r?\n\s*\{ href: "\/admin\/work\/blog\/", label: "글 초안" \},\r?\n\s*\{ href: "\/admin\/work\/paper\/", label: "홍보 종이" \},\r?\n\s*\],/u);
   assert.match(layout, /const prerenderPages = \["\/admin\/work\/", "\/admin\/work\/fee\/", "\/admin\/work\/messages\/", "\/admin\/work\/schedule\/"\];/u);
   assert.doesNotMatch(layout, /\/admin\/work\/realprice\/settings\//u, "설정은 메뉴에 따로 넣지 않음(실거래가 화면에서 들어감)");
   assert.match(
@@ -129,12 +129,13 @@ test("메뉴: 업무 도구 아래 단계에 '실거래가'를 더하고, 미리
 });
 
 test("P1-e 홍보물: 목록 고르기는 메모리만(최대 6건·해제 막음), 홍보물 화면은 ids로 다시 읽고, 그림은 data 주소 PNG, A4는 인쇄 CSS", async () => {
-  const [index, promo, card, promoLib, css] = await Promise.all([
+  const [index, promo, card, promoLib, css, draw] = await Promise.all([
     readSource(PAGES[0]),
     readSource(PAGES[2]),
     readSource("src/lib/work-realprice-card.ts"),
     readSource("src/lib/work/realprice-promo.mjs"),
     readSource("src/styles/admin.css"),
+    readSource("src/lib/work-card-draw.ts"),
   ]);
   assert.match(index, /<th scope="col" class="rt-pick-col">담기<\/th>/u, "표 끝 열");
   assert.match(index, /const view = takeButtonView\(shown, new Set\(picked\.keys\(\)\)\);/u, "'다 담기'는 보이는 거래만(realprice-promo.mjs)");
@@ -148,7 +149,9 @@ test("P1-e 홍보물: 목록 고르기는 메모리만(최대 6건·해제 막�
   assert.match(promo, /<div class="rt-print-sheet" data-promo-sheet><\/div>/u);
   assert.match(card, /canvas\.toDataURL\("image\/png"\)/u, "CSP img-src에 blob이 없어 data 주소");
   assert.doesNotMatch(`${card}\n${promo}`, /createObjectURL|blob:/u);
-  assert.match(card, /const LOGO_SRC = "\/images\/brand\/leaders-city-happy-logo\.webp";/u, "같은 출처 로고(canvas가 오염되지 않음)");
+  // 로고 읽기는 업무 카드 공통 파일로 옮겼다(보드 45번 C). 카드는 그 함수를 가져다 쓴다.
+  assert.match(draw, /export const LOGO_SRC = "\/images\/brand\/leaders-city-happy-logo\.webp";/u, "같은 출처 로고(canvas가 오염되지 않음)");
+  assert.match(card, /import \{[^}]*\bloadLogo\b[^}]*\} from "\.\/work-card-draw";/u, "카드는 공통 로고 읽기를 씀");
   assert.doesNotMatch(`${card}\n${promoLib}`, /aptDong|jibun/u, "카드·글에 동 번호·지번 칸을 쓰지 않음(DEC-WT-22)");
   const print = mediaBlocks(css, "print");
   assert.match(print, /@page \{ size: A4 portrait;/u);

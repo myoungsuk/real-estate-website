@@ -99,7 +99,7 @@ const guideSections = ADMIN_HELP_GUIDE.flatMap((group) => group.sections);
 
 test("관리 화면마다 제목 아래에 자기 주소의 '이 화면 사용법' 상자가 한 개씩 있다", async () => {
   const pages = await listAdminPages();
-  assert.equal(pages.length, 16, "관리 화면 16개(사용 안내 화면 제외, 2026-11-19 실거래가·실거래가 설정, 2026-11-20 홍보물 만들기·글 초안 추가)");
+  assert.equal(pages.length, 17, "관리 화면 17개(사용 안내 화면 제외, 2026-11-19 실거래가·실거래가 설정, 2026-11-20 홍보물 만들기·글 초안·홍보 종이 추가)");
   const routes = [];
   for (const file of pages) {
     const source = await readSource(`src/pages/admin/${file}`);
