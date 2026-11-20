@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
+import { ADMIN_PAGE_HELP } from "../src/lib/admin-help.mjs";
 import { stripWebpMetadataFromDataUrl } from "../src/lib/admin-webp-clean.mjs";
 import { validateWebpBytes } from "../worker/github-content.mjs";
 
@@ -422,12 +423,12 @@ test("관리 화면 사용법 상자는 접혀 있다가 열리고, 자세한 �
   assertNoBrowserErrors();
 });
 
-test("관리 화면 15곳은 사용법 상자를 연 채로 360·390·768·1280px에서 가로로 넘치지 않는다", async ({ page }) => {
+// 화면 목록은 사용법 문구 한 곳(admin-help.mjs ADMIN_PAGE_HELP)에서 센다. 관리 화면마다 항목이 하나씩 있는지는 tests/admin-help.test.mjs가 화면 원본과 대조한다.
+const HELP_PAGE_PATHS = Object.keys(ADMIN_PAGE_HELP);
+
+test(`관리 화면 ${HELP_PAGE_PATHS.length}곳과 사용 안내는 사용법 상자를 연 채로 360·390·768·1280px에서 가로로 넘치지 않는다`, async ({ page }) => {
   await page.route("**/api/admin/**", (route) => route.fulfill({ status: 503, json: { ok: false, error: { code: "TEST_OFFLINE", message: "시험 중에는 관리 API를 부르지 않습니다." } } }));
-  const paths = [
-    "/admin/", "/admin/work/", "/admin/work/fee/", "/admin/work/messages/", "/admin/work/schedule/", "/admin/work/realprice/", "/admin/work/realprice/settings/", "/admin/listings/", "/admin/listings/editor/",
-    "/admin/content/", "/admin/external-links/", "/admin/complexes/", "/admin/deployment/", "/admin/history/", "/admin/help/",
-  ];
+  const paths = [...HELP_PAGE_PATHS, "/admin/help/"];
   for (const width of [360, 390, 768, 1280]) {
     await page.setViewportSize({ width, height: 900 });
     for (const path of paths) {
