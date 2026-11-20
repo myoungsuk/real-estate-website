@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { access, readFile, readdir } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import test from "node:test";
 
 const readSource = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
@@ -321,17 +321,14 @@ test("외부 콘텐츠는 블로그와 유튜브를 나누고 일반 영상을 �
   assert.match(contentSource, /export type ExternalContentType = "blog" \| "youtube" \| "instagram";/u);
 });
 
-test("관리자 화면에서 'admin-write-ready' 신호를 듣는 화면은 그 신호를 보내는 AdminWriteGate를 함께 둔다", async () => {
-  const pagesDir = new URL("../src/pages/admin/", import.meta.url);
-  const files = (await readdir(pagesDir, { recursive: true })).map((name) => name.replaceAll("\\", "/")).filter((name) => name.endsWith(".astro"));
-  const listeners = [];
-  for (const name of files) {
-    const source = await readFile(new URL(name, pagesDir), "utf8");
-    if (!source.includes('addEventListener("admin-write-ready"')) continue;
-    listeners.push(name);
-    assert.match(source, /<AdminWriteGate\b/u, `${name}: 신호를 보내는 AdminWriteGate가 없으면 신호가 오지 않아 단추가 계속 꺼져 있음`);
+test("관리자 편집 화면은 'admin-write-ready' 신호 대신 공유 세션 Promise를 기다려, 세션 응답이 화면 스크립트보다 먼저 와도 최신 내용을 불러온다", async () => {
+  for (const name of ["content/index.astro", "complexes/index.astro", "external-links/index.astro", "listings/editor.astro"]) {
+    const source = await readSource(`src/pages/admin/${name}`);
+    assert.doesNotMatch(source, /addEventListener\("admin-write-ready"/u, `${name}: 신호만 들으면 먼저 온 세션 결과를 놓침`);
+    assert.match(source, /void getAdminSession\(\)\.then\(\(session\) => \{/u, `${name}: 공유 Promise는 결과를 간직하므로 순서와 무관`);
+    assert.match(source, /\}\)\.catch\(\(\) => undefined\);/u, `${name}: 세션 실패 안내는 AdminWriteGate가 맡고 여기서는 처리되지 않은 거부를 남기지 않음`);
+    assert.match(source, /<AdminWriteGate\b/u, `${name}: 저장 연결 안내와 단추 잠금은 AdminWriteGate가 계속 맡음`);
   }
-  assert.ok(listeners.length >= 4, "편집 화면 4곳(content·complexes·external-links·listings/editor)은 지금처럼 신호를 들음");
   const listings = await readSource("src/pages/admin/listings/index.astro");
   assert.doesNotMatch(listings, /addEventListener\("admin-write-ready"/u, "매물 목록에는 AdminWriteGate가 없으므로 신호를 기다리지 않음");
   assert.match(listings, /void getAdminSession\(\)\.then\(\(session\) => \{\s*reviewWriteEnabled = session\.writeEnabled;/u, "매물 목록은 세션 결과를 직접 기다려 확인 완료 단추를 켬(신호 순서와 무관)");

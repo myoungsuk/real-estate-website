@@ -87,7 +87,7 @@ import { complexes } from "../../../lib/complexes";
 
   <script>
     import { formatComplexComparisonRows, parseComplexComparisonRows, parseComplexSlugLines, splitAdminLines } from "../../../lib/admin-complexes.mjs";
-    import { convertImageFileToWebp, readAdminContent, setAdminFormStatus, uploadAdminImage, writeAdminContent, type AdminResource } from "../../../lib/admin-content-client";
+    import { convertImageFileToWebp, getAdminSession, readAdminContent, setAdminFormStatus, uploadAdminImage, writeAdminContent, type AdminResource } from "../../../lib/admin-content-client";
     import { guardAdminFormChanges, reviewAdminContentChange } from "../../../lib/admin-content-review";
     import type { ComplexContent, ComplexOverview, ComplexSource } from "../../../lib/complexes";
 
@@ -194,8 +194,10 @@ import { complexes } from "../../../lib/complexes";
       if (formTitle) formTitle.textContent = "지역·단지 수정";
       dirtyGuard.markSaved();
     };
-    window.addEventListener("admin-write-ready", (event) => {
-      if (!(event as CustomEvent<{ writeEnabled: boolean }>).detail.writeEnabled) return;
+    // 세션 결과는 getAdminSession()의 공유 Promise로 직접 기다린다. 'admin-write-ready' 신호만 들으면 세션 응답이 이 스크립트보다 먼저 올 때
+    // 신호를 놓쳐 최신 내용을 불러오지 않는다. 실패 안내는 AdminWriteGate가 보여 주므로 여기서는 조용히 넘긴다.
+    void getAdminSession().then((session) => {
+      if (!session.writeEnabled) return;
       void Promise.all([
         readAdminContent<ComplexContent[]>("complexes"),
         readAdminContent<ComplexOverview>("complexes-overview"),
@@ -213,7 +215,7 @@ import { complexes } from "../../../lib/complexes";
         setAdminFormStatus(statusMessage, message, "error");
         setAdminFormStatus(overviewStatusMessage, message, "error");
       });
-    });
+    }).catch(() => undefined);
     overviewForm?.addEventListener("submit", async (event) => {
       event.preventDefault();
       if (!overviewResource) return setAdminFormStatus(overviewStatusMessage, "최신 전체 안내를 먼저 불러와 주세요.", "error");

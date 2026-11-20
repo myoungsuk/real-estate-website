@@ -180,6 +180,7 @@ import { office } from "../../../lib/site";
       readBankListingFile,
     } from "../../../lib/admin/bank-listing-import.mjs";
     import {
+      getAdminSession,
       readAdminContent,
       setAdminFormStatus,
       writeAdminContentBatch,
@@ -395,8 +396,10 @@ import { office } from "../../../lib/site";
     renderManagedList();
     resetManualForm();
 
-    window.addEventListener("admin-write-ready", (event) => {
-      writeEnabled = (event as CustomEvent<{ writeEnabled: boolean }>).detail.writeEnabled;
+    // 세션 결과는 getAdminSession()의 공유 Promise로 직접 기다린다. 'admin-write-ready' 신호만 들으면 세션 응답이 이 스크립트보다 먼저 올 때
+    // 신호를 놓쳐 최신 내용을 불러오지 않는다. 실패 안내는 AdminWriteGate가 보여 주므로 여기서는 조용히 넘긴다.
+    void getAdminSession().then((session) => {
+      writeEnabled = session.writeEnabled;
       renderManagedList();
       if (currentAnalysis) renderBankAnalysis();
       if (!writeEnabled) return;
@@ -413,7 +416,7 @@ import { office } from "../../../lib/site";
       }).catch((error) => {
         setAdminFormStatus(manualStatus, error instanceof Error ? error.message : "네이버 매물을 불러오지 못했습니다.", "error");
       });
-    });
+    }).catch(() => undefined);
 
     const bankForm = document.querySelector<HTMLFormElement>("[data-bank-import-form]");
     const bankFile = document.querySelector<HTMLInputElement>("[data-bank-file]");
