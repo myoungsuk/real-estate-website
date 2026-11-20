@@ -66,6 +66,7 @@ import { CUSTOMER_QUERY_MAX, NOTE_BODY_MAX } from "../../../lib/work/customers-v
             <button class="rt-strip__clear" type="button" data-nt-clear hidden>찾기 지우기</button>
           </div>
           <p class="cu-done" role="status" aria-live="polite" data-nt-done hidden><span data-nt-done-text></span> <a class="admin-text-link" href="#" data-nt-done-link>손님 카드 열기</a></p>
+          <p class="admin-form-status" role="status" aria-live="polite" tabindex="-1" data-nt-notice></p>
           <ol class="cu-notes" data-nt-list></ol>
           <section class="admin-panel rt-state cu-state" aria-labelledby="nt-empty-title" data-nt-empty hidden>
             <div class="admin-empty-state">
@@ -154,6 +155,9 @@ import { CUSTOMER_QUERY_MAX, NOTE_BODY_MAX } from "../../../lib/work/customers-v
         const empty = pick("[data-nt-empty]");
         const more = pick<HTMLButtonElement>("[data-nt-more]");
         const listStatus = pick("[data-nt-list-status]");
+        // 목록 위 상태 줄: 목록을 다시 읽어 펼친 칸이 사라져도 왜 실패했는지 남긴다(loadList는 이 줄을 건드리지 않음).
+        const notice = pick("[data-nt-notice]");
+        const clearNotice = () => setStatus(notice, "", "idle");
         const templates = {
           move: pick<HTMLTemplateElement>("[data-nt-move-template]"),
           edit: pick<HTMLTemplateElement>("[data-nt-edit-template]"),
@@ -168,6 +172,16 @@ import { CUSTOMER_QUERY_MAX, NOTE_BODY_MAX } from "../../../lib/work/customers-v
         let today = todayInKorea();
         let panelSeq = 0;
         const errorCode = (error: unknown) => (error instanceof WorkApiError ? error.code : null);
+        // 다른 화면이 먼저 고치거나 옮기거나 지운 메모(409·404): 목록 위에 까닭을 남기고 목록을 새로 읽는다.
+        // 넣던 글은 버린다(손님 카드 고치기의 409와 같은 방식). 다시 읽은 뒤에는 새 version으로 다시 할 수 있다.
+        function staleNote(code: string | null, action: "고친 글" | "옮기기") {
+          if (code !== "VERSION_CONFLICT" && code !== "NOT_FOUND") return false;
+          const why = code === "NOT_FOUND" ? "이 메모를 찾지 못했습니다. 다른 화면에서 지웠거나 손님 카드로 옮겼을 수 있습니다." : "다른 화면에서 이 메모를 먼저 고치거나 옮겼습니다.";
+          setStatus(notice, `${action === "고친 글" ? "고친 글을 저장하지 않았습니다." : "옮기지 않았습니다."} ${why} 목록을 새로 읽었으니 다시 해 주세요.`, "error");
+          void loadList();
+          notice.focus();
+          return true;
+        }
 
         function showState(title: string, body: string, { symbol = "!", retry = false, home = false } = {}) {
           boot.hidden = true;
@@ -285,6 +299,7 @@ import { CUSTOMER_QUERY_MAX, NOTE_BODY_MAX } from "../../../lib/work/customers-v
             setStatus(status, "옮기고 있습니다…", "saving");
             try {
               await updateNote(note.id, { version: note.version, customerId });
+              clearNotice();
               items = items.filter((entry) => entry.id !== note.id);
               renderList();
               pick("[data-nt-done-text]").textContent = `✓ 메모를 '${customer.displayName}' 손님 카드로 옮겼습니다.`;
@@ -293,8 +308,8 @@ import { CUSTOMER_QUERY_MAX, NOTE_BODY_MAX } from "../../../lib/work/customers-v
               doneLink.focus();
             } catch (error) {
               const code = errorCode(error);
+              if (staleNote(code, "옮기기")) return;
               setStatus(status, `옮기지 못했습니다. ${customerErrorText(code)}`, "error");
-              if (code === "VERSION_CONFLICT" || code === "NOT_FOUND") void loadList();
               go.disabled = false;
             } finally {
               busy = false;
@@ -329,11 +344,13 @@ import { CUSTOMER_QUERY_MAX, NOTE_BODY_MAX } from "../../../lib/work/customers-v
             setStatus(status, "저장하고 있습니다…", "saving");
             try {
               const { note: saved } = await updateNote(note.id, { version: note.version, body: checked.value });
+              clearNotice();
               items = items.map((entry) => (entry.id === saved.id ? saved : entry));
               renderList();
               setStatus(listStatus, "✓ 고친 메모를 저장했습니다.", "success");
             } catch (error) {
               const code = errorCode(error);
+              if (staleNote(code, "고친 글")) return;
               setStatus(status, `저장하지 못했습니다. ${customerErrorText(code)}`, "error");
               go.disabled = false;
             } finally {
@@ -410,6 +427,7 @@ import { CUSTOMER_QUERY_MAX, NOTE_BODY_MAX } from "../../../lib/work/customers-v
           query.value = cleanQuery(query.value);
           applied = query.value;
           done.hidden = true;
+          clearNotice();
           void loadList();
         }
         pick("[data-nt-q-go]").addEventListener("click", applySearch);
@@ -501,6 +519,7 @@ import { CUSTOMER_QUERY_MAX, NOTE_BODY_MAX } from "../../../lib/work/customers-v
           done.hidden = true;
           setStatus(memoStatus, "", "idle");
           setStatus(listStatus, "", "idle");
+          clearNotice();
           void start();
         };
         window.addEventListener("pageshow", (event) => {

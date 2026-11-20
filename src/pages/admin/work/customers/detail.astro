@@ -106,6 +106,7 @@ import { NOTE_BODY_MAX } from "../../../../lib/work/customers-view.mjs";
               <button class="work-primary-button cu-save" type="button" data-cu-memo-save>메모 저장</button>
             </div>
             <p class="admin-form-status" role="status" aria-live="polite" data-cu-memo-status></p>
+            <button class="work-secondary-button" type="button" data-cu-memo-reload hidden>다시 불러오기</button>
           </div>
           <ol class="cu-notes" data-cu-notes></ol>
           <p class="cu-soft" data-cu-notes-empty hidden>아직 메모가 없습니다.</p>
@@ -196,6 +197,7 @@ import { NOTE_BODY_MAX } from "../../../../lib/work/customers-view.mjs";
       const memo = pick<HTMLTextAreaElement>("[data-cu-memo]");
       const memoSave = pick<HTMLButtonElement>("[data-cu-memo-save]");
       const memoStatus = pick("[data-cu-memo-status]");
+      const memoReload = pick<HTMLButtonElement>("[data-cu-memo-reload]");
 
       let id: string | null = null;
       let detail: CustomerDetail | null = null;
@@ -429,18 +431,42 @@ import { NOTE_BODY_MAX } from "../../../../lib/work/customers-view.mjs";
         }
         busy = true;
         memoSave.disabled = true;
+        memoReload.hidden = true;
         setStatus(memoStatus, "저장하고 있습니다…", "saving");
         try {
           await createNote({ body: checked.value, customerId: id });
-          memo.value = "";
+        } catch (error) {
+          setStatus(memoStatus, `저장하지 못했습니다. ${customerErrorText(errorCode(error))}`, "error");
+          busy = false;
+          memoSave.disabled = false;
+          return;
+        }
+        // 여기부터는 저장이 끝난 뒤다. 다시 읽기가 실패해도 '저장하지 못했습니다'로 알리지 않는다(다시 누르면 메모가 두 번 들어감).
+        memo.value = "";
+        try {
           // 메모를 쓰면 서버가 마지막 연락일을 오늘로 바꾸므로 카드를 다시 읽는다.
           await load();
           setStatus(memoStatus, "✓ 메모를 저장했습니다.", "success");
-        } catch (error) {
-          setStatus(memoStatus, `저장하지 못했습니다. ${customerErrorText(errorCode(error))}`, "error");
+        } catch {
+          setStatus(memoStatus, "✓ 메모는 저장했습니다. 다만 손님 카드를 새로 읽지 못해 아래 메모 목록에는 아직 없습니다. '다시 불러오기'를 눌러 주세요.", "error");
+          memoReload.hidden = false;
         } finally {
           busy = false;
           memoSave.disabled = false;
+        }
+      });
+      // 메모 저장 뒤 다시 읽기만 실패했을 때: 손님 카드만 다시 읽는다(메모는 다시 보내지 않음).
+      memoReload.addEventListener("click", async () => {
+        if (busy) return;
+        busy = true;
+        try {
+          await load();
+          memoReload.hidden = true;
+          setStatus(memoStatus, "✓ 손님 카드를 새로 읽었습니다.", "success");
+        } catch (error) {
+          showLoadError(error);
+        } finally {
+          busy = false;
         }
       });
       pick("[data-cu-bar-memo]").addEventListener("click", () => {
@@ -491,6 +517,7 @@ import { NOTE_BODY_MAX } from "../../../../lib/work/customers-view.mjs";
         detail = null;
         memo.value = "";
         setStatus(memoStatus, "", "idle");
+        memoReload.hidden = true;
         setStatus(basicStatus, "", "idle");
         openEdit(false);
         openDelete(false);

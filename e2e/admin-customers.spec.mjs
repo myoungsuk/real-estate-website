@@ -55,11 +55,13 @@ function makeStore({ customers, count } = {}) {
 }
 
 // 늘 같은 시각에서 시작하고 실제 서버는 부르지 않는다(맞지 않는 관리 API는 503).
-async function setup(page, { width = 390, enabled = true, store = makeStore(), patchConflict = false } = {}) {
+// failCustomerReadAfterNote: 손님 메모 저장(POST /notes) 바로 뒤의 손님 카드 읽기 한 번만 503으로 실패시킨다.
+async function setup(page, { width = 390, enabled = true, store = makeStore(), patchConflict = false, failCustomerReadAfterNote = false } = {}) {
   await page.clock.install({ time: NOW });
   await page.setViewportSize({ width, height: 900 });
   const calls = { all: [], writes: [] };
   let nextId = 900;
+  let failNextCustomerRead = false;
   await page.route("**/api/admin/**", (route) => route.fulfill(failure(503, "TEST_OFFLINE")));
   await page.route("**/api/admin/v1/work/**", (route) => {
     const request = route.request();
@@ -100,6 +102,10 @@ async function setup(page, { width = 390, enabled = true, store = makeStore(), p
       if (index < 0) return route.fulfill(failure(404, "NOT_FOUND"));
       const current = store.customers[index];
       if (method === "GET") {
+        if (failNextCustomerRead) {
+          failNextCustomerRead = false;
+          return route.fulfill(failure(503, "TEST_OFFLINE"));
+        }
         return route.fulfill(envelope({ customer: current, deals: store.deals[current.id] ?? [], notes: store.notes.filter((item) => item.customerId === current.id), files: [] }));
       }
       if (method === "PATCH") {
@@ -113,7 +119,7 @@ async function setup(page, { width = 390, enabled = true, store = makeStore(), p
         return route.fulfill(envelope({ customer: store.customers[index] }));
       }
       if (method === "DELETE") {
-        if (body.confirmName !== current.displayName) return route.fulfill(failure(409, "CONFIRMATION_MISMATCH"));
+        if (body.confirmName !== current.displayName) return route.fulfill(failure(400, "CONFIRMATION_MISMATCH"));
         store.customers.splice(index, 1);
         const removed = store.notes.filter((item) => item.customerId === current.id).length;
         store.notes = store.notes.filter((item) => item.customerId !== current.id);
@@ -133,6 +139,7 @@ async function setup(page, { width = 390, enabled = true, store = makeStore(), p
       store.notes.push(created);
       const owner = store.customers.find((item) => item.id === body.customerId);
       if (owner) owner.lastContactOn = TODAY;
+      if (owner && failCustomerReadAfterNote) failNextCustomerRead = true;
       return route.fulfill(envelope({ note: created }, 201));
     }
     const noteMatch = path.match(/^\/notes\/([^/]+)$/u);
@@ -339,6 +346,31 @@ test("손님 카드 고치기: 바뀐 칸과 version만 보내고, 다른 화면
   assertNoErrors();
 });
 
+test("손님 카드 메모: 저장은 됐는데 다시 읽기만 실패하면 '저장했습니다'와 '다시 불러오기'를 보이고, 메모는 한 번만 보낸다", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const calls = await setup(page, { width: 360, failCustomerReadAfterNote: true });
+  await page.goto(`/admin/work/customers/detail/?id=${uuid(1)}`);
+  await expect(page.locator(".cu-notes .cu-memo")).toHaveCount(1);
+  const status = page.locator("[data-cu-memo-status]");
+  const reload = page.locator("[data-cu-memo-reload]");
+  await expect(reload).toBeHidden();
+  await page.locator("#cu-memo").fill("가상 손님 1 통화. 다시 읽기 실패 시험.");
+  await page.getByRole("button", { name: "메모 저장" }).click();
+  await expect(status).toContainText("메모는 저장했습니다");
+  await expect(status).not.toContainText("저장하지 못했습니다");
+  await expect(page.locator("#cu-memo")).toHaveValue("");
+  await expect(reload).toBeVisible();
+  await expect(page.locator(".cu-notes .cu-memo")).toHaveCount(1);
+  await reload.click();
+  await expect(status).toHaveText("✓ 손님 카드를 새로 읽었습니다.");
+  await expect(reload).toBeHidden();
+  await expect(page.locator(".cu-notes .cu-memo")).toHaveCount(2);
+  await expect(page.locator("[data-cu-contact-on]")).toHaveText("11. 21. · 오늘");
+  expect(calls.writes.filter((write) => write.path === "/notes")).toHaveLength(1);
+  expect(await overflowOf(page)).toBeLessThanOrEqual(0);
+  assertNoErrors();
+});
+
 test("손님 지우기: 이름이 한 글자라도 다르면 '지우기'가 눌리지 않고, 똑같이 넣으면 confirmName으로 지운 뒤 남긴 메모를 알린다", async ({ page }) => {
   const assertNoErrors = collectErrors(page);
   const calls = await setup(page, { width: 360 });
@@ -411,6 +443,53 @@ for (const width of [360, 1280]) {
     assertNoErrors();
   });
 }
+
+test("메모 창고: 다른 화면이 먼저 고친 메모(409)는 목록 위에 까닭을 남기고 새로 읽어 다시 고칠 수 있고, 옮기기 409도 까닭이 남는다", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const store = makeStore();
+  const calls = await setup(page, { width: 360, store });
+  await page.goto("/admin/work/notes/");
+  const memos = page.locator("[data-nt-list] > .cu-memo");
+  const notice = page.locator("[data-nt-notice]");
+  await expect(memos).toHaveCount(2);
+
+  // 고치기: 펼친 사이 다른 화면이 먼저 고침 → 409 → 목록 위 까닭 + 새 글로 다시 읽음
+  let target = memos.filter({ hasText: "관리사무소" });
+  await target.getByRole("button", { name: "고치기" }).click();
+  store.notes[2] = { ...store.notes[2], body: "가상숲2단지 관리사무소: 주차 1.3대(다른 화면).", version: 2 };
+  await target.locator("textarea").fill("가상숲2단지 관리사무소: 주차 1.2대, 승강기 공사.");
+  await target.getByRole("button", { name: "고친 메모 저장" }).click();
+  await expect(notice).toContainText("고친 글을 저장하지 않았습니다. 다른 화면에서 이 메모를 먼저 고치거나 옮겼습니다.");
+  await expect(notice).toBeFocused();
+  await expect(memos.filter({ hasText: "주차 1.3대(다른 화면)" })).toHaveCount(1);
+  await expect(page.locator("[data-nt-edit-body]")).toHaveCount(0);
+  expect(calls.writes.at(-1).body).toMatchObject({ version: 1 });
+
+  // 다시 고치면 새 version(2)으로 저장되고 까닭 줄은 지워진다
+  target = memos.filter({ hasText: "관리사무소" });
+  await target.getByRole("button", { name: "고치기" }).click();
+  await target.locator("textarea").fill("가상숲2단지 관리사무소: 주차 1.3대, 승강기 공사.");
+  await target.getByRole("button", { name: "고친 메모 저장" }).click();
+  await expect(page.locator("[data-nt-list-status]")).toHaveText("✓ 고친 메모를 저장했습니다.");
+  expect(calls.writes.at(-1)).toMatchObject({ method: "PATCH", path: `/notes/${uuid(503)}`, body: { version: 2, body: "가상숲2단지 관리사무소: 주차 1.3대, 승강기 공사." } });
+  await expect(notice).toHaveText("");
+
+  // 옮기기: 고르는 사이 다른 화면이 먼저 고침 → 409 → 펼친 칸은 닫혀도 까닭은 목록 위에 남음
+  target = memos.filter({ hasText: "모르는 번호" });
+  await target.getByRole("button", { name: "손님에게 옮기기" }).click();
+  const move = target.locator(".cu-move");
+  await move.getByRole("searchbox").fill("가상 손님 2");
+  await move.getByRole("searchbox").press("Enter");
+  await move.getByRole("radio").check();
+  store.notes[1] = { ...store.notes[1], version: 3 };
+  await move.getByRole("button", { name: "이 손님에게 옮기기" }).click();
+  await expect(notice).toContainText("옮기지 않았습니다. 다른 화면에서 이 메모를 먼저 고치거나 옮겼습니다.");
+  await expect(page.locator(".cu-move")).toHaveCount(0);
+  await expect(memos.filter({ hasText: "모르는 번호" })).toHaveCount(1);
+  await expect(page.locator("[data-nt-done]")).toBeHidden();
+  expect(await overflowOf(page)).toBeLessThanOrEqual(0);
+  assertNoErrors();
+});
 
 test("메모 창고: '고치기'는 글과 version만 보내고, '지우기'는 한 번 더 '지우기'를 눌러야 지우며, 찾기 0건이면 까닭을 보인다", async ({ page }) => {
   const assertNoErrors = collectErrors(page);
