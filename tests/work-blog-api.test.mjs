@@ -301,8 +301,9 @@ test("TK-49·TK-67 운영자 결정 ②: 소재지는 명시사항이 다 찼는
   assert.deepEqual(draft.inputs.managementFee.items, FULL_FEE_ITEMS, "비목 금액은 명시사항용으로 D1에만 둠");
   assert.equal(draft.emphasisNumbers, "2억 6,000만 원");
   assert.deepEqual(draft.checks.blocks, []);
-  assert.doesNotMatch(dumpAll(database), /ZZTEST|999-9/u, "D1 어디에도 소재지 0");
-  assert.doesNotMatch(JSON.stringify(logs), /ZZTEST|999-9/u);
+  // requestId(감사 기록의 request_id)는 무작위 UUID라 999-9 같은 글자가 우연히 들어갈 수 있어 빼고 본다.
+  assert.doesNotMatch(dumpAll(database).replace(/"request_id":"[^"]*"/gu, ""), /ZZTEST|999-9/u, "D1 어디에도 소재지 0");
+  assert.doesNotMatch(JSON.stringify(logs.map((entry) => ({ ...entry, requestId: undefined }))), /ZZTEST|999-9/u);
   assert.doesNotMatch(JSON.stringify(done.json), /ZZTEST/u);
 });
 
@@ -329,7 +330,8 @@ test("TK-48·TK-49 만들기 전에 막기: 명시사항 빈 칸은 400 DISCLOSU
   ]) {
     const result = await post({ source: LISTING, style: "plain", inputs: listingInputs(), ...extra });
     assert.deepEqual([result.status, result.json.error.code, result.json.error.details], [400, "PERSONAL_DATA_PATTERN", [field]], JSON.stringify(extra));
-    assert.doesNotMatch(JSON.stringify(result.json), /1234|someone|101호|ZZTEST/u, "응답에 입력값 없음");
+    // requestId는 무작위 UUID라 1234 같은 글자가 우연히 들어갈 수 있어 빼고 본다.
+    assert.doesNotMatch(JSON.stringify({ ...result.json, requestId: undefined }), /1234|someone|101호|ZZTEST/u, "응답에 입력값 없음");
   }
   for (const [body, field] of [
     [{ source: LISTING, style: "monthly", inputs: listingInputs() }, "style"], // 매매에 월세 성격

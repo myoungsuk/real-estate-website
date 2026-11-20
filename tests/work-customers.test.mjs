@@ -100,7 +100,8 @@ test("손님 입력 검사: 칸 이름만 알려 주고 입력값은 돌려주�
     assert.equal(result.status, 400, JSON.stringify(body).slice(0, 40));
     assert.equal(result.json.error.code, "VALIDATION_FAILED");
     assert.deepEqual(result.json.error.details, [field]);
-    assert.doesNotMatch(JSON.stringify(result.json), /가가가|abcd|"x"/u);
+    // requestId는 무작위 UUID라 abcd 같은 글자가 우연히 들어갈 수 있어 빼고 본다.
+    assert.doesNotMatch(JSON.stringify({ ...result.json, requestId: undefined }), /가가가|abcd|"x"/u);
   }
 });
 
