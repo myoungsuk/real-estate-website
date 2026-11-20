@@ -1358,6 +1358,19 @@ html:has(.rt-pick-bar:not([hidden])) { scroll-padding-bottom: calc(var(--rt-pick
   .rt-promo__card-list { grid-template-columns: repeat(2, minmax(0, 540px)); }
 }
 /* A4 한 장(TK-40): 화면에서는 숨기고, 인쇄할 때는 메뉴·단추·설명을 모두 숨겨 카드 그림만 남긴다(1장은 가운데 크게, 2장은 나란히). */
+/* 중개보수 영수증(보드 45번 A): 계산 칸 아래 접기 상자. 인쇄 때는 영수증 그림만 A4 한 장에 뽑는다. */
+.work-receipt { margin: 0 0 18px; border: 1px solid var(--ds-edge); border-radius: 2px; background: var(--ds-paper); }
+.work-receipt > summary { display: flex; align-items: center; min-height: 48px; padding: 8px 14px; color: var(--ds-navy); font-size: 1rem; font-weight: 800; cursor: pointer; }
+.work-receipt[open] > summary { border-bottom: 1px solid var(--ds-edge); }
+.work-receipt > :not(summary) { margin-inline: 14px; }
+.work-receipt > .work-help { margin: 12px 14px 0; }
+.work-receipt__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.work-receipt__actions > * { flex: 1 1 200px; min-height: 48px; }
+.work-receipt__actions > a.work-primary-button:not([hidden]) { display: inline-flex; align-items: center; justify-content: center; width: auto; text-decoration: none; }
+.work-receipt > .admin-form-status:empty { margin: 0; }
+.work-receipt[open] { padding-bottom: 14px; }
+/* 단추 모양 규칙(display: inline-flex)이 hidden을 덮지 않게 한다. */
+.work-receipt [hidden] { display: none !important; }
 .rt-print-sheet { display: none; }
 @media print {
   @page { size: A4 portrait; margin: 12mm; }
@@ -1365,6 +1378,7 @@ html:has(.rt-pick-bar:not([hidden])) { scroll-padding-bottom: calc(var(--rt-pick
   .admin-body:has(.rt-print-sheet) :is(.skip-link, .admin-side, .admin-top, .admin-subtabs, .admin-tabbar) { display: none !important; }
   .admin-body:has(.rt-print-sheet) :is(.admin-shell, .admin-shell__body, .admin-main) { display: block; min-height: 0; margin: 0; padding: 0; border: 0; box-shadow: none; }
   .rt-promo > :not(.rt-print-sheet) { display: none !important; }
+  .work-doc:has(> .rt-print-sheet img) > :not(.rt-print-sheet) { display: none !important; }
   .rt-print-sheet { display: flex; justify-content: center; align-items: flex-start; gap: 6mm; break-inside: avoid; }
   .rt-print-sheet img { display: block; flex: 0 0 auto; width: 150mm; max-width: 100%; height: auto; border: 0.3mm solid var(--ds-edge); }
   .rt-print-sheet[data-count="2"] img { width: 88mm; }
