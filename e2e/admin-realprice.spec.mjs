@@ -230,6 +230,36 @@ test("실거래가 980px 이상(0안): 상태 칸·거르기를 늘 펼치고 12
   assertNoErrors();
 });
 
+// CI(Linux)는 글꼴이 Windows보다 넓어 1221px 표가 8px 넘친 적이 있다(PR #80). 글자 간격을 넓혀 넓은 글꼴을 흉내 내고, 긴 단지명에서도
+// 표 감싸개 안 가로 스크롤 0, 문서 가로 넘침 0(고르기 칸의 화면 읽기용 글자가 감싸개를 벗어나지 않음), 짧은 단지명은 끊기지 않음을 본다.
+test("실거래가 1221px 표: 넓은 글꼴·긴 단지명에서도 표와 문서가 가로로 넘치지 않음", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  let long = false;
+  const named = (item) => (long ? { ...item, aptName: item.aptName.replace("가상숲", "가상숲센트럴파크리버뷰더퍼스트") } : item);
+  await setup(page, { width: 1221, trades: () => envelope({ items: firstPage.map(named), nextCursor: null, recordHighReady: true, coverage: {}, warnings: [] }) });
+  for (const name of ["짧은 단지명", "긴 단지명"]) {
+    long = name === "긴 단지명";
+    await page.goto("/admin/work/realprice/");
+    await expect(rows(page)).toHaveCount(30);
+    for (const width of [1221, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const spacing of ["normal", "0.04em"]) {
+        const shape = await page.evaluate((spacing) => {
+          document.querySelector(".rt-table").style.letterSpacing = spacing;
+          const wrap = document.querySelector(".rt-table-wrap");
+          const broken = [...document.querySelectorAll("[data-rt-rows] td.rt-name strong")].filter((strong) => strong.getClientRects().length > 1).length;
+          return { inner: wrap.scrollWidth - wrap.clientWidth, page: document.documentElement.scrollWidth - document.documentElement.clientWidth, broken };
+        }, spacing);
+        const label = `${name} ${width}px 글자 간격 ${spacing}`;
+        expect(shape.inner, `${label}: 표 안 가로 스크롤`).toBe(0);
+        expect(shape.page, `${label}: 문서 가로 넘침`).toBeLessThanOrEqual(0);
+        if (!long) expect(shape.broken, `${label}: 짧은 단지명이 두 줄로 끊김`).toBe(0);
+      }
+    }
+  }
+  assertNoErrors();
+});
+
 const states = [
   {
     name: "꺼짐",

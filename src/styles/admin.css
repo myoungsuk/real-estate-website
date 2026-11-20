@@ -1181,7 +1181,10 @@
   .rt-table th,
   .rt-table td { padding-inline: 8px; }
   .rt-table th:first-child { width: auto; }
-  .rt-table td.rt-name { white-space: normal; }
+  /* 글꼴 폭이 달라도(예: Linux의 Noto 글꼴) 표가 감싸개를 넘지 않게, 칸이 모자랄 때만 단지명은 글자 사이에서, 전용면적·층은 띄어쓰기에서 줄을 바꾼다.
+     단지명 칸은 8rem(굵은 글자 약 7글자)보다 좁아지지 않아, 칸이 모자라면 전용면적·층이 먼저 줄을 바꾸고 짧은 단지명은 끊기지 않는다. */
+  .rt-table td.rt-name { min-width: 8rem; white-space: normal; overflow-wrap: anywhere; }
+  .rt-table td.rt-size { white-space: normal; }
   .rt-table td.rt-flags { white-space: normal; }
   .rt-table td.rt-price { min-width: 9.5rem; }
   .rt-table .rt-price__monthly { display: block; }
@@ -1191,7 +1194,8 @@
   .rt-runs th:first-child { width: auto; }
   .rt-table th.rt-pick-col,
   .rt-table td.rt-pick { padding-inline: 2px; }
-  .rt-table td.rt-pick .admin-review-select { justify-content: center; min-width: 44px; }
+  /* position: relative — 화면 읽기용 글자(position: absolute)의 기준을 이 칸으로 잡아, 표 감싸개를 벗어나 문서를 가로로 넘치게 하지 않는다. */
+  .rt-table td.rt-pick .admin-review-select { position: relative; justify-content: center; min-width: 44px; }
   .rt-table td.rt-pick .admin-review-select span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
 
