@@ -1364,6 +1364,7 @@ html:has(.rt-pick-bar:not([hidden])) { scroll-padding-bottom: calc(var(--rt-pick
 .work-receipt[open] > summary { border-bottom: 1px solid var(--ds-edge); }
 .work-receipt > :not(summary) { margin-inline: 14px; }
 .work-receipt > .work-help { margin: 12px 14px 0; }
+.work-receipt > .work-copy-fallback { width: calc(100% - 28px); margin-block: 12px 14px; }
 .work-receipt__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .work-receipt__actions > * { flex: 1 1 200px; min-height: 48px; }
 .work-receipt__actions > a.work-primary-button:not([hidden]) { display: inline-flex; align-items: center; justify-content: center; width: auto; text-decoration: none; }
