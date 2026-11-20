@@ -112,7 +112,7 @@ test("D안: 모든 폭에서 상태 한 줄(문제 있을 때만 펼침)·찾기
 
 test("메뉴: 업무 도구 아래 단계에 '실거래가'를 더하고, 미리 그리기 prerender 목록과 업무 도구 첫 화면 도구 3개는 그대로(TK-37)", async () => {
   const [layout, workIndex] = await Promise.all([readSource("src/layouts/AdminLayout.astro"), readSource("src/pages/admin/work/index.astro")]);
-  assert.match(layout, /\{ href: "\/admin\/work\/schedule\/", label: "계약 일정" \},\r?\n\s*\{ href: "\/admin\/work\/realprice\/", label: "실거래가" \},\r?\n\s*\],/u);
+  assert.match(layout, /\{ href: "\/admin\/work\/schedule\/", label: "계약 일정" \},\r?\n\s*\{ href: "\/admin\/work\/realprice\/", label: "실거래가" \},\r?\n\s*\{ href: "\/admin\/work\/blog\/", label: "글 초안" \},\r?\n\s*\],/u);
   assert.match(layout, /const prerenderPages = \["\/admin\/work\/", "\/admin\/work\/fee\/", "\/admin\/work\/messages\/", "\/admin\/work\/schedule\/"\];/u);
   assert.doesNotMatch(layout, /\/admin\/work\/realprice\/settings\//u, "설정은 메뉴에 따로 넣지 않음(실거래가 화면에서 들어감)");
   assert.match(

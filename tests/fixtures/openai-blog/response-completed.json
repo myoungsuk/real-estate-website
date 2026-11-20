@@ -1,0 +1,26 @@
+{
+  "id": "resp_fake_completed_0001",
+  "object": "response",
+  "created_at": 1795410000,
+  "status": "completed",
+  "background": true,
+  "model": "gpt-test-blog-2026-11-01",
+  "output": [
+    { "id": "rs_fake_0001", "type": "reasoning", "summary": [] },
+    {
+      "id": "msg_fake_0001",
+      "type": "message",
+      "status": "completed",
+      "role": "assistant",
+      "content": [{ "type": "output_text", "text": "__RESULT__", "annotations": [] }]
+    }
+  ],
+  "incomplete_details": null,
+  "usage": {
+    "input_tokens": 4000,
+    "input_tokens_details": { "cached_tokens": 0 },
+    "output_tokens": 5000,
+    "output_tokens_details": { "reasoning_tokens": 3500 },
+    "total_tokens": 9000
+  }
+}

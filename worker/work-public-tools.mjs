@@ -1,6 +1,6 @@
 // 업무 도구 단계 P(공개 자료 도구) API. work-api.mjs의 handleWorkApi()가 단계 2 켜기 값 확인 **전에** 이 파일로 넘긴다(설계서 22.2절).
-// - 경로: /work/public-tools/session, /work/realprice/*(status·refresh·trades·complexes·watch), /work/blog/*(P3 전까지 늘 503 BLOG_DISABLED).
-// - 순서: 단계 P 켜기 값 → 구조 번호 → (쓰기) Origin·CSRF → 입력 → 처리 → 감사(쓰기인 realprice.refresh·realprice.watch.update만).
+// - 경로: /work/public-tools/session, /work/realprice/*(status·refresh·trades·complexes·watch), /work/blog/*(sources·drafts·limits, P3 글 초안, 처리는 work-blog.mjs).
+// - 순서: 단계 P 켜기 값 → 구조 번호 → (쓰기) Origin·CSRF → 입력 → 처리 → 감사(쓰기인 realprice.refresh·realprice.watch.update, blog.create·confirm·cancel·settings.update).
 // - 꺼진 기능의 거부는 D1에 쓰지 않고 Worker 로그에 HMAC 작업자 ID만 남긴다(단계 2와 같음).
 // - work-api.mjs와 서로 import한다. 서로의 내보내기는 요청을 처리할 때만 쓰므로(모듈을 읽을 때 쓰지 않음) 순환 import가 문제되지 않는다.
 import { parseAdminAllowedOrigins } from "./admin-security.mjs";
@@ -11,6 +11,8 @@ import { listRealpriceTrades, readRealpriceWatch, saveRealpriceWatch, searchReal
 import { readRealpriceStatus, refreshStatements } from "./realprice-store.mjs";
 import { WorkApiError, createWorkCsrfToken, hasD1, validateWorkJsonWrite } from "./work-security.mjs";
 import { writeBatchWithAudit } from "./work-audit.mjs";
+import { hasOpenAiConfig } from "./work-ai-config.mjs";
+import { routeBlog } from "./work-blog.mjs";
 import { WORK_SCHEMA_VERSION, readSchemaVersion, readWorkJsonBody, recordDenied, workError, workSuccess } from "./work-api.mjs";
 
 const REALPRICE_KEY_MIN_LENGTH = 20;
@@ -36,8 +38,21 @@ export function getRealpriceConfigState(env, db = env?.WORK_DB) {
   return "enabled";
 }
 
+// 글 초안 켜기 값과 설정(22.2절 의사 코드). OpenAI 키·모델·추론 수준·출력 상한·단가표(14.2절)가 하나라도 빠지면 config_missing.
+export function getBlogConfigState(env, db = env?.WORK_DB) {
+  if (env?.WORK_BLOG_ENABLED !== "true") return "disabled";
+  if (!hasD1(db) || typeof env?.ADMIN_CSRF_SECRET !== "string" || env.ADMIN_CSRF_SECRET.length < 32) return "config_missing";
+  try {
+    parseAdminAllowedOrigins(env.ADMIN_ALLOWED_ORIGINS);
+  } catch {
+    return "config_missing";
+  }
+  return hasOpenAiConfig(env, "blog") ? "enabled" : "config_missing";
+}
+
 const disabledError = () => new WorkApiError("REALPRICE_DISABLED", "실거래가 도구가 아직 켜지지 않았습니다.", 503);
 const configMissingError = () => new WorkApiError("REALPRICE_CONFIG_MISSING", "실거래가 도구 설정이 완료되지 않았습니다.", 503);
+const blogConfigMissingError = () => new WorkApiError("BLOG_CONFIG_MISSING", "글 초안 도구 설정이 완료되지 않았습니다.", 503);
 const methodNotAllowed = (allow) => Object.assign(new WorkApiError("METHOD_NOT_ALLOWED", "허용되지 않은 요청 방식입니다.", 405), { allow });
 const notFound = () => new WorkApiError("NOT_FOUND", "요청한 업무 자료를 찾지 못했습니다.", 404);
 
@@ -75,15 +90,17 @@ async function handleSession(context) {
   if (method !== "GET") return workError(requestId, methodNotAllowed("GET"), { Allow: "GET" });
   const realprice = getRealpriceConfigState(env, db);
   if (realprice === "config_missing") return workError(requestId, configMissingError());
-  // 글 초안(P3)은 아직 없으므로 WORK_BLOG_ENABLED가 있어도 false로 둔다.
-  if (realprice === "disabled") {
+  const blog = getBlogConfigState(env, db);
+  if (blog === "config_missing") return workError(requestId, blogConfigMissingError());
+  // 둘 다 꺼져 있으면 D1을 읽지 않는다. 하나라도 켜져 있으면 같은 업무 CSRF 토큰을 준다(22.2절).
+  if (realprice === "disabled" && blog === "disabled") {
     return workSuccess({ realpriceEnabled: false, blogEnabled: false, administrator: maskEmail(actor.email), csrfToken: null, schemaVersion: null }, requestId);
   }
   const schema = await checkSchema(context);
   if (schema.response) return schema.response;
   return workSuccess({
-    realpriceEnabled: true,
-    blogEnabled: false,
+    realpriceEnabled: realprice === "enabled",
+    blogEnabled: blog === "enabled",
     administrator: maskEmail(actor.email),
     csrfToken: await createWorkCsrfToken(actor.email, env.ADMIN_CSRF_SECRET, now),
     schemaVersion: schema.schemaVersion,
@@ -170,16 +187,60 @@ async function handleRealprice(context) {
   }
 }
 
-// context: { db, actor, requestId, now, auditLog, method, route }
-export async function handlePublicToolsApi(request, env, context) {
-  const full = { ...context, request, env };
-  const { route, requestId, db, actor, now, auditLog } = full;
-  if (route === "/public-tools/session") return handleSession(full);
-  if (matches(route, "/public-tools")) return workError(requestId, notFound());
-  if (matches(route, "/blog")) {
-    // 글 초안(P3) 전까지는 켜기 값과 상관없이 막는다.
+// 글 초안(P3). 실거래가 켜기 값과 따로 켠다(WORK_BLOG_ENABLED). 순서는 실거래가와 같다.
+async function handleBlog(context) {
+  const { env, db, actor, request, requestId, now, method, auditLog } = context;
+  const state = getBlogConfigState(env, db);
+  if (state === "config_missing") return workError(requestId, blogConfigMissingError());
+  if (state === "disabled") {
     await recordDenied(db, actor, env, request, requestId, now, "BLOG_DISABLED", auditLog, { storeInD1: false });
     return workError(requestId, new WorkApiError("BLOG_DISABLED", "글 초안 도구가 아직 켜지지 않았습니다.", 503));
   }
+  const schema = await checkSchema(context);
+  if (schema.response) return schema.response;
+
+  let body = null;
+  if (WRITE_METHODS.has(method)) {
+    try {
+      await validateWorkJsonWrite(request, actor, env, now);
+    } catch (error) {
+      if (error instanceof WorkApiError) {
+        if (error.code === "ORIGIN_DENIED" || error.code === "CSRF_INVALID") {
+          await recordDenied(db, actor, env, request, requestId, now, error.code, auditLog);
+        }
+        return workError(requestId, error);
+      }
+      return workError(requestId, blogConfigMissingError());
+    }
+    try {
+      body = await readWorkJsonBody(request);
+    } catch (error) {
+      return workError(requestId, error);
+    }
+  } else if (method !== "GET") {
+    return workError(requestId, methodNotAllowed("GET"), { Allow: "GET" });
+  }
+
+  try {
+    const handled = await routeBlog({ ...context, url: new URL(request.url), body });
+    return jsonResponse({ ok: true, data: handled.data, requestId }, { status: handled.status ?? 200, headers: { "X-Request-Id": requestId } });
+  } catch (error) {
+    if (error instanceof WorkApiError) return workError(requestId, error, error.status === 405 ? { Allow: error.allow ?? "GET" } : {});
+    try {
+      auditLog({ event: "work_request_failed", requestId, status: 503, code: "STORAGE_UNAVAILABLE", errorName: typeof error?.name === "string" ? error.name.slice(0, 40) : "Error" });
+    } catch {
+      // Worker 로그 장애는 무시한다.
+    }
+    return workError(requestId, new WorkApiError("STORAGE_UNAVAILABLE", "업무 자료를 처리하지 못했습니다.", 503, true));
+  }
+}
+
+// context: { db, actor, requestId, now, auditLog, method, route, randomUUID, openaiFetch }
+export async function handlePublicToolsApi(request, env, context) {
+  const full = { ...context, request, env };
+  const { route, requestId } = full;
+  if (route === "/public-tools/session") return handleSession(full);
+  if (matches(route, "/public-tools")) return workError(requestId, notFound());
+  if (matches(route, "/blog")) return handleBlog(full);
   return handleRealprice(full);
 }

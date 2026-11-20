@@ -99,7 +99,7 @@ const guideSections = ADMIN_HELP_GUIDE.flatMap((group) => group.sections);
 
 test("관리 화면마다 제목 아래에 자기 주소의 '이 화면 사용법' 상자가 한 개씩 있다", async () => {
   const pages = await listAdminPages();
-  assert.equal(pages.length, 15, "관리 화면 15개(사용 안내 화면 제외, 2026-11-19 실거래가·실거래가 설정, 2026-11-20 홍보물 만들기 추가)");
+  assert.equal(pages.length, 16, "관리 화면 16개(사용 안내 화면 제외, 2026-11-19 실거래가·실거래가 설정, 2026-11-20 홍보물 만들기·글 초안 추가)");
   const routes = [];
   for (const file of pages) {
     const source = await readSource(`src/pages/admin/${file}`);
@@ -207,6 +207,24 @@ test("실거래가 사용 안내 숫자는 서버 상수·작업 예약과 맞�
   assert.equal(facts.realpriceRefreshHours * 60, refresh.estimatedMinutes, "다시 받기 예상 시간");
   const reset = new Date(query.nextReadBudgetReset(Date.parse("2026-11-19T05:00:00Z")));
   assert.equal(facts.realpriceReadResetTime, `오전 ${(reset.getUTCHours() + 9) % 24}시`, "조회 한도 풀리는 한국 시각");
+});
+
+test("글 초안 사용 안내 숫자는 서버·화면 상수와 맞다", async () => {
+  const [budget, blog, view] = await Promise.all([
+    import("../worker/work-ai-budget.mjs"),
+    import("../worker/work-blog.mjs"),
+    import("../src/lib/work/blog-view.mjs"),
+  ]);
+  const facts = ADMIN_HELP_FACTS;
+  assert.equal(facts.blogDailyDefault, budget.AI_LIMIT_DEFAULTS.dailyCreateLimit, "하루 만들기 처음 값");
+  assert.equal(facts.blogMonthlyDefaultDollars * 1_000_000, budget.AI_LIMIT_DEFAULTS.monthlyCostLimitMicroUsd, "월 비용 상한 처음 값");
+  assert.equal(facts.blogPollFastSeconds * 1000, view.BLOG_POLL_FAST_MS, "처음 확인 간격");
+  assert.equal(facts.blogPollSlowSeconds * 1000, view.BLOG_POLL_SLOW_MS, "1분 뒤 확인 간격");
+  assert.equal(view.BLOG_POLL_FAST_FOR_MS, 60_000, "처음 간격은 1분 동안");
+  assert.equal(facts.blogResultKeepMinutes * 60 * 1000, blog.BLOG_RESULT_KEEP_MS, "결과 맡아 두는 시간");
+  assert.equal(facts.blogResultKeepMinutes, view.BLOG_RESULT_KEEP_MINUTES, "화면 문구의 결과 맡아 두는 시간");
+  assert.equal(facts.blogRetentionDays, blog.BLOG_RETENTION_DAYS, "보관 기간");
+  assert.equal(facts.blogRetentionDays, view.BLOG_RETENTION_DAYS, "화면 문구의 보관 기간");
 });
 
 test("작은따옴표 이름은 따옴표 없이 굵은 글자로 나누고, 큰따옴표 말은 그대로 둔다", () => {

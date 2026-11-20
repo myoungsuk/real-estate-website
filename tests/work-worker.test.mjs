@@ -22,6 +22,7 @@ import { createWorkCsrfToken, getWorkConfigState, verifyWorkCsrfToken } from "..
 const migrationSql = await readFile(new URL("../migrations/work/0001_init.sql", import.meta.url), "utf8");
 const migration0002Sql = await readFile(new URL("../migrations/work/0002_deal_schedule_inputs.sql", import.meta.url), "utf8");
 const migration0003Sql = await readFile(new URL("../migrations/work/0003_public_realprice.sql", import.meta.url), "utf8");
+const migration0004Sql = await readFile(new URL("../migrations/work/0004_blog_drafts.sql", import.meta.url), "utf8");
 const ORIGIN = "https://leaderscityhappy.com";
 const TEAM = "https://leaderscityhappy.cloudflareaccess.com";
 const AUD = "test-audience";
@@ -56,7 +57,7 @@ function createD1(database) {
   };
 }
 
-// 업무 시험 DB: 지금 코드의 구조 번호(0003까지)와 맞게 마이그레이션을 차례로 적용한다. F 시험은 0001만 따로 본다.
+// 업무 시험 DB: 지금 코드의 구조 번호(0004까지)와 맞게 마이그레이션을 차례로 적용한다. F 시험은 0001만 따로 본다.
 function freshDb({ only0001 = false } = {}) {
   const database = new DatabaseSync(":memory:");
   database.exec("PRAGMA foreign_keys = ON;");
@@ -64,6 +65,7 @@ function freshDb({ only0001 = false } = {}) {
   if (!only0001) {
     database.exec(migration0002Sql);
     database.exec(migration0003Sql);
+    database.exec(migration0004Sql);
   }
   return { database, db: createD1(database) };
 }
@@ -220,7 +222,8 @@ test("C. 스키마 번호가 낮거나 없으면 503 WORK_SCHEMA_OUTDATED, 높�
     ["숫자 아님(\"2\")", (database) => database.exec("UPDATE settings SET value_json = '\"2\"' WHERE key = 'schema_version'"), "WORK_SCHEMA_OUTDATED"],
     ["1(0002 적용 전)", (database) => database.exec("UPDATE settings SET value_json = '1' WHERE key = 'schema_version'"), "WORK_SCHEMA_OUTDATED"],
     ["2(0003 적용 전)", (database) => database.exec("UPDATE settings SET value_json = '2' WHERE key = 'schema_version'"), "WORK_SCHEMA_OUTDATED"],
-    ["4", (database) => database.exec("UPDATE settings SET value_json = '4' WHERE key = 'schema_version'"), "WORK_SCHEMA_AHEAD"],
+    ["3(0004 적용 전)", (database) => database.exec("UPDATE settings SET value_json = '3' WHERE key = 'schema_version'"), "WORK_SCHEMA_OUTDATED"],
+    ["5", (database) => database.exec("UPDATE settings SET value_json = '5' WHERE key = 'schema_version'"), "WORK_SCHEMA_AHEAD"],
   ]) {
     const { database, db } = freshDb();
     setup(database);

@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { validateContent, validateLegalRules } from "./content-validation.mjs";
+import { validateAdDisclosureRules, validateContent, validateLegalRules } from "./content-validation.mjs";
 import { validateReferencedPublicImages } from "./public-image-validation.mjs";
 
 const readJson = async (path) => JSON.parse(await readFile(new URL(path, import.meta.url), "utf8"));
@@ -16,11 +16,13 @@ const content = {
 };
 
 const legalRules = await readJson("../src/data/work/legal-rules.json");
+const adDisclosureRules = await readJson("../src/data/work/ad-disclosure-rules.json");
 
 const errors = [
   ...validateContent(content),
   ...await validateReferencedPublicImages(content),
   ...validateLegalRules(legalRules),
+  ...validateAdDisclosureRules(adDisclosureRules),
 ];
 if (errors.length > 0) {
   console.error(`콘텐츠 검증 실패 (${errors.length}건)`);

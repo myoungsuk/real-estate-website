@@ -8,13 +8,16 @@ export class WorkApiError extends Error {
   code: string | null;
   status: number;
   retryAt: string | null;
+  // 오류가 난 칸 이름(VALIDATION_FAILED·DISCLOSURE_INCOMPLETE 등). 입력값은 담기지 않는다(글 초안 P3에서 더함).
+  details: string[];
 
-  constructor(message: string, { code = null, status = 0, retryAt = null }: { code?: string | null; status?: number; retryAt?: string | null } = {}) {
+  constructor(message: string, { code = null, status = 0, retryAt = null, details = [] }: { code?: string | null; status?: number; retryAt?: string | null; details?: string[] } = {}) {
     super(message);
     this.name = "WorkApiError";
     this.code = code;
     this.status = status;
     this.retryAt = retryAt;
+    this.details = details;
   }
 }
 
@@ -29,7 +32,7 @@ export interface WorkSession {
 interface WorkEnvelope<T> {
   ok: boolean;
   data?: T;
-  error?: { code?: string; message?: string; retryAt?: string };
+  error?: { code?: string; message?: string; retryAt?: string; details?: unknown };
 }
 
 async function readEnvelope<T>(response: Response): Promise<T> {
@@ -49,6 +52,7 @@ async function readEnvelope<T>(response: Response): Promise<T> {
       code: body.error?.code ?? null,
       status: response.status,
       retryAt: typeof body.error?.retryAt === "string" ? body.error.retryAt : null,
+      details: Array.isArray(body.error?.details) ? body.error.details.filter((item): item is string => typeof item === "string") : [],
     });
   }
   return body.data;
