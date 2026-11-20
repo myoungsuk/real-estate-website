@@ -1430,6 +1430,58 @@ html:has(.rt-pick-bar:not([hidden])) { scroll-padding-bottom: calc(var(--rt-pick
   .rt-print-sheet[data-count="2"] img { width: 88mm; }
 }
 
+/* 홍보 종이(보드 45번 C): 거래 완료 알림 그림·명함 A안 흰 종이.
+   명함 크기는 모두 --mm의 배수다. 화면 미리 보기는 칸 폭에 맞춰(최대 1mm = 4px) 줄이고, 인쇄는 1mm로 그린다. 가장 작은 글자 2.54mm(약 7.2pt). */
+.paper-done,
+.paper-card { margin-top: 28px; }
+.paper-done h2,
+.paper-card h2 { margin: 0 0 8px; color: var(--ds-navy); font-size: 1.25rem; font-weight: 800; }
+.paper-done__preview { margin: 16px 0 0; }
+.paper-done__preview img { display: block; width: min(100%, 432px); height: auto; border: 1px solid var(--ds-edge); }
+.bc-stage { container-type: inline-size; display: grid; gap: 16px; margin: 12px 0; }
+.bc-stage figure { margin: 0; }
+.bc-stage figcaption { margin-top: 6px; color: var(--ds-ink-soft); font-size: 0.875rem; }
+.bc-stage .bc { --mm: min(4px, calc(100cqw / 91)); border: 1px solid var(--ds-edge); }
+@media (min-width: 980px) {
+  .bc-stage { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.bc { --mm: 1mm; box-sizing: border-box; position: relative; overflow: hidden; width: calc(var(--mm) * 90); height: calc(var(--mm) * 50); color: var(--ds-ink); background: var(--ds-paper); font-family: Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; line-height: 1.3; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.bc p,
+.bc dl,
+.bc dd { margin: 0; }
+.bc--front { display: grid; grid-template-columns: 1fr auto; grid-template-rows: 1fr auto; padding: calc(var(--mm) * 5.6) calc(var(--mm) * 5.8); }
+.bc__logo { display: block; width: auto; height: calc(var(--mm) * 10.8); }
+.bc__who { align-self: start; text-align: right; }
+.bc__who small { display: block; color: var(--ds-ink-soft); font-size: calc(var(--mm) * 2.9); font-weight: 700; }
+.bc__who strong { display: block; color: var(--ds-navy); font-size: calc(var(--mm) * 7.1); font-weight: 900; letter-spacing: 0.04em; line-height: 1.15; }
+.bc__tel { grid-column: 1 / -1; align-self: end; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 0 calc(var(--mm) * 2); padding-top: calc(var(--mm) * 1.9); border-top: calc(var(--mm) * 0.25) solid var(--ds-navy); }
+.bc__tel b { font-size: calc(var(--mm) * 5.4); font-weight: 900; letter-spacing: 0.01em; }
+.bc__tel span { color: var(--ds-ink-soft); font-size: calc(var(--mm) * 2.7); }
+.bc--back { display: flex; flex-direction: column; justify-content: space-between; padding: calc(var(--mm) * 5.4) calc(var(--mm) * 5.8); }
+.bc__headline { color: var(--ds-navy); font-size: calc(var(--mm) * 3.7); font-weight: 900; }
+.bc__areas { margin-top: calc(var(--mm) * 0.5) !important; font-size: calc(var(--mm) * 2.7); font-weight: 700; }
+.bc__rows div { display: grid; grid-template-columns: calc(var(--mm) * 8.5) minmax(0, 1fr); gap: calc(var(--mm) * 1.5); font-size: calc(var(--mm) * 2.54); line-height: 1.35; }
+.bc__rows dt { color: var(--ds-ink-soft); font-weight: 700; }
+.bc__legal { padding-top: calc(var(--mm) * 1.2); border-top: calc(var(--mm) * 0.17) solid var(--ds-edge); color: var(--ds-ink-soft); font-size: calc(var(--mm) * 2.54); line-height: 1.35; }
+.paper-print { display: none; }
+@media print {
+  @page paper-card { size: 96mm 56mm; margin: 0; }
+  @page paper-sheet { size: A4 portrait; margin: 0; }
+  .admin-body[data-paper-print] { background: var(--ds-paper); }
+  .admin-body[data-paper-print] :is(.skip-link, .admin-side, .admin-top, .admin-subtabs, .admin-tabbar) { display: none !important; }
+  .admin-body[data-paper-print] :is(.admin-shell, .admin-shell__body, .admin-main) { display: block; min-height: 0; margin: 0; padding: 0; border: 0; box-shadow: none; }
+  .admin-body[data-paper-print] .paper > * { display: none !important; }
+  .admin-body[data-paper-print="done"] .paper > .paper-print--done { display: flex !important; justify-content: center; }
+  .admin-body[data-paper-print="card"] .paper > .paper-print--card,
+  .admin-body[data-paper-print="sheet"] .paper > .paper-print--sheet { display: block !important; }
+  .paper-print--done img { display: block; width: 150mm; height: auto; border: 0.3mm solid var(--ds-edge); }
+  .paper-print .bc { --mm: 1mm; }
+  .bc-page { page: paper-card; break-after: page; box-sizing: border-box; width: 96mm; height: 56mm; padding: 3mm; overflow: hidden; }
+  .bc-a4 { page: paper-sheet; break-after: page; position: relative; width: 210mm; height: 297mm; overflow: hidden; }
+  .bc-a4__slot { position: absolute; width: 90mm; height: 50mm; }
+  .bc-a4__marks { position: absolute; inset: 0; width: 210mm; height: 297mm; stroke: var(--ds-ink); stroke-width: 0.15; }
+}
+
 /* 설정 화면 */
 .rt-back { margin: 0 0 8px; }
 .rt-section { margin-top: 16px; }

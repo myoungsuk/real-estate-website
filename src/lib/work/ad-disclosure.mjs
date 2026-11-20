@@ -2,6 +2,7 @@
 // - 사무소 5항목: office.json(법적 상호·주소·연락처·등록번호·대표). 중개보조원 칸은 없다.
 // - 매물 칸: 매물 종류별 규칙(ad-disclosure-rules.json)의 필수 칸을 공개 자료 사실 + 화면 입력으로 채운다. 하나라도 비면 missing에 넣는다.
 // - 단지 소개 글(complex)은 사무소 5항목만 붙인다.
+// - 사무소 5항목의 칸 목록·빈 칸 검사·그림 아래 칸 3줄도 여기 한 곳에 둔다(보드 45번 C, 두 벌 금지). 실거래가 홍보물·거래 완료 알림·명함이 함께 쓴다.
 // - 면적은 ㎡만 쓴다(평 없음). 호수는 받지 않는다(화면 입력 검사에서 막음).
 // 화면(빈 칸 표시·복사 막기)과 Worker(만들기 전에 막기, 운영자 결정 2026-11-20 "만들기부터 막음")가 같은 함수를 쓴다.
 
@@ -116,6 +117,27 @@ export function formatManagementFee(fee) {
 export function officeLine(office) {
   return `[중개사무소] ${office.legalName} · ${office.address} · ${office.mobile} · 등록번호 ${office.registrationNumber} · 대표 ${office.representative}`;
 }
+
+// 사무소 명시사항 5항목(DEC-WT-23, 설계서 22.10절). 앞은 office.json 칸 이름, 뒤는 빈 칸 안내에 쓰는 이름.
+export const OFFICE_DISCLOSURE_FIELDS = Object.freeze([
+  ["legalName", "중개사무소 명칭"],
+  ["address", "소재지"],
+  ["mobile", "연락처"],
+  ["registrationNumber", "등록번호"],
+  ["representative", "대표 성명"],
+]);
+
+// 5항목 가운데 빈 칸의 이름(빈 배열이면 통과). 하나라도 비면 그림·글을 만들지 않는다.
+export function officeFieldsMissing(office) {
+  return OFFICE_DISCLOSURE_FIELDS.filter(([key]) => typeof office?.[key] !== "string" || office[key].trim() === "").map(([, label]) => label);
+}
+
+// 그림 아래 칸 3줄(상호·대표 / 소재지 / 연락처·등록번호).
+export const officeLines = (office) => [
+  `${office.legalName} · 대표 ${office.representative}`,
+  office.address,
+  `연락처 ${office.mobile} · 등록번호 ${office.registrationNumber}`,
+];
 
 // 이 분류에서 층을 소재지에 적어야 하는지(공동주택·상가, 다가구주택).
 function needsFloor(category, inputs) {

@@ -1,0 +1,255 @@
+---
+import AdminIcon from "../../../components/admin/AdminIcon.astro";
+import AdminPageHelp from "../../../components/admin/AdminPageHelp.astro";
+import BusinessCard from "../../../components/admin/BusinessCard.astro";
+import office from "../../../data/office.json";
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import { DONE_DEAL_TYPES, DONE_LIMITS, businessCardView } from "../../../lib/work/promo-paper.mjs";
+
+// 홍보 종이 1차(보드 45번 C, 운영자 결정 2026-11-20 18:09). 명함 글은 빌드 때 사무소 확정 공개 정보로 채운다.
+const card = businessCardView(office);
+
+// A4 10장 판: 2열 × 5줄(90×50mm). 가로 여백 15mm·세로 23.5mm로 위아래·좌우가 같아 양면(긴 쪽 넘기기)으로 뽑아도 앞뒤 칸이 맞는다.
+const SHEET = { left: 15, top: 23.5, w: 90, h: 50, cols: 2, rows: 5 };
+const slots = Array.from({ length: SHEET.cols * SHEET.rows }, (_, index) => ({
+  x: SHEET.left + (index % SHEET.cols) * SHEET.w,
+  y: SHEET.top + Math.floor(index / SHEET.cols) * SHEET.h,
+}));
+// 재단 표시: 자르는 선의 연장선을 칸 밖 1.5 ~ 6mm에만 긋는다(칸 안에는 선이 없음).
+const xs = Array.from({ length: SHEET.cols + 1 }, (_, index) => SHEET.left + index * SHEET.w);
+const ys = Array.from({ length: SHEET.rows + 1 }, (_, index) => SHEET.top + index * SHEET.h);
+const right = xs.at(-1) ?? 0;
+const bottom = ys.at(-1) ?? 0;
+const cropMarks = [
+  ...xs.flatMap((x) => [[x, SHEET.top - 6, x, SHEET.top - 1.5], [x, bottom + 1.5, x, bottom + 6]]),
+  ...ys.flatMap((y) => [[SHEET.left - 6, y, SHEET.left - 1.5, y], [right + 1.5, y, right + 6, y]]),
+];
+---
+
+<AdminLayout
+  title="홍보 종이 | 행복한부동산 관리자"
+  description="거래 완료 알림 그림과 명함 인쇄 파일을 만드는 관리자 업무 도구입니다."
+>
+  <div class="work-ui work-doc paper" data-paper>
+    <header class="work-doc__header">
+      <span class="work-round-icon work-round-icon--title" data-tone="rose">
+        <AdminIcon name="page" size={22} />
+      </span>
+      <h1>홍보 종이</h1>
+      <span class="admin-stage-badge">저장하지 않음</span>
+    </header>
+
+    <p class="work-doc__lead">거래 완료 알림 그림과 명함 인쇄 파일을 만듭니다. 넣은 값은 저장하지 않고 화면을 닫으면 사라집니다.</p>
+
+    <AdminPageHelp page="/admin/work/paper/" />
+
+    <section class="work-tool paper-done" aria-labelledby="paper-done-title" data-done-tool>
+      <h2 id="paper-done-title">거래 완료 알림</h2>
+      <p class="work-help">단지 이름·거래 종류·면적만 들어갑니다. 면적은 '전용 84㎡대'처럼 흐리게 쓰고, 가격·동·층·계약 날짜는 넣지 않습니다.</p>
+      <div class="work-row">
+        <label class="work-row__label" for="done-name">단지 이름</label>
+        <div class="work-row__control">
+          <input id="done-name" type="text" maxlength={DONE_LIMITS.complexName} autocomplete="off" placeholder="예: 리더스시티5블록" data-done-field="complexName" />
+          <small>동 번호·호수·층은 넣지 않습니다.</small>
+        </div>
+      </div>
+      <div class="work-row">
+        <label class="work-row__label" for="done-deal">거래 종류</label>
+        <div class="work-row__control">
+          <select id="done-deal" autocomplete="off" data-done-field="dealType">
+            {DONE_DEAL_TYPES.map((type) => <option value={type.value}>{type.label}</option>)}
+          </select>
+        </div>
+      </div>
+      <div class="work-row">
+        <label class="work-row__label" for="done-area">전용면적(㎡)</label>
+        <div class="work-row__control">
+          <input id="done-area" type="text" inputmode="decimal" maxlength="6" autocomplete="off" placeholder="예: 84.97" data-done-field="areaM2" />
+          <small data-done-area-preview>그림에는 정수로 내려 '전용 84㎡대'처럼 나옵니다.</small>
+        </div>
+      </div>
+      <div class="work-receipt__actions">
+        <button class="work-primary-button" type="button" data-done-make>알림 그림 만들기</button>
+        <a class="work-primary-button" data-done-download hidden>그림 저장</a>
+        <button class="work-secondary-button" type="button" data-done-print hidden>종이로 뽑기(A4)</button>
+      </div>
+      <p class="work-help" data-done-timing>계약 직후보다 시간을 두고 올리면 거래하신 분이 덜 드러납니다.</p>
+      <p class="admin-form-status" role="status" aria-live="polite" data-done-status></p>
+      <figure class="paper-done__preview" data-done-preview hidden>
+        <img alt="" data-done-image />
+      </figure>
+      <canvas data-done-canvas hidden></canvas>
+    </section>
+
+    <section class="work-tool paper-card" aria-labelledby="paper-card-title">
+      <h2 id="paper-card-title">명함</h2>
+      {card.blocked ? (
+        <p class="work-message" role="status">{card.blocked}</p>
+      ) : (
+        <>
+          <p class="work-help">사무소 정보로 자동으로 채워집니다(90×50mm, 흰 종이). 인쇄소에는 '인쇄소용 PDF(앞·뒤)', 집 프린터에는 'A4 10장 판'을 씁니다.</p>
+          <div class="bc-stage">
+            <figure><BusinessCard side="front" view={card} /><figcaption>앞면</figcaption></figure>
+            <figure><BusinessCard side="back" view={card} /><figcaption>뒷면</figcaption></figure>
+          </div>
+          <div class="work-receipt__actions">
+            <button class="work-secondary-button" type="button" data-card-print="card">인쇄소용 PDF(앞·뒤)</button>
+            <button class="work-secondary-button" type="button" data-card-print="sheet">A4 10장 판</button>
+          </div>
+          <p class="work-help">인쇄 창에서 '대상'을 'PDF로 저장'으로, 배율은 100%(맞춤 끄기)로 둡니다. 인쇄소용 PDF는 사방 3mm 재단 여유를 넣은 96×56mm 두 쪽(앞·뒤)입니다. A4 10장 판은 앞면 한 장·뒷면 한 장이고, 양면으로 뽑을 때는 긴 쪽 넘기기를 고릅니다.</p>
+        </>
+      )}
+    </section>
+
+    {/* 인쇄할 때만 보이는 칸(화면에서는 숨김). 누른 단추에 따라 body[data-paper-print]가 하나만 고른다. */}
+    <div class="paper-print paper-print--done" data-done-sheet></div>
+    {!card.blocked && (
+      <>
+      <div class="paper-print paper-print--card">
+        <div class="bc-page"><BusinessCard side="front" view={card} /></div>
+        <div class="bc-page"><BusinessCard side="back" view={card} /></div>
+      </div>
+      <div class="paper-print paper-print--sheet">
+        {(["front", "back"] as const).map((side) => (
+          <div class="bc-a4">
+            {slots.map((slot) => (
+              <div class="bc-a4__slot" style={`left: ${slot.x}mm; top: ${slot.y}mm;`}><BusinessCard side={side} view={card} /></div>
+            ))}
+            <svg class="bc-a4__marks" viewBox="0 0 210 297" aria-hidden="true">
+              {cropMarks.map(([x1, y1, x2, y2]) => <line x1={x1} y1={y1} x2={x2} y2={y2} />)}
+            </svg>
+          </div>
+        ))}
+      </div>
+      </>
+    )}
+  </div>
+
+  <script>
+    import office from "../../../data/office.json";
+    import { loadLogo } from "../../../lib/work-card-draw";
+    import { renderDoneCard } from "../../../lib/work-done-card";
+    import { areaBandText, buildDoneNotice, doneFileName } from "../../../lib/work/promo-paper.mjs";
+    import { todayInKorea } from "../../../lib/work/legal-dates.mjs";
+
+    const root = document.querySelector<HTMLElement>("[data-paper]");
+
+    if (root) {
+      const name = root.querySelector<HTMLInputElement>('[data-done-field="complexName"]');
+      const deal = root.querySelector<HTMLSelectElement>('[data-done-field="dealType"]');
+      const area = root.querySelector<HTMLInputElement>('[data-done-field="areaM2"]');
+      const areaPreview = root.querySelector<HTMLElement>("[data-done-area-preview]");
+      const make = root.querySelector<HTMLButtonElement>("[data-done-make]");
+      const download = root.querySelector<HTMLAnchorElement>("[data-done-download]");
+      const print = root.querySelector<HTMLButtonElement>("[data-done-print]");
+      const status = root.querySelector<HTMLElement>("[data-done-status]");
+      const preview = root.querySelector<HTMLElement>("[data-done-preview]");
+      const image = root.querySelector<HTMLImageElement>("[data-done-image]");
+      const canvas = root.querySelector<HTMLCanvasElement>("[data-done-canvas]");
+      const sheet = root.querySelector<HTMLElement>("[data-done-sheet]");
+
+      if (name && deal && area && areaPreview && make && download && print && status && preview && image && canvas && sheet) {
+        const AREA_HINT = "그림에는 정수로 내려 '전용 84㎡대'처럼 나옵니다.";
+        // 입력이 바뀌면 만든 그림을 버린다(그림을 만드는 중에 바뀌면 끝난 그림도 버림). 입력값은 이 칸과 변수에만 있고 저장·전송하지 않는다.
+        let token = 0;
+        const setStatus = (text: string, state: "idle" | "success" | "error") => {
+          status.textContent = text;
+          status.dataset.state = state;
+        };
+        const clearImage = () => {
+          token += 1;
+          download.hidden = true;
+          download.removeAttribute("href");
+          print.hidden = true;
+          preview.hidden = true;
+          image.removeAttribute("src");
+          image.alt = "";
+          sheet.replaceChildren();
+        };
+        const refresh = () => {
+          clearImage();
+          make.disabled = false;
+          const band = areaBandText(area.value);
+          areaPreview.textContent = band ? `그림에는 '${band}'로 나옵니다.` : AREA_HINT;
+          setStatus("", "idle");
+        };
+        const current = () => buildDoneNotice({ complexName: name.value, dealType: deal.value, areaM2: area.value }, office);
+
+        // 인쇄: 누른 단추에 맞는 인쇄 칸 하나만 보이게 body에 표시를 달고, 인쇄 창이 닫히면 뗀다.
+        const printAs = (mode: "done" | "card" | "sheet") => {
+          document.body.dataset.paperPrint = mode;
+          window.print();
+        };
+        window.addEventListener("afterprint", () => {
+          delete document.body.dataset.paperPrint;
+        });
+
+        // 명함 로고: 흰 여백을 잘라 낸 로고(카드 그림과 같은 함수)로 바꾼다. 실패하면 원래 파일을 그대로 쓴다.
+        void loadLogo().then((logo) => {
+          const cut = document.createElement("canvas");
+          cut.width = logo.w;
+          cut.height = logo.h;
+          cut.getContext("2d")?.drawImage(logo.image, logo.x, logo.y, logo.w, logo.h, 0, 0, logo.w, logo.h);
+          const url = cut.toDataURL("image/png");
+          for (const img of document.querySelectorAll<HTMLImageElement>("img[data-card-logo]")) img.src = url;
+        }).catch(() => undefined);
+
+        for (const field of [name, deal, area]) {
+          field.addEventListener("input", refresh);
+          field.addEventListener("change", refresh);
+        }
+        make.addEventListener("click", async () => {
+          const built = current();
+          if (!built.ok) {
+            clearImage();
+            setStatus(built.error.message, "error");
+            return;
+          }
+          const mine = ++token;
+          make.disabled = true;
+          try {
+            const result = await renderDoneCard(canvas, built.notice);
+            if (mine !== token) return;
+            if (result.overflow) {
+              setStatus("단지 이름이 길어 그림에 다 들어가지 않습니다. 이름을 줄여 주세요.", "error");
+              return;
+            }
+            const alt = `거래 완료 알림: ${built.notice.name} · ${built.notice.fact}`;
+            image.src = result.dataUrl;
+            image.alt = alt;
+            preview.hidden = false;
+            download.href = result.dataUrl;
+            download.download = doneFileName(todayInKorea());
+            download.hidden = false;
+            const printed = document.createElement("img");
+            printed.src = result.dataUrl;
+            printed.alt = alt;
+            sheet.replaceChildren(printed);
+            print.hidden = false;
+            setStatus("✓ 그림을 만들었습니다. '그림 저장'으로 내려받거나 '종이로 뽑기(A4)'를 누르세요.", "success");
+          } catch {
+            if (mine === token) setStatus("그림을 만들지 못했습니다. 다시 눌러 주세요.", "error");
+          } finally {
+            if (mine === token) make.disabled = false;
+          }
+        });
+        print.addEventListener("click", () => printAs("done"));
+        for (const button of root.querySelectorAll<HTMLButtonElement>("[data-card-print]")) {
+          button.addEventListener("click", () => printAs(button.dataset.cardPrint === "sheet" ? "sheet" : "card"));
+        }
+
+        const reset = () => {
+          name.value = "";
+          area.value = "";
+          deal.value = "sale";
+          make.disabled = false;
+          refresh();
+        };
+        window.addEventListener("pageshow", (event) => {
+          if (event.persisted) reset();
+        });
+        reset();
+      }
+    }
+  </script>
+</AdminLayout>

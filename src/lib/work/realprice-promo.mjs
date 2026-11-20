@@ -3,6 +3,7 @@
 // - 동 번호·지번은 넣지 않고 층은 숫자 그대로 쓴다(DEC-WT-22). 사무소 명시사항 5항목이 하나라도 비면 복사·내려받기를 막는다(DEC-WT-23).
 // - 해제된 거래는 고를 수 없고, 고른 뒤 해제로 바뀌었으면 빼고 알린다. recordHigh가 true가 아니면(false·null) '신고가' 말을 쓰지 않는다.
 import { formatKoreanWon } from "./work-format.mjs";
+import { OFFICE_DISCLOSURE_FIELDS, officeFieldsMissing, officeLines } from "./ad-disclosure.mjs";
 import { areaText, dateText, floorText, kindLabel, priceParts } from "./realprice-view.mjs";
 import { promoBasisLine, promoFlow } from "./realprice-insight-view.mjs";
 
@@ -29,14 +30,8 @@ export const PROMO_HIGH_RULE = `신고가: 같은 단지·같은 전용면적에
 // 스레드(500자)·카카오톡용 짧은 판정 기준(같은 뜻, 3건이 한 줄씩 들어가게)
 export const PROMO_HIGH_RULE_SHORT = `신고가: 같은 단지·전용면적의 앞선 매매(${compareFromText} 이후, 해제·직거래 뺌) 최고가보다 높은 거래.`;
 
-// 사무소 명시사항 5항목(DEC-WT-23, 설계서 22.10절). 앞은 office.json 칸 이름.
-export const PROMO_DISCLOSURE_FIELDS = Object.freeze([
-  ["legalName", "중개사무소 명칭"],
-  ["address", "소재지"],
-  ["mobile", "연락처"],
-  ["registrationNumber", "등록번호"],
-  ["representative", "대표 성명"],
-]);
+// 사무소 명시사항 5항목(DEC-WT-23, 설계서 22.10절)은 ad-disclosure.mjs 한 곳에 둔다(보드 45번 C). 기존 이름은 그대로 다시 내보낸다.
+export const PROMO_DISCLOSURE_FIELDS = OFFICE_DISCLOSURE_FIELDS;
 
 // ── 고른 거래 ID ──
 
@@ -123,10 +118,8 @@ export function promoSelection(data) {
   return { items: usable, cancelledCount, missingCount, highOff, notices, receivedAt: usable.length > 0 ? data?.receivedAt ?? null : null };
 }
 
-// 명시사항 5항목 가운데 빈 칸의 이름(빈 배열이면 통과).
-export function disclosureProblems(office) {
-  return PROMO_DISCLOSURE_FIELDS.filter(([key]) => typeof office?.[key] !== "string" || office[key].trim() === "").map(([, label]) => label);
-}
+// 명시사항 5항목 가운데 빈 칸의 이름(빈 배열이면 통과). ad-disclosure.mjs officeFieldsMissing과 같은 함수.
+export const disclosureProblems = officeFieldsMissing;
 
 // 만들 수 없는 이유(없으면 null). 화면은 이 문장을 보여 주고 복사·내려받기·인쇄를 막는다.
 export function promoBlockReason({ items, receivedAt, office }) {
@@ -185,11 +178,8 @@ function dealRange(items) {
   return dates[0] === dates.at(-1) ? `계약일 ${dateText(dates[0])}` : `계약일 ${dateText(dates[0])} ~ ${dateText(dates.at(-1))}`;
 }
 
-export const disclosureLines = (office) => [
-  `${office.legalName} · 대표 ${office.representative}`,
-  office.address,
-  `연락처 ${office.mobile} · 등록번호 ${office.registrationNumber}`,
-];
+// 그림 아래 칸 3줄. ad-disclosure.mjs officeLines와 같은 함수.
+export const disclosureLines = officeLines;
 // 해시태그(P1-f, 2026-11-20 운영자 답 "10개 안팎·단지 이름 넣음"): 고정 4개 → 거래 종류 → #신고가(있을 때) → 법정동 최대 3개 →
 // 전용면적 최대 2개(#전용84, ㎡ 소수점 버림) → 단지 이름 최대 3개(띄어쓰기·기호 뺌). 겹치면 하나, 모두 PROMO_HASHTAGS_MAX개 안.
 // 개수가 넘치면 단지 이름은 지키고 전용면적 → 법정동 순으로 줄인다. 동 번호는 넣지 않는다.
