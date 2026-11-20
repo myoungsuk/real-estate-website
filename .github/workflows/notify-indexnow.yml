@@ -8,8 +8,10 @@ on:
 permissions:
   contents: read
 
+# 커밋마다 따로 돈다. 한 묶음(group)으로 두면 GitHub가 대기 실행을 1개만 남겨, 짧은 사이에 3번 넘게 병합하면 가운데 커밋의 알림이 취소됐다.
+# 실행마다 자기 커밋의 변경(HEAD^..HEAD)만 알리므로 동시에 돌아도 겹치는 주소가 두 번 나갈 뿐 빠지지 않는다.
 concurrency:
-  group: notify-indexnow-master
+  group: notify-indexnow-${{ github.event.workflow_run.head_sha }}
   cancel-in-progress: false
 
 jobs:
