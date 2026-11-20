@@ -200,6 +200,7 @@ const defaults: Record<string, string | boolean> = DEFAULT_REALPRICE_FILTERS;
                 <th scope="col">계약일</th>
                 <th scope="col">법정동</th>
                 <th scope="col" class="rt-only-card">새로 들어옴</th>
+                <th scope="col" class="rt-pick-col">홍보물</th>
               </tr>
             </thead>
             <tbody data-rt-rows></tbody>
@@ -208,6 +209,11 @@ const defaults: Record<string, string | boolean> = DEFAULT_REALPRICE_FILTERS;
         <p class="rt-criterion rt-criterion--below" data-rt-criterion><strong>신고가</strong> {criterion}</p>
         <div class="rt-more" data-rt-more hidden>
           <button class="admin-secondary-button" type="button" data-rt-more-button>30건 더 보기</button>
+        </div>
+        <div class="rt-pick-bar" data-rt-pick-bar hidden>
+          <p data-rt-pick-text></p>
+          <a class="admin-primary-button" href="/admin/work/realprice/promo/" data-rt-promo-link>홍보물 만들기</a>
+          <button class="admin-secondary-button" type="button" data-rt-pick-clear>비우기</button>
         </div>
         <p class="sr-only" role="status" data-rt-live></p>
       </section>
@@ -232,6 +238,7 @@ const defaults: Record<string, string | boolean> = DEFAULT_REALPRICE_FILTERS;
       statusView,
       tradesQuery,
     } from "../../../../lib/work/realprice-view.mjs";
+    import { PROMO_IDS_MAX, isPromoSelectable, promoHref, selectionText } from "../../../../lib/work/realprice-promo.mjs";
     import { formatKoreanWon } from "../../../../lib/work/work-format.mjs";
 
     interface Trade {
@@ -298,6 +305,9 @@ const defaults: Record<string, string | boolean> = DEFAULT_REALPRICE_FILTERS;
       const more = pick("[data-rt-more]");
       const moreButton = pick<HTMLButtonElement>("[data-rt-more-button]");
       const live = pick("[data-rt-live]");
+      const pickBar = pick("[data-rt-pick-bar]");
+      const pickText = pick("[data-rt-pick-text]");
+      const promoLink = pick<HTMLAnchorElement>("[data-rt-promo-link]");
       const wide = window.matchMedia("(min-width: 980px)");
 
       let filters: Filters = { ...DEFAULT_REALPRICE_FILTERS };
@@ -309,6 +319,8 @@ const defaults: Record<string, string | boolean> = DEFAULT_REALPRICE_FILTERS;
       let cursor: string | null = null;
       let requestSeq = 0;
       let controller: AbortController | null = null;
+      // 홍보물에 넣을 거래(P1-e): 이 화면 메모리에만 둔다(브라우저 저장 없음). 거르기·보기를 바꿔도 남고, 최대 PROMO_IDS_MAX건.
+      const picked = new Map<string, Trade>();
 
       const show = (element: HTMLElement, visible: boolean) => { element.hidden = !visible; };
       const errorCode = (error: unknown) => (error instanceof WorkApiError ? error.code : null);
@@ -393,6 +405,54 @@ const defaults: Record<string, string | boolean> = DEFAULT_REALPRICE_FILTERS;
         return span;
       };
 
+      // 홍보물 고르기 칸: 해제된 거래는 고를 수 없다(설계서 22.10절). 다 고르면(최대 건수) 나머지 칸은 잠근다.
+      function pickCell(item: Trade) {
+        const td = cell("rt-pick", "홍보물");
+        const label = document.createElement("label");
+        label.className = "admin-review-select";
+        const box = document.createElement("input");
+        box.type = "checkbox";
+        box.value = item.tradeKey;
+        box.autocomplete = "off";
+        const selectable = isPromoSelectable(item);
+        box.dataset.rtPick = selectable ? "on" : "off";
+        box.checked = selectable && picked.has(item.tradeKey);
+        box.disabled = !selectable || (!box.checked && picked.size >= PROMO_IDS_MAX);
+        box.setAttribute("aria-label", `${item.aptName || "단지명 없음"} ${dateText(item.dealDate)} ${kindLabel(item)}${selectable ? " 홍보물에 넣기" : " 해제된 거래라 홍보물에 넣을 수 없음"}`);
+        const text = document.createElement("span");
+        text.textContent = selectable ? "고르기" : "고를 수 없음";
+        label.append(box, text);
+        td.append(label);
+        return td;
+      }
+
+      function syncPicks() {
+        const full = picked.size >= PROMO_IDS_MAX;
+        for (const box of rows.querySelectorAll<HTMLInputElement>("input[data-rt-pick]")) {
+          if (box.dataset.rtPick !== "on") continue;
+          box.checked = picked.has(box.value);
+          box.disabled = !box.checked && full;
+        }
+        pickText.textContent = selectionText(picked.size);
+        const href = promoHref([...picked.keys()]);
+        if (href) promoLink.href = href;
+        pickBar.hidden = picked.size === 0;
+      }
+      rows.addEventListener("change", (event) => {
+        const box = event.target as HTMLInputElement;
+        if (box.dataset.rtPick !== "on") return;
+        const item = items.find((trade) => trade.tradeKey === box.value);
+        if (box.checked && item && picked.size < PROMO_IDS_MAX) picked.set(box.value, item);
+        else picked.delete(box.value);
+        syncPicks();
+        live.textContent = picked.size >= PROMO_IDS_MAX ? `${selectionText(picked.size)}. 더 고르려면 하나를 빼 주세요.` : selectionText(picked.size);
+      });
+      pick("[data-rt-pick-clear]").addEventListener("click", () => {
+        picked.clear();
+        syncPicks();
+        live.textContent = "고른 거래를 비웠습니다.";
+      });
+
       // 서버 값은 모두 textContent로 넣는다(HTML로 해석하지 않음).
       function rowOf(item: Trade, showHigh: boolean) {
         const tr = document.createElement("tr");
@@ -436,7 +496,7 @@ const defaults: Record<string, string | boolean> = DEFAULT_REALPRICE_FILTERS;
         umd.textContent = item.umdName;
         const fresh = cell("rt-new rt-only-card", "새로 들어옴");
         if (item.isNew) fresh.append(tag("새로 들어옴", "rt-tag--new"));
-        tr.append(name, size, price, kind, flags, date, umd, fresh);
+        tr.append(name, size, price, kind, flags, date, umd, fresh, pickCell(item));
         return tr;
       }
 
@@ -481,7 +541,10 @@ const defaults: Record<string, string | boolean> = DEFAULT_REALPRICE_FILTERS;
         const showHigh = renderNotice(data);
         if (appended === 0) rows.replaceChildren();
         const start = items.length - data.items.length;
+        // 고른 뒤 다시 받기로 해제된 거래는 고른 것에서 뺀다(홍보물 화면도 다시 읽을 때 한 번 더 뺀다).
+        for (const item of data.items) if (picked.has(item.tradeKey) && !isPromoSelectable(item)) picked.delete(item.tradeKey);
         rows.append(...items.slice(start).map((item) => rowOf(item, showHigh)));
+        syncPicks();
         count.textContent = `${items.length.toLocaleString("ko-KR")}건`;
         show(tableWrap, items.length > 0);
         show(zero, items.length === 0);

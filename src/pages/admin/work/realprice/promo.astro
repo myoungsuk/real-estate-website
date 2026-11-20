@@ -1,0 +1,272 @@
+---
+import AdminIcon from "../../../../components/admin/AdminIcon.astro";
+import AdminPageHelp from "../../../../components/admin/AdminPageHelp.astro";
+import AdminLayout from "../../../../layouts/AdminLayout.astro";
+import { PROMO_IDS_MAX, PROMO_TEXT_KINDS } from "../../../../lib/work/realprice-promo.mjs";
+
+// 단계 P 실거래가 홍보물(P1-e, 운영자 시안 승인 2026-11-20 10:43:09: 카드 A안, 4 ~ 6건은 3건씩 최대 2장, 해시태그·카카오톡은 권하는 대로).
+// 목록에서 고른 거래 ID(?ids=)로 거래를 다시 읽어 글 4가지·카드 그림·A4 한 장을 만든다. 글·그림은 브라우저에서만 만들고 서버에 저장하지 않는다.
+const listHref = "/admin/work/realprice/";
+---
+
+<AdminLayout
+  title="홍보물 만들기 | 행복한부동산 관리자"
+  description="고른 실거래로 스레드·인스타그램·블로그·카카오톡 글과 카드 그림, A4 인쇄 한 장을 만드는 관리자 업무 도구입니다."
+>
+  <div class="work-ui work-doc rt-doc rt-promo" data-promo-page>
+    <header class="work-doc__header">
+      <span class="work-round-icon work-round-icon--title" data-tone="navy">
+        <AdminIcon name="chart" size={22} />
+      </span>
+      <h1>홍보물 만들기</h1>
+      <span class="admin-stage-badge">국토교통부 공개 자료</span>
+    </header>
+
+    <p class="work-doc__lead">고른 실거래(최대 {PROMO_IDS_MAX}건)로 글 4가지·카드 그림·A4 한 장을 만듭니다. 숫자는 받은 자료 그대로이고 출처·받은 시각·사무소 명시사항이 자동으로 붙습니다.</p>
+
+    <AdminPageHelp page="/admin/work/realprice/promo/" />
+
+    <p class="rt-boot" role="status" data-promo-boot>고른 거래를 불러오고 있습니다…</p>
+
+    <section class="admin-panel rt-state" aria-labelledby="promo-state-title" data-promo-state hidden>
+      <div class="admin-empty-state">
+        <span aria-hidden="true" data-promo-state-symbol>!</span>
+        <div>
+          <h2 id="promo-state-title" data-promo-state-title></h2>
+          <p data-promo-state-body></p>
+          <p class="rt-state__links">
+            <button class="admin-secondary-button rt-state__action" type="button" data-promo-retry hidden>다시 불러오기</button>
+            <a class="admin-text-link" href={listHref}>실거래가 목록으로 <span aria-hidden="true">→</span></a>
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <p class="admin-inline-notice rt-notice rt-promo__notice" role="status" data-promo-notice hidden><span aria-hidden="true">i</span><span data-promo-notice-text></span></p>
+
+    <div class="rt-promo__main" data-promo-main hidden>
+      <section class="admin-panel rt-promo__cards" aria-labelledby="promo-cards-title">
+        <div class="admin-panel__heading">
+          <h2 id="promo-cards-title">카드 그림 <span data-promo-card-count></span></h2>
+        </div>
+        <p class="work-help">1080×1350 PNG(인스타그램 세로 피드 크기)입니다. 4건 이상은 3건씩 두 장으로 나눕니다.</p>
+        <p class="rt-loading" role="status" data-promo-card-loading>카드 그림을 그리고 있습니다…</p>
+        <div class="rt-promo__card-list" data-promo-card-list></div>
+      </section>
+
+      <section class="admin-panel rt-promo__texts" aria-labelledby="promo-texts-title">
+        <h2 id="promo-texts-title">글 4가지</h2>
+        <div class="work-row" role="radiogroup" aria-labelledby="promo-kind-label">
+          <span class="work-row__label" id="promo-kind-label">글 종류</span>
+          <div class="work-segment rt-promo__kinds">
+            {PROMO_TEXT_KINDS.map(([value, label], index) => (
+              <label class="work-choice">
+                <input type="radio" name="promo-kind" value={value} checked={index === 0} autocomplete="off" />
+                <span>{label}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+        <label class="work-output__label" for="promo-preview" data-promo-preview-label>스레드 글</label>
+        <textarea id="promo-preview" class="work-preview rt-promo__preview" rows="14" readonly data-promo-preview></textarea>
+        <small class="work-output__count" aria-live="polite" data-promo-count></small>
+        <div class="work-doc__action">
+          <button class="work-primary-button" type="button" data-promo-copy>글 복사</button>
+          <p class="admin-form-status" role="status" aria-live="polite" data-promo-status></p>
+        </div>
+        <p class="work-help">그림을 함께 올릴 때는 위 카드 그림을 먼저 내려받으세요. 카카오톡 글은 1:1 채팅에 붙여 넣는 짧은 글입니다.</p>
+      </section>
+
+      <section class="admin-panel rt-promo__print" aria-labelledby="promo-print-title">
+        <h2 id="promo-print-title">A4 인쇄</h2>
+        <p class="work-help">카드 그림을 A4 한 장에 맞춰 인쇄합니다. PDF가 필요하면 인쇄 창에서 'PDF로 저장'을 고르세요.</p>
+        <button class="admin-secondary-button" type="button" data-promo-print disabled>인쇄하기</button>
+      </section>
+    </div>
+
+    <div class="rt-print-sheet" data-promo-sheet></div>
+  </div>
+
+  <script>
+    import office from "../../../../data/office.json";
+    import { getWorkSession, readWork, WorkApiError } from "../../../../lib/work-realprice-client";
+    import { renderPromoCard, type PromoCard } from "../../../../lib/work-realprice-card";
+    import { todayInKorea } from "../../../../lib/work/legal-dates.mjs";
+    import {
+      PROMO_TEXT_KINDS,
+      parsePromoIds,
+      promoBlockReason,
+      promoCards,
+      promoFileName,
+      promoSelection,
+      promoTexts,
+      textCount,
+    } from "../../../../lib/work/realprice-promo.mjs";
+    import { apiErrorText } from "../../../../lib/work/realprice-view.mjs";
+
+    type Kind = "threads" | "instagram" | "blog" | "kakao";
+    interface IdsResponse {
+      items: { tradeKey: string; kind: string; cancelled: boolean; recordHigh: boolean | null }[];
+      missing: string[];
+      receivedAt: string | null;
+      recordHighReady: boolean;
+      warnings: { code: string; level?: string }[];
+    }
+
+    const root = document.querySelector<HTMLElement>("[data-promo-page]");
+    if (root) {
+      const pick = <T extends Element = HTMLElement>(selector: string) => root.querySelector<T>(selector) as T;
+      const boot = pick("[data-promo-boot]");
+      const statePanel = pick("[data-promo-state]");
+      const retry = pick<HTMLButtonElement>("[data-promo-retry]");
+      const notice = pick("[data-promo-notice]");
+      const main = pick("[data-promo-main]");
+      const cardList = pick("[data-promo-card-list]");
+      const cardLoading = pick("[data-promo-card-loading]");
+      const cardCount = pick("[data-promo-card-count]");
+      const previewLabel = pick("[data-promo-preview-label]");
+      const preview = pick<HTMLTextAreaElement>("[data-promo-preview]");
+      const count = pick("[data-promo-count]");
+      const copyButton = pick<HTMLButtonElement>("[data-promo-copy]");
+      const status = pick("[data-promo-status]");
+      const printButton = pick<HTMLButtonElement>("[data-promo-print]");
+      const sheet = pick("[data-promo-sheet]");
+      const kindNames = Object.fromEntries(PROMO_TEXT_KINDS) as Record<Kind, string>;
+      let texts: Record<Kind, string> | null = null;
+
+      function showState(title: string, body: string, { symbol = "!", canRetry = false } = {}) {
+        boot.hidden = true;
+        main.hidden = true;
+        pick("[data-promo-state-symbol]").textContent = symbol;
+        pick("[data-promo-state-title]").textContent = title;
+        pick("[data-promo-state-body]").textContent = body;
+        retry.hidden = !canRetry;
+        statePanel.hidden = false;
+      }
+
+      const selectedKind = () => (root.querySelector<HTMLInputElement>('input[name="promo-kind"]:checked')?.value ?? "threads") as Kind;
+      function showText() {
+        if (!texts) return;
+        const kind = selectedKind();
+        previewLabel.textContent = `${kindNames[kind]} 글`;
+        preview.value = texts[kind];
+        const counted = textCount(kind, texts[kind]);
+        count.textContent = kind === "instagram" ? `${counted.label} · 해시태그 ${counted.tags}개` : counted.label;
+        count.dataset.state = counted.over ? "over" : "";
+        copyButton.textContent = `${kindNames[kind]} 글 복사`;
+        status.textContent = "";
+      }
+      root.addEventListener("change", (event) => {
+        if ((event.target as HTMLInputElement).name === "promo-kind") showText();
+      });
+      preview.addEventListener("focus", () => preview.scrollIntoView({ block: "nearest" }));
+      copyButton.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(preview.value);
+          status.textContent = `✓ ${kindNames[selectedKind()]} 글을 복사했습니다.`;
+          status.dataset.state = "success";
+        } catch {
+          preview.focus({ preventScroll: true });
+          preview.select();
+          preview.scrollIntoView({ block: "nearest" });
+          status.textContent = "자동 복사가 막혔습니다. 선택된 글을 직접 복사해 주세요.";
+          status.dataset.state = "error";
+        }
+      });
+      printButton.addEventListener("click", () => window.print());
+
+      // 카드 그림: 미리보기 그림과 내려받기 링크(data 주소, CSP img-src에 blob이 없어 data를 쓴다). 서버 값은 textContent·속성으로만 넣는다.
+      async function drawCards(cards: PromoCard[]) {
+        const canvas = document.createElement("canvas");
+        const today = todayInKorea();
+        const figures: HTMLElement[] = [];
+        const prints: HTMLImageElement[] = [];
+        for (const [index, card] of cards.entries()) {
+          const result = await renderPromoCard(canvas, card);
+          const figure = document.createElement("figure");
+          figure.className = "rt-promo__card";
+          const image = document.createElement("img");
+          image.src = result.dataUrl;
+          image.width = 540;
+          image.height = 675;
+          image.alt = `카드 그림${cards.length > 1 ? ` ${index + 1}/${cards.length}장` : ""}: ${card.title}`;
+          const caption = document.createElement("figcaption");
+          const name = promoFileName(today, index, cards.length);
+          const link = document.createElement("a");
+          link.className = "work-primary-button rt-promo__download";
+          link.href = result.dataUrl;
+          link.download = name;
+          link.dataset.promoDownload = "";
+          link.textContent = cards.length > 1 ? `${index + 1}장 내려받기` : "그림 내려받기";
+          const file = document.createElement("small");
+          file.textContent = name;
+          caption.append(link, file);
+          if (result.overflow) {
+            const warn = document.createElement("small");
+            warn.className = "rt-promo__warn";
+            warn.textContent = "글이 길어 그림 아래 칸과 겹칠 수 있습니다. 그림을 확인해 주세요.";
+            caption.append(warn);
+          }
+          figure.append(image, caption);
+          figures.push(figure);
+          const printed = document.createElement("img");
+          printed.src = result.dataUrl;
+          printed.alt = image.alt;
+          prints.push(printed);
+        }
+        cardList.replaceChildren(...figures);
+        sheet.replaceChildren(...prints);
+        sheet.dataset.count = String(cards.length);
+        cardCount.textContent = cards.length > 1 ? `${cards.length}장` : "";
+        cardLoading.hidden = true;
+        printButton.disabled = false;
+      }
+
+      async function start() {
+        statePanel.hidden = true;
+        notice.hidden = true;
+        boot.hidden = false;
+        const { ids, error } = parsePromoIds(window.location.search);
+        if (error) {
+          showState("고른 거래가 없습니다", error === "none" ? "실거래가 목록에서 홍보물에 넣을 거래를 고른 뒤 '홍보물 만들기'를 눌러 주세요." : "주소의 거래 목록이 올바르지 않습니다. 실거래가 목록에서 다시 골라 주세요.", { symbol: "0" });
+          return;
+        }
+        let data: IdsResponse;
+        try {
+          const session = await getWorkSession({ refresh: true });
+          if (!session.realpriceEnabled) throw new WorkApiError("disabled", { code: "REALPRICE_DISABLED" });
+          data = await readWork<IdsResponse>("/realprice/trades", `ids=${ids.join(",")}`);
+        } catch (failure) {
+          const code = failure instanceof WorkApiError ? failure.code : null;
+          const retryAt = failure instanceof WorkApiError ? failure.retryAt : null;
+          if (code === "REALPRICE_DISABLED") showState("실거래가 탭이 아직 켜지지 않았습니다", "켜기 값을 등록하면 자료 받기와 목록이 켜집니다. 켜기 값 등록은 개발 담당이 합니다.", { symbol: "–" });
+          else showState("고른 거래를 불러오지 못했습니다", apiErrorText(code, { retryAt }), { canRetry: code !== "AUTH_REQUIRED" });
+          return;
+        }
+        const selection = promoSelection(data);
+        const input = { items: selection.items, receivedAt: selection.receivedAt, office };
+        const blocked = promoBlockReason(input);
+        if (selection.notices.length > 0) {
+          pick("[data-promo-notice-text]").textContent = selection.notices.join(" ");
+          notice.hidden = false;
+        }
+        if (blocked) {
+          showState("홍보물을 만들 수 없습니다", blocked, { symbol: "!", canRetry: selection.items.length > 0 && !selection.receivedAt });
+          return;
+        }
+        texts = promoTexts(input) as Record<Kind, string>;
+        boot.hidden = true;
+        main.hidden = false;
+        showText();
+        try {
+          await drawCards(promoCards(input) as PromoCard[]);
+        } catch {
+          cardLoading.textContent = "카드 그림을 그리지 못했습니다. 화면을 새로 고쳐 주세요. 글은 그대로 복사할 수 있습니다.";
+        }
+      }
+      retry.addEventListener("click", () => void start());
+
+      void start();
+    }
+  </script>
+</AdminLayout>

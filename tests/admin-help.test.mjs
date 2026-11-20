@@ -99,7 +99,7 @@ const guideSections = ADMIN_HELP_GUIDE.flatMap((group) => group.sections);
 
 test("관리 화면마다 제목 아래에 자기 주소의 '이 화면 사용법' 상자가 한 개씩 있다", async () => {
   const pages = await listAdminPages();
-  assert.equal(pages.length, 14, "관리 화면 14개(사용 안내 화면 제외, 2026-11-19 실거래가·실거래가 설정 추가)");
+  assert.equal(pages.length, 15, "관리 화면 15개(사용 안내 화면 제외, 2026-11-19 실거래가·실거래가 설정, 2026-11-20 홍보물 만들기 추가)");
   const routes = [];
   for (const file of pages) {
     const source = await readSource(`src/pages/admin/${file}`);
@@ -200,6 +200,7 @@ test("실거래가 사용 안내 숫자는 서버 상수·작업 예약과 맞�
   assert.equal(facts.realpriceSearchYears * 12, query.REALPRICE_COMPLEX_SEARCH_MONTHS, "단지 찾기 범위");
   assert.equal(facts.realpriceRefreshMonths, store.REALPRICE_RECENT_MONTHS, "다시 받기 달 수");
   assert.equal(facts.realpriceNewDays, query.REALPRICE_NEW_DAYS, "'새로 들어옴' 기간");
+  assert.equal(facts.realpricePromoMax, query.REALPRICE_IDS_MAX, "홍보물에 고를 수 있는 거래 수");
   const refresh = store.refreshStatements({ prepare: () => ({ bind: () => ({}) }) }, Date.parse("2026-11-19T05:00:00Z"));
   assert.equal(facts.realpriceRefreshHours * 60, refresh.estimatedMinutes, "다시 받기 예상 시간");
   const reset = new Date(query.nextReadBudgetReset(Date.parse("2026-11-19T05:00:00Z")));
