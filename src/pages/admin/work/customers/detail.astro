@@ -1,0 +1,534 @@
+---
+import AdminIcon from "../../../../components/admin/AdminIcon.astro";
+import AdminPageHelp from "../../../../components/admin/AdminPageHelp.astro";
+import WorkCustomerFields from "../../../../components/admin/WorkCustomerFields.astro";
+import AdminLayout from "../../../../layouts/AdminLayout.astro";
+import { NOTE_BODY_MAX } from "../../../../lib/work/customers-view.mjs";
+
+// 손님 카드(단계 2, 사용자 선택 2026-11-21 02:26:01 "A 차례대로", "손님 상세에 일정 함께 담기").
+// - 차례: 기본 정보 → 거래·일정 → 메모 → 파일(설계서 7.1). PC(980px 이상)는 왼쪽에 기본 정보를 붙이고 오른쪽에 나머지를 둔다.
+// - 주소의 ?id=는 무작위 UUID만 받는다. 이름·전화는 주소·제목(title)·브라우저 저장소에 넣지 않는다.
+// - 서버를 부르므로 탭 미리 그리기 prerender 목록에 넣지 않는다. 업무 세션이 꺼져 있으면 손님 자료를 부르지 않는다.
+---
+
+<AdminLayout
+  title="손님 카드 | 행복한부동산 관리자"
+  description="손님 한 명의 기본 정보·거래 일정·메모를 보고 고치는 관리자 업무 도구입니다."
+>
+  <div class="work-ui work-doc cu-doc cu-doc--wide cu-detail" data-cu-detail-page>
+    <p class="cu-back"><a class="admin-text-link" href="/admin/work/customers/"><span aria-hidden="true">←</span> 손님 목록</a></p>
+    <header class="work-doc__header cu-detail__header">
+      <span class="work-round-icon work-round-icon--title" data-tone="navy">
+        <AdminIcon name="person" size={22} />
+      </span>
+      <h1 data-cu-name>손님 카드</h1>
+      <span data-cu-head-status></span>
+    </header>
+    <AdminPageHelp page="/admin/work/customers/detail/" />
+
+    <p class="rt-boot cu-boot" role="status" data-cu-boot>손님 카드를 불러오고 있습니다…</p>
+    <section class="admin-panel rt-state cu-state" aria-labelledby="cu-state-title" data-cu-state hidden>
+      <div class="admin-empty-state">
+        <span aria-hidden="true" data-cu-state-symbol>!</span>
+        <div>
+          <h2 id="cu-state-title" data-cu-state-title></h2>
+          <p data-cu-state-body></p>
+          <button class="work-secondary-button cu-state__go" type="button" data-cu-state-retry hidden>다시 불러오기</button>
+          <a class="work-secondary-button cu-state__go" href="/admin/work/customers/" data-cu-state-list hidden>손님 목록으로</a>
+          <a class="admin-text-link" href="/admin/work/" data-cu-state-home hidden>업무 도구 처음으로</a>
+        </div>
+      </div>
+    </section>
+
+    <div class="cu-two" data-cu-main hidden>
+      <div class="cu-two__side">
+        <section class="cu-block cu-basic" aria-labelledby="cu-basic-title">
+          <h2 id="cu-basic-title" class="cu-block__title">기본 정보</h2>
+          <div class="cu-actions" data-cu-contact>
+            <a class="work-secondary-button cu-act" href="#" data-cu-call><AdminIcon name="phone" size={20} /><span>전화</span></a>
+            <a class="work-secondary-button cu-act" href="#" data-cu-sms><AdminIcon name="message" size={20} /><span>문자</span></a>
+          </div>
+          <dl class="cu-facts">
+            <div><dt>전화번호</dt><dd class="cu-num" data-cu-phone></dd></div>
+            <div><dt>찾는 조건</dt><dd class="cu-pre" data-cu-needs></dd></div>
+            <div><dt>마지막 연락</dt><dd><span data-cu-contact-on></span> <small>(이 손님 메모를 새로 쓰면 오늘로 바뀜)</small></dd></div>
+            <div><dt>정리 안내</dt><dd><span data-cu-retention></span> <small>(지워지지 않음. 그날이 지나면 정리할지 묻기만 함)</small></dd></div>
+          </dl>
+          <div class="cu-actions cu-actions--quiet">
+            <button class="admin-text-link cu-linkbtn" type="button" aria-expanded="false" aria-controls="cu-edit-panel" data-cu-edit-open>고치기</button>
+            <button class="admin-text-link cu-linkbtn cu-danger" type="button" aria-expanded="false" aria-controls="cu-delete-panel" data-cu-delete-open>손님 지우기</button>
+          </div>
+          <p class="admin-form-status" role="status" aria-live="polite" data-cu-basic-status></p>
+
+          <section class="cu-form cu-panel" id="cu-edit-panel" aria-labelledby="cu-edit-title" data-cu-edit-panel hidden>
+            <h3 id="cu-edit-title" class="cu-panel__title">기본 정보 고치기</h3>
+            <WorkCustomerFields idPrefix="cu-edit" />
+            <div class="cu-actions">
+              <button class="work-primary-button cu-save" type="button" data-cu-edit-save>고친 내용 저장</button>
+              <button class="work-secondary-button" type="button" data-cu-edit-cancel>그만두기</button>
+            </div>
+            <p class="admin-form-status" role="status" aria-live="polite" data-cu-edit-status></p>
+            <button class="work-secondary-button" type="button" data-cu-edit-reload hidden>다시 불러오기</button>
+          </section>
+
+          <section class="cu-form cu-panel cu-panel--danger" id="cu-delete-panel" aria-labelledby="cu-delete-title" data-cu-delete-panel hidden>
+            <h3 id="cu-delete-title" class="cu-panel__title">손님 지우기</h3>
+            <p>지우면 되돌릴 수 없습니다. 이 손님의 메모와, 이 손님만 참여한 거래·일정이 함께 지워집니다. 다른 손님과 함께인 거래는 남깁니다.</p>
+            <div class="work-row">
+              <label class="work-row__label" for="cu-delete-confirm">확인하려면 손님 이름 <strong data-cu-delete-name></strong>을(를) 그대로 넣으세요</label>
+              <div class="work-row__control">
+                <input id="cu-delete-confirm" type="text" maxlength="60" autocomplete="off" data-cu-delete-confirm />
+              </div>
+            </div>
+            <div class="cu-actions">
+              <button class="work-primary-button cu-save cu-delete-go" type="button" disabled data-cu-delete-go>지우기</button>
+              <button class="work-secondary-button" type="button" data-cu-delete-cancel>그만두기</button>
+            </div>
+            <p class="admin-form-status" role="status" aria-live="polite" data-cu-delete-status></p>
+          </section>
+        </section>
+      </div>
+
+      <div class="cu-two__main">
+        <section class="cu-block" aria-labelledby="cu-deals-title">
+          <h2 id="cu-deals-title" class="cu-block__title">거래·일정 <span class="cu-block__n" data-cu-deals-count></span></h2>
+          <div class="cu-deals" data-cu-deals></div>
+          <p class="cu-soft" data-cu-deals-empty hidden>아직 이 손님과 이은 거래가 없습니다.</p>
+        </section>
+
+        <section class="cu-block" id="cu-notes" aria-labelledby="cu-notes-title">
+          <h2 id="cu-notes-title" class="cu-block__title">메모 <span class="cu-block__n" data-cu-notes-count></span></h2>
+          <div class="cu-composer">
+            <label class="sr-only" for="cu-memo">이 손님 메모</label>
+            <textarea id="cu-memo" rows="3" maxlength={NOTE_BODY_MAX} placeholder="통화·방문 내용을 적습니다" autocomplete="off" data-cu-memo></textarea>
+            <div class="cu-composer__foot">
+              <small>주민등록번호처럼 보이는 숫자는 저장할 때 가려집니다.</small>
+              <button class="work-primary-button cu-save" type="button" data-cu-memo-save>메모 저장</button>
+            </div>
+            <p class="admin-form-status" role="status" aria-live="polite" data-cu-memo-status></p>
+            <button class="work-secondary-button" type="button" data-cu-memo-reload hidden>다시 불러오기</button>
+          </div>
+          <ol class="cu-notes" data-cu-notes></ol>
+          <p class="cu-soft" data-cu-notes-empty hidden>아직 메모가 없습니다.</p>
+          <p class="cu-soft" data-cu-notes-limit hidden>최근 50개까지 보입니다.</p>
+        </section>
+
+        <section class="cu-block" aria-labelledby="cu-files-title">
+          <h2 id="cu-files-title" class="cu-block__title">파일</h2>
+          <p class="cu-soft" data-cu-files-text></p>
+        </section>
+      </div>
+    </div>
+
+    <section class="admin-panel rt-state cu-state" aria-labelledby="cu-gone-title" data-cu-gone hidden>
+      <div class="admin-empty-state">
+        <span aria-hidden="true">✓</span>
+        <div>
+          <h2 id="cu-gone-title">손님을 지웠습니다</h2>
+          <p data-cu-gone-text></p>
+          <a class="work-secondary-button cu-state__go" href="/admin/work/customers/">손님 목록으로</a>
+        </div>
+      </div>
+    </section>
+
+    <div class="cu-bar" data-cu-bar hidden>
+      <button class="work-primary-button" type="button" data-cu-bar-memo><AdminIcon name="note" size={20} /><span>메모 추가</span></button>
+    </div>
+  </div>
+
+  <script>
+    import {
+      WorkApiError,
+      createNote,
+      deleteCustomer,
+      getCustomerSession,
+      readCustomer,
+      updateCustomer,
+      type CustomerDetail,
+    } from "../../../../lib/work-customers-client";
+    import { element, fillFields, noteItem, readFields, setStatus, showFieldErrors, statusBadge } from "../../../../lib/work-customers-dom";
+    import { todayInKorea } from "../../../../lib/work/legal-dates.mjs";
+    import {
+      DEAL_STATUS_LABELS,
+      DEAL_TYPE_LABELS,
+      PARTY_ROLE_LABELS,
+      agoText,
+      checkCustomerInput,
+      checkNoteBody,
+      customerChanges,
+      customerErrorText,
+      customerIdFromSearch,
+      dateText,
+      deleteResultText,
+      dueText,
+      isCleanupDue,
+      isRetryable,
+      phoneText,
+    } from "../../../../lib/work/customers-view.mjs";
+
+    const root = document.querySelector<HTMLElement>("[data-cu-detail-page]");
+    if (root) {
+      const pick = <T extends HTMLElement>(selector: string) => {
+        const found = root.querySelector<T>(selector);
+        if (!found) throw new Error(`손님 카드 화면 칸이 없습니다: ${selector}`);
+        return found;
+      };
+      const labelOf = (table: Record<string, string>, key: string) => table[key] ?? key;
+      const boot = pick("[data-cu-boot]");
+      const statePanel = pick("[data-cu-state]");
+      const main = pick("[data-cu-main]");
+      const gone = pick("[data-cu-gone]");
+      const bar = pick("[data-cu-bar]");
+      const nameHeading = pick("[data-cu-name]");
+      const headStatus = pick("[data-cu-head-status]");
+      const call = pick<HTMLAnchorElement>("[data-cu-call]");
+      const sms = pick<HTMLAnchorElement>("[data-cu-sms]");
+      const basicStatus = pick("[data-cu-basic-status]");
+      const editOpen = pick<HTMLButtonElement>("[data-cu-edit-open]");
+      const editPanel = pick("[data-cu-edit-panel]");
+      const editSave = pick<HTMLButtonElement>("[data-cu-edit-save]");
+      const editStatus = pick("[data-cu-edit-status]");
+      const editReload = pick<HTMLButtonElement>("[data-cu-edit-reload]");
+      const deleteOpen = pick<HTMLButtonElement>("[data-cu-delete-open]");
+      const deletePanel = pick("[data-cu-delete-panel]");
+      const deleteConfirm = pick<HTMLInputElement>("[data-cu-delete-confirm]");
+      const deleteGo = pick<HTMLButtonElement>("[data-cu-delete-go]");
+      const deleteStatus = pick("[data-cu-delete-status]");
+      const memo = pick<HTMLTextAreaElement>("[data-cu-memo]");
+      const memoSave = pick<HTMLButtonElement>("[data-cu-memo-save]");
+      const memoStatus = pick("[data-cu-memo-status]");
+      const memoReload = pick<HTMLButtonElement>("[data-cu-memo-reload]");
+
+      let id: string | null = null;
+      let detail: CustomerDetail | null = null;
+      let busy = false;
+      let today = todayInKorea();
+      const errorCode = (error: unknown) => (error instanceof WorkApiError ? error.code : null);
+
+      function showState(title: string, body: string, { symbol = "!", retry = false, list = false, home = false } = {}) {
+        boot.hidden = true;
+        main.hidden = true;
+        bar.hidden = true;
+        pick("[data-cu-state-symbol]").textContent = symbol;
+        pick("[data-cu-state-title]").textContent = title;
+        pick("[data-cu-state-body]").textContent = body;
+        pick("[data-cu-state-retry]").hidden = !retry;
+        pick("[data-cu-state-list]").hidden = !list;
+        pick("[data-cu-state-home]").hidden = !home;
+        statePanel.hidden = false;
+      }
+      const showDisabled = () => showState(
+        "손님 자료 저장이 아직 켜지지 않았습니다",
+        "손님 이름·전화·메모를 서버에 저장하는 기능은 운영자가 켜야 쓸 수 있습니다. 켜기 전에는 아무것도 저장하지 않습니다.",
+        { symbol: "–", home: true },
+      );
+      const showMissing = () => showState("이 손님을 찾지 못했습니다", "다른 화면에서 지웠거나 주소가 잘못되었을 수 있습니다.", { symbol: "?", list: true });
+      function showLoadError(error: unknown) {
+        const code = errorCode(error);
+        if (code === "WORK_DISABLED") showDisabled();
+        else if (code === "NOT_FOUND") showMissing();
+        else showState("손님 카드를 불러오지 못했습니다", customerErrorText(code), { retry: isRetryable(code) });
+      }
+
+      function renderBasic() {
+        if (!detail) return;
+        const { customer } = detail;
+        nameHeading.textContent = customer.displayName;
+        headStatus.replaceChildren(statusBadge(customer.status));
+        const hasPhone = Boolean(customer.phoneDigits);
+        pick("[data-cu-contact]").hidden = !hasPhone;
+        if (hasPhone) {
+          call.href = `tel:${customer.phoneDigits}`;
+          sms.href = `sms:${customer.phoneDigits}`;
+        }
+        pick("[data-cu-phone]").textContent = hasPhone ? phoneText(customer.phoneDigits) : "없음";
+        pick("[data-cu-needs]").textContent = customer.needs || "아직 적지 않았습니다.";
+        pick("[data-cu-contact-on]").textContent = customer.lastContactOn ? `${dateText(customer.lastContactOn, today)} · ${agoText(customer.lastContactOn, today)}` : "기록 없음";
+        const retention = pick("[data-cu-retention]");
+        retention.replaceChildren(document.createTextNode(customer.retentionUntil ? `${dateText(customer.retentionUntil, today)}부터` : "없음"));
+        if (isCleanupDue(customer, today)) retention.append(" ", element("span", "admin-badge admin-badge--warning cu-cleanup", "정리할 때 지남"));
+        pick("[data-cu-delete-name]").textContent = `'${customer.displayName}'`;
+      }
+
+      function renderDeals() {
+        if (!detail) return;
+        const box = pick("[data-cu-deals]");
+        // 같은 거래에 역할이 둘이면 서버가 역할마다 한 줄씩 준다. 화면에는 거래 하나로 모으고 역할을 이어 쓴다.
+        const deals = new Map<string, { deal: CustomerDetail["deals"][number]; roles: string[] }>();
+        for (const deal of detail.deals) {
+          const entry = deals.get(deal.id);
+          if (entry) entry.roles.push(labelOf(PARTY_ROLE_LABELS, deal.role));
+          else deals.set(deal.id, { deal, roles: [labelOf(PARTY_ROLE_LABELS, deal.role)] });
+        }
+        box.replaceChildren(...[...deals.values()].map(({ deal, roles }) => {
+          const article = element("article", "cu-deal");
+          article.append(element("h3", "cu-deal__title", deal.title));
+          const meta = element("p", "cu-deal__meta", `${labelOf(DEAL_TYPE_LABELS, deal.dealType)} · ${roles.join("·")} · `);
+          meta.append(element("span", "cu-deal__status", labelOf(DEAL_STATUS_LABELS, deal.status)));
+          article.append(meta);
+          if (deal.events.length === 0) {
+            article.append(element("p", "cu-soft", "아직 일정이 없습니다."));
+          } else {
+            const list = element("ul", "cu-events");
+            for (const event of deal.events) {
+              const row = element("li", `cu-event${event.doneAt ? " is-done" : ""}`);
+              row.append(
+                element("span", "cu-event__date", dateText(event.dueOn, today)),
+                element("span", "cu-event__title", event.title),
+                element("span", "cu-event__left", event.doneAt ? "✓ 끝남" : dueText(event.dueOn, today)),
+              );
+              list.append(row);
+            }
+            article.append(list);
+          }
+          return article;
+        }));
+        pick("[data-cu-deals-count]").textContent = `${deals.size}건`;
+        pick("[data-cu-deals-empty]").hidden = deals.size > 0;
+      }
+
+      function renderNotes() {
+        if (!detail) return;
+        pick("[data-cu-notes]").replaceChildren(...detail.notes.map((note) => noteItem(note, today)));
+        pick("[data-cu-notes-count]").textContent = `${detail.notes.length}개`;
+        pick("[data-cu-notes-empty]").hidden = detail.notes.length > 0;
+        pick("[data-cu-notes-limit]").hidden = detail.notes.length < 50;
+      }
+
+      function renderFiles(filesEnabled: boolean) {
+        if (!detail) return;
+        const text = pick("[data-cu-files-text]");
+        if (detail.files.length > 0) text.textContent = `연결된 파일 ${detail.files.length}개가 있습니다. 파일은 파일 저장소가 켜진 뒤에 열어 볼 수 있습니다.`;
+        else text.textContent = filesEnabled ? "아직 올린 파일이 없습니다." : "파일 저장소가 아직 켜지지 않았습니다. 계약서 사진 등은 파일 저장소를 켠 뒤에 올릴 수 있습니다.";
+      }
+
+      let filesEnabled = false;
+      async function load() {
+        if (!id) return;
+        detail = await readCustomer(id);
+        renderBasic();
+        renderDeals();
+        renderNotes();
+        renderFiles(filesEnabled);
+      }
+
+      // ── 고치기 ──
+      function openEdit(open: boolean) {
+        editPanel.hidden = !open;
+        editOpen.setAttribute("aria-expanded", String(open));
+        editReload.hidden = true;
+        if (open) {
+          openDelete(false);
+          fillFields(editPanel, detail?.customer ?? null);
+          setStatus(editStatus, "", "idle");
+          editPanel.querySelector<HTMLInputElement>('[data-cu-field="displayName"]')?.focus();
+        }
+      }
+      editOpen.addEventListener("click", () => openEdit(Boolean(editPanel.hidden)));
+      pick("[data-cu-edit-cancel]").addEventListener("click", () => {
+        openEdit(false);
+        editOpen.focus();
+      });
+      editSave.addEventListener("click", async () => {
+        if (busy || !detail || !id) return;
+        const checked = checkCustomerInput(readFields(editPanel));
+        if (!checked.ok) {
+          showFieldErrors(editPanel, checked.errors);
+          setStatus(editStatus, "빨간 글자가 있는 칸을 고쳐 주세요.", "error");
+          return;
+        }
+        showFieldErrors(editPanel, {});
+        const changes = customerChanges(detail.customer, checked.value);
+        if (!changes) {
+          setStatus(editStatus, "바뀐 것이 없습니다.", "idle");
+          return;
+        }
+        busy = true;
+        editSave.disabled = true;
+        setStatus(editStatus, "저장하고 있습니다…", "saving");
+        try {
+          const { customer } = await updateCustomer(id, { version: detail.customer.version, ...changes });
+          detail = { ...detail, customer };
+          renderBasic();
+          openEdit(false);
+          setStatus(basicStatus, "✓ 고친 내용을 저장했습니다.", "success");
+          editOpen.focus();
+        } catch (error) {
+          const code = errorCode(error);
+          setStatus(editStatus, `저장하지 못했습니다. ${customerErrorText(code)}`, "error");
+          editReload.hidden = code !== "VERSION_CONFLICT";
+        } finally {
+          busy = false;
+          editSave.disabled = false;
+        }
+      });
+      // 다른 화면이 먼저 고쳤을 때: 넣던 값은 버리고 새 내용으로 다시 채운다.
+      editReload.addEventListener("click", async () => {
+        if (busy) return;
+        busy = true;
+        try {
+          await load();
+          openEdit(true);
+          setStatus(editStatus, "새 내용을 불러왔습니다. 다시 고친 뒤 저장해 주세요.", "idle");
+        } catch (error) {
+          showLoadError(error);
+        } finally {
+          busy = false;
+        }
+      });
+
+      // ── 지우기(이름 다시 입력) ──
+      function openDelete(open: boolean) {
+        deletePanel.hidden = !open;
+        deleteOpen.setAttribute("aria-expanded", String(open));
+        deleteConfirm.value = "";
+        deleteGo.disabled = true;
+        setStatus(deleteStatus, "", "idle");
+        if (open) {
+          openEdit(false);
+          deleteConfirm.focus();
+        }
+      }
+      deleteOpen.addEventListener("click", () => openDelete(Boolean(deletePanel.hidden)));
+      pick("[data-cu-delete-cancel]").addEventListener("click", () => {
+        openDelete(false);
+        deleteOpen.focus();
+      });
+      deleteConfirm.addEventListener("input", () => {
+        deleteGo.disabled = !detail || deleteConfirm.value.trim() !== detail.customer.displayName;
+      });
+      deleteGo.addEventListener("click", async () => {
+        if (busy || !detail || !id) return;
+        busy = true;
+        deleteGo.disabled = true;
+        setStatus(deleteStatus, "지우고 있습니다…", "saving");
+        try {
+          const result = await deleteCustomer(id, deleteConfirm.value.trim());
+          detail = null;
+          main.hidden = true;
+          bar.hidden = true;
+          nameHeading.textContent = "손님 카드";
+          headStatus.replaceChildren();
+          pick("[data-cu-gone-text]").textContent = deleteResultText(result);
+          gone.hidden = false;
+          gone.querySelector<HTMLAnchorElement>("a")?.focus();
+        } catch (error) {
+          setStatus(deleteStatus, `지우지 못했습니다. ${customerErrorText(errorCode(error))}`, "error");
+          deleteGo.disabled = false;
+        } finally {
+          busy = false;
+        }
+      });
+
+      // ── 메모 ──
+      memoSave.addEventListener("click", async () => {
+        if (busy || !id) return;
+        const checked = checkNoteBody(memo.value);
+        if (!checked.ok) {
+          setStatus(memoStatus, checked.error, "error");
+          memo.focus();
+          return;
+        }
+        busy = true;
+        memoSave.disabled = true;
+        memoReload.hidden = true;
+        setStatus(memoStatus, "저장하고 있습니다…", "saving");
+        try {
+          await createNote({ body: checked.value, customerId: id });
+        } catch (error) {
+          setStatus(memoStatus, `저장하지 못했습니다. ${customerErrorText(errorCode(error))}`, "error");
+          busy = false;
+          memoSave.disabled = false;
+          return;
+        }
+        // 여기부터는 저장이 끝난 뒤다. 다시 읽기가 실패해도 '저장하지 못했습니다'로 알리지 않는다(다시 누르면 메모가 두 번 들어감).
+        memo.value = "";
+        try {
+          // 메모를 쓰면 서버가 마지막 연락일을 오늘로 바꾸므로 카드를 다시 읽는다.
+          await load();
+          setStatus(memoStatus, "✓ 메모를 저장했습니다.", "success");
+        } catch {
+          setStatus(memoStatus, "✓ 메모는 저장했습니다. 다만 손님 카드를 새로 읽지 못해 아래 메모 목록에는 아직 없습니다. '다시 불러오기'를 눌러 주세요.", "error");
+          memoReload.hidden = false;
+        } finally {
+          busy = false;
+          memoSave.disabled = false;
+        }
+      });
+      // 메모 저장 뒤 다시 읽기만 실패했을 때: 손님 카드만 다시 읽는다(메모는 다시 보내지 않음).
+      memoReload.addEventListener("click", async () => {
+        if (busy) return;
+        busy = true;
+        try {
+          await load();
+          memoReload.hidden = true;
+          setStatus(memoStatus, "✓ 손님 카드를 새로 읽었습니다.", "success");
+        } catch (error) {
+          showLoadError(error);
+        } finally {
+          busy = false;
+        }
+      });
+      pick("[data-cu-bar-memo]").addEventListener("click", () => {
+        memo.scrollIntoView({ block: "center" });
+        memo.focus({ preventScroll: true });
+      });
+
+      // 저장하지 않은 메모·고치기 칸이 있으면 떠나기 전에 묻는다.
+      window.addEventListener("beforeunload", (event) => {
+        const editing = !editPanel.hidden;
+        if (!memo.value.trim() && !editing) return;
+        event.preventDefault();
+      });
+
+      // ── 처음 불러오기: 주소 ID → 업무 세션(켜짐) → 손님 카드 ──
+      async function start() {
+        statePanel.hidden = true;
+        main.hidden = true;
+        gone.hidden = true;
+        bar.hidden = true;
+        boot.hidden = false;
+        today = todayInKorea();
+        id = customerIdFromSearch(location.search);
+        if (!id) {
+          showMissing();
+          return;
+        }
+        try {
+          const session = await getCustomerSession({ refresh: true });
+          if (!session.enabled) {
+            showDisabled();
+            return;
+          }
+          filesEnabled = session.filesEnabled;
+          await load();
+        } catch (error) {
+          showLoadError(error);
+          return;
+        }
+        boot.hidden = true;
+        main.hidden = false;
+        bar.hidden = false;
+      }
+      pick("[data-cu-state-retry]").addEventListener("click", () => void start());
+
+      // 열 때마다(뒤로 가기 캐시 복원 포함) 넣던 메모·고치기·지우기 칸을 비우고 다시 불러온다.
+      const reset = () => {
+        detail = null;
+        memo.value = "";
+        setStatus(memoStatus, "", "idle");
+        memoReload.hidden = true;
+        setStatus(basicStatus, "", "idle");
+        openEdit(false);
+        openDelete(false);
+        nameHeading.textContent = "손님 카드";
+        headStatus.replaceChildren();
+        void start();
+      };
+      window.addEventListener("pageshow", (event) => {
+        if (event.persisted) reset();
+      });
+      reset();
+    }
+  </script>
+</AdminLayout>

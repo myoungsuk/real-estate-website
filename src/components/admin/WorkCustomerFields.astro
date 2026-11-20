@@ -1,0 +1,48 @@
+---
+// 손님 입력 칸 4개(이름·전화번호·찾는 조건·상태). 손님 목록의 '새 손님'과 손님 카드의 '고치기'가 같이 쓴다.
+// 칸 범위는 서버(worker/work-input.mjs parseCustomerCreate)와 같다. 값 읽기·채우기·오류 표시는 src/lib/work-customers-dom.ts가 한다.
+import { CUSTOMER_NAME_MAX, CUSTOMER_NEEDS_MAX, CUSTOMER_STATUS_LABELS, CUSTOMER_STATUS_ORDER } from "../../lib/work/customers-view.mjs";
+
+interface Props {
+  idPrefix: string;
+}
+
+const { idPrefix } = Astro.props;
+const statusLabels = CUSTOMER_STATUS_LABELS as Record<string, string>;
+---
+
+<div class="cu-fields" data-cu-fields>
+  <div class="work-row">
+    <label class="work-row__label" for={`${idPrefix}-name`}>이름 <span class="cu-required">필수</span></label>
+    <div class="work-row__control">
+      <input id={`${idPrefix}-name`} type="text" maxlength={CUSTOMER_NAME_MAX} autocomplete="off" aria-describedby={`${idPrefix}-name-error`} data-cu-field="displayName" />
+      <small class="cu-error" id={`${idPrefix}-name-error`} data-cu-error="displayName"></small>
+    </div>
+  </div>
+  <div class="work-row">
+    <label class="work-row__label" for={`${idPrefix}-phone`}>전화번호</label>
+    <div class="work-row__control">
+      <input id={`${idPrefix}-phone`} type="text" inputmode="tel" maxlength="20" placeholder="예: 010-0000-0000" autocomplete="off" aria-describedby={`${idPrefix}-phone-error`} data-cu-field="phone" />
+      <small class="cu-error" id={`${idPrefix}-phone-error`} data-cu-error="phone"></small>
+    </div>
+  </div>
+  <div class="work-row">
+    <label class="work-row__label" for={`${idPrefix}-needs`}>찾는 조건</label>
+    <div class="work-row__control">
+      <textarea id={`${idPrefix}-needs`} rows="3" maxlength={CUSTOMER_NEEDS_MAX} placeholder="예: 천동 84㎡ 매매, 4억 중반까지" autocomplete="off" aria-describedby={`${idPrefix}-needs-help ${idPrefix}-needs-error`} data-cu-field="needs"></textarea>
+      <small id={`${idPrefix}-needs-help`}>호수·주민등록번호는 넣지 않습니다. 주민등록번호처럼 보이는 숫자는 저장할 때 가려집니다.</small>
+      <small class="cu-error" id={`${idPrefix}-needs-error`} data-cu-error="needs"></small>
+    </div>
+  </div>
+  <div class="work-row" role="radiogroup" aria-labelledby={`${idPrefix}-status-label`}>
+    <span class="work-row__label" id={`${idPrefix}-status-label`}>상태</span>
+    <div class="work-segment">
+      {CUSTOMER_STATUS_ORDER.map((status: string) => (
+        <label class="work-choice">
+          <input type="radio" name={`${idPrefix}-status`} value={status} checked={status === "consulting"} autocomplete="off" data-cu-field="status" />
+          <span>{statusLabels[status]}</span>
+        </label>
+      ))}
+    </div>
+  </div>
+</div>

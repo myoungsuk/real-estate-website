@@ -52,6 +52,11 @@ const SQL = Object.freeze({
   customerDelete: "DELETE FROM customers WHERE id = ?",
   customerDeals:
     "SELECT d.id, d.title, d.deal_type, d.status, d.version, d.updated_at, p.role FROM deal_parties p JOIN deals d ON d.id = p.deal_id WHERE p.customer_id = ? ORDER BY d.updated_at DESC, d.id DESC",
+  // 손님 카드에 거래별 일정을 함께 싣는다(사용자 선택 2026-11-21 02:26:01 "손님 상세에 일정 함께 담기"). 그 손님이 참여한 거래의 일정을 한 번에 읽는다.
+  // 같은 거래에 역할이 둘이어도 IN이라 일정이 두 번 나오지 않는다. 열·순서는 거래 상세(work-deals.mjs dealEvents)와 같다.
+  customerDealEvents:
+    "SELECT id, deal_id, kind, due_on, title, alarm_offsets, source, done_at, version, created_at, updated_at FROM deal_events"
+    + " WHERE deal_id IN (SELECT deal_id FROM deal_parties WHERE customer_id = ?) ORDER BY due_on, id",
   customerNotes:
     "SELECT id, customer_id, deal_id, body, source, file_id, version, created_at, updated_at FROM notes WHERE customer_id = ? ORDER BY created_at DESC, id DESC LIMIT ?",
   customerFiles:
@@ -137,6 +142,23 @@ function customerView(row) {
   };
 }
 
+// 거래 일정 한 건(거래 상세 GET /deals/:id의 events와 같은 모양).
+function eventView(row) {
+  return {
+    id: row.id,
+    dealId: row.deal_id,
+    kind: row.kind,
+    dueOn: row.due_on,
+    title: row.title,
+    alarmOffsets: JSON.parse(row.alarm_offsets),
+    source: row.source,
+    doneAt: row.done_at,
+    version: row.version,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 export function noteView(row) {
   return {
     id: row.id,
@@ -192,11 +214,20 @@ async function getCustomer(ctx, id) {
     const row = await loadCustomer(ctx.db, id);
     if (!row) return null;
     const deals = await all(ctx.db.prepare(SQL.customerDeals).bind(id));
+    const events = await all(ctx.db.prepare(SQL.customerDealEvents).bind(id));
     const notes = await all(ctx.db.prepare(SQL.customerNotes).bind(id, DETAIL_NOTE_LIMIT));
     const files = await all(ctx.db.prepare(SQL.customerFiles).bind(id));
+    const eventsByDeal = new Map();
+    for (const event of events) {
+      if (!eventsByDeal.has(event.deal_id)) eventsByDeal.set(event.deal_id, []);
+      eventsByDeal.get(event.deal_id).push(eventView(event));
+    }
     return {
       customer: customerView(row),
-      deals: deals.map((deal) => ({ id: deal.id, title: deal.title, dealType: deal.deal_type, status: deal.status, role: deal.role, version: deal.version, updatedAt: deal.updated_at })),
+      deals: deals.map((deal) => ({
+        id: deal.id, title: deal.title, dealType: deal.deal_type, status: deal.status, role: deal.role, version: deal.version, updatedAt: deal.updated_at,
+        events: eventsByDeal.get(deal.id) ?? [],
+      })),
       notes: notes.map(noteView),
       files: files.map((file) => ({ id: file.id, kind: file.kind, mimeType: file.mime_type, byteSize: file.byte_size, caption: file.caption, dealId: file.deal_id, createdAt: file.created_at })),
     };

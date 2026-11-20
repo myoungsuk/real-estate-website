@@ -1,0 +1,532 @@
+---
+import AdminIcon from "../../../components/admin/AdminIcon.astro";
+import AdminPageHelp from "../../../components/admin/AdminPageHelp.astro";
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import { CUSTOMER_QUERY_MAX, NOTE_BODY_MAX } from "../../../lib/work/customers-view.mjs";
+
+// 메모 창고(단계 2): 손님·거래와 잇지 않은 메모(GET /notes?inbox=1). 사용자 선택 2026-11-21 02:26:01 "손님 화면 안 링크로만"이라 메뉴에는 넣지 않는다.
+// - 서버 요청은 work-customers-client.ts 한 곳. 업무 세션이 꺼져 있으면 메모를 부르지 않는다.
+// - 서버를 부르므로 탭 미리 그리기 prerender 목록에 넣지 않는다.
+// - 메모를 손님에게 옮겨도 그 손님의 '마지막 연락'은 바뀌지 않는다(서버 설계: 메모를 새로 쓸 때만 바뀜).
+---
+
+<AdminLayout
+  title="메모 창고 | 행복한부동산 관리자"
+  description="손님과 잇지 않은 메모를 모아 두었다가 손님 카드로 옮기는 관리자 업무 도구입니다."
+>
+  <div class="work-ui work-doc cu-doc cu-doc--wide" data-nt-page>
+    <p class="cu-back"><a class="admin-text-link" href="/admin/work/customers/"><span aria-hidden="true">←</span> 손님 목록</a></p>
+    <header class="work-doc__header">
+      <span class="work-round-icon work-round-icon--title" data-tone="navy">
+        <AdminIcon name="note" size={22} />
+      </span>
+      <h1>메모 창고</h1>
+      <span class="admin-stage-badge">손님과 잇지 않은 메모</span>
+    </header>
+    <AdminPageHelp page="/admin/work/notes/" />
+
+    <p class="rt-boot cu-boot" role="status" data-nt-boot>메모를 불러오고 있습니다…</p>
+    <section class="admin-panel rt-state cu-state" aria-labelledby="nt-state-title" data-nt-state hidden>
+      <div class="admin-empty-state">
+        <span aria-hidden="true" data-nt-state-symbol>!</span>
+        <div>
+          <h2 id="nt-state-title" data-nt-state-title></h2>
+          <p data-nt-state-body></p>
+          <button class="work-secondary-button cu-state__go" type="button" data-nt-state-retry hidden>다시 불러오기</button>
+          <a class="admin-text-link" href="/admin/work/" data-nt-state-home hidden>업무 도구 처음으로</a>
+        </div>
+      </div>
+    </section>
+
+    <div class="cu-two" data-nt-main hidden>
+      <div class="cu-two__side">
+        <section class="cu-block" aria-labelledby="nt-quick-title">
+          <h2 id="nt-quick-title" class="cu-block__title">빠른 메모</h2>
+          <div class="cu-composer">
+            <label class="sr-only" for="nt-memo">빠른 메모</label>
+            <textarea id="nt-memo" rows="4" maxlength={NOTE_BODY_MAX} placeholder="전화 받으며 급히 적을 내용" autocomplete="off" data-nt-memo></textarea>
+            <div class="cu-composer__foot">
+              <small>주민등록번호처럼 보이는 숫자는 저장할 때 가려집니다.</small>
+              <button class="work-primary-button cu-save" type="button" data-nt-memo-save>메모 저장</button>
+            </div>
+            <p class="admin-form-status" role="status" aria-live="polite" data-nt-memo-status></p>
+          </div>
+        </section>
+      </div>
+
+      <div class="cu-two__main">
+        <div class="rt-find" role="search" aria-label="메모 찾기">
+          <label class="sr-only" for="nt-q">메모 글자로 찾기</label>
+          <input id="nt-q" type="search" maxlength={CUSTOMER_QUERY_MAX} placeholder="메모 글자로 찾기" enterkeyhint="search" autocomplete="off" data-nt-q />
+          <button class="rt-find__go" type="button" data-nt-q-go>찾기</button>
+        </div>
+        <section class="cu-list" aria-labelledby="nt-count">
+          <div class="rt-strip cu-strip">
+            <div class="rt-strip__text"><h2 id="nt-count" data-nt-count>메모</h2></div>
+            <button class="rt-strip__clear" type="button" data-nt-clear hidden>찾기 지우기</button>
+          </div>
+          <p class="cu-done" role="status" aria-live="polite" data-nt-done hidden><span data-nt-done-text></span> <a class="admin-text-link" href="#" data-nt-done-link>손님 카드 열기</a></p>
+          <p class="admin-form-status" role="status" aria-live="polite" tabindex="-1" data-nt-notice></p>
+          <ol class="cu-notes" data-nt-list></ol>
+          <section class="admin-panel rt-state cu-state" aria-labelledby="nt-empty-title" data-nt-empty hidden>
+            <div class="admin-empty-state">
+              <span aria-hidden="true">0</span>
+              <div>
+                <h2 id="nt-empty-title" data-nt-empty-title></h2>
+                <p data-nt-empty-body></p>
+                <button class="work-secondary-button cu-state__go" type="button" data-nt-empty-clear hidden>찾기 지우기</button>
+              </div>
+            </div>
+          </section>
+          <div class="cu-more-line">
+            <button class="work-secondary-button cu-more" type="button" data-nt-more hidden>20개 더 보기</button>
+            <p class="admin-form-status" role="status" aria-live="polite" data-nt-list-status></p>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- 메모 한 개에 붙이는 '손님에게 옮기기' 칸(복사해서 씀) -->
+    <template data-nt-move-template>
+      <div class="cu-move" role="group" aria-label="손님에게 옮기기">
+        <label class="work-row__label" data-nt-move-label>어느 손님에게 옮길까요?</label>
+        <div class="rt-find">
+          <input type="search" maxlength={CUSTOMER_QUERY_MAX} placeholder="손님 이름·전화번호" enterkeyhint="search" autocomplete="off" data-nt-move-q />
+          <button class="rt-find__go" type="button" data-nt-move-find>찾기</button>
+        </div>
+        <div class="cu-move__pick" role="radiogroup" aria-label="찾은 손님" data-nt-move-pick></div>
+        <div class="cu-actions">
+          <button class="work-primary-button cu-save" type="button" disabled data-nt-move-go>이 손님에게 옮기기</button>
+          <button class="work-secondary-button" type="button" data-nt-move-cancel>그만두기</button>
+        </div>
+        <p class="admin-form-status" role="status" aria-live="polite" data-nt-move-status></p>
+      </div>
+    </template>
+    <template data-nt-edit-template>
+      <div class="cu-move" role="group" aria-label="메모 고치기">
+        <label class="sr-only" data-nt-edit-label>메모 글</label>
+        <textarea rows="4" maxlength={NOTE_BODY_MAX} autocomplete="off" data-nt-edit-body></textarea>
+        <div class="cu-actions">
+          <button class="work-primary-button cu-save" type="button" data-nt-edit-go>고친 메모 저장</button>
+          <button class="work-secondary-button" type="button" data-nt-edit-cancel>그만두기</button>
+        </div>
+        <p class="admin-form-status" role="status" aria-live="polite" data-nt-edit-status></p>
+      </div>
+    </template>
+    <template data-nt-delete-template>
+      <div class="cu-move cu-panel--danger" role="group" aria-label="메모 지우기">
+        <p>이 메모를 지울까요? 지우면 되돌릴 수 없습니다.</p>
+        <div class="cu-actions">
+          <button class="work-primary-button cu-save cu-delete-go" type="button" data-nt-delete-go>지우기</button>
+          <button class="work-secondary-button" type="button" data-nt-delete-cancel>그만두기</button>
+        </div>
+        <p class="admin-form-status" role="status" aria-live="polite" data-nt-delete-status></p>
+      </div>
+    </template>
+  </div>
+
+  <script>
+    import { WorkApiError, createNote, deleteNote, getCustomerSession, listCustomers, listNotes, updateNote, type Customer, type Note } from "../../../lib/work-customers-client";
+    import { element, noteItem, setStatus, statusBadge } from "../../../lib/work-customers-dom";
+    import { todayInKorea } from "../../../lib/work/legal-dates.mjs";
+    import { checkNoteBody, cleanQuery, customerErrorText, customerHref, customerListQuery, isRetryable, noteListQuery } from "../../../lib/work/customers-view.mjs";
+
+    const MOVE_PICK_MAX = 5;
+    const root = document.querySelector<HTMLElement>("[data-nt-page]");
+    if (root) {
+      const list = root.querySelector<HTMLOListElement>("[data-nt-list]");
+      if (list) {
+        const pick = <T extends HTMLElement>(selector: string, from: ParentNode = root) => {
+          const found = from.querySelector<T>(selector);
+          if (!found) throw new Error(`메모 창고 화면 칸이 없습니다: ${selector}`);
+          return found;
+        };
+        const boot = pick("[data-nt-boot]");
+        const statePanel = pick("[data-nt-state]");
+        const main = pick("[data-nt-main]");
+        const memo = pick<HTMLTextAreaElement>("[data-nt-memo]");
+        const memoSave = pick<HTMLButtonElement>("[data-nt-memo-save]");
+        const memoStatus = pick("[data-nt-memo-status]");
+        const query = pick<HTMLInputElement>("[data-nt-q]");
+        const count = pick("[data-nt-count]");
+        const clear = pick<HTMLButtonElement>("[data-nt-clear]");
+        const done = pick("[data-nt-done]");
+        const doneLink = pick<HTMLAnchorElement>("[data-nt-done-link]");
+        const empty = pick("[data-nt-empty]");
+        const more = pick<HTMLButtonElement>("[data-nt-more]");
+        const listStatus = pick("[data-nt-list-status]");
+        // 목록 위 상태 줄: 목록을 다시 읽어 펼친 칸이 사라져도 왜 실패했는지 남긴다(loadList는 이 줄을 건드리지 않음).
+        const notice = pick("[data-nt-notice]");
+        const clearNotice = () => setStatus(notice, "", "idle");
+        const templates = {
+          move: pick<HTMLTemplateElement>("[data-nt-move-template]"),
+          edit: pick<HTMLTemplateElement>("[data-nt-edit-template]"),
+          remove: pick<HTMLTemplateElement>("[data-nt-delete-template]"),
+        };
+
+        let items: Note[] = [];
+        let cursor: string | null = null;
+        let applied = "";
+        let loadToken = 0;
+        let busy = false;
+        let today = todayInKorea();
+        let panelSeq = 0;
+        const errorCode = (error: unknown) => (error instanceof WorkApiError ? error.code : null);
+        // 다른 화면이 먼저 고치거나 옮기거나 지운 메모(409·404): 목록 위에 까닭을 남기고 목록을 새로 읽는다.
+        // 넣던 글은 버린다(손님 카드 고치기의 409와 같은 방식). 다시 읽은 뒤에는 새 version으로 다시 할 수 있다.
+        function staleNote(code: string | null, action: "고친 글" | "옮기기") {
+          if (code !== "VERSION_CONFLICT" && code !== "NOT_FOUND") return false;
+          const why = code === "NOT_FOUND" ? "이 메모를 찾지 못했습니다. 다른 화면에서 지웠거나 손님 카드로 옮겼을 수 있습니다." : "다른 화면에서 이 메모를 먼저 고치거나 옮겼습니다.";
+          setStatus(notice, `${action === "고친 글" ? "고친 글을 저장하지 않았습니다." : "옮기지 않았습니다."} ${why} 목록을 새로 읽었으니 다시 해 주세요.`, "error");
+          void loadList();
+          notice.focus();
+          return true;
+        }
+
+        function showState(title: string, body: string, { symbol = "!", retry = false, home = false } = {}) {
+          boot.hidden = true;
+          main.hidden = true;
+          pick("[data-nt-state-symbol]").textContent = symbol;
+          pick("[data-nt-state-title]").textContent = title;
+          pick("[data-nt-state-body]").textContent = body;
+          pick("[data-nt-state-retry]").hidden = !retry;
+          pick("[data-nt-state-home]").hidden = !home;
+          statePanel.hidden = false;
+        }
+        const showDisabled = () => showState(
+          "손님 자료 저장이 아직 켜지지 않았습니다",
+          "메모를 서버에 저장하는 기능은 운영자가 켜야 쓸 수 있습니다. 켜기 전에는 아무것도 저장하지 않습니다.",
+          { symbol: "–", home: true },
+        );
+
+        // ── 메모 한 개: 시각·글 + '손님에게 옮기기'·'고치기'·'지우기'. 펼친 칸은 한 번에 하나만 ──
+        function closePanels() {
+          for (const open of list!.querySelectorAll<HTMLElement>("[data-nt-panel]")) open.remove();
+          for (const row of list!.querySelectorAll<HTMLElement>(".cu-memo.is-open")) row.classList.remove("is-open");
+        }
+
+        function noteRow(note: Note) {
+          const row = noteItem(note, today, "cu-memo cu-memo--inbox");
+          row.dataset.ntNote = note.id;
+          const actions = element("div", "cu-actions cu-actions--quiet");
+          const moveButton = element("button", "admin-text-link cu-linkbtn", "손님에게 옮기기");
+          const editButton = element("button", "admin-text-link cu-linkbtn", "고치기");
+          const deleteButton = element("button", "admin-text-link cu-linkbtn cu-danger", "지우기");
+          for (const button of [moveButton, editButton, deleteButton]) button.type = "button";
+          actions.append(moveButton, editButton, deleteButton);
+          row.append(actions);
+
+          const open = (template: HTMLTemplateElement) => {
+            const panel = template.content.firstElementChild!.cloneNode(true) as HTMLElement;
+            panel.dataset.ntPanel = "";
+            closePanels();
+            row.classList.add("is-open");
+            row.append(panel);
+            const cancel = panel.querySelector<HTMLButtonElement>("[data-nt-move-cancel], [data-nt-edit-cancel], [data-nt-delete-cancel]");
+            cancel?.addEventListener("click", () => {
+              panel.remove();
+              row.classList.remove("is-open");
+              actions.querySelector("button")?.focus();
+            });
+            return panel;
+          };
+
+          moveButton.addEventListener("click", () => openMove(note, open(templates.move)));
+          editButton.addEventListener("click", () => openEdit(note, open(templates.edit)));
+          deleteButton.addEventListener("click", () => openDelete(note, open(templates.remove)));
+          return row;
+        }
+
+        function openMove(note: Note, panel: HTMLElement) {
+          const seq = ++panelSeq;
+          const input = pick<HTMLInputElement>("[data-nt-move-q]", panel);
+          const label = pick<HTMLLabelElement>("[data-nt-move-label]", panel);
+          const pickBox = pick("[data-nt-move-pick]", panel);
+          const go = pick<HTMLButtonElement>("[data-nt-move-go]", panel);
+          const status = pick("[data-nt-move-status]", panel);
+          input.id = `nt-move-q-${seq}`;
+          label.htmlFor = input.id;
+          let found: Customer[] = [];
+          const chosen = () => pickBox.querySelector<HTMLInputElement>("input:checked")?.value ?? "";
+          async function find() {
+            const text = cleanQuery(input.value);
+            input.value = text;
+            if (!text) {
+              setStatus(status, "손님 이름이나 전화번호(숫자 3자리 이상)를 넣고 '찾기'를 눌러 주세요.", "error");
+              input.focus();
+              return;
+            }
+            setStatus(status, "찾고 있습니다…", "saving");
+            try {
+              const page = await listCustomers(customerListQuery({ q: text }));
+              found = page.items.slice(0, MOVE_PICK_MAX);
+              pickBox.replaceChildren(...found.map((customer) => {
+                const option = element("label", "cu-move__opt");
+                const radio = element("input");
+                radio.type = "radio";
+                radio.name = `nt-move-${seq}`;
+                radio.value = customer.id;
+                radio.autocomplete = "off";
+                const text = element("span");
+                text.append(element("strong", "", customer.displayName), " ", statusBadge(customer.status));
+                if (customer.needs) text.append(" ", element("span", "cu-move__needs", customer.needs));
+                option.append(radio, text);
+                return option;
+              }));
+              go.disabled = true;
+              if (found.length === 0) setStatus(status, "찾는 손님이 없습니다. 손님 목록에서 먼저 손님을 넣어 주세요.", "error");
+              else setStatus(status, page.items.length > MOVE_PICK_MAX ? `먼저 찾은 ${MOVE_PICK_MAX}명입니다. 없으면 이름을 더 넣어 찾아 주세요.` : `${found.length}명을 찾았습니다. 옮길 손님을 고르세요.`, "idle");
+            } catch (error) {
+              setStatus(status, `찾지 못했습니다. ${customerErrorText(errorCode(error))}`, "error");
+            }
+          }
+          pick("[data-nt-move-find]", panel).addEventListener("click", () => void find());
+          input.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" && !event.isComposing) {
+              event.preventDefault();
+              void find();
+            }
+          });
+          pickBox.addEventListener("change", () => {
+            go.disabled = !chosen();
+          });
+          go.addEventListener("click", async () => {
+            const customerId = chosen();
+            const customer = found.find((entry) => entry.id === customerId);
+            if (busy || !customer) return;
+            busy = true;
+            go.disabled = true;
+            setStatus(status, "옮기고 있습니다…", "saving");
+            try {
+              await updateNote(note.id, { version: note.version, customerId });
+              clearNotice();
+              items = items.filter((entry) => entry.id !== note.id);
+              renderList();
+              pick("[data-nt-done-text]").textContent = `✓ 메모를 '${customer.displayName}' 손님 카드로 옮겼습니다.`;
+              doneLink.href = customerHref(customer.id);
+              done.hidden = false;
+              doneLink.focus();
+            } catch (error) {
+              const code = errorCode(error);
+              if (staleNote(code, "옮기기")) return;
+              setStatus(status, `옮기지 못했습니다. ${customerErrorText(code)}`, "error");
+              go.disabled = false;
+            } finally {
+              busy = false;
+            }
+          });
+          input.focus();
+        }
+
+        function openEdit(note: Note, panel: HTMLElement) {
+          const seq = ++panelSeq;
+          const body = pick<HTMLTextAreaElement>("[data-nt-edit-body]", panel);
+          const label = pick<HTMLLabelElement>("[data-nt-edit-label]", panel);
+          const go = pick<HTMLButtonElement>("[data-nt-edit-go]", panel);
+          const status = pick("[data-nt-edit-status]", panel);
+          body.id = `nt-edit-${seq}`;
+          label.htmlFor = body.id;
+          body.value = note.body;
+          go.addEventListener("click", async () => {
+            if (busy) return;
+            const checked = checkNoteBody(body.value);
+            if (!checked.ok) {
+              setStatus(status, checked.error, "error");
+              body.focus();
+              return;
+            }
+            if (checked.value === note.body) {
+              setStatus(status, "바뀐 것이 없습니다.", "idle");
+              return;
+            }
+            busy = true;
+            go.disabled = true;
+            setStatus(status, "저장하고 있습니다…", "saving");
+            try {
+              const { note: saved } = await updateNote(note.id, { version: note.version, body: checked.value });
+              clearNotice();
+              items = items.map((entry) => (entry.id === saved.id ? saved : entry));
+              renderList();
+              setStatus(listStatus, "✓ 고친 메모를 저장했습니다.", "success");
+            } catch (error) {
+              const code = errorCode(error);
+              if (staleNote(code, "고친 글")) return;
+              setStatus(status, `저장하지 못했습니다. ${customerErrorText(code)}`, "error");
+              go.disabled = false;
+            } finally {
+              busy = false;
+            }
+          });
+          body.focus();
+        }
+
+        function openDelete(note: Note, panel: HTMLElement) {
+          const go = pick<HTMLButtonElement>("[data-nt-delete-go]", panel);
+          const status = pick("[data-nt-delete-status]", panel);
+          go.addEventListener("click", async () => {
+            if (busy) return;
+            busy = true;
+            go.disabled = true;
+            setStatus(status, "지우고 있습니다…", "saving");
+            try {
+              await deleteNote(note.id);
+              items = items.filter((entry) => entry.id !== note.id);
+              renderList();
+              setStatus(listStatus, "✓ 메모를 지웠습니다.", "success");
+              query.focus();
+            } catch (error) {
+              setStatus(status, `지우지 못했습니다. ${customerErrorText(errorCode(error))}`, "error");
+              go.disabled = false;
+            } finally {
+              busy = false;
+            }
+          });
+          go.focus();
+        }
+
+        function renderList() {
+          list!.replaceChildren(...items.map(noteRow));
+          count.textContent = `${applied ? "찾은 메모" : "메모"} ${items.length.toLocaleString("ko-KR")}개${cursor ? " 이상" : ""} · 최근 쓴 순`;
+          more.hidden = !cursor;
+          clear.hidden = !applied;
+          empty.hidden = items.length > 0;
+          if (items.length === 0) {
+            pick("[data-nt-empty-title]").textContent = applied ? "찾는 메모가 없습니다" : "메모 창고가 비어 있습니다";
+            pick("[data-nt-empty-body]").textContent = applied
+              ? "손님과 잇지 않은 메모 글에서만 찾습니다. 손님 카드로 옮긴 메모는 그 손님 카드에 있습니다."
+              : "전화 받다가 급히 적은 메모를 '빠른 메모'에 저장하면 여기에 쌓입니다. 손님이 정해지면 그 손님 카드로 옮깁니다.";
+            pick("[data-nt-empty-clear]").hidden = !applied;
+          }
+        }
+
+        async function loadList({ append = false } = {}) {
+          const mine = ++loadToken;
+          more.disabled = true;
+          setStatus(listStatus, append ? "더 불러오고 있습니다…" : "불러오고 있습니다…", "saving");
+          try {
+            const page = await listNotes(noteListQuery({ q: applied, cursor: append ? cursor : null }));
+            if (mine !== loadToken) return;
+            items = append ? [...items, ...page.items] : page.items;
+            cursor = page.nextCursor;
+            setStatus(listStatus, "", "idle");
+            renderList();
+          } catch (error) {
+            if (mine !== loadToken) return;
+            const code = errorCode(error);
+            if (!append && code === "WORK_DISABLED") {
+              showDisabled();
+              return;
+            }
+            setStatus(listStatus, `메모를 불러오지 못했습니다. ${customerErrorText(code)}`, "error");
+          } finally {
+            if (mine === loadToken) more.disabled = false;
+          }
+        }
+
+        function applySearch() {
+          query.value = cleanQuery(query.value);
+          applied = query.value;
+          done.hidden = true;
+          clearNotice();
+          void loadList();
+        }
+        pick("[data-nt-q-go]").addEventListener("click", applySearch);
+        query.addEventListener("keydown", (event) => {
+          if (event.key === "Enter" && !event.isComposing) {
+            event.preventDefault();
+            applySearch();
+          }
+        });
+        const clearSearch = () => {
+          query.value = "";
+          applied = "";
+          void loadList();
+        };
+        clear.addEventListener("click", clearSearch);
+        pick("[data-nt-empty-clear]").addEventListener("click", clearSearch);
+        more.addEventListener("click", () => {
+          if (cursor) void loadList({ append: true });
+        });
+
+        // ── 빠른 메모(손님 없이 저장) ──
+        memoSave.addEventListener("click", async () => {
+          if (busy) return;
+          const checked = checkNoteBody(memo.value);
+          if (!checked.ok) {
+            setStatus(memoStatus, checked.error, "error");
+            memo.focus();
+            return;
+          }
+          busy = true;
+          memoSave.disabled = true;
+          setStatus(memoStatus, "저장하고 있습니다…", "saving");
+          try {
+            await createNote({ body: checked.value });
+            memo.value = "";
+            setStatus(memoStatus, "✓ 메모를 저장했습니다.", "success");
+            done.hidden = true;
+            query.value = "";
+            applied = "";
+            await loadList();
+          } catch (error) {
+            setStatus(memoStatus, `저장하지 못했습니다. ${customerErrorText(errorCode(error))}`, "error");
+          } finally {
+            busy = false;
+            memoSave.disabled = false;
+          }
+        });
+
+        // 저장하지 않은 빠른 메모·고치던 메모가 있으면 떠나기 전에 묻는다.
+        window.addEventListener("beforeunload", (event) => {
+          const editing = list.querySelector<HTMLTextAreaElement>("[data-nt-edit-body]");
+          if (!memo.value.trim() && !editing) return;
+          event.preventDefault();
+        });
+
+        // ── 처음 불러오기: 업무 세션(켜짐) → 메모 창고 ──
+        async function start() {
+          statePanel.hidden = true;
+          main.hidden = true;
+          boot.hidden = false;
+          today = todayInKorea();
+          try {
+            const session = await getCustomerSession({ refresh: true });
+            if (!session.enabled) {
+              showDisabled();
+              return;
+            }
+          } catch (error) {
+            const code = errorCode(error);
+            if (code === "WORK_DISABLED") showDisabled();
+            else showState("메모를 불러오지 못했습니다", customerErrorText(code), { retry: isRetryable(code) });
+            return;
+          }
+          boot.hidden = true;
+          main.hidden = false;
+          await loadList();
+        }
+        pick("[data-nt-state-retry]").addEventListener("click", () => void start());
+
+        // 열 때마다(뒤로 가기 캐시 복원 포함) 빠른 메모·찾는 말·펼친 칸을 비우고 다시 불러온다.
+        const reset = () => {
+          memo.value = "";
+          query.value = "";
+          applied = "";
+          items = [];
+          cursor = null;
+          busy = false;
+          list.replaceChildren();
+          done.hidden = true;
+          setStatus(memoStatus, "", "idle");
+          setStatus(listStatus, "", "idle");
+          clearNotice();
+          void start();
+        };
+        window.addEventListener("pageshow", (event) => {
+          if (event.persisted) reset();
+        });
+        reset();
+      }
+    }
+  </script>
+</AdminLayout>

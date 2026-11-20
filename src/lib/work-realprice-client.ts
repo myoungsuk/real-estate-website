@@ -35,7 +35,8 @@ interface WorkEnvelope<T> {
   error?: { code?: string; message?: string; retryAt?: string; details?: unknown };
 }
 
-async function readEnvelope<T>(response: Response): Promise<T> {
+// 손님 화면(단계 2, work-customers-client.ts)도 같은 봉투 해석을 쓴다.
+export async function readEnvelope<T>(response: Response): Promise<T> {
   const type = (response.headers.get("Content-Type") ?? "").split(";", 1)[0].trim().toLowerCase();
   if (type !== "application/json") {
     // Access 로그인 만료는 JSON이 아닌 응답(로그인 화면으로 이동)으로 온다.

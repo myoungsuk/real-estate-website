@@ -127,6 +127,49 @@ test("손님 한 건 보기: 거래·메모·파일을 함께 주고 보기 감�
   assert.equal(audit(database).length, before + 1, "없는 대상은 감사 기록 없음");
 });
 
+test("손님 한 건 보기: 거래마다 그 거래의 일정(마감일 순)을 함께 싣고, 다른 손님만의 거래 일정은 넣지 않으며, 감사는 customer.view 1줄 그대로다", async () => {
+  const { database, db } = freshDb();
+  const env = workEnv(db);
+  const customer = await makeCustomer(env, { displayName: "가상 손님 일정" });
+  const other = await makeCustomer(env, { displayName: "가상 손님 다른" });
+  const at = new Date(NOW).toISOString();
+  const [dA, dB, dX] = [nextUuid(), nextUuid(), nextUuid()];
+  const insertDeal = database.prepare("INSERT INTO deals (id, title, deal_type, property_kind, created_at, updated_at) VALUES (?, ?, 'jeonse', 'housing', ?, ?)");
+  insertDeal.run(dA, "가상 거래 가", at, at);
+  insertDeal.run(dB, "가상 거래 나", at, at);
+  insertDeal.run(dX, "가상 남의 거래", at, at);
+  const party = database.prepare("INSERT INTO deal_parties (deal_id, customer_id, role) VALUES (?, ?, ?)");
+  party.run(dA, customer.id, "tenant");
+  party.run(dA, customer.id, "other"); // 같은 거래에 역할 둘: 일정은 두 번 나오지 않아야 한다
+  party.run(dB, customer.id, "buyer");
+  party.run(dB, other.id, "seller"); // 함께인 거래의 일정은 이 손님 카드에도 보인다
+  party.run(dX, other.id, "buyer");
+  const event = database.prepare("INSERT INTO deal_events (id, deal_id, kind, due_on, title, source, done_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'calculated', ?, ?, ?)");
+  event.run("e-a2", dA, "balance", "2026-12-26", "잔금", null, at, at);
+  event.run("e-a1", dA, "contract", "2026-11-20", "계약", "2026-11-20T06:00:00.000Z", at, at);
+  event.run("e-b1", dB, "middle_payment", "2026-12-01", "중도금", null, at, at);
+  event.run("e-x1", dX, "balance", "2026-12-02", "가상 남의 잔금", null, at, at);
+  const before = audit(database).length;
+
+  const detail = await work(env, `/customers/${customer.id}`);
+  assert.equal(detail.status, 200);
+  const byDeal = Object.fromEntries(detail.json.data.deals.map((deal) => [`${deal.id}:${deal.role}`, deal.events.map((item) => item.id)]));
+  assert.deepEqual(byDeal, { [`${dA}:tenant`]: ["e-a1", "e-a2"], [`${dA}:other`]: ["e-a1", "e-a2"], [`${dB}:buyer`]: ["e-b1"] }, "거래마다 마감일 순, 남의 거래 일정 없음");
+  const balance = detail.json.data.deals.find((deal) => deal.id === dA).events[1];
+  assert.deepEqual(balance, { id: "e-a2", dealId: dA, kind: "balance", dueOn: "2026-12-26", title: "잔금", alarmOffsets: ["-PT6H"], source: "calculated", doneAt: null, version: 1, createdAt: at, updatedAt: at }, "거래 상세의 일정과 같은 모양");
+  const dealDetail = await work(env, `/deals/${dA}`);
+  assert.deepEqual(dealDetail.json.data.events, detail.json.data.deals.find((deal) => deal.id === dA).events, "거래 상세 GET /deals/:id와 같은 값");
+
+  const viewAudits = audit(database).slice(before).filter((row) => row.action.endsWith(".view"));
+  assert.deepEqual(viewAudits.slice(0, 1), [{ actor_email: OWNER, action: "customer.view", target_type: "customer", target_id: customer.id, outcome: "ok", reason: null }], "손님 보기는 customer.view 1줄(거래마다 deal.view를 남기지 않음)");
+  assert.equal(viewAudits.filter((row) => row.action === "deal.view").length, 1, "deal.view는 위에서 거래 상세를 직접 부른 1번뿐");
+
+  const empty = await work(env, `/customers/${other.id}`);
+  assert.deepEqual(empty.json.data.deals.find((deal) => deal.id === dX).events.map((item) => item.id), ["e-x1"]);
+  const lonely = await makeCustomer(env, { displayName: "가상 손님 거래 없음" });
+  assert.deepEqual((await work(env, `/customers/${lonely.id}`)).json.data.deals, [], "거래가 없으면 빈 목록");
+});
+
 test("손님 고치기: version이 맞으면 +1, 다른 화면이 먼저 고쳤으면 409, 없으면 404. 실패한 수정은 감사가 남지 않는다", async () => {
   const { database, db } = freshDb();
   const env = workEnv(db);
