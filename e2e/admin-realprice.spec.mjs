@@ -179,15 +179,16 @@ test("실거래가 979px 이하(B안): 상태 한 줄·거르기 접힘·세 줄
   await expect.poll(() => calls.trades.at(-1)).toBe("watch=1");
   await expect(page.locator("#rt-list-title")).toHaveText("관심 단지 거래 30건 · 계약일 최근순", { useInnerText: true });
 
-  // 작은 탭: 다섯째 '실거래가'가 지금 화면이고, 줄 안에서 잘리지 않게 옮겨져 있음
+  // 작은 탭: 다섯째(마지막) '실거래가'가 지금 화면이고, 줄 안에서 잘리지 않고 오른쪽에 간격(의도 16px)을 두고 옮겨져 있음
   const tab = page.locator('.admin-subtabs a[href="/admin/work/realprice/"]');
   await expect(tab).toHaveAttribute("aria-current", "page");
   const fit = await tab.evaluate((link) => {
     const strip = link.closest(".admin-subtabs").getBoundingClientRect();
     const box = link.getBoundingClientRect();
-    return { left: box.left >= strip.left, right: box.right <= strip.right };
+    return { left: box.left >= strip.left, right: box.right <= strip.right, gap: strip.right - box.right };
   });
-  expect(fit).toEqual({ left: true, right: true });
+  expect({ left: fit.left, right: fit.right }).toEqual({ left: true, right: true });
+  expect(fit.gap, "마지막 탭 오른쪽 간격(글꼴 소수점 폭 여유 4px)").toBeGreaterThanOrEqual(12);
   expect(await overflowOf(page)).toBeLessThanOrEqual(0);
   assertNoErrors();
 });
