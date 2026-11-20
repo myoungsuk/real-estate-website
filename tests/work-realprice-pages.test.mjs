@@ -118,5 +118,6 @@ test("메뉴: 업무 도구 아래 단계에 '실거래가'를 더하고, 미리
   assert.deepEqual(tools, ["/admin/work/fee/", "/admin/work/messages/", "/admin/work/schedule/"], "업무 도구 첫 화면 도구 3개 그대로");
   const css = await readSource("src/styles/admin.css");
   assert.match(css, /\.admin-subtabs a\[aria-current="true"\] \{[^}]*font-weight: 800;/u);
+  assert.match(css, /@media \(max-width: 979px\) \{[^@]*\.rt-notice--in-sum \{ display: none; \}/u, "979px 이하: 신고가 준비 안내는 상태 줄로 옮김");
   assert.match(css, /\.admin-menu__subitem\[aria-current="true"\] \{[^}]*font-weight: 800;/u);
 });

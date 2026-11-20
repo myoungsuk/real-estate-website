@@ -9,6 +9,7 @@ import {
   REALPRICE_WATCH_MAX,
   REALPRICE_WATCH_NAME_MAX,
 } from "../worker/realprice-query.mjs";
+import { REALPRICE_DAILY_READ_HARD } from "../worker/realprice-store.mjs";
 import {
   DEFAULT_REALPRICE_FILTERS,
   DONG_GU_UMD_NAMES,
@@ -28,6 +29,7 @@ import {
   kstLong,
   kstShort,
   priceParts,
+  refreshDoneView,
   rowsText,
   runOutcome,
   seedWords,
@@ -123,12 +125,19 @@ test("자료 받기 상태: 정상·받기 전·처음 채우는 중·받기 멈
     ["분양권", 0, "매매를 다 채운 뒤 시작"],
     ["전월세", 0, "분양권 다음"],
   ], "채우는 순서: 매매 → 분양권 → 전월세");
-  assert.equal(statusView(filling, { nowMs: NOW, todayKst: TODAY }).fill, "과거 자료 채우는 중 · 매매 79%", "휴대폰 한 줄: 지금 채우는 종류만");
-  assert.equal(backfillLine({ ...filling, backfill: { sale: full(251), presale: full(234), rent: { done: 150, total: 191 } } }), "과거 자료 채우는 중 · 전월세 78%", "다 채운 종류는 뺌");
-  assert.equal(backfillLine({ ...filling, backfill: { sale: full(251), presale: { done: 0, total: 234 }, rent: { done: 0, total: 191 } } }), "과거 자료 채우는 중 · 분양권 0%", "다음 차례가 아직 0이면 그 종류");
-  assert.equal(backfillLine({ ...filling, backfill: { sale: full(251), presale: { done: 10, total: 234 }, rent: { done: 40, total: 191 } } }), "과거 자료 채우는 중 · 분양권 4% · 전월세 20%", "둘이 함께 채워지면 둘 다");
-  assert.equal(empty.fill, "과거 자료 채우기 대기 · 매매 0%");
+  const fillingView = statusView(filling, { nowMs: NOW, todayKst: TODAY });
+  assert.equal(fillingView.fill, "과거 자료 채우는 중 · 매매 79% · 신고가는 채운 뒤", "휴대폰 한 줄: 지금 채우는 종류만, 매매를 채우는 동안은 신고가 준비 중도 함께(TR-11 52.4-1)");
+  assert.equal(fillingView.fillHigh, true, "목록 위 신고가 준비 안내는 979px 이하에서 이 줄로 옮김");
+  // 매매를 다 채웠으면 서버가 recordHighReady: true를 준다(worker/realprice-store.mjs).
+  const saleDone = { ...filling, recordHighReady: true };
+  assert.equal(backfillLine({ ...saleDone, backfill: { sale: full(251), presale: full(234), rent: { done: 150, total: 191 } } }), "과거 자료 채우는 중 · 전월세 78%", "다 채운 종류는 뺌");
+  assert.equal(backfillLine({ ...saleDone, backfill: { sale: full(251), presale: { done: 0, total: 234 }, rent: { done: 0, total: 191 } } }), "과거 자료 채우는 중 · 분양권 0%", "다음 차례가 아직 0이면 그 종류");
+  assert.equal(backfillLine({ ...saleDone, backfill: { sale: full(251), presale: { done: 10, total: 234 }, rent: { done: 40, total: 191 } } }), "과거 자료 채우는 중 · 분양권 4% · 전월세 20%", "둘이 함께 채워지면 둘 다");
+  assert.equal(statusView({ ...saleDone, backfill: { sale: full(251), presale: full(234), rent: { done: 150, total: 191 } } }, { nowMs: NOW, todayKst: TODAY }).fillHigh, false, "매매를 다 채웠으면 목록 위 안내도 없음");
+  assert.equal(empty.fill, "과거 자료 채우기 대기 · 매매 0%", "받은 자료가 없으면 목록이 없으므로 신고가 글자를 붙이지 않음");
+  assert.equal(empty.fillHigh, false);
   assert.equal(ready.fill, "", "다 채우면 한 줄 없음");
+  assert.equal(ready.fillHigh, false);
   assert.equal(backfillLine({ backfill: { sale: { done: 0, total: 0 }, presale: { done: 0, total: 0 }, rent: { done: 0, total: 0 } } }), "", "받을 달 수를 모르면 없음");
 
   const stopped = { ...readyStatus, lastSuccessAt: "2026-11-17T00:40:00Z", lastError: { code: "RT_KEY_EXPIRED", at: "2026-11-17T01:00:00Z" } };
@@ -192,4 +201,21 @@ test("오류 문장과 설정 화면 숫자", () => {
   assert.deepEqual(runOutcome({ outcome: "partial", errorCode: "RT_WRITE_BUDGET" }), { tone: "warning", text: "일부만 · 오늘 쓰기 예산 다 씀" });
   assert.deepEqual(runOutcome({ outcome: "failed", errorCode: "RT_KEY_EXPIRED" }), { tone: "warning", text: "실패 · 인증키 연장 필요" });
   assert.deepEqual(runOutcome({ outcome: "failed", errorCode: "RT_UPSTREAM_FAILED" }), { tone: "warning", text: "실패" });
+});
+
+test("지금 다시 받기 알림(TK-29): 끝 상한을 넘은 날은 Cron이 한국 09시(UTC 0시)까지 받지 않으므로 '약 2시간 안에'라고 쓰지 않는다", () => {
+  const queued = { queuedMonths: 12, estimatedMinutes: 120 };
+  const usageOf = (rowsRead) => ({ today: { rowsRead, readSoftLimit: 1_500_000, readHardLimit: REALPRICE_DAILY_READ_HARD } });
+  assert.deepEqual(refreshDoneView(queued, usageOf(REALPRICE_DAILY_READ_HARD - 1), { nowMs: NOW, statusAtMs: NOW }), {
+    notice: "다시 받기를 차례에 넣었습니다. 최근 자료 12건(4개월 × 3종류)을 약 2시간 안에 모두 다시 받습니다. 그동안 목록은 지금 자료로 볼 수 있습니다.",
+    button: "다시 받는 중(약 2시간)",
+  }, "평소 날");
+  assert.deepEqual(refreshDoneView(queued, usageOf(REALPRICE_DAILY_READ_HARD), { nowMs: NOW, statusAtMs: NOW }), {
+    notice: "다시 받기를 차례에 넣었습니다. 하루 조회 한도를 넘어 한국 시각 내일 오전 9시부터 다시 받습니다. 최근 자료 12건(4개월 × 3종류)은 그 뒤 약 2시간 안에 모두 받습니다. 목록과 단지 찾기도 오전 9시부터 다시 볼 수 있습니다.",
+    button: "오전 9시부터 다시 받음",
+  }, "끝 상한 날 한국 14시 → 내일 09시");
+  const kst0800 = Date.parse("2026-11-18T23:00:00Z");
+  assert.match(refreshDoneView(queued, usageOf(REALPRICE_DAILY_READ_HARD + 5), { nowMs: kst0800, statusAtMs: kst0800 }).notice, /한국 시각 오늘 오전 9시부터/u, "한국 08시 → 오늘 09시");
+  assert.equal(refreshDoneView(queued, usageOf(REALPRICE_DAILY_READ_HARD), { nowMs: Date.parse("2026-11-19T00:10:00Z"), statusAtMs: Date.parse("2026-11-18T23:50:00Z") }).button, "다시 받는 중(약 2시간)", "화면을 연 뒤 UTC 날이 바뀌었으면 한도가 풀려 평소 문장");
+  assert.equal(refreshDoneView(queued, null, { nowMs: NOW, statusAtMs: NOW }).button, "다시 받는 중(약 2시간)", "상태를 모르면 평소 문장");
 });

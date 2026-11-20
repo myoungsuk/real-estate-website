@@ -221,6 +221,9 @@ export function backfillBars(status) {
 
 // 979px 이하 상태 줄 아래 한 줄(막대 3개는 '자세히' 안, 날개대장 검토 2026-11-19). 다 채운 종류는 빼고, 지금 채우는 종류만 쓴다
 // (차례대로 채우므로 보통 한 종류. 아직 시작 전인 종류는 '자세히'의 막대에서 본다). 다 채웠거나 자료가 없으면 빈 글자.
+// 받은 자료가 있고 매매를 다 채우기 전(신고가 판정 준비 전)이면 끝에 "· 신고가는 채운 뒤"를 붙인다. 그때 목록 위 긴 안내는
+// 979px 이하에서 숨기고 이유 문장은 '자세히' 안에 둔다(첫 거래가 첫 화면에 들어오게, 날개-2 TR-11 52.4-1).
+const highPending = (status) => Boolean(status?.lastSuccessAt) && status?.recordHighReady !== true;
 /** @param {any} status */
 export function backfillLine(status) {
   if (backfillTotals(status?.backfill).total === 0) return "";
@@ -228,7 +231,7 @@ export function backfillLine(status) {
   if (left.length === 0) return "";
   const running = left.filter((bar) => bar.done > 0);
   const shown = running.length > 0 ? running : left.slice(0, 1);
-  return `${status?.lastSuccessAt ? "과거 자료 채우는 중" : "과거 자료 채우기 대기"} · ${shown.map((bar) => `${bar.label} ${bar.percent}%`).join(" · ")}`;
+  return `${status?.lastSuccessAt ? "과거 자료 채우는 중" : "과거 자료 채우기 대기"} · ${shown.map((bar) => `${bar.label} ${bar.percent}%`).join(" · ")}${highPending(status) ? " · 신고가는 채운 뒤" : ""}`;
 }
 
 // 위쪽 상태 줄·칸에 쓸 글자. todayKst: "YYYY-MM-DD".
@@ -258,7 +261,8 @@ export function statusView(status, { nowMs, todayKst }) {
     : problem?.stop
       ? `${kstShort(status.lastSuccessAt)}까지 받은 자료${ago ? `(${ago})` : ""}`
       : `${kstShort(status.lastSuccessAt)} 받음 · ${receivedCurrent ? `${Number(currentMonth.slice(5))}월분까지` : "이번 달은 아직"}`;
-  return { empty, problem, badge, line, fill: backfillLine(status), lastLong, range, totals, recordHighReady: status?.recordHighReady === true };
+  const fill = backfillLine(status);
+  return { empty, problem, badge, line, fill, fillHigh: Boolean(fill) && highPending(status), lastLong, range, totals, recordHighReady: status?.recordHighReady === true };
 }
 
 // 설정 화면의 오늘 사용량 4칸(status.today, unmatchedSaleRows). 큰 행 수는 '만 행'으로 줄인다(소수 첫째 자리 아래는 버림).
@@ -274,6 +278,27 @@ export function usageView(status) {
     writes: `${rowsText(today.rowsWritten)} / 예산 ${rowsText(today.writeBudget)}`,
     reads: `${rowsText(today.rowsRead)} / 첫 상한 ${rowsText(today.readSoftLimit)}`,
     unmatched: `${Number(status?.unmatchedSaleRows ?? 0).toLocaleString("ko-KR")}건`,
+  };
+}
+
+// '지금 다시 받기' 뒤 알림·단추 글자(POST 응답 + 화면을 열 때 받은 status). 오늘(UTC 날) 읽기가 끝 상한을 넘었으면 Cron이 외부 요청 없이
+// 끝나고(worker/work-scheduled.mjs ③) 목록·단지 찾기도 429라(worker/realprice-query.mjs), UTC 0시 = 한국 오전 9시부터 받는다고 쓴다(TK-29).
+// status를 받은 뒤 UTC 날이 바뀌었으면 한도가 풀렸으므로 평소 문장을 쓴다.
+/** @param {{ queuedMonths: number, estimatedMinutes: number }} data @param {any} status @param {{ nowMs: number, statusAtMs: number }} options */
+export function refreshDoneView(data, status, { nowMs, statusAtMs }) {
+  const minutes = Number(data?.estimatedMinutes) || 0;
+  const time = minutes >= 60 ? `약 ${Math.round(minutes / 60)}시간` : `약 ${minutes}분`;
+  const months = `최근 자료 ${data?.queuedMonths ?? 0}건(4개월 × 3종류)`;
+  const today = status?.today ?? {};
+  const sameUtcDay = new Date(nowMs).toISOString().slice(0, 10) === new Date(statusAtMs).toISOString().slice(0, 10);
+  const hard = sameUtcDay && Number.isFinite(today.readHardLimit) && Number(today.rowsRead) >= today.readHardLimit;
+  if (!hard) {
+    return { notice: `다시 받기를 차례에 넣었습니다. ${months}을 ${time} 안에 모두 다시 받습니다. 그동안 목록은 지금 자료로 볼 수 있습니다.`, button: `다시 받는 중(${time})` };
+  }
+  const day = Number(kstParts(new Date(nowMs).toISOString()).hour) < 9 ? "오늘" : "내일";
+  return {
+    notice: `다시 받기를 차례에 넣었습니다. 하루 조회 한도를 넘어 한국 시각 ${day} 오전 9시부터 다시 받습니다. ${months}은 그 뒤 ${time} 안에 모두 받습니다. 목록과 단지 찾기도 오전 9시부터 다시 볼 수 있습니다.`,
+    button: "오전 9시부터 다시 받음",
   };
 }
 

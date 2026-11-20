@@ -1088,10 +1088,14 @@
   .rt-sum__fill { color: var(--ds-ink-soft); font-size: 0.9375rem; font-weight: 600; font-variant-numeric: tabular-nums; }
   /* 과거 채우기 막대는 '자세히'를 펼쳤을 때만 보인다(접힌 동안은 위 한 줄만, 첫 거래가 첫 화면에 들어오게. 날개대장 검토 2026-11-19). */
   .rt-sum:not([open]) + .rt-backfill { display: none; }
+  /* 매매를 채우는 동안 신고가 판정 준비 안내는 위 한 줄 끝("· 신고가는 채운 뒤")과 '자세히' 안 문장으로 옮긴다(목록 위 4 ~ 6줄 안내가 첫 거래를 첫 화면 밖으로 밀어서, 날개-2 TR-11). */
+  .rt-sum__high { margin: 12px 0 0; }
+  .rt-notice--in-sum { display: none; }
 }
 @media (min-width: 980px) {
   .rt-sum > summary,
   .rt-sum__lead { display: none; }
+  .rt-sum__high { display: none; }
 }
 
 /* 보기 고르기·관심 단지 줄. 979px 이하는 보기 이름표를 화면 읽기 프로그램에만 둔다. */

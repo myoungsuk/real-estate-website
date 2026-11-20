@@ -72,6 +72,7 @@ const defaults: Record<string, string | boolean> = DEFAULT_REALPRICE_FILTERS;
       </summary>
       <div class="rt-sum__body">
         <p class="rt-sum__lead">{mainLead}</p>
+        <p class="rt-sum__high" data-rt-sum-high hidden></p>
         <section class="rt-status" aria-label="자료 받기 상태">
           <dl>
             <div><dt>마지막으로 받은 시각</dt><dd data-rt-last></dd></div>
@@ -303,6 +304,7 @@ const defaults: Record<string, string | boolean> = DEFAULT_REALPRICE_FILTERS;
       let mode: "new" | "watch" = "new";
       let status: Status | null = null;
       let problem = false;
+      let highInSum = false;
       let items: Trade[] = [];
       let cursor: string | null = null;
       let requestSeq = 0;
@@ -355,6 +357,11 @@ const defaults: Record<string, string | boolean> = DEFAULT_REALPRICE_FILTERS;
         const fill = pick("[data-rt-sum-fill]");
         fill.textContent = view.fill;
         show(fill, Boolean(view.fill));
+        // 신고가 판정 준비 전: 979px 이하는 위 한 줄 끝("· 신고가는 채운 뒤")과 이 문장으로 알리고 목록 위 안내는 숨긴다(CSS). 980px 이상은 목록 위 안내 그대로.
+        highInSum = view.fillHigh;
+        const sumHigh = pick("[data-rt-sum-high]");
+        sumHigh.textContent = highInSum ? highWaitText(current) : "";
+        show(sumHigh, highInSum);
         pick("[data-rt-last]").textContent = view.lastLong;
         pick("[data-rt-range]").textContent = view.range;
         const badge = pick("[data-rt-badge]");
@@ -449,16 +456,21 @@ const defaults: Record<string, string | boolean> = DEFAULT_REALPRICE_FILTERS;
         }
       }
 
+      function highWaitText(current: Status | null) {
+        const through = current?.coveredThrough ? `, 지금 ${monthText(current.coveredThrough)}까지` : "";
+        return `신고가 판정 준비 중(매매 과거 자료 채우는 중${through}). 과거 자료가 빠진 채 표시하면 신고가가 아닌 거래를 신고가로 보일 수 있어 다 채운 뒤 표시합니다.`;
+      }
+
       function renderNotice(data: TradesResponse) {
         let text = "";
         if (!data.recordHighReady) {
-          const through = status?.coveredThrough ? `, 지금 ${monthText(status.coveredThrough)}까지` : "";
-          text = `신고가 판정 준비 중(매매 과거 자료 채우는 중${through}). 과거 자료가 빠진 채 표시하면 신고가가 아닌 거래를 신고가로 보일 수 있어 다 채운 뒤 표시합니다.`;
+          text = highWaitText(status);
         } else if (data.warnings.some((warning) => warning.code === "RT_READ_BUDGET")) {
           text = "오늘 조회가 많아 신고가 표시를 잠시 껐습니다. 한국 시각 오전 9시 뒤에 다시 보입니다. 목록은 그대로 볼 수 있습니다.";
         }
         noticeText.textContent = text;
         show(notice, Boolean(text));
+        notice.classList.toggle("rt-notice--in-sum", !data.recordHighReady && highInSum);
         const showHigh = !text;
         for (const element of criteria) element.hidden = !showHigh;
         return showHigh;

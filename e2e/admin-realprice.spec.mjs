@@ -265,9 +265,10 @@ const states = [
     },
     check: async (page) => {
       await expect(page.locator("[data-rt-backfill] .rt-progress__head").first()).toHaveText("매매79%");
-      await expect(page.locator("[data-rt-sum-fill]")).toHaveText("과거 자료 채우는 중 · 매매 79%");
+      await expect(page.locator("[data-rt-sum-fill]")).toHaveText("과거 자료 채우는 중 · 매매 79% · 신고가는 채운 뒤");
       await expect(page.locator("[data-rt-backfill]"), "360px은 막대를 '자세히' 안에").toBeHidden();
-      await expect(page.locator("[data-rt-notice-text]")).toContainText("신고가 판정 준비 중(매매 과거 자료 채우는 중, 지금 2010년 4월까지)");
+      await expect(page.locator("[data-rt-notice]"), "360px은 목록 위 신고가 준비 안내를 상태 줄로 옮김").toBeHidden();
+      await expect(page.locator("[data-rt-sum-high]")).toContainText("신고가 판정 준비 중(매매 과거 자료 채우는 중, 지금 2010년 4월까지)");
       await expect(page.locator(".rt-tag--high")).toHaveCount(0);
       await expect(page.locator("[data-rt-criterion]:visible")).toHaveCount(0);
     },
@@ -350,6 +351,38 @@ test("실거래가 979px 이하: 과거 자료를 채우는 동안에도 막대�
   await page.reload();
   await expect(rows(page)).toHaveCount(30);
   await expect(page.locator("[data-rt-backfill]")).toBeVisible();
+  await expect(page.locator("[data-rt-sum-fill]")).toBeHidden();
+  assertNoErrors();
+});
+
+test("실거래가 979px 이하: 매매를 채우는 동안 신고가 준비 안내는 상태 줄 끝과 '자세히' 안으로 옮겨 390×844 첫 화면에 첫 거래가 다 들어오고, 980px 이상은 목록 위 안내 그대로", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const saleFilling = { ...okStatus, coveredThrough: "2010-04", recordHighReady: false, backfill: { sale: { done: 200, total: 251 }, presale: { done: 0, total: 234 }, rent: { done: 0, total: 191 } } };
+  await setup(page, {
+    status: saleFilling,
+    trades: () => envelope({ items: firstPage.map((item) => ({ ...item, recordHigh: null, prevMaxWon: null })), nextCursor: null, recordHighReady: false, coverage: {}, warnings: [] }),
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/admin/work/realprice/");
+  await expect(rows(page)).toHaveCount(30);
+  await expect(page.locator("[data-rt-sum]")).not.toHaveAttribute("open", "");
+  await expect(page.locator("[data-rt-sum-fill]")).toHaveText("과거 자료 채우는 중 · 매매 79% · 신고가는 채운 뒤");
+  await expect(page.locator("[data-rt-notice]")).toBeHidden();
+  await expect(page.locator(".rt-tag--high")).toHaveCount(0);
+  await expect(page.locator("[data-rt-criterion]:visible")).toHaveCount(0);
+  const first = await rows(page).first().boundingBox();
+  const tabbar = await page.locator(".admin-tabbar").boundingBox();
+  expect(first.y + first.height, "매매를 채우는 동안에도 첫 거래 카드가 아래 탭 위에 다 보임").toBeLessThanOrEqual(tabbar.y);
+  await page.locator("[data-rt-sum] > summary").click();
+  await expect(page.locator("[data-rt-sum-high]")).toBeVisible();
+  await expect(page.locator("[data-rt-sum-high]")).toHaveText("신고가 판정 준비 중(매매 과거 자료 채우는 중, 지금 2010년 4월까지). 과거 자료가 빠진 채 표시하면 신고가가 아닌 거래를 신고가로 보일 수 있어 다 채운 뒤 표시합니다.");
+  await expect(page.locator("[data-rt-backfill]")).toBeVisible();
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.reload();
+  await expect(rows(page)).toHaveCount(30);
+  await expect(page.locator("[data-rt-notice]")).toBeVisible();
+  await expect(page.locator("[data-rt-notice-text]")).toContainText("신고가 판정 준비 중(매매 과거 자료 채우는 중, 지금 2010년 4월까지)");
+  await expect(page.locator("[data-rt-sum-high]")).toBeHidden();
   await expect(page.locator("[data-rt-sum-fill]")).toBeHidden();
   assertNoErrors();
 });
@@ -465,6 +498,51 @@ test("실거래가 설정: 관심 단지가 비면 홈페이지 단지 이름 �
     expect(await overflowOf(page), `${width}px`).toBeLessThanOrEqual(0);
   }
   await expect(page.locator('.admin-menu__subitem[href="/admin/work/realprice/"]').first()).toHaveAttribute("aria-current", "true");
+  assertNoErrors();
+});
+
+test("실거래가 설정: 찾는 중에는 Enter(키 반복 포함)·검색어 단추를 다시 눌러도 한 번만 부른다(한 번에 약 8,700행 읽음)", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const calls = await setup(page, { watch: { version: 0, items: [] } });
+  // 나중에 건 길이 먼저 쓰인다: 응답을 0.4초 늦춘다.
+  await page.route(`${WORK}/realprice/complexes**`, async (route) => {
+    calls.complexes.push(new URL(route.request().url()).searchParams.get("q"));
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    await route.fulfill(envelope({ items: [] }));
+  });
+  await page.goto("/admin/work/realprice/settings/");
+  const query = page.locator("#rt-complex-q");
+  await query.fill("가상숲");
+  await query.focus();
+  for (let index = 0; index < 5; index += 1) await page.keyboard.press("Enter");
+  await expect(page.locator("[data-rt-search-status]")).toHaveText("찾는 중입니다…");
+  await page.locator("[data-rt-seed-buttons] > button").first().click();
+  await expect(query, "찾는 중에 누른 검색어 단추는 입력칸도 바꾸지 않음").toHaveValue("가상숲");
+  await expect(page.locator("[data-rt-search-status]")).toContainText("“가상숲”와(과) 이름이 맞는 단지가 없습니다.");
+  expect(calls.complexes, "Enter 5번 + 검색어 단추 1번 → 1번만 부름").toEqual(["가상숲"]);
+
+  // Enter를 누르고 있으면(키 반복) 첫 keydown만 부른다.
+  await query.focus();
+  await page.keyboard.down("Enter");
+  await expect.poll(() => calls.complexes.length).toBe(2);
+  await expect(page.locator("[data-rt-search-status]")).toContainText("이름이 맞는 단지가 없습니다.");
+  await page.keyboard.down("Enter");
+  await page.keyboard.down("Enter");
+  await page.keyboard.up("Enter");
+  await page.waitForTimeout(600);
+  expect(calls.complexes, "키 반복 keydown은 무시").toHaveLength(2);
+  assertNoErrors();
+});
+
+test("실거래가 설정: 하루 조회 끝 상한을 넘은 날 다시 받기 알림은 '약 2시간 안에' 대신 한국 시각 오전 9시부터 받는다고 알린다(TK-29)", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const calls = await setup(page, { status: { ...okStatus, today: { ...okStatus.today, rowsRead: okStatus.today.readHardLimit } } });
+  await page.goto("/admin/work/realprice/settings/");
+  await page.getByRole("button", { name: "지금 다시 받기" }).click();
+  await expect(page.locator("[data-rt-refresh-done-text]")).toHaveText("다시 받기를 차례에 넣었습니다. 하루 조회 한도를 넘어 한국 시각 내일 오전 9시부터 다시 받습니다. 최근 자료 12건(4개월 × 3종류)은 그 뒤 약 2시간 안에 모두 받습니다. 목록과 단지 찾기도 오전 9시부터 다시 볼 수 있습니다.");
+  await expect(page.locator("[data-rt-refresh]")).toHaveText("오전 9시부터 다시 받음");
+  await expect(page.locator("[data-rt-refresh]")).toBeDisabled();
+  expect(calls.refresh).toHaveLength(1);
   assertNoErrors();
 });
 

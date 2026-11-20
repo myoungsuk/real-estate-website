@@ -130,6 +130,7 @@ const publishedComplexes = complexes
       cleanComplexQuery,
       dateText,
       kstShort,
+      refreshDoneView,
       runOutcome,
       seedWords,
       statusProblem,
@@ -168,6 +169,11 @@ const publishedComplexes = complexes
       let lastResults: { query: string; items: ComplexResult[] } | null = null;
       let saving = false;
       let searchSeq = 0;
+      // 찾는 중에는 찾기 단추·Enter·검색어 단추를 모두 무시한다(한 번에 약 8,700행을 읽어 하루 읽기 한도에 바로 닿음, 날개-2 TR-11 52.4-3).
+      let searching = false;
+      // 다시 받기 알림이 끝 상한 날인지 보려고 화면을 열 때 받은 status와 그 시각을 둔다(TK-29).
+      let loadedStatus: Record<string, unknown> | null = null;
+      let loadedStatusAt = 0;
 
       const errorCode = (error: unknown) => (error instanceof WorkApiError ? error.code : null);
       const show = (element: HTMLElement, visible: boolean) => { element.hidden = !visible; };
@@ -285,12 +291,14 @@ const publishedComplexes = complexes
       // ── 단지 찾기(찾기 단추·Enter·검색어 단추를 누를 때만 부른다) ──
 
       async function search(value: string) {
+        if (searching) return;
         const text = cleanComplexQuery(value);
         if (!text) {
           searchStatus.textContent = "단지명을 1 ~ 30자로 넣어 주세요.";
           return;
         }
         const request = ++searchSeq;
+        searching = true;
         searchButton.disabled = true;
         searchStatus.textContent = "찾는 중입니다…";
         try {
@@ -306,6 +314,7 @@ const publishedComplexes = complexes
           const retryAt = error instanceof WorkApiError ? error.retryAt : null;
           searchStatus.textContent = apiErrorText(errorCode(error), { retryAt });
         } finally {
+          searching = false;
           if (request === searchSeq) searchButton.disabled = false;
         }
       }
@@ -313,11 +322,13 @@ const publishedComplexes = complexes
       query.addEventListener("keydown", (event) => {
         if (event.key !== "Enter" || event.isComposing) return;
         event.preventDefault();
+        if (event.repeat) return;
         void search(query.value);
       });
       for (const word of seedWords(published)) {
         const seed = button(word, "admin-secondary-button", `${word}(으)로 단지 찾기`);
         seed.addEventListener("click", () => {
+          if (searching) return;
           query.value = word;
           void search(word);
         });
@@ -368,9 +379,9 @@ const publishedComplexes = complexes
         setNotice(pick("[data-rt-refresh-error]"), "");
         try {
           const data = await writeWork<{ queuedMonths: number; estimatedMinutes: number }>("/realprice/refresh", "POST", {});
-          const time = data.estimatedMinutes >= 60 ? `약 ${Math.round(data.estimatedMinutes / 60)}시간` : `약 ${data.estimatedMinutes}분`;
-          setNotice(pick("[data-rt-refresh-done]"), `다시 받기를 차례에 넣었습니다. 최근 자료 ${data.queuedMonths}건(4개월 × 3종류)을 ${time} 안에 모두 다시 받습니다. 그동안 목록은 지금 자료로 볼 수 있습니다.`);
-          refreshButton.textContent = `다시 받는 중(${time})`;
+          const done = refreshDoneView(data, loadedStatus, { nowMs: Date.now(), statusAtMs: loadedStatusAt });
+          setNotice(pick("[data-rt-refresh-done]"), done.notice);
+          refreshButton.textContent = done.button;
         } catch (error) {
           setNotice(pick("[data-rt-refresh-error]"), apiErrorText(errorCode(error)));
           refreshButton.disabled = false;
@@ -398,6 +409,8 @@ const publishedComplexes = complexes
           return;
         }
         boot.hidden = true;
+        loadedStatus = status;
+        loadedStatusAt = Date.now();
         renderWatch();
         renderStatus(status);
         main.hidden = false;
