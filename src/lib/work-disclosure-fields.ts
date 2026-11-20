@@ -40,6 +40,17 @@ const ERROR_TEXT: Record<string, string> = {
   managementFee: "금액과 포함 비목(월 평균), 또는 비목별 금액(정액)을 확인합니다.",
   approvalDate: "날짜를 확인합니다.",
 };
+// '빈 칸·고칠 칸' 줄처럼 칸 묶음 위에서 글이 줄어드는 줄: 지금까지 가장 높았던 높이를 최소 높이로 남겨 아래 칸이 올라가지 않게 한다.
+// 다른 매물을 고르는 등 칸 묶음을 새로 만들 때는 releaseHeight()로 푼다.
+export function keepHeight(line: HTMLElement) {
+  const height = Math.max(line.getBoundingClientRect().height, Number(line.dataset.blKeepHeight) || 0);
+  line.dataset.blKeepHeight = String(height);
+  line.style.minHeight = height > 0 ? `${height}px` : "";
+}
+export function releaseHeight(line: HTMLElement) {
+  delete line.dataset.blKeepHeight;
+  line.style.minHeight = "";
+}
 export const disclosureFieldLabel = (key: string) => (key === "areaM2" ? "면적" : (DISCLOSURE_FIELD_LABELS as Record<string, string>)[key] ?? key);
 
 interface Options {
@@ -399,14 +410,23 @@ export function createDisclosureFields(fieldsBox: HTMLElement, { rules, office, 
   }
 
   // 줄마다 빨간 테두리·안내 글자(touched가 거짓이면 모두 지움).
+  // 한 번 보인 안내 글은 칸을 채워도 자리를 남겨(글은 보이지 않게) 아래 칸이 올라가지 않게 한다.
   function renderMarks(state: FieldState, touched: boolean) {
     for (const [key, row] of rows) {
       const message = touched ? state.messages.get(key) : undefined;
       row.classList.toggle("bl-row--empty", Boolean(message));
       const mark = row.querySelector<HTMLElement>("[data-bl-mark]");
-      if (mark) {
-        mark.textContent = message ?? "";
-        mark.hidden = !message;
+      if (!mark) continue;
+      if (message) {
+        mark.textContent = message;
+        mark.hidden = false;
+        delete mark.dataset.blHeld;
+      } else if (touched && !mark.hidden) {
+        mark.dataset.blHeld = "";
+      } else if (!touched) {
+        mark.textContent = "";
+        mark.hidden = true;
+        delete mark.dataset.blHeld;
       }
     }
   }

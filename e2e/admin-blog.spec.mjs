@@ -139,6 +139,33 @@ function collectErrors(page) {
   return () => expect(errors, "브라우저 콘솔 오류가 없어야 합니다").toEqual([]);
 }
 const overflowOf = (page) => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+// 보이는 명시사항 선택 단추(.bl-seg)마다 글자 노드가 놓인 줄 수를 세어 두 줄 이상인 단추 이름을 돌려준다.
+// 좁은 폭에서 '다세대주택'·'위반건축물'이 두 줄로 꺾이면 단추가 높아져 아래 칸이 밀린다.
+const twoLineChoices = (page) => page.evaluate(() => [...document.querySelectorAll(".bl-seg .work-choice")].filter((choice) => choice.offsetParent).flatMap((choice) => {
+  const walker = document.createTreeWalker(choice, NodeFilter.SHOW_TEXT);
+  const tops = new Set();
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    if (!node.textContent.trim()) continue;
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    for (const rect of range.getClientRects()) tops.add(Math.round(rect.top));
+  }
+  return tops.size > 1 ? [`${choice.textContent.trim()}(${choice.querySelector("input")?.checked ? "고름" : "안 고름"})`] : [];
+}));
+// 고르기 전에 한 번, 보이는 단추를 하나씩 고를 때마다 한 번 잰다. 누른 단추 이름을 돌려준다.
+async function expectOneLineChoices(page, label) {
+  expect(await twoLineChoices(page), `${label}: 고르기 전 두 줄 단추`).toEqual([]);
+  const choices = page.locator(".bl-seg .work-choice:visible");
+  const names = [];
+  for (let index = 0; index < await choices.count(); index++) {
+    const choice = choices.nth(index);
+    names.push((await choice.innerText()).trim());
+    await choice.click();
+    expect(await twoLineChoices(page), `${label}: '${names.at(-1)}'을 고른 뒤 두 줄 단추`).toEqual([]);
+  }
+  expect(names, `${label}: 긴 단추도 눌러 봄`).toEqual(expect.arrayContaining(["다세대주택", "위반건축물"]));
+  return names;
+}
 const step = (page, no) => page.locator(`[data-bl-step="${no}"]`);
 const copied = (page) => page.evaluate(() => window.__copied);
 
@@ -332,5 +359,30 @@ test("글 초안 다시 열기 360px: 소재지는 저장하지 않아 다시 �
   await expect(page.locator("[data-bl-fail]")).toBeVisible();
   await expect(page.locator("[data-bl-fail-title]")).toHaveText("결과를 받지 못했습니다(10분 지남)");
   await expect(page.locator("[data-bl-retry]"), "고른 자료가 없으면 '다시 만들기'를 숨김").toBeHidden();
+  assertNoErrors();
+});
+
+test("글 초안 360px 명시사항 칸 밀림 0px: 칸을 고르거나 채워도 아래 칸 위치가 그대로(매물 안내지와 같은 칸), 선택 단추 글자는 360·390px에서 늘 한 줄", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  await setup(page, { width: 360 });
+  await page.goto("/admin/work/blog/");
+  await page.getByRole("button", { name: "가상숲1단지 고르기" }).click();
+  const rowOf = (key) => page.locator(`[data-bl-row='${key}']`);
+  const topOf = (key) => rowOf(key).evaluate((element) => Math.round(element.getBoundingClientRect().top + window.scrollY));
+
+  const beforePick = await topOf("floor");
+  await rowOf("violation").locator("label:has(input[value='none'])").click();
+  await expect(page.locator("[data-bl-count]")).not.toContainText("위반건축물");
+  expect(await topOf("floor") - beforePick, "위반건축물을 고른 뒤 아래 칸").toBe(0);
+
+  await page.getByRole("button", { name: "다음: 글 성격" }).click();
+  await expect(rowOf("location").locator("[data-bl-mark]")).toBeVisible();
+  const beforeFill = await topOf("kind");
+  await rowOf("location").locator("input").fill("대전광역시 동구 가상동 100");
+  await expect(rowOf("location").locator("[data-bl-mark]")).toBeHidden();
+  expect(await topOf("kind") - beforeFill, "소재지를 채운 뒤 아래 칸").toBe(0);
+  await expectOneLineChoices(page, "360px");
+  await page.setViewportSize({ width: 390, height: 900 });
+  await expectOneLineChoices(page, "390px");
   assertNoErrors();
 });
