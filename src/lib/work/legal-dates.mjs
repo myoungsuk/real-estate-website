@@ -106,6 +106,7 @@ const REPORTABLE_DEAL_KINDS = new Set(["sale", "supply", "status_sale"]);
 const LEASE_DEAL_KINDS = new Set(["jeonse", "monthly_rent"]);
 const PROPERTY_TARGETS = new Set(["housing", "land", "other"]);
 const REGULATIONS = new Set(["none", "adjusted", "overheated"]);
+export const MAX_MIDDLE_PAYMENTS = 3;
 
 function findDeadlineRule(legalRules, kind) {
   const rule = (legalRules?.deadlineRules ?? []).find((item) => item.kind === kind);
@@ -235,13 +236,33 @@ export function buildContractSchedule(input, legalRules) {
     const events = [plainEvent("contract", "계약일", contractDate, propertyLabel)];
     const notices = [];
 
-    for (const [kind, label, date] of [
-      ["middlePayment", "중도금", input.middlePaymentDate],
-      ["balance", "잔금", input.balanceDate],
-    ]) {
+    // 중도금은 최대 3번(보드 45번 B, 운영자 결정 2026-11-20). 단계 2 거래 자료는 한 칸(middlePaymentDate)만 넘긴다.
+    // 첫 번째는 kind "middlePayment"를 그대로 써서 단계 2 일정 종류·.ics UID가 바뀌지 않게 하고, 2·3차만 새 kind를 쓴다.
+    const isBlank = (date) => date === null || date === undefined || date === "";
+    const rawMiddle = Array.isArray(input.middlePaymentDates) ? input.middlePaymentDates : [input.middlePaymentDate];
+    // 앞 차를 비우고 뒤 차만 넣으면 화면 칸 이름(2차)과 결과 이름(1차)이 달라지므로 막는다.
+    const firstBlank = rawMiddle.findIndex(isBlank);
+    if (firstBlank >= 0 && rawMiddle.slice(firstBlank).some((date) => !isBlank(date))) {
+      throw new WorkInputError("MIDDLE_PAYMENT_GAP", `${firstBlank + 1}차 중도금일부터 넣어 주세요.`);
+    }
+    const middleDates = rawMiddle.filter((date) => !isBlank(date));
+    if (middleDates.length > MAX_MIDDLE_PAYMENTS) {
+      throw new WorkInputError("MIDDLE_PAYMENT_TOO_MANY", `중도금은 ${MAX_MIDDLE_PAYMENTS}번까지 넣을 수 있습니다.`);
+    }
+    const middleEntries = middleDates.map((date, index) => [
+      index === 0 ? "middlePayment" : `middlePayment${index + 1}`,
+      middleDates.length > 1 ? `${index + 1}차 중도금` : "중도금",
+      date,
+    ]);
+    let previousMiddle = null;
+    for (const [kind, label, date] of [...middleEntries, ["balance", "잔금", input.balanceDate]]) {
       if (date === null || date === undefined || date === "") continue;
       assertCalendarDate(date, `${label}일`);
       if (date < contractDate) throw new WorkInputError("DATE_ORDER_INVALID", `${label}일이 계약일보다 빠릅니다.`);
+      if (kind.startsWith("middlePayment") && previousMiddle && date < previousMiddle.date) {
+        throw new WorkInputError("DATE_ORDER_INVALID", `${label}일이 ${previousMiddle.label}일보다 빠릅니다.`);
+      }
+      if (kind.startsWith("middlePayment")) previousMiddle = { date, label };
       events.push(plainEvent(kind, label, date, propertyLabel));
     }
 
