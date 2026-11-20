@@ -9,21 +9,27 @@ import {
   REALPRICE_KIND_OPTIONS,
   REALPRICE_PERIODS,
   REALPRICE_PRICE_OPTIONS,
+  chipText,
 } from "../../../../lib/work/realprice-view.mjs";
 
-// 단계 P 실거래가(P1-d). 사용자 시안 결정 2026-11-19 12:58:48: 979px 이하 B안(설명 한 줄·상태 한 줄 요약·거르기 접기), 980px 이상 0안.
-// 화면은 하나이고 두 모양은 CSS(admin.css '실거래가')와 아래 스크립트의 펼침 처리로 나눈다. 서버를 부르므로 탭 미리 그리기 prerender 목록에 넣지 않는다.
+// 단계 P 실거래가(P1-d, P1-f). 운영자 결정 2026-11-20 13:36:35 D안: 위 상태 한 줄 → 보기 3칸(새 거래·주요 거래·관심 단지) → 찾기칸 →
+// 거르기 단추 6개(기간·평형·금액·신고가만·분양권만·더 보기) → 'n건 보는 중'·켜짐 줄·다 담기 → 목록(거래마다 '담기'). 휴대폰·PC가 같은 순서이고
+// 폭에 따른 모양은 CSS(admin.css '실거래가')가 나눈다. 서버를 부르므로 탭 미리 그리기 prerender 목록에 넣지 않는다.
 const settingsHref = "/admin/work/realprice/settings/";
 const mainLead = "대전 동구 아파트 실거래 신고 자료를 10분마다 조금씩 받아 둡니다. 계약일 기준이며, 신고 기한(30일) 때문에 최근 거래는 늘어날 수 있습니다.";
 const criterion = "같은 단지·같은 전용면적에서 계약일이 앞선 매매(해제·직거래 뺌)의 최고가보다 높은 거래";
-const selects = [
+// 거르기 단추(chip)는 고른 값을 짧은 글자로 보이고, 누르면 휴대폰·PC 기본 고르기 목록(경계까지 쓴 글자)이 열린다.
+const chipSelects = [
   { key: "period", id: "rt-period", label: "기간(계약일)", options: REALPRICE_PERIODS },
-  { key: "kind", id: "rt-kind", label: "거래 종류", options: REALPRICE_KIND_OPTIONS },
-  { key: "area", id: "rt-area", label: "전용면적", options: REALPRICE_AREA_OPTIONS },
+  { key: "area", id: "rt-area", label: "평형(전용면적)", options: REALPRICE_AREA_OPTIONS },
   { key: "price", id: "rt-price", label: "금액(전월세는 보증금)", options: REALPRICE_PRICE_OPTIONS },
+] as const;
+const moreSelects = [
+  { key: "kind", id: "rt-kind", label: "거래 종류", options: REALPRICE_KIND_OPTIONS },
   { key: "umd", id: "rt-umd", label: "법정동", options: [{ value: "", label: "전체 법정동" }, ...DONG_GU_UMD_NAMES.map((name) => ({ value: name, label: name }))] },
 ] as const;
 const defaults: Record<string, string | boolean> = DEFAULT_REALPRICE_FILTERS;
+const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(defaults[key])).text;
 ---
 
 <AdminLayout
@@ -38,9 +44,6 @@ const defaults: Record<string, string | boolean> = DEFAULT_REALPRICE_FILTERS;
       <h1>실거래가</h1>
       <span class="admin-stage-badge">국토교통부 공개 자료</span>
     </header>
-
-    <p class="work-doc__lead rt-lead--full">{mainLead}</p>
-    <p class="work-doc__lead rt-lead--short">계약일 기준 · 최근 거래는 늘어날 수 있음</p>
 
     <AdminPageHelp page="/admin/work/realprice/" />
 
@@ -65,10 +68,10 @@ const defaults: Record<string, string | boolean> = DEFAULT_REALPRICE_FILTERS;
             <span class="admin-badge admin-badge--warning" data-rt-sum-badge>받기 멈춤</span>
             <strong data-rt-sum-warn-text></strong>
           </span>
-          <span class="rt-sum__line" data-rt-sum-line></span>
+          <span class="rt-sum__head"><span class="rt-sum__line" data-rt-sum-line></span><span class="rt-sum__basis"> · 계약일 기준</span></span>
           <span class="rt-sum__fill" data-rt-sum-fill hidden></span>
         </span>
-        <span class="rt-fold__action" aria-hidden="true" data-rt-sum-action>자세히</span>
+        <span class="rt-sum__action" aria-hidden="true" data-rt-sum-action>자세히</span>
       </summary>
       <div class="rt-sum__body">
         <p class="rt-sum__lead">{mainLead}</p>
@@ -108,6 +111,10 @@ const defaults: Record<string, string | boolean> = DEFAULT_REALPRICE_FILTERS;
             <span>새 거래</span>
           </label>
           <label class="work-choice">
+            <input type="radio" name="rt-mode" value="major" autocomplete="off" />
+            <span>주요 거래</span>
+          </label>
+          <label class="work-choice">
             <input type="radio" name="rt-mode" value="watch" autocomplete="off" />
             <span>관심 단지</span>
           </label>
@@ -130,46 +137,62 @@ const defaults: Record<string, string | boolean> = DEFAULT_REALPRICE_FILTERS;
         </div>
       </section>
 
-      <details class="rt-fold" data-rt-fold>
-        <summary>
-          <span class="rt-fold__title">거르기</span>
-          <span class="rt-fold__summary" data-rt-fold-summary>최근 3개월 · 해제 빼기</span>
-          <span class="rt-fold__action" aria-hidden="true" data-rt-fold-action>펼치기</span>
-        </summary>
-        <div class="admin-listing-filters rt-filters" role="search" aria-label="실거래 거르기">
-          {selects.map((select) => (
-            <div class="admin-field">
-              <label for={select.id}>{select.label}</label>
-              <select id={select.id} data-rt-filter={select.key} autocomplete="off">
+      <div class="rt-top" data-rt-top>
+        <div class="rt-find" role="search" aria-label="단지·동 이름으로 찾기">
+          <label class="sr-only" for="rt-q">단지 이름이나 동 이름</label>
+          <input id="rt-q" type="search" maxlength="30" placeholder="단지 이름이나 동 이름" enterkeyhint="search" autocomplete="off" data-rt-q />
+          <button class="rt-find__go" type="button" data-rt-q-go>찾기</button>
+        </div>
+        <div class="rt-chips" role="group" aria-label="거르기">
+          {chipSelects.map((select) => (
+            <label class="rt-chip rt-chip--menu rt-chip--select" data-rt-chip={select.key}>
+              <span class="rt-chip__text" aria-hidden="true" data-rt-chip-text={select.key}>{chipTextOf(select.key)}</span>
+              <select id={select.id} aria-label={select.label} data-rt-filter={select.key} autocomplete="off">
                 {select.options.map((option) => (
                   <option value={option.value} selected={option.value === defaults[select.key]}>{option.label}</option>
                 ))}
               </select>
-            </div>
+            </label>
           ))}
-          <div class="rt-filter-checks">
-            <label class="work-check">
-              <input type="checkbox" data-rt-filter="excludeCancelled" checked autocomplete="off" />
-              <span>해제 빼기</span>
-            </label>
-            <label class="work-check">
-              <input type="checkbox" data-rt-filter="excludeDirect" autocomplete="off" />
-              <span>직거래 빼기</span>
-            </label>
-          </div>
-          <button class="admin-filter-reset" type="button" data-rt-reset disabled>거르기 초기화</button>
+          <button class="rt-chip" type="button" aria-pressed="false" data-rt-toggle="highOnly">신고가만</button>
+          <button class="rt-chip" type="button" aria-pressed="false" data-rt-toggle="presale">분양권만</button>
+          <button class="rt-chip rt-chip--menu" type="button" aria-expanded="false" aria-controls="rt-more-filters" data-rt-more-toggle>더 보기</button>
         </div>
-      </details>
+      </div>
+      <div class="admin-listing-filters rt-filters" id="rt-more-filters" role="group" aria-label="거르기 더 보기" data-rt-more-filters hidden>
+        {moreSelects.map((select) => (
+          <div class="admin-field">
+            <label for={select.id}>{select.label}</label>
+            <select id={select.id} data-rt-filter={select.key} autocomplete="off">
+              {select.options.map((option) => (
+                <option value={option.value} selected={option.value === defaults[select.key]}>{option.label}</option>
+              ))}
+            </select>
+          </div>
+        ))}
+        <div class="rt-filter-checks">
+          <label class="work-check">
+            <input type="checkbox" data-rt-filter="excludeCancelled" checked autocomplete="off" />
+            <span>해제 빼기</span>
+          </label>
+          <label class="work-check">
+            <input type="checkbox" data-rt-filter="excludeDirect" autocomplete="off" />
+            <span>직거래 빼기</span>
+          </label>
+        </div>
+        <p class="rt-filters__major" data-rt-major-note hidden>주요 거래는 최근 30일 매매(해제·직거래 뺌)만 봅니다. 거래 종류·해제·직거래는 '새 거래'에서 바꿉니다.</p>
+        <button class="admin-filter-reset" type="button" data-rt-reset disabled>거르기 초기화</button>
+      </div>
 
       <section class="admin-panel rt-list" aria-labelledby="rt-list-title" data-rt-list>
-        <div class="admin-panel__heading admin-panel__heading--list rt-list__heading">
-          <div>
-            <p class="admin-eyebrow rt-wide-only">계약일 최근순</p>
-            <h2 id="rt-list-title">새 거래 <span><span data-rt-count></span><span class="rt-wide-only" data-rt-count-suffix> 보는 중</span><span class="rt-narrow-only" data-rt-count-suffix> · 계약일 최근순</span></span></h2>
+        <div class="rt-strip" data-rt-strip>
+          <div class="rt-strip__text">
+            <h2 id="rt-list-title"><span class="sr-only" data-rt-list-name>새 거래</span> <span data-rt-count></span><span data-rt-count-suffix> 보는 중</span></h2>
+            <p class="rt-strip__on"><span data-rt-on-text>거르기 없음 · 해제 거래 뺌</span><button class="rt-strip__clear" type="button" data-rt-clear-all hidden>모두 끄기</button></p>
           </div>
+          <button class="rt-take" type="button" data-rt-take hidden>위에서 6건 담기</button>
         </div>
         <p class="admin-inline-notice rt-notice" data-rt-notice hidden><span aria-hidden="true">i</span><span data-rt-notice-text></span></p>
-        <p class="rt-criterion rt-criterion--above" data-rt-criterion><strong>신고가</strong> {criterion}</p>
         <p class="rt-loading" role="status" data-rt-loading hidden>거래를 불러오고 있습니다…</p>
         <div class="rt-skeleton" aria-hidden="true" data-rt-skeleton hidden>
           {[1, 2, 3, 4].map(() => <div><span></span><span></span><span></span></div>)}
@@ -179,12 +202,11 @@ const defaults: Record<string, string | boolean> = DEFAULT_REALPRICE_FILTERS;
           <p data-rt-error-text></p>
           <button class="admin-secondary-button" type="button" data-rt-retry>다시 불러오기</button>
         </div>
-        <div class="admin-empty-state admin-empty-state--filtered" data-rt-zero hidden>
-          <span aria-hidden="true">0</span>
-          <div>
-            <h3>조건에 맞는 거래가 없습니다.</h3>
-            <p>기간을 늘리거나 거래 종류·법정동·금액 조건을 바꿔 보세요.</p>
-            <button class="admin-text-button" type="button" data-rt-zero-reset>거르기 초기화</button>
+        <div class="rt-empty" data-rt-zero hidden>
+          <h3 data-rt-zero-title>조건에 맞는 거래가 없습니다.</h3>
+          <p data-rt-zero-body>기간을 늘리거나 거래 종류·법정동·금액 조건을 바꿔 보세요.</p>
+          <div class="rt-empty__actions" data-rt-zero-actions>
+            <button type="button" data-rt-zero-action="reset">거르기 초기화</button>
           </div>
         </div>
         <div class="admin-table-wrap rt-table-wrap" data-rt-table-wrap hidden>
@@ -200,7 +222,7 @@ const defaults: Record<string, string | boolean> = DEFAULT_REALPRICE_FILTERS;
                 <th scope="col">계약일</th>
                 <th scope="col">법정동</th>
                 <th scope="col" class="rt-only-card">새로 들어옴</th>
-                <th scope="col" class="rt-pick-col">홍보물</th>
+                <th scope="col" class="rt-pick-col">담기</th>
               </tr>
             </thead>
             <tbody data-rt-rows></tbody>
@@ -226,9 +248,16 @@ const defaults: Record<string, string | boolean> = DEFAULT_REALPRICE_FILTERS;
     import { todayInKorea } from "../../../../lib/work/legal-dates.mjs";
     import {
       DEFAULT_REALPRICE_FILTERS,
+      REALPRICE_PERIODS,
+      REALPRICE_VIEW_HIGH_PAGE_SIZE,
+      REALPRICE_VIEW_MAJOR_DAYS,
+      REALPRICE_VIEW_PAGE_SIZE,
+      activeFilterLine,
       apiErrorText,
+      chipText,
+      cleanComplexQuery,
       dateText,
-      filterSummary,
+      emptyView,
       isDefaultFilters,
       kindLabel,
       kstLong,
@@ -238,7 +267,15 @@ const defaults: Record<string, string | boolean> = DEFAULT_REALPRICE_FILTERS;
       statusView,
       tradesQuery,
     } from "../../../../lib/work/realprice-view.mjs";
-    import { PROMO_IDS_MAX, isPromoSelectable, promoHref, selectionText } from "../../../../lib/work/realprice-promo.mjs";
+    import {
+      PROMO_IDS_MAX,
+      isPromoSelectable,
+      promoHref,
+      selectionText,
+      takeButtonView,
+      takeResultText,
+      takeVisible,
+    } from "../../../../lib/work/realprice-promo.mjs";
     import { formatKoreanWon } from "../../../../lib/work/work-format.mjs";
 
     interface Trade {
@@ -264,12 +301,24 @@ const defaults: Record<string, string | boolean> = DEFAULT_REALPRICE_FILTERS;
       nextCursor: string | null;
       recordHighReady: boolean;
       warnings: { code: string; level?: string }[];
+      major?: { since: string; days: number; top: number };
     }
     interface WatchResponse {
       version: number;
       items: { aptSeq: string; displayName: string; complexSlug: string | null }[];
     }
-    type Filters = { period: string; kind: string; area: string; price: string; umd: string; excludeCancelled: boolean; excludeDirect: boolean };
+    type Filters = {
+      period: string;
+      kind: string;
+      area: string;
+      price: string;
+      umd: string;
+      excludeCancelled: boolean;
+      excludeDirect: boolean;
+      q: string;
+      highOnly: boolean;
+    };
+    type Mode = "new" | "major" | "watch";
     type Status = Parameters<typeof statusView>[0];
 
     const root = document.querySelector<HTMLElement>("[data-rt-page]");
@@ -284,12 +333,17 @@ const defaults: Record<string, string | boolean> = DEFAULT_REALPRICE_FILTERS;
       const main = pick("[data-rt-main]");
       const watchLine = pick("[data-rt-watch-line]");
       const watchEmpty = pick("[data-rt-watch-empty]");
-      const fold = pick<HTMLDetailsElement>("[data-rt-fold]");
-      const foldAction = pick("[data-rt-fold-action]");
-      const foldSummary = pick("[data-rt-fold-summary]");
+      const top = pick("[data-rt-top]");
+      const qInput = pick<HTMLInputElement>("[data-rt-q]");
+      const moreToggle = pick<HTMLButtonElement>("[data-rt-more-toggle]");
+      const moreFilters = pick("[data-rt-more-filters]");
+      const majorNote = pick("[data-rt-major-note]");
       const resetButton = pick<HTMLButtonElement>("[data-rt-reset]");
       const list = pick("[data-rt-list]");
-      const listTitle = pick("#rt-list-title");
+      const listName = pick("[data-rt-list-name]");
+      const onText = pick("[data-rt-on-text]");
+      const clearAll = pick<HTMLButtonElement>("[data-rt-clear-all]");
+      const takeButton = pick<HTMLButtonElement>("[data-rt-take]");
       const count = pick("[data-rt-count]");
       const countSuffixes = [...root.querySelectorAll<HTMLElement>("[data-rt-count-suffix]")];
       const notice = pick("[data-rt-notice]");
@@ -308,10 +362,14 @@ const defaults: Record<string, string | boolean> = DEFAULT_REALPRICE_FILTERS;
       const pickBar = pick("[data-rt-pick-bar]");
       const pickText = pick("[data-rt-pick-text]");
       const promoLink = pick<HTMLAnchorElement>("[data-rt-promo-link]");
-      const wide = window.matchMedia("(min-width: 980px)");
+      const zeroTitle = pick("[data-rt-zero-title]");
+      const zeroBody = pick("[data-rt-zero-body]");
+      const zeroActions = pick("[data-rt-zero-actions]");
 
       let filters: Filters = { ...DEFAULT_REALPRICE_FILTERS };
-      let mode: "new" | "watch" = "new";
+      let mode: Mode = "new";
+      // 지금 목록에 그린 거래('신고가만'이면 받은 거래 가운데 신고가만). '다 담기'는 이 순서로 담는다.
+      let shown: Trade[] = [];
       let status: Status | null = null;
       let problem = false;
       let highInSum = false;
@@ -345,18 +403,14 @@ const defaults: Record<string, string | boolean> = DEFAULT_REALPRICE_FILTERS;
         }
       }
 
-      // 979px 이하: 상태는 문제가 있을 때만 펼쳐 두고(12:58:48 결정) 거르기는 접는다. 980px 이상: 둘 다 늘 펼친다(요약 줄은 CSS가 숨김).
+      // 상태 한 줄은 휴대폰·PC 모두 접어 두고 문제가 있을 때만 펼쳐 둔다(D안, 2026-11-20 13:36:35). '더 보기' 거르기도 처음에는 접는다.
       function applyLayout() {
-        sum.open = wide.matches || problem;
-        fold.open = wide.matches;
+        sum.open = problem;
       }
       const syncActions = () => {
         sumAction.textContent = sum.open ? "접기" : "자세히";
-        foldAction.textContent = fold.open ? "접기" : "펼치기";
       };
       sum.addEventListener("toggle", syncActions);
-      fold.addEventListener("toggle", syncActions);
-      wide.addEventListener("change", applyLayout);
 
       function renderStatus(current: Status) {
         const view = statusView(current, { nowMs: Date.now(), todayKst: todayInKorea() });
@@ -405,11 +459,13 @@ const defaults: Record<string, string | boolean> = DEFAULT_REALPRICE_FILTERS;
         return span;
       };
 
-      // 홍보물 고르기 칸: 해제된 거래는 고를 수 없다(설계서 22.10절). 다 고르면(최대 건수) 나머지 칸은 잠근다.
+      // 홍보물 담기 칸(P1-f D안: 체크 칸을 '담기' 단추 모양으로): 해제된 거래는 담을 수 없다(설계서 22.10절). 다 담으면(최대 건수) 나머지 칸은 잠근다.
+      // 체크 칸은 보이지 않게만 숨기고(키보드·화면 읽기 프로그램은 그대로 체크 칸으로 씀) 글자는 '담기' → '✓ 담음'으로 바꾼다.
+      const pickLabel = (selectable: boolean, checked: boolean) => (!selectable ? "담을 수 없음" : checked ? "✓ 담음" : "담기");
       function pickCell(item: Trade) {
-        const td = cell("rt-pick", "홍보물");
+        const td = cell("rt-pick", "담기");
         const label = document.createElement("label");
-        label.className = "admin-review-select";
+        label.className = "admin-review-select rt-pick-button";
         const box = document.createElement("input");
         box.type = "checkbox";
         box.value = item.tradeKey;
@@ -418,12 +474,21 @@ const defaults: Record<string, string | boolean> = DEFAULT_REALPRICE_FILTERS;
         box.dataset.rtPick = selectable ? "on" : "off";
         box.checked = selectable && picked.has(item.tradeKey);
         box.disabled = !selectable || (!box.checked && picked.size >= PROMO_IDS_MAX);
-        box.setAttribute("aria-label", `${item.aptName || "단지명 없음"} ${dateText(item.dealDate)} ${kindLabel(item)}${selectable ? " 홍보물에 넣기" : " 해제된 거래라 홍보물에 넣을 수 없음"}`);
+        box.setAttribute("aria-label", `${item.aptName || "단지명 없음"} ${dateText(item.dealDate)} ${kindLabel(item)}${selectable ? " 홍보물에 담기" : " 해제된 거래라 홍보물에 담을 수 없음"}`);
         const text = document.createElement("span");
-        text.textContent = selectable ? "고르기" : "고를 수 없음";
+        text.setAttribute("aria-hidden", "true");
+        text.textContent = pickLabel(selectable, box.checked);
         label.append(box, text);
         td.append(label);
         return td;
+      }
+
+      // '다 담기' 단추: 보이는 거래·남은 자리·담은 수에 맞춘 글자(realprice-promo.mjs takeButtonView). 보이는 거래가 없으면 숨긴다.
+      function syncTake() {
+        const view = takeButtonView(shown, new Set(picked.keys()));
+        takeButton.textContent = view.text;
+        takeButton.disabled = view.disabled;
+        takeButton.hidden = shown.length === 0;
       }
 
       function syncPicks() {
@@ -432,11 +497,14 @@ const defaults: Record<string, string | boolean> = DEFAULT_REALPRICE_FILTERS;
           if (box.dataset.rtPick !== "on") continue;
           box.checked = picked.has(box.value);
           box.disabled = !box.checked && full;
+          const text = box.nextElementSibling;
+          if (text) text.textContent = pickLabel(true, box.checked);
         }
         pickText.textContent = selectionText(picked.size);
         const href = promoHref([...picked.keys()]);
         if (href) promoLink.href = href;
         pickBar.hidden = picked.size === 0;
+        syncTake();
       }
       rows.addEventListener("change", (event) => {
         const box = event.target as HTMLInputElement;
@@ -445,12 +513,18 @@ const defaults: Record<string, string | boolean> = DEFAULT_REALPRICE_FILTERS;
         if (box.checked && item && picked.size < PROMO_IDS_MAX) picked.set(box.value, item);
         else picked.delete(box.value);
         syncPicks();
-        live.textContent = picked.size >= PROMO_IDS_MAX ? `${selectionText(picked.size)}. 더 고르려면 하나를 빼 주세요.` : selectionText(picked.size);
+        live.textContent = picked.size >= PROMO_IDS_MAX ? `${selectionText(picked.size)}. 더 담으려면 하나를 빼 주세요.` : selectionText(picked.size);
+      });
+      takeButton.addEventListener("click", () => {
+        const { add, skippedCancelled } = takeVisible(shown, new Set(picked.keys()));
+        for (const item of add) picked.set(item.tradeKey, item);
+        syncPicks();
+        live.textContent = takeResultText(add.length, skippedCancelled, picked.size);
       });
       pick("[data-rt-pick-clear]").addEventListener("click", () => {
         picked.clear();
         syncPicks();
-        live.textContent = "고른 거래를 비웠습니다.";
+        live.textContent = "담은 거래를 비웠습니다.";
       });
       // 막대 실제 높이를 아래 여백(admin.css의 scroll-padding-bottom)에 넘겨, Tab으로 옮긴 포커스가 막대 뒤로 숨지 않게 한다.
       if (typeof ResizeObserver === "function") {
@@ -507,10 +581,13 @@ const defaults: Record<string, string | boolean> = DEFAULT_REALPRICE_FILTERS;
         return tr;
       }
 
+      // 목록 이름(새 거래·주요 거래·관심 단지 거래)은 보기 3칸에 이미 보이므로 화면 읽기 프로그램에만 읽힌다(제목은 'n건 보는 중').
       function setListTitle(text: string) {
-        const first = listTitle.firstChild;
-        if (first?.nodeType === Node.TEXT_NODE) first.nodeValue = `${text} `;
+        listName.textContent = text;
       }
+
+      const pageSize = () => (filters.highOnly ? REALPRICE_VIEW_HIGH_PAGE_SIZE : REALPRICE_VIEW_PAGE_SIZE);
+      const moreText = () => `${pageSize()}건 더 보기`;
 
       function setListBusy(busy: boolean) {
         list.setAttribute("aria-busy", busy ? "true" : "false");
@@ -519,8 +596,23 @@ const defaults: Record<string, string | boolean> = DEFAULT_REALPRICE_FILTERS;
         for (const suffix of countSuffixes) suffix.hidden = busy;
         if (busy) {
           count.textContent = "불러오는 중";
-          for (const element of [errorBox, zero, tableWrap, more, notice]) element.hidden = true;
+          shown = [];
+          for (const element of [errorBox, zero, tableWrap, more, notice, takeButton]) element.hidden = true;
         }
+      }
+
+      // 0건 글자·단추(realprice-view.mjs emptyView). 단추는 data-rt-zero-action으로 아래 한 곳에서 처리한다.
+      function renderEmpty(highUnavailable: boolean) {
+        const view = emptyView(filters, { major: mode === "major", loaded: items.length, highUnavailable });
+        zeroTitle.textContent = view.title;
+        zeroBody.textContent = view.body;
+        zeroActions.replaceChildren(...view.actions.map(({ action, label }) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.dataset.rtZeroAction = action;
+          button.textContent = label;
+          return button;
+        }));
       }
 
       function highWaitText(current: Status | null) {
@@ -543,23 +635,37 @@ const defaults: Record<string, string | boolean> = DEFAULT_REALPRICE_FILTERS;
         return showHigh;
       }
 
+      // '켜짐' 줄과 '모두 끄기'. 신고가만이면 몇 건 가운데서 골랐는지도 쓴다.
+      function renderOnLine() {
+        const line = activeFilterLine(filters, { major: mode === "major" });
+        onText.textContent = filters.highOnly && items.length > 0 ? `${line} · 불러온 ${items.length.toLocaleString("ko-KR")}건 가운데` : line;
+        clearAll.hidden = isDefaultFilters(filters);
+      }
+
       function renderList(data: TradesResponse, appended: number) {
         setListBusy(false);
         const showHigh = renderNotice(data);
-        if (appended === 0) rows.replaceChildren();
-        const start = items.length - data.items.length;
         // 고른 뒤 다시 받기로 해제된 거래는 고른 것에서 뺀다(홍보물 화면도 다시 읽을 때 한 번 더 뺀다).
         for (const item of data.items) if (picked.has(item.tradeKey) && !isPromoSelectable(item)) picked.delete(item.tradeKey);
-        rows.append(...items.slice(start).map((item) => rowOf(item, showHigh)));
+        // '신고가만'은 받은 거래에서 화면이 거른다(서버는 그대로, 2026-11-20 결정). 신고가 판정을 못 하는 때는 0건과 그 까닭을 보인다.
+        shown = filters.highOnly ? (showHigh ? items.filter((item) => item.recordHigh === true) : []) : items;
+        rows.replaceChildren(...shown.map((item) => rowOf(item, showHigh)));
         syncPicks();
-        count.textContent = `${items.length.toLocaleString("ko-KR")}건`;
-        show(tableWrap, items.length > 0);
-        show(zero, items.length === 0);
-        if (items.length === 0) for (const element of criteria) element.hidden = true;
-        show(more, Boolean(cursor));
+        count.textContent = `${shown.length.toLocaleString("ko-KR")}건`;
+        renderOnLine();
+        show(tableWrap, shown.length > 0);
+        show(zero, shown.length === 0);
+        if (shown.length === 0) {
+          renderEmpty(filters.highOnly && !showHigh);
+          for (const element of criteria) element.hidden = true;
+        }
+        show(more, Boolean(cursor) && !(filters.highOnly && !showHigh));
         moreButton.disabled = false;
-        moreButton.textContent = "30건 더 보기";
-        live.textContent = appended > 0 ? `${data.items.length}건을 더 불러왔습니다. 모두 ${items.length}건입니다.` : `${items.length}건을 보여 줍니다.`;
+        moreButton.textContent = moreText();
+        const highNote = filters.highOnly ? ` 그 가운데 신고가 ${shown.length}건을 보여 줍니다.` : "";
+        live.textContent = appended > 0
+          ? `${data.items.length}건을 더 불러왔습니다. 모두 ${items.length}건입니다.${highNote}`
+          : filters.highOnly ? `${items.length}건을 불러왔습니다.${highNote}` : `${items.length}건을 보여 줍니다.`;
       }
 
       function renderListError(error: unknown) {
@@ -569,7 +675,7 @@ const defaults: Record<string, string | boolean> = DEFAULT_REALPRICE_FILTERS;
         count.textContent = "";
         for (const suffix of countSuffixes) suffix.hidden = true;
         errorBox.hidden = false;
-        for (const element of [zero, more, notice, ...criteria]) element.hidden = true;
+        for (const element of [zero, more, notice, takeButton, ...criteria]) element.hidden = true;
         tableWrap.hidden = items.length === 0;
       }
 
@@ -586,7 +692,7 @@ const defaults: Record<string, string | boolean> = DEFAULT_REALPRICE_FILTERS;
           setListBusy(true);
         }
         try {
-          const query = tradesQuery(filters, { watch: mode === "watch", cursor: append ? cursor : null, todayKst: todayInKorea() });
+          const query = tradesQuery(filters, { watch: mode === "watch", major: mode === "major", cursor: append ? cursor : null, todayKst: todayInKorea() });
           const data = await readWork<TradesResponse>("/realprice/trades", query, controller.signal);
           if (request !== requestSeq) return;
           items = append ? [...items, ...data.items] : data.items;
@@ -596,7 +702,7 @@ const defaults: Record<string, string | boolean> = DEFAULT_REALPRICE_FILTERS;
           if (request !== requestSeq || (error instanceof DOMException && error.name === "AbortError")) return;
           if (append) {
             moreButton.disabled = false;
-            moreButton.textContent = "30건 더 보기";
+            moreButton.textContent = moreText();
           }
           renderListError(error);
         }
@@ -607,12 +713,13 @@ const defaults: Record<string, string | boolean> = DEFAULT_REALPRICE_FILTERS;
       async function showMode() {
         const request = ++requestSeq;
         controller?.abort();
-        setListTitle(mode === "watch" ? "관심 단지 거래" : "새 거래");
+        setListTitle(mode === "watch" ? "관심 단지 거래" : mode === "major" ? "주요 거래" : "새 거래");
         watchLine.hidden = true;
         watchEmpty.hidden = true;
-        fold.hidden = false;
+        top.hidden = false;
         list.hidden = false;
-        if (mode === "new") {
+        syncFilterControls();
+        if (mode !== "watch") {
           void loadList();
           return;
         }
@@ -628,7 +735,9 @@ const defaults: Record<string, string | boolean> = DEFAULT_REALPRICE_FILTERS;
         if (request !== requestSeq) return;
         if (watch.items.length === 0) {
           setListBusy(false);
-          fold.hidden = true;
+          top.hidden = true;
+          moreFilters.hidden = true;
+          moreToggle.setAttribute("aria-expanded", "false");
           list.hidden = true;
           watchEmpty.hidden = false;
           return;
@@ -641,21 +750,42 @@ const defaults: Record<string, string | boolean> = DEFAULT_REALPRICE_FILTERS;
       for (const input of root.querySelectorAll<HTMLInputElement>('input[name="rt-mode"]')) {
         input.addEventListener("change", () => {
           if (!input.checked) return;
-          mode = input.value === "watch" ? "watch" : "new";
+          mode = input.value === "watch" ? "watch" : input.value === "major" ? "major" : "new";
           void showMode();
         });
       }
 
-      // ── 거르기 ──
+      // ── 찾기·거르기 단추(P1-f D안) ──
 
       const filterInputs = [...root.querySelectorAll<HTMLInputElement | HTMLSelectElement>("[data-rt-filter]")];
+      const toggles = [...root.querySelectorAll<HTMLButtonElement>("[data-rt-toggle]")];
+      const chipTexts = [...root.querySelectorAll<HTMLElement>("[data-rt-chip-text]")];
+      // 주요 거래는 서버가 기간(최근 30일)·종류(매매)·해제·직거래를 정하므로 그 칸은 잠근다.
+      const MAJOR_FIXED = new Set(["period", "kind", "excludeCancelled", "excludeDirect"]);
+      // '더 보기' 안 칸(분양권만은 따로 단추가 있음) 가운데 켜진 것이 있으면 '더 보기' 단추도 켜짐으로 보인다.
+      const moreSet = () => (filters.kind !== "all" && filters.kind !== "presale") || filters.umd !== "" || !filters.excludeCancelled || filters.excludeDirect;
       function syncFilterControls() {
+        const major = mode === "major";
         for (const input of filterInputs) {
           const key = input.dataset.rtFilter as keyof Filters;
           if (input instanceof HTMLInputElement && input.type === "checkbox") input.checked = Boolean(filters[key]);
           else input.value = String(filters[key]);
+          input.disabled = major && MAJOR_FIXED.has(key);
         }
-        foldSummary.textContent = filterSummary(filters);
+        for (const span of chipTexts) {
+          const key = span.dataset.rtChipText as "period" | "area" | "price";
+          const view = chipText(key, String(filters[key]));
+          const fixed = major && key === "period";
+          span.textContent = fixed ? `최근 ${REALPRICE_VIEW_MAJOR_DAYS}일` : view.text;
+          span.parentElement?.classList.toggle("is-set", view.set && !fixed);
+        }
+        for (const button of toggles) {
+          const on = button.dataset.rtToggle === "highOnly" ? filters.highOnly : filters.kind === "presale";
+          button.setAttribute("aria-pressed", on ? "true" : "false");
+          button.disabled = major && button.dataset.rtToggle === "presale";
+        }
+        moreToggle.classList.toggle("is-set", moreSet());
+        majorNote.hidden = !major;
         resetButton.disabled = isDefaultFilters(filters);
       }
       for (const input of filterInputs) {
@@ -666,13 +796,62 @@ const defaults: Record<string, string | boolean> = DEFAULT_REALPRICE_FILTERS;
           void loadList();
         });
       }
+      for (const button of toggles) {
+        button.addEventListener("click", () => {
+          if (button.dataset.rtToggle === "highOnly") filters = { ...filters, highOnly: !filters.highOnly };
+          else filters = { ...filters, kind: filters.kind === "presale" ? "all" : "presale" };
+          syncFilterControls();
+          void loadList();
+        });
+      }
+      moreToggle.addEventListener("click", () => {
+        const open = moreFilters.hidden;
+        moreFilters.hidden = !open;
+        moreToggle.setAttribute("aria-expanded", open ? "true" : "false");
+      });
+      // 찾기: '찾기' 단추·Enter(한글 입력 조합 중 Enter는 빼고)로만 찾는다. 칸을 비우면(지우기 ×) 바로 찾는 말 없이 다시 부른다.
+      function applyQuery() {
+        const q = cleanComplexQuery(qInput.value) ?? "";
+        if (q === filters.q) return;
+        filters = { ...filters, q };
+        syncFilterControls();
+        void loadList();
+      }
+      pick("[data-rt-q-go]").addEventListener("click", applyQuery);
+      qInput.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" || event.isComposing) return;
+        event.preventDefault();
+        applyQuery();
+      });
+      qInput.addEventListener("input", () => {
+        if (qInput.value.trim() === "" && filters.q !== "") applyQuery();
+      });
       const resetFilters = () => {
         filters = { ...DEFAULT_REALPRICE_FILTERS };
+        qInput.value = "";
         syncFilterControls();
         void loadList();
       };
       resetButton.addEventListener("click", resetFilters);
-      pick("[data-rt-zero-reset]").addEventListener("click", resetFilters);
+      clearAll.addEventListener("click", resetFilters);
+      zeroActions.addEventListener("click", (event) => {
+        const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-rt-zero-action]");
+        if (!button) return;
+        const action = button.dataset.rtZeroAction;
+        if (action === "reset") {
+          resetFilters();
+          return;
+        }
+        if (action === "high-off") filters = { ...filters, highOnly: false };
+        else if (action === "period-max") filters = { ...filters, period: REALPRICE_PERIODS[REALPRICE_PERIODS.length - 1].value };
+        else if (action === "q-clear") {
+          filters = { ...filters, q: "" };
+          qInput.value = "";
+          qInput.focus();
+        }
+        syncFilterControls();
+        void loadList();
+      });
       moreButton.addEventListener("click", () => {
         if (cursor) void loadList({ append: true });
       });

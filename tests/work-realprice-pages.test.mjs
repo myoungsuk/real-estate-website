@@ -78,19 +78,22 @@ test("표시는 색이 아니라 글자로: 신고가·해제·새로 들어옴�
   assert.match(index, /if \(request !== requestSeq\) return;/u, "늦게 온 응답은 버림");
 });
 
-test("979px 이하 B안·980px 이상 0안, 1220px 이하 카드·1221px 이상 표(사용자 결정 2026-11-19 12:58:48)", async () => {
+test("D안: 모든 폭에서 상태 한 줄(문제 있을 때만 펼침)·찾기칸·거르기 단추 6개·'n건 보는 중' 줄, 1220px 이하 카드·1221px 이상 표(운영자 결정 2026-11-20 13:36:35)", async () => {
   const css = await readSource("src/styles/admin.css");
-  const rt = css.slice(css.indexOf("/* 실거래가·실거래가 설정(단계 P, P1-d)"));
+  const rt = css.slice(css.indexOf("/* 실거래가·실거래가 설정(단계 P, P1-d·P1-f)"));
   assert.ok(rt.length > 1000, "실거래가 규칙은 admin.css 끝에 있음");
   const narrow = mediaBlocks(rt, "(max-width: 979px)");
   const wide = mediaBlocks(rt, "(min-width: 980px)");
-  assert.match(narrow, /\.rt-lead--full \{ display: none; \}/u, "휴대폰은 설명 한 줄");
-  assert.match(narrow, /\.rt-sum > summary \{ display: grid;/u, "휴대폰은 상태 한 줄 요약");
+  assert.match(rt, /^\.rt-sum > summary \{ display: grid;/mu, "상태 한 줄 요약은 모든 폭(미디어 덩어리 밖)");
+  assert.doesNotMatch(rt, /\.rt-fold|\.rt-lead|\.rt-wide-only|\.rt-narrow-only/u, "B안·0안 접기·설명 줄·폭별 숨김 규칙은 지움");
   assert.match(narrow, /\.rt-sum:not\(\[open\]\) \+ \.rt-backfill \{ display: none; \}/u, "휴대폰은 과거 채우기 막대를 '자세히' 안에(날개대장 검토)");
-  assert.match(narrow, /\.rt-fold > summary \{ display: flex;/u, "휴대폰은 거르기 접기");
   assert.match(narrow, /\.rt-mode \.work-row__label \{ position: absolute;/u, "보기 이름표는 화면 읽기 프로그램에만");
-  assert.match(wide, /\.rt-sum > summary,\r?\n\s*\.rt-sum__lead \{ display: none; \}/u, "PC는 상태 칸을 늘 펼침");
-  assert.match(wide, /\.rt-fold > summary \{ display: none; \}/u, "PC는 거르기를 늘 펼침");
+  assert.match(rt, /\.rt-find input \{[^}]*min-height: 48px;/u, "찾기칸 48px");
+  assert.match(rt, /\.rt-chip \{[^}]*min-height: 44px;/u, "거르기 단추 44px");
+  assert.match(rt, /\.rt-chip--select select \{ position: absolute; inset: 0;[^}]*opacity: 0;/u, "기간·평형·금액은 단추 위에 기본 고르기 목록을 덮음");
+  assert.match(rt, /\.rt-take \{[^}]*min-height: 44px;/u, "다 담기 단추 44px");
+  assert.match(rt, /\.rt-pick-button \{[^}]*min-height: 44px;/u, "거래마다 담기 단추 44px");
+  assert.match(wide, /\.rt-top \{ display: grid;/u, "PC는 찾기칸·단추를 한 줄에");
   const cards = mediaBlocks(rt, "(max-width: 1220px)");
   const table = mediaBlocks(rt, "(min-width: 1221px)");
   assert.match(cards, /\.rt-table tr \{ display: block;/u);
@@ -99,9 +102,12 @@ test("979px 이하 B안·980px 이상 0안, 1220px 이하 카드·1221px 이상 
   assert.doesNotMatch(rt, /#(?!8a6424\b)[0-9a-f]{3,8}\b/iu, "새 색은 --ds-* 이름만(경고 금색 #8a6424만 예외)");
 
   const index = await readSource(PAGES[0]);
-  assert.match(index, /const wide = window\.matchMedia\("\(min-width: 980px\)"\);/u, "CSS와 같은 경계");
-  assert.match(index, /sum\.open = wide\.matches \|\| problem;/u, "휴대폰은 문제가 있을 때만 상태를 펼쳐 둠");
-  assert.match(index, /fold\.open = wide\.matches;/u);
+  assert.doesNotMatch(index, /window\.matchMedia\(/u, "폭에 따라 펼치는 코드 없음(휴대폰·PC 같은 순서)");
+  assert.match(index, /sum\.open = problem;/u, "문제가 있을 때만 상태를 펼쳐 둠");
+  assert.match(index, /<input id="rt-q" type="search" maxlength="30"/u, "찾는 말 30자(서버 q 상한과 같음)");
+  for (const marker of ['data-rt-toggle="highOnly">신고가만</button>', 'data-rt-toggle="presale">분양권만</button>', 'aria-expanded="false" aria-controls="rt-more-filters" data-rt-more-toggle>더 보기</button>', '<input type="radio" name="rt-mode" value="major"']) {
+    assert.ok(index.includes(marker), marker);
+  }
 });
 
 test("메뉴: 업무 도구 아래 단계에 '실거래가'를 더하고, 미리 그리기 prerender 목록과 업무 도구 첫 화면 도구 3개는 그대로(TK-37)", async () => {
@@ -130,7 +136,8 @@ test("P1-e 홍보물: 목록 고르기는 메모리만(최대 6건·해제 막�
     readSource("src/lib/work/realprice-promo.mjs"),
     readSource("src/styles/admin.css"),
   ]);
-  assert.match(index, /<th scope="col" class="rt-pick-col">홍보물<\/th>/u, "표 끝 열");
+  assert.match(index, /<th scope="col" class="rt-pick-col">담기<\/th>/u, "표 끝 열");
+  assert.match(index, /const view = takeButtonView\(shown, new Set\(picked\.keys\(\)\)\);/u, "'다 담기'는 보이는 거래만(realprice-promo.mjs)");
   assert.match(index, /const picked = new Map<string, Trade>\(\);/u, "고른 거래는 화면 메모리에만");
   assert.match(index, /box\.disabled = !selectable \|\| \(!box\.checked && picked\.size >= PROMO_IDS_MAX\);/u, "해제는 막고, 다 고르면 나머지를 잠금");
   assert.match(index, /const href = promoHref\(\[\.\.\.picked\.keys\(\)\]\);\r?\n\s*if \(href\) promoLink\.href = href;/u, "링크 주소로만 넘김(주소 바꾸기 없음)");

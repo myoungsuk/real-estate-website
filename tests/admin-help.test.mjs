@@ -201,6 +201,8 @@ test("실거래가 사용 안내 숫자는 서버 상수·작업 예약과 맞�
   assert.equal(facts.realpriceRefreshMonths, store.REALPRICE_RECENT_MONTHS, "다시 받기 달 수");
   assert.equal(facts.realpriceNewDays, query.REALPRICE_NEW_DAYS, "'새로 들어옴' 기간");
   assert.equal(facts.realpricePromoMax, query.REALPRICE_IDS_MAX, "홍보물에 고를 수 있는 거래 수");
+  assert.equal(facts.realpriceMajorDays, query.REALPRICE_MAJOR_DAYS, "'주요 거래' 기간");
+  assert.equal(facts.realpriceMajorTop, query.REALPRICE_MAJOR_TOP, "'주요 거래' 금액 상위 건수");
   const refresh = store.refreshStatements({ prepare: () => ({ bind: () => ({}) }) }, Date.parse("2026-11-19T05:00:00Z"));
   assert.equal(facts.realpriceRefreshHours * 60, refresh.estimatedMinutes, "다시 받기 예상 시간");
   const reset = new Date(query.nextReadBudgetReset(Date.parse("2026-11-19T05:00:00Z")));

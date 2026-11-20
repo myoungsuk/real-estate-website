@@ -1041,14 +1041,15 @@
 .admin-help-table th:first-child,
 .admin-help-table td:first-child { width: 42%; }
 
-/* 실거래가·실거래가 설정(단계 P, P1-d). 사용자 시안 결정 2026-11-19 12:58:48: 979px 이하는 B안(설명 한 줄·상태 한 줄 요약·거르기 접기),
-   980px 이상은 0안(펼친 상태 칸·거르기). 목록은 1220px 이하 세 줄 카드, 1221px 이상 표(매물 현황과 같은 경계).
-   색은 --ds-* 이름만 쓰고 경고는 금색 선으로 알린다. 상태는 색만이 아니라 글자로 알린다. 모서리 2px, 누름 영역 44px. */
+/* 실거래가·실거래가 설정(단계 P, P1-d·P1-f). 운영자 결정 2026-11-20 13:36:35 D안: 휴대폰·PC 모두 위 상태 한 줄(문제가 있을 때만 펼침) →
+   보기 3칸 → 찾기칸 → 거르기 단추 6개 → 'n건 보는 중'·켜짐 줄·다 담기 → 목록(거래마다 '담기' 단추). 979px 이하는 거르기 단추가 두 줄로 감기고,
+   980px 이상은 찾기칸 오른쪽에 한 줄. 목록은 1220px 이하 세 줄 카드, 1221px 이상 표(매물 현황과 같은 경계).
+   색은 --ds-* 이름만 쓰고 경고는 금색 선으로 알린다. 상태는 색만이 아니라 글자로 알린다. 모서리 2px, 누름 영역 44px, 글자 16px 이상. */
 .rt-doc { max-width: 1040px; }
 .rt-doc [hidden] { display: none !important; }
 .rt-boot { margin: 16px 0; color: var(--ds-ink-soft); }
 
-/* 위: 자료 받기 상태. 980px 이상은 늘 펼친 칸(요약 줄 숨김), 979px 이하는 한 줄 요약을 누르면 펼친다. */
+/* 위: 자료 받기 상태('자세히'를 펼치면 보이는 칸). */
 .rt-status { display: grid; gap: 10px 16px; margin: 16px 0; padding: 14px 16px; border: 1px solid var(--ds-edge); border-radius: 2px; background: var(--ds-paper); }
 .rt-status dl { display: grid; gap: 8px 28px; margin: 0; }
 .rt-status dl > div { display: grid; grid-template-columns: 8.5rem minmax(0, 1fr); gap: 8px; align-items: baseline; }
@@ -1063,29 +1064,32 @@
   .rt-status__warn { grid-column: 1 / -1; grid-row: 2; }
   .rt-status__link { grid-column: 2; grid-row: 1; }
 }
-.rt-fold__action { display: inline-flex; align-items: center; min-height: 36px; padding: 0 10px; border: 1.5px solid var(--ds-navy); border-radius: 2px; color: var(--ds-navy); background: var(--ds-paper); font-size: 0.875rem; font-weight: 800; }
-.rt-sum > summary,
-.rt-fold > summary { cursor: pointer; list-style: none; }
-.rt-sum > summary::-webkit-details-marker,
-.rt-fold > summary::-webkit-details-marker { display: none; }
-.rt-sum > summary:focus-visible,
-.rt-fold > summary:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
-.rt-sum__text { display: grid; gap: 4px; min-width: 0; }
+/* 상태 한 줄(P1-f D안): 휴대폰·PC 모두 "12:10 받음 · 11월분까지 · 계약일 기준 · 자세히" 한 줄이고, 문제가 있을 때만 펼친다. */
+.rt-sum { margin: 0 0 8px; }
+.rt-sum > summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0 10px; min-height: 44px; cursor: pointer; list-style: none; }
+.rt-sum > summary::-webkit-details-marker { display: none; }
+.rt-sum > summary:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+.rt-sum__text { display: grid; gap: 2px; min-width: 0; }
+.rt-sum__head { color: var(--ds-ink-soft); font-size: 1rem; }
+/* '· 계약일 기준'은 380px 미만 휴대폰과, 979px 이하에서 과거 채우기 글자가 붙을 때 화면 읽기 프로그램에만 둔다(상태 줄이 감겨 첫 거래가
+   첫 화면 밖으로 밀려서. 같은 말은 '자세히' 안 첫 문장에 있음). */
+@media (max-width: 379px) {
+  .rt-sum__basis { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}
+@media (max-width: 979px) {
+  .rt-sum__text:has(.rt-sum__fill:not([hidden])) .rt-sum__basis { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}
 .rt-sum__line { color: var(--ds-ink); font-weight: 700; font-variant-numeric: tabular-nums; }
+.rt-sum__action { color: var(--ds-navy); font-size: 1rem; font-weight: 800; text-decoration: underline; text-underline-offset: 3px; }
 .rt-sum__warn { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .rt-sum__warn strong { color: var(--ds-ink); font-weight: 800; }
-.rt-lead--short { display: none; }
+.rt-sum--warn { padding: 6px 12px; border-left: 4px solid #8a6424; background: var(--ds-paper-2); }
+.rt-sum--warn .rt-sum__line { color: var(--ds-ink-soft); font-weight: 600; }
+.rt-sum__body { padding: 0 0 12px; border-top: 1px solid var(--ds-edge); }
+.rt-sum__lead { margin: 12px 0 0; color: var(--ds-ink-soft); }
+.rt-sum .rt-status { margin: 12px 0 0; padding: 0; border: 0; background: transparent; }
+.rt-sum__fill { color: var(--ds-ink-soft); font-size: 1rem; font-weight: 600; font-variant-numeric: tabular-nums; }
 @media (max-width: 979px) {
-  .rt-lead--full { display: none; }
-  .rt-lead--short { display: block; margin-bottom: 12px; }
-  .rt-sum { margin: 0 0 12px; border: 1px solid var(--ds-edge); border-radius: 2px; background: var(--ds-paper); }
-  .rt-sum > summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; min-height: 52px; padding: 8px 12px 8px 14px; }
-  .rt-sum--warn { border-color: #8a6424; border-left-width: 4px; background: var(--ds-paper-2); }
-  .rt-sum--warn .rt-sum__line { color: var(--ds-ink-soft); font-size: 0.9375rem; font-weight: 600; }
-  .rt-sum__body { padding: 0 14px 12px; border-top: 1px solid var(--ds-edge); }
-  .rt-sum__lead { margin: 12px 0 0; color: var(--ds-ink-soft); }
-  .rt-sum .rt-status { margin: 12px 0 0; padding: 0; border: 0; background: transparent; }
-  .rt-sum__fill { color: var(--ds-ink-soft); font-size: 0.9375rem; font-weight: 600; font-variant-numeric: tabular-nums; }
   /* 과거 채우기 막대는 '자세히'를 펼쳤을 때만 보인다(접힌 동안은 위 한 줄만, 첫 거래가 첫 화면에 들어오게. 날개대장 검토 2026-11-19). */
   .rt-sum:not([open]) + .rt-backfill { display: none; }
   /* 매매를 채우는 동안 신고가 판정 준비 안내는 위 한 줄 끝("· 신고가는 채운 뒤")과 '자세히' 안 문장으로 옮긴다(목록 위 4 ~ 6줄 안내가 첫 거래를 첫 화면 밖으로 밀어서, 날개-2 TR-11). */
@@ -1093,59 +1097,82 @@
   .rt-notice--in-sum { display: none; }
 }
 @media (min-width: 980px) {
-  .rt-sum > summary,
-  .rt-sum__lead { display: none; }
+  /* PC는 과거 채우기 막대를 늘 보이므로 한 줄 끝 채우기 글자와 '자세히' 안 신고가 준비 문장은 숨긴다(목록 위 안내가 같은 말을 함). */
+  .rt-sum__fill,
   .rt-sum__high { display: none; }
 }
 
-/* 보기 고르기·관심 단지 줄. 979px 이하는 보기 이름표를 화면 읽기 프로그램에만 둔다. */
-.rt-mode { margin: 0 0 12px; }
+/* 보기 3칸(새 거래·주요 거래·관심 단지)·관심 단지 줄. 979px 이하는 보기 이름표를 화면 읽기 프로그램에만 둔다. */
+.rt-mode { margin: 0 0 10px; }
+.work-ui .rt-mode .work-segment { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.work-ui .rt-mode .work-segment .work-choice { padding-inline: 6px; }
 .rt-watch-line { display: flex; flex-wrap: wrap; align-items: center; gap: 0 12px; margin: 0 0 12px; }
 @media (max-width: 979px) {
-  .rt-mode { margin-bottom: 10px; }
   .rt-mode.work-row { padding-block: 0; }
   .rt-mode .work-row__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
 
-/* 거르기(매물 현황 찾기 칸 모양). 979px 이하는 접고, 접힌 줄에 지금 조건을 글자로 보인다. 980px 이상은 늘 펼치고 요약 줄을 숨긴다. */
-.admin-listing-filters.rt-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: end; }
+/* 찾기칸(48px, 남색 테두리)과 거르기 단추 6개(44px). 기간·평형·금액은 단추 위에 투명한 기본 고르기 목록을 덮어 누르면 휴대폰·PC 기본 목록이 열린다. */
+.rt-find { display: flex; gap: 6px; margin: 0 0 10px; }
+.rt-find input { flex: 1 1 auto; min-width: 0; min-height: 48px; padding: 8px 12px; border: 1.5px solid var(--ds-navy); border-radius: 2px; color: var(--ds-ink); background: var(--ds-paper); font: inherit; font-size: 1.0625rem; }
+.rt-find input::placeholder { color: var(--ds-ink-soft); }
+.rt-find input:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+.rt-find__go { flex: 0 0 auto; min-height: 48px; padding: 0 16px; border: 0; border-radius: 2px; color: var(--ds-paper); background: var(--ds-navy); font: inherit; font-weight: 800; cursor: pointer; }
+.rt-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+.rt-chip { position: relative; display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding: 0 12px; border: 1px solid var(--ds-field-edge); border-radius: 2px; color: var(--ds-ink); background: var(--ds-paper); font: inherit; font-size: 1rem; font-weight: 700; white-space: nowrap; cursor: pointer; }
+.rt-chip--menu::after { content: "▾"; font-size: 0.8em; }
+.rt-chip[aria-expanded="true"]::after { content: "▴"; }
+.rt-chip[aria-pressed="true"],
+.rt-chip.is-set { border: 1.5px solid var(--ds-navy); color: var(--ds-paper); background: var(--ds-navy); }
+.rt-chip[aria-pressed="true"]::before,
+.rt-chip.is-set::before { content: "✓"; }
+.rt-chip:focus-visible,
+.rt-chip--select:focus-within { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+.rt-chip--select select { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; font-size: 1rem; cursor: pointer; }
+.rt-chip:disabled,
+.rt-chip--select:has(select:disabled) { border-style: dashed; color: var(--ds-ink-soft); background: var(--ds-paper-2); cursor: not-allowed; }
+.rt-chip--select select:disabled { cursor: not-allowed; }
+/* '더 보기' 안: 거래 종류·법정동·해제 빼기·직거래 빼기·거르기 초기화(매물 현황 찾기 칸 모양) */
+.admin-listing-filters.rt-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: end; margin: 0 0 12px; }
 .rt-filter-checks { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; }
+.rt-filters__major { grid-column: 1 / -1; margin: 0; color: var(--ds-ink-soft); }
 .rt-filters .admin-filter-reset { grid-column: 1 / -1; }
 @media (min-width: 760px) {
-  .admin-listing-filters.rt-filters { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .rt-filter-checks { grid-column: span 2; }
-  .rt-filters .admin-filter-reset { grid-column: auto; }
-}
-@media (min-width: 1100px) {
-  .admin-listing-filters.rt-filters { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-  .rt-filter-checks { grid-column: 1 / span 4; }
-}
-@media (max-width: 979px) {
-  .rt-fold { margin: 0 0 14px; border: 1px solid var(--ds-edge); border-radius: 2px; background: var(--ds-paper-2); }
-  .rt-fold > summary { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-height: 52px; padding: 8px 14px; }
-  .rt-fold__title { color: var(--ds-navy); font-weight: 800; }
-  .rt-fold__summary { flex: 1 1 auto; min-width: 0; color: var(--ds-ink); }
-  .rt-fold .admin-listing-filters.rt-filters { margin: 0; border: 0; border-top: 1px solid var(--ds-edge); border-radius: 0; }
+  .admin-listing-filters.rt-filters { grid-template-columns: repeat(2, minmax(0, 1fr)) auto; }
+  .rt-filter-checks { grid-column: 1 / 3; }
+  .rt-filters .admin-filter-reset { grid-column: 3; }
 }
 @media (min-width: 980px) {
-  .rt-fold > summary { display: none; }
+  .rt-top { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: start; }
+  .rt-chips { flex-wrap: nowrap; }
 }
 
-/* 목록 */
-.rt-list { margin-top: 16px; }
-.rt-narrow-only { display: none; }
-.rt-criterion { margin: 0 0 12px; color: var(--ds-ink); }
+/* 목록: 패널 테두리 없이 위 남색 선의 'n건 보는 중' 줄(켜짐 줄·모두 끄기·다 담기)부터 시작한다. */
+.rt-list.admin-panel { margin-top: 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.rt-strip { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0; padding: 8px 0; border-top: 2px solid var(--ds-navy); }
+.rt-strip__text { min-width: 0; }
+.rt-strip h2 { margin: 0; color: var(--ds-navy); font-size: 1.0625rem; font-weight: 800; }
+.rt-strip__on { margin: 0; color: var(--ds-ink-soft); font-size: 1rem; }
+.rt-strip__clear { display: inline-flex; align-items: center; min-height: 44px; margin: -10px 0 -10px 8px; padding: 0 4px; border: 0; color: var(--ds-navy); background: transparent; font: inherit; font-weight: 800; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.rt-take { flex: 0 0 auto; min-height: 44px; padding: 0 12px; border: 1.5px solid var(--ds-navy); border-radius: 2px; color: var(--ds-navy); background: var(--ds-paper); font: inherit; font-size: 1rem; font-weight: 800; cursor: pointer; }
+.rt-take:disabled { border-color: var(--ds-edge); color: var(--ds-ink-soft); cursor: not-allowed; }
+.rt-strip__clear:focus-visible,
+.rt-take:focus-visible,
+.rt-find__go:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+.rt-criterion { margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--ds-edge); color: var(--ds-ink); }
 .rt-criterion strong { margin-right: 6px; padding: 1px 6px; border-radius: 2px; color: var(--ds-paper); background: var(--ds-navy); font-size: 0.875rem; }
-.rt-criterion--below { display: none; margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--ds-edge); }
 .rt-notice { margin: 0 0 12px; }
 .rt-notice--warn { border-left: 4px solid #8a6424; }
-@media (max-width: 979px) {
-  .rt-wide-only { display: none; }
-  .rt-narrow-only { display: inline; }
-  .rt-list__heading { margin-bottom: 12px; }
-  .rt-list__heading h2 span { font-size: 0.9375rem; }
-  .rt-criterion--above { display: none; }
-  .rt-criterion--below { display: block; }
+/* 0건: 까닭과 바로 할 일 단추(첫 단추가 주 단추) */
+.rt-empty { padding: 20px 0; border-top: 1px solid var(--ds-edge); }
+.rt-empty h3 { margin: 0 0 6px; color: var(--ds-ink); font-size: 1.125rem; }
+.rt-empty p { margin: 0 0 12px; color: var(--ds-ink-soft); }
+.rt-empty__actions { display: grid; gap: 8px; }
+.rt-empty__actions button { min-height: 48px; padding: 0 20px; border: 1.5px solid var(--ds-navy); border-radius: 2px; color: var(--ds-navy); background: var(--ds-paper); font: inherit; font-weight: 800; cursor: pointer; }
+.rt-empty__actions button:first-child { color: var(--ds-paper); background: var(--ds-navy); }
+.rt-empty__actions button:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+@media (min-width: 980px) {
+  .rt-empty__actions { grid-template-columns: repeat(2, max-content); }
 }
 .rt-more { display: flex; justify-content: center; padding-top: 16px; }
 .rt-more .admin-secondary-button { min-height: 48px; padding: 0 20px; }
@@ -1159,10 +1186,15 @@
 .rt-table .rt-price { font-weight: 800; }
 .rt-table .rt-price__monthly { font-weight: 700; white-space: nowrap; }
 .rt-table .rt-kind small { color: var(--ds-ink-soft); }
-/* 홍보물 고르기(P1-e): 표는 끝 열(체크 칸만 보이고 '고르기' 글자는 화면 읽기용), 카드는 셋째 줄 오른쪽 끝. 누르는 곳은 admin-review-select의 44px. 고른 뒤에는 목록 아래에 붙는 막대(휴대폰은 아래 탭 위). */
+/* 홍보물 담기(P1-e, P1-f D안): 표는 끝 열 "담기", 카드는 셋째 줄 오른쪽 끝. 체크 칸을 '담기' 단추 모양(44px, 남색 테두리)으로 보이고 체크 칸은
+   단추 전체를 덮는 투명한 칸으로만 둔다(키보드 Space·화면 읽기는 체크 칸 그대로). 담으면 남색 바탕 "✓ 담음". 담은 뒤에는 목록 아래에 붙는 막대(휴대폰은 아래 탭 위). */
 .rt-table td.rt-pick { white-space: nowrap; }
-.rt-table td.rt-pick .admin-review-select { cursor: pointer; }
-.rt-table td.rt-pick .admin-review-select:has(input:disabled) { cursor: not-allowed; }
+.rt-table td.rt-pick .rt-pick-button { position: relative; justify-content: center; min-width: 44px; min-height: 44px; padding: 0 14px; border: 1.5px solid var(--ds-navy); border-radius: 2px; color: var(--ds-navy); background: var(--ds-paper); font-size: 1rem; font-weight: 800; cursor: pointer; }
+.rt-table td.rt-pick .rt-pick-button input { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.rt-table td.rt-pick .rt-pick-button:has(input:checked) { color: var(--ds-paper); background: var(--ds-navy); }
+.rt-table td.rt-pick .rt-pick-button:has(input:focus-visible) { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+.rt-table td.rt-pick .rt-pick-button:has(input:disabled) { border-color: var(--ds-edge); color: var(--ds-ink-soft); cursor: not-allowed; }
+.rt-table td.rt-pick .rt-pick-button input:disabled { cursor: not-allowed; }
 .rt-pick-bar { position: sticky; bottom: 0; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 12px; padding: 10px 0; border-top: 2px solid var(--ds-navy); background: var(--ds-paper); }
 .rt-pick-bar[hidden] { display: none; }
 .rt-pick-bar p { flex: 1 1 auto; min-width: 0; margin: 0; color: var(--ds-navy); font-weight: 800; }
@@ -1196,9 +1228,6 @@ html:has(.rt-pick-bar:not([hidden])) { scroll-padding-bottom: calc(var(--rt-pick
   .rt-runs th:first-child { width: auto; }
   .rt-table th.rt-pick-col,
   .rt-table td.rt-pick { padding-inline: 2px; }
-  /* position: relative — 화면 읽기용 글자(position: absolute)의 기준을 이 칸으로 잡아, 표 감싸개를 벗어나 문서를 가로로 넘치게 하지 않는다. */
-  .rt-table td.rt-pick .admin-review-select { position: relative; justify-content: center; min-width: 44px; }
-  .rt-table td.rt-pick .admin-review-select span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
 
 /* 1220px 이하: 세 줄 카드(단지명·전용면적·층 / 금액·거래 종류·신고가·해제 / 계약일·법정동·새로 들어옴).
@@ -1279,14 +1308,52 @@ html:has(.rt-pick-bar:not([hidden])) { scroll-padding-bottom: calc(var(--rt-pick
 .rt-promo__card { display: grid; gap: 10px; justify-items: start; margin: 0; }
 .rt-promo__card img { display: block; width: 100%; max-width: 540px; height: auto; border: 1px solid var(--ds-edge); border-radius: 2px; }
 .rt-promo__card figcaption { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
-.rt-promo__card small { color: var(--ds-ink-soft); font-size: 0.875rem; }
-.rt-promo__card .rt-promo__warn { flex-basis: 100%; color: var(--ds-ink); font-weight: 700; }
+.rt-promo__card small { color: var(--ds-ink-soft); font-size: 1rem; }
 .rt-promo__download { display: inline-flex; align-items: center; justify-content: center; width: auto; min-height: 44px; text-decoration: none; }
-.rt-promo__kinds { flex-wrap: wrap; }
 .rt-promo__preview { min-height: 18rem; }
 .work-output__count[data-state="over"] { color: var(--ds-ink); font-weight: 800; }
 .work-output__count[data-state="over"]::after { content: " · 글자 수 상한을 넘음"; }
 .rt-promo__print .admin-secondary-button { min-height: 44px; padding: 0 18px; }
+/* 홍보물 D안(P1-f): 담은 거래 요약 → '어디에 올릴까요?'(2×2, 760px 이상 4칸, 56px) → 번호 순서 ① 그림 저장 ② 글 복사 ③ 그 앱에서 붙여 넣기
+   → 접어 둔 글 미리 보기·카드 그림 크게 보기 → 종이로 뽑기(A4). 저장·복사를 마친 단추는 남색 테두리 "✓ … 함"으로 바뀐다. */
+.rt-picked { margin: 0; padding: 10px 0 0; border-top: 2px solid var(--ds-navy); border-bottom: 1px solid var(--ds-edge); }
+.rt-picked h2 { margin: 0 0 4px; color: var(--ds-navy); font-size: 1.125rem; font-weight: 800; }
+.rt-picked__list { margin: 0; padding: 0; list-style: none; }
+.rt-picked__list li { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 32px; }
+.rt-picked__list span { min-width: 0; overflow-wrap: anywhere; }
+.rt-picked__list strong { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+.rt-picked__back { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; color: var(--ds-navy); font-weight: 800; text-decoration: underline; text-underline-offset: 3px; }
+.rt-where__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.rt-where__choice { position: relative; display: flex; align-items: center; justify-content: center; gap: 4px; min-height: 56px; border: 1.5px solid var(--ds-field-edge); border-radius: 2px; color: var(--ds-ink); background: var(--ds-paper); font-size: 1.0625rem; font-weight: 800; cursor: pointer; }
+.rt-where__choice input { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.rt-where__choice:has(input:checked) { border-color: var(--ds-navy); color: var(--ds-paper); background: var(--ds-navy); }
+.rt-where__choice:has(input:checked)::before { content: "✓"; }
+.rt-where__choice:has(input:focus-visible) { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+.rt-steps { display: grid; gap: 12px; margin: 16px 0 0; padding: 0; list-style: none; }
+.rt-step { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 10px; align-items: start; }
+.rt-step__no { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; color: var(--ds-paper); background: var(--ds-navy); font-size: 1.0625rem; font-weight: 800; }
+.rt-step__body { min-width: 0; }
+.rt-step__body p { margin: 0 0 6px; }
+.rt-step__downloads { display: grid; gap: 8px; }
+.rt-step__download small { display: block; margin-top: 4px; color: var(--ds-ink-soft); font-size: 1rem; }
+.rt-step .rt-promo__download,
+.rt-step .rt-step__button { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 52px; font-size: 1.0625rem; text-decoration: none; }
+.rt-step .work-primary-button.is-done { border: 1.5px solid var(--ds-navy); color: var(--ds-navy); background: var(--ds-paper); }
+.rt-promo__warn { color: var(--ds-ink); font-weight: 700; }
+.rt-promo__fold { margin-top: 12px; border-top: 1px solid var(--ds-edge); }
+.rt-promo__fold > summary { display: flex; align-items: center; gap: 6px; min-height: 44px; color: var(--ds-navy); font-weight: 800; cursor: pointer; }
+.rt-promo__fold > summary:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+.rt-promo__fold[open] > summary { margin-bottom: 8px; }
+.rt-promo__print { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--ds-edge); }
+.rt-promo__print .work-help { margin-top: 6px; }
+@media (min-width: 760px) {
+  .rt-where__grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (min-width: 980px) {
+  .rt-step__downloads { grid-auto-flow: column; justify-content: start; }
+  .rt-step .rt-promo__download,
+  .rt-step .rt-step__button { width: auto; min-width: 16rem; padding: 0 20px; }
+}
 @media (min-width: 1221px) {
   .rt-promo__card-list { grid-template-columns: repeat(2, minmax(0, 540px)); }
 }
