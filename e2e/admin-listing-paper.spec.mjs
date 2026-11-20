@@ -51,18 +51,18 @@ const row = (page, id, key) => page.locator(`[data-lp-form='${id}'] [data-bl-row
 // 공동주택 명시사항 칸을 모두 채운다(층·총 층수는 공개 자료에서 이미 채워져 있음).
 async function fillApartment(page, id, { location = "대전광역시 동구 가상동 100", fee = "250000" } = {}) {
   await row(page, id, "location").locator("input").fill(location);
-  await row(page, id, "kind").locator("input[value='아파트']").check({ force: true });
-  await row(page, id, "violation").locator("input[value='none']").check({ force: true });
-  await row(page, id, "moveIn").locator("input[value='now']").check({ force: true });
+  await row(page, id, "kind").locator("label:has(input[value='아파트'])").click();
+  await row(page, id, "violation").locator("label:has(input[value='none'])").click();
+  await row(page, id, "moveIn").locator("label:has(input[value='now'])").click();
   await row(page, id, "rooms").locator("input").fill("3");
   await row(page, id, "bathrooms").locator("input").fill("2");
   await row(page, id, "approvalDate").locator("input").fill("2010-05-01");
-  await row(page, id, "parking").locator("input[value='perHousehold']").check({ force: true });
+  await row(page, id, "parking").locator("label:has(input[value='perHousehold'])").click();
   await row(page, id, "parking").locator("input[type='text']").first().fill("1.2");
-  await row(page, id, "managementFee").locator("input[value='average']").check({ force: true });
+  await row(page, id, "managementFee").locator("label:has(input[value='average'])").click();
   await row(page, id, "managementFee").locator("input[type='text']:visible").first().fill(fee);
-  await row(page, id, "managementFee").locator("input[value='general']").check({ force: true });
-  await row(page, id, "direction").locator("input[value='거실']").check({ force: true });
+  await row(page, id, "managementFee").locator("label:has(input[value='general'])").click();
+  await row(page, id, "direction").locator("label:has(input[value='거실'])").click();
 }
 
 test("매물 안내지 390px: 분양권 잠금, 빈 칸이면 안 만듦, 다 채우면 PNG 1080×1350·listing-YYYYMMDD.png, 칸을 바꾸면 그림을 버림, 서버 요청·저장·CSP 위반 0", async ({ page }) => {
