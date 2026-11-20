@@ -1159,13 +1159,34 @@
 .rt-table .rt-price { font-weight: 800; }
 .rt-table .rt-price__monthly { font-weight: 700; white-space: nowrap; }
 .rt-table .rt-kind small { color: var(--ds-ink-soft); }
+/* 홍보물 고르기(P1-e): 표는 끝 열(체크 칸만 보이고 '고르기' 글자는 화면 읽기용), 카드는 셋째 줄 오른쪽 끝. 누르는 곳은 admin-review-select의 44px. 고른 뒤에는 목록 아래에 붙는 막대(휴대폰은 아래 탭 위). */
+.rt-table td.rt-pick { white-space: nowrap; }
+.rt-table td.rt-pick .admin-review-select { cursor: pointer; }
+.rt-table td.rt-pick .admin-review-select:has(input:disabled) { cursor: not-allowed; }
+.rt-pick-bar { position: sticky; bottom: 0; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 12px; padding: 10px 0; border-top: 2px solid var(--ds-navy); background: var(--ds-paper); }
+.rt-pick-bar[hidden] { display: none; }
+.rt-pick-bar p { flex: 1 1 auto; min-width: 0; margin: 0; color: var(--ds-navy); font-weight: 800; }
+.rt-pick-bar .admin-primary-button,
+.rt-pick-bar .admin-secondary-button { min-height: 44px; padding: 0 16px; text-decoration: none; }
+/* 막대가 보이는 동안 키보드 포커스·본문 끝이 막대 뒤로 숨지 않게 한다. --rt-pick-bar-h는 화면 스크립트가 막대 실제 높이를 재서 넣고(줄이 바뀌어 높아져도 맞음), 못 재면 한 줄 높이 66px로 본다. */
+html:has(.rt-pick-bar:not([hidden])) { scroll-padding-bottom: calc(var(--rt-pick-bar-h, 66px) + 16px); }
+@media (max-width: 979px) {
+  .rt-pick-bar { bottom: calc(56px + env(safe-area-inset-bottom)); flex-wrap: nowrap; gap: 8px; }
+  .rt-pick-bar .admin-primary-button,
+  .rt-pick-bar .admin-secondary-button { flex: 0 0 auto; padding: 0 12px; }
+  /* 979px 이하는 아래 탭(56px)도 더한다(막대 66px이면 130px, 결과 막대와 같은 방법). */
+  html:has(.rt-pick-bar:not([hidden])) { scroll-padding-bottom: calc(56px + var(--rt-pick-bar-h, 66px) + 8px + env(safe-area-inset-bottom)); }
+}
 
 /* 1221px 이상: 표 */
 @media (min-width: 1221px) {
   .rt-table th,
   .rt-table td { padding-inline: 8px; }
   .rt-table th:first-child { width: auto; }
-  .rt-table td.rt-name { white-space: normal; }
+  /* 글꼴 폭이 달라도(예: Linux의 Noto 글꼴) 표가 감싸개를 넘지 않게, 칸이 모자랄 때만 단지명은 글자 사이에서, 전용면적·층은 띄어쓰기에서 줄을 바꾼다.
+     단지명 칸은 8rem(굵은 글자 약 7글자)보다 좁아지지 않아, 칸이 모자라면 전용면적·층이 먼저 줄을 바꾸고 짧은 단지명은 끊기지 않는다. */
+  .rt-table td.rt-name { min-width: 8rem; white-space: normal; overflow-wrap: anywhere; }
+  .rt-table td.rt-size { white-space: normal; }
   .rt-table td.rt-flags { white-space: normal; }
   .rt-table td.rt-price { min-width: 9.5rem; }
   .rt-table .rt-price__monthly { display: block; }
@@ -1173,6 +1194,11 @@
   .rt-table .rt-flags .rt-tag + .rt-tag { margin: 4px 0 0; }
   .rt-only-card { display: none; }
   .rt-runs th:first-child { width: auto; }
+  .rt-table th.rt-pick-col,
+  .rt-table td.rt-pick { padding-inline: 2px; }
+  /* position: relative — 화면 읽기용 글자(position: absolute)의 기준을 이 칸으로 잡아, 표 감싸개를 벗어나 문서를 가로로 넘치게 하지 않는다. */
+  .rt-table td.rt-pick .admin-review-select { position: relative; justify-content: center; min-width: 44px; }
+  .rt-table td.rt-pick .admin-review-select span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
 
 /* 1220px 이하: 세 줄 카드(단지명·전용면적·층 / 금액·거래 종류·신고가·해제 / 계약일·법정동·새로 들어옴).
@@ -1196,6 +1222,8 @@
   .rt-table td.rt-umd { color: var(--ds-ink-soft); }
   .rt-table td.rt-umd::before { display: inline; content: "· "; margin-left: 6px; }
   .rt-table td.rt-new:empty { display: none; }
+  .rt-table td.rt-pick { position: absolute; right: 0; bottom: 4px; display: block; }
+  .rt-table td.rt-pick::before { display: none; content: none; }
 
   /* 최근 실행 10번: 한 실행을 세 줄로(시작·결과 / 받은 달 수·호출·쓴 행 / 새로·바뀜·지움) */
   .rt-runs tr { display: grid; grid-template-columns: auto auto minmax(0, 1fr); grid-template-areas: none; align-items: center; gap: 4px 16px; padding: 10px 0; }
@@ -1238,6 +1266,42 @@
 .rt-error { display: grid; gap: 12px; justify-items: start; padding: 16px 0 4px; border-top: 1px solid var(--ds-edge); }
 .rt-error p { margin: 0; }
 .rt-error .admin-secondary-button { min-height: 48px; padding: 0 18px; }
+
+/* 홍보물 화면(P1-e): 카드 미리보기(실제 그림 1080×1350의 절반 크기까지) → 글 4가지 → A4 인쇄. */
+.rt-state__links { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; margin: 14px 0 0; }
+.rt-state__links .rt-state__action { margin-top: 0; }
+.rt-state__links .admin-text-link { display: inline-flex; align-items: center; min-height: 44px; }
+.rt-promo__notice { margin: 16px 0 0; }
+.rt-promo__main { display: grid; gap: 16px; margin-top: 16px; }
+.rt-promo__main[hidden] { display: none; }
+.rt-promo__main .admin-panel h2 { margin: 0 0 8px; color: var(--ds-navy); font-size: 1.25rem; font-weight: 800; }
+.rt-promo__card-list { display: grid; gap: 20px; }
+.rt-promo__card { display: grid; gap: 10px; justify-items: start; margin: 0; }
+.rt-promo__card img { display: block; width: 100%; max-width: 540px; height: auto; border: 1px solid var(--ds-edge); border-radius: 2px; }
+.rt-promo__card figcaption { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.rt-promo__card small { color: var(--ds-ink-soft); font-size: 0.875rem; }
+.rt-promo__card .rt-promo__warn { flex-basis: 100%; color: var(--ds-ink); font-weight: 700; }
+.rt-promo__download { display: inline-flex; align-items: center; justify-content: center; width: auto; min-height: 44px; text-decoration: none; }
+.rt-promo__kinds { flex-wrap: wrap; }
+.rt-promo__preview { min-height: 18rem; }
+.work-output__count[data-state="over"] { color: var(--ds-ink); font-weight: 800; }
+.work-output__count[data-state="over"]::after { content: " · 글자 수 상한을 넘음"; }
+.rt-promo__print .admin-secondary-button { min-height: 44px; padding: 0 18px; }
+@media (min-width: 1221px) {
+  .rt-promo__card-list { grid-template-columns: repeat(2, minmax(0, 540px)); }
+}
+/* A4 한 장(TK-40): 화면에서는 숨기고, 인쇄할 때는 메뉴·단추·설명을 모두 숨겨 카드 그림만 남긴다(1장은 가운데 크게, 2장은 나란히). */
+.rt-print-sheet { display: none; }
+@media print {
+  @page { size: A4 portrait; margin: 12mm; }
+  .admin-body:has(.rt-print-sheet) { background: var(--ds-paper); }
+  .admin-body:has(.rt-print-sheet) :is(.skip-link, .admin-side, .admin-top, .admin-subtabs, .admin-tabbar) { display: none !important; }
+  .admin-body:has(.rt-print-sheet) :is(.admin-shell, .admin-shell__body, .admin-main) { display: block; min-height: 0; margin: 0; padding: 0; border: 0; box-shadow: none; }
+  .rt-promo > :not(.rt-print-sheet) { display: none !important; }
+  .rt-print-sheet { display: flex; justify-content: center; align-items: flex-start; gap: 6mm; break-inside: avoid; }
+  .rt-print-sheet img { display: block; flex: 0 0 auto; width: 150mm; max-width: 100%; height: auto; border: 0.3mm solid var(--ds-edge); }
+  .rt-print-sheet[data-count="2"] img { width: 88mm; }
+}
 
 /* 설정 화면 */
 .rt-back { margin: 0 0 8px; }

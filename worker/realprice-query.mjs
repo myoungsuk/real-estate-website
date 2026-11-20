@@ -7,6 +7,9 @@
 // - 하루 읽기 끝 상한을 넘으면 목록·단지 찾기를 429 RT_READ_BUDGET(retryAt = 다음 한국 시각 09:00)로 거절한다.
 //   갱신 상태·관심 단지 보기는 읽는 양이 작아 거절하지 않는다(TK-54).
 // - 목록·단지 찾기의 읽은 행 수(meta.rows_read)는 rt_daily_usage에 더한다. 보기 요청은 감사 기록을 남기지 않는다(22.12절).
+// - trades?ids=(P1-e 홍보물): 거래 ID 1 ~ 6개를 기본 키로만 다시 읽는다(REALPRICE_TRADES_BY_IDS_SQL, json_each 바인딩 1개).
+//   목록 거르기·커서와 함께 보내면 400으로 거절한다. 응답은 items(보낸 순서)·missing(없어진 ID)·receivedAt(해제 아닌 거래 달의
+//   마지막 성공 시각 가운데 가장 이른 것)·recordHighReady·warnings이고, 사용량 세기·상한·감사 규칙은 목록과 같다.
 // - SQL은 모두 이 파일의 고정 문장이고 값은 bind로만 넘긴다(입력값을 SQL에 이어 붙이지 않음).
 import complexes from "../src/data/complexes.json" with { type: "json" };
 import { getComplexMatchCandidates, normalizeComplexText } from "../src/lib/complex-matching.mjs";
@@ -38,6 +41,9 @@ export const REALPRICE_COMPLEX_QUERY_MAX = 30;
 export const REALPRICE_COMPLEX_RESULT_MAX = 50;
 export const REALPRICE_COMPLEX_SEARCH_MONTHS = 36; // 단지 찾기는 최근 36개월 매매 범위만 읽는다(표 전체를 훑지 않게)
 export const REALPRICE_WATCH_VERSION_SETTING = "realprice_watch_version";
+export const REALPRICE_IDS_MAX = 6; // 홍보물에 고를 수 있는 거래 수(설계서 22.10)
+// ids와 함께 보내면 400인 목록 매개변수. 조용히 무시하면 어느 쪽이 적용됐는지 헷갈리므로 거절한다(날개대장 조건, P1-e).
+const TRADES_LIST_PARAMS = Object.freeze(["kind", "from", "to", "watch", "apt", "umd", "areaMin", "areaMax", "priceMin", "priceMax", "cancelled", "direct", "cursor", "limit"]);
 const COVERAGE_PENDING_MAX = 12;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MONTH_PATTERN = /^(\d{4})-(0[1-9]|1[0-2])$/u;
@@ -82,6 +88,12 @@ FROM (
 )
 ORDER BY deal_date DESC, trade_key DESC
 LIMIT ?18`;
+
+// 고른 거래 다시 읽기(홍보물 화면, P1-e): ?1 = 거래 ID JSON 배열(1 ~ 6개). 기본 키로만 찾는다(표를 훑지 않음).
+export const REALPRICE_TRADES_BY_IDS_SQL = `SELECT trade_key, kind, deal_date, umd_nm, jibun, apt_seq, apt_nm, area_x100, floor, build_year, price_won, deposit_won,
+  monthly_rent_won, dealing_gbn, cancelled, cancelled_on, registered_on, apt_dong, extra_json, is_backfill, first_seen_at, cmp_seq
+FROM rt_trades
+WHERE trade_key IN (SELECT value FROM json_each(?1))`;
 
 // 신고가 비교 자료(22.8절): 돌려줄 쪽의 판정 대상 매매 행이 속한 단지·면적 묶음(?1 = JSON [[cmp_seq, area_x100, 가장 이른 계약일, 가장 늦은 계약일], …])마다
 // ① 가장 이른 계약일 앞의 비교 대상 최고가 1행(deal_date NULL)과 ② 가장 이른 ~ 가장 늦은 계약일 사이(늦은 날은 빼고)의 비교 대상 거래를 돌려준다.
@@ -385,19 +397,77 @@ async function readTodayUsage(db, nowMs) {
   return { rowsRead: Number(row?.rows_read ?? 0) };
 }
 
-// GET /work/realprice/trades. 돌려주는 값: { items, nextCursor, recordHighReady, coverage, warnings }
-export async function listRealpriceTrades(db, params, { nowMs }) {
-  const query = parseTradesQuery(params, nowMs);
+// ids(쉼표로 이은 거래 ID 1 ~ 6개)가 없으면 null. 형식이 틀리거나 7개 이상이거나 목록 매개변수와 함께 오면 400. 같은 ID는 하나로 합친다(보낸 순서 유지).
+export function parseTradeIds(params) {
+  if (!params.has("ids")) return null;
+  const conflicts = TRADES_LIST_PARAMS.filter((name) => params.has(name));
+  if (conflicts.length > 0) throw invalid(["ids", ...conflicts]);
+  const values = params.getAll("ids");
+  if (values.length !== 1) throw invalid(["ids"]);
+  const parts = values[0].split(",");
+  if (parts.length > REALPRICE_IDS_MAX || parts.some((part) => !TRADE_KEY_PATTERN.test(part))) throw invalid(["ids"]);
+  return [...new Set(parts)];
+}
+
+// 고른 거래들이 속한 달(거래 ID의 종류·연월)의 마지막 성공 시각 가운데 가장 이른 것(설계서 22.10 '자료를 받은 시각').
+// 받은 기록이 없는 달이 섞이거나 거래가 없으면 null(모르는 시각을 지어내지 않음).
+export function tradesReceivedAt(monthRows, tradeRows) {
+  const success = new Map(monthRows.map((row) => [`${row.kind}:${row.deal_ymd}`, row.last_success_at]));
+  let earliest = null;
+  for (const row of tradeRows) {
+    const at = success.get(row.trade_key.split(":", 2).join(":"));
+    if (!at) return null;
+    if (earliest === null || at < earliest) earliest = at;
+  }
+  return earliest;
+}
+
+// 목록과 고른 거래 다시 읽기가 함께 쓰는 앞부분: 하루 읽기 끝 상한(429)·첫 상한, 받은 달 기록, 신고가 판정 준비.
+async function readTradesContext(db, nowMs) {
   const usage = await readTodayUsage(db, nowMs);
   if (usage.rowsRead >= REALPRICE_DAILY_READ_HARD) throw readBudgetExceededError(nowMs);
   const readSoftExceeded = usage.rowsRead >= REALPRICE_DAILY_READ_SOFT;
-
   const currentYmd = kstMonth(nowMs);
   const monthsResult = await readMonthsStatement(db).all();
   const monthRows = monthsResult.results ?? [];
   const saleDone = new Set(monthRows.filter((row) => row.kind === "sale" && row.last_success_at).map((row) => row.deal_ymd));
   const recordHighReady = expectedMonths("sale", currentYmd).every((ymd) => saleDone.has(ymd));
-  const recordHighEnabled = recordHighReady && !readSoftExceeded;
+  return { readSoftExceeded, currentYmd, monthsResult, monthRows, recordHighReady, recordHighEnabled: recordHighReady && !readSoftExceeded };
+}
+
+// GET /work/realprice/trades?ids= (홍보물 화면, P1-e). 돌려주는 값: { items(보낸 순서), missing(못 찾은 ID), receivedAt, recordHighReady, warnings }
+// 해제로 바뀐 거래도 cancelled: true로 그대로 돌려준다(빼는 것은 화면이 알리며 한다). receivedAt은 해제가 아닌 거래의 달만 본다.
+async function readRealpriceTradesByIds(db, ids, { nowMs }) {
+  const context = await readTradesContext(db, nowMs);
+  const result = await db.prepare(REALPRICE_TRADES_BY_IDS_SQL).bind(JSON.stringify(ids)).all();
+  let rowsRead = rowsReadOf(result);
+  const byKey = new Map((result.results ?? []).map((row) => [row.trade_key, row]));
+  const found = ids.filter((id) => byKey.has(id)).map((id) => byKey.get(id));
+  const groups = context.recordHighEnabled ? recordHighGroups(found) : [];
+  if (groups.length > 0) {
+    const prior = await db.prepare(REALPRICE_PRIOR_SQL).bind(JSON.stringify(groups)).all();
+    rowsRead += rowsReadOf(prior);
+    const previous = previousMaxByRow(found, prior.results ?? []);
+    found.forEach((row, index) => { row.prev_max_won = previous[index]; });
+  }
+  await addReadUsage(db, nowMs, 1 + rowsReadOf(context.monthsResult) + rowsRead);
+  const warnings = [];
+  if (context.readSoftExceeded) warnings.push({ code: "RT_READ_BUDGET", level: "soft" });
+  return {
+    items: found.map((row) => tradeView(row, { recordHighEnabled: context.recordHighEnabled, nowMs })),
+    missing: ids.filter((id) => !byKey.has(id)),
+    receivedAt: tradesReceivedAt(context.monthRows, found.filter((row) => Number(row.cancelled) === 0)),
+    recordHighReady: context.recordHighReady,
+    warnings,
+  };
+}
+
+// GET /work/realprice/trades. 돌려주는 값: { items, nextCursor, recordHighReady, coverage, warnings }
+export async function listRealpriceTrades(db, params, { nowMs }) {
+  const ids = parseTradeIds(params);
+  if (ids) return readRealpriceTradesByIds(db, ids, { nowMs });
+  const query = parseTradesQuery(params, nowMs);
+  const { readSoftExceeded, currentYmd, monthsResult, monthRows, recordHighReady, recordHighEnabled } = await readTradesContext(db, nowMs);
 
   // 최근 달 창부터 읽어 돌려줄 수 + 1건이 차면 멈춘다(36개월이면 창 6개, 문장 최대 6번).
   const rowsAll = [];

@@ -6,8 +6,8 @@ import { ADMIN_HELP_FACTS } from "../src/lib/admin-help.mjs";
 import { REALPRICE_VIEW_PAGE_SIZE } from "../src/lib/work/realprice-view.mjs";
 
 const readSource = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
-const PAGES = ["src/pages/admin/work/realprice/index.astro", "src/pages/admin/work/realprice/settings.astro"];
-const SCRIPTS = ["src/lib/work-realprice-client.ts", "src/lib/work-realprice-dom.ts", "src/lib/work/realprice-view.mjs"];
+const PAGES = ["src/pages/admin/work/realprice/index.astro", "src/pages/admin/work/realprice/settings.astro", "src/pages/admin/work/realprice/promo.astro"];
+const SCRIPTS = ["src/lib/work-realprice-client.ts", "src/lib/work-realprice-dom.ts", "src/lib/work/realprice-view.mjs", "src/lib/work-realprice-card.ts", "src/lib/work/realprice-promo.mjs"];
 // 미디어 덩어리 하나(@media … { … })를 잘라 낸다. 안쪽 괄호가 한 겹인 이 파일의 규칙 모양을 기준으로 한다.
 const mediaBlocks = (css, query) => {
   const blocks = [];
@@ -25,7 +25,7 @@ const mediaBlocks = (css, query) => {
   return blocks.join("\n");
 };
 
-test("두 화면은 관리 틀·사용법 상자를 쓰고, form 없이 입력칸마다 autocomplete=off", async () => {
+test("세 화면(실거래가·설정·홍보물)은 관리 틀·사용법 상자를 쓰고, form 없이 입력칸마다 autocomplete=off", async () => {
   for (const path of PAGES) {
     const source = await readSource(path);
     assert.match(source, /import AdminLayout from "\.\.\/\.\.\/\.\.\/\.\.\/layouts\/AdminLayout\.astro";/u, path);
@@ -120,4 +120,32 @@ test("메뉴: 업무 도구 아래 단계에 '실거래가'를 더하고, 미리
   assert.match(css, /\.admin-subtabs a\[aria-current="true"\] \{[^}]*font-weight: 800;/u);
   assert.match(css, /@media \(max-width: 979px\) \{[^@]*\.rt-notice--in-sum \{ display: none; \}/u, "979px 이하: 신고가 준비 안내는 상태 줄로 옮김");
   assert.match(css, /\.admin-menu__subitem\[aria-current="true"\] \{[^}]*font-weight: 800;/u);
+});
+
+test("P1-e 홍보물: 목록 고르기는 메모리만(최대 6건·해제 막음), 홍보물 화면은 ids로 다시 읽고, 그림은 data 주소 PNG, A4는 인쇄 CSS", async () => {
+  const [index, promo, card, promoLib, css] = await Promise.all([
+    readSource(PAGES[0]),
+    readSource(PAGES[2]),
+    readSource("src/lib/work-realprice-card.ts"),
+    readSource("src/lib/work/realprice-promo.mjs"),
+    readSource("src/styles/admin.css"),
+  ]);
+  assert.match(index, /<th scope="col" class="rt-pick-col">홍보물<\/th>/u, "표 끝 열");
+  assert.match(index, /const picked = new Map<string, Trade>\(\);/u, "고른 거래는 화면 메모리에만");
+  assert.match(index, /box\.disabled = !selectable \|\| \(!box\.checked && picked\.size >= PROMO_IDS_MAX\);/u, "해제는 막고, 다 고르면 나머지를 잠금");
+  assert.match(index, /const href = promoHref\(\[\.\.\.picked\.keys\(\)\]\);\r?\n\s*if \(href\) promoLink\.href = href;/u, "링크 주소로만 넘김(주소 바꾸기 없음)");
+  assert.match(promo, /readWork<IdsResponse>\("\/realprice\/trades", `ids=\$\{ids\.join\(","\)\}`\)/u, "고른 ID로 다시 읽음");
+  assert.match(promo, /const selection = promoSelection\(data\);/u, "해제·찾지 못한 거래는 빼고 알림");
+  assert.match(promo, /const blocked = promoBlockReason\(input\);/u, "명시사항·받은 시각이 없으면 막음");
+  assert.match(promo, /link\.download = name;/u);
+  assert.match(promo, /<div class="rt-print-sheet" data-promo-sheet><\/div>/u);
+  assert.match(card, /canvas\.toDataURL\("image\/png"\)/u, "CSP img-src에 blob이 없어 data 주소");
+  assert.doesNotMatch(`${card}\n${promo}`, /createObjectURL|blob:/u);
+  assert.match(card, /const LOGO_SRC = "\/images\/brand\/leaders-city-happy-logo\.webp";/u, "같은 출처 로고(canvas가 오염되지 않음)");
+  assert.doesNotMatch(`${card}\n${promoLib}`, /aptDong|jibun/u, "카드·글에 동 번호·지번 칸을 쓰지 않음(DEC-WT-22)");
+  const print = mediaBlocks(css, "print");
+  assert.match(print, /@page \{ size: A4 portrait;/u);
+  assert.match(print, /\.admin-body:has\(\.rt-print-sheet\) :is\(\.skip-link, \.admin-side, \.admin-top, \.admin-subtabs, \.admin-tabbar\) \{ display: none !important; \}/u, "메뉴 숨김");
+  assert.match(print, /\.rt-promo > :not\(\.rt-print-sheet\) \{ display: none !important; \}/u, "단추·설명 숨김");
+  assert.match(css, /\.rt-print-sheet \{ display: none; \}/u, "화면에서는 인쇄 칸을 숨김");
 });
