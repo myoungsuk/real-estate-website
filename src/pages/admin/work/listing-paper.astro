@@ -13,6 +13,9 @@ import { LISTING_PICK_MAX, bigPriceText, listingOfficeBlockReason, listingPaperS
 // - 공동주택 필수 13항목은 1:1로 보내는 그림에도 늘 넣는다. 빈 필수 항목이 있으면 그림을 만들지 않는다.
 // - 넣은 값은 이 화면 메모리에만 두고 저장·서버 전송·URL·브라우저 저장소에 넣지 않는다.
 const sources = listingPaperSources(naverListings, disclosureRules);
+// 브라우저에는 빌드 때 만든 목록을 JSON으로만 넘긴다. 브라우저 묶음이 가격 읽기(naver-listing-filter.mjs)를 끌어오면 공개 /properties/ 묶음까지 바뀌기 때문.
+// "<"는 JSON 이스케이프(\u003c)로 바꿔 글 안의 </script>가 칸을 끊지 못하게 한다.
+const pageData = JSON.stringify({ checkedAt: naverListings.checkedAt, sources }).replace(/</gu, "\\u003c");
 const officeBlocked = listingOfficeBlockReason(office);
 const tradeLabels: Record<string, string> = { sale: "매매", jeonse: "전세", "monthly-rent": "월세" };
 const metaOf = (source: (typeof sources)[number]) => {
@@ -98,10 +101,10 @@ const metaOf = (source: (typeof sources)[number]) => {
 
     {/* 인쇄할 때만 보이는 칸(홍보 종이와 같은 인쇄 CSS: body[data-paper-print="done"]). */}
     <div class="paper-print paper-print--done" data-lp-sheet></div>
+    <script type="application/json" data-lp-data set:html={pageData}></script>
   </div>
 
   <script>
-    import naverListings from "../../../data/naver-listings.json";
     import office from "../../../data/office.json";
     import disclosureRules from "../../../data/work/ad-disclosure-rules.json";
     import { renderCompareCard, renderListingCard, type CompareSheet, type ListingSheet } from "../../../lib/work-listing-card";
@@ -113,7 +116,6 @@ const metaOf = (source: (typeof sources)[number]) => {
       buildListingSheet,
       checkListingInputs,
       listingFileName,
-      listingPaperSources,
       pickBlockReason,
     } from "../../../lib/work/listing-paper.mjs";
     import { matchesBlogSourceQuery } from "../../../lib/work/blog-sources.mjs";
@@ -141,7 +143,8 @@ const metaOf = (source: (typeof sources)[number]) => {
         const canvas = pick<HTMLCanvasElement>("[data-lp-canvas]");
         const sheetBox = pick<HTMLElement>("[data-lp-sheet]");
 
-        const sources = listingPaperSources(naverListings, disclosureRules) as Source[];
+        const pageData = JSON.parse(root.querySelector("[data-lp-data]")?.textContent ?? "{}") as { checkedAt?: string; sources?: Source[] };
+        const sources = pageData.sources ?? [];
         const byId = new Map(sources.map((source) => [source.id, source]));
         const items = [...list.querySelectorAll<HTMLElement>("[data-lp-item]")];
         // 담은 매물과 칸 값은 이 배열(화면 메모리)에만 있다. 저장·전송하지 않는다.
@@ -292,7 +295,7 @@ const metaOf = (source: (typeof sources)[number]) => {
             ready.push(checked.item);
           }
           const compare = ready.length > 1;
-          const built = compare ? buildCompareSheet(ready, office, naverListings.checkedAt) : buildListingSheet(ready[0], office);
+          const built = compare ? buildCompareSheet(ready, office, pageData.checkedAt ?? null) : buildListingSheet(ready[0], office);
           if (!built.ok || !built.sheet) {
             setStatus(built.error ?? "그림을 만들 수 없습니다.", "error");
             return;
