@@ -1,0 +1,10 @@
+{
+  "id": "resp_fake_incomplete_0001",
+  "object": "response",
+  "status": "incomplete",
+  "background": true,
+  "model": "gpt-test-blog-2026-11-01",
+  "output": [{ "id": "rs_fake_0002", "type": "reasoning", "summary": [] }],
+  "incomplete_details": { "reason": "max_output_tokens" },
+  "usage": { "input_tokens": 4000, "output_tokens": 20000, "total_tokens": 24000 }
+}

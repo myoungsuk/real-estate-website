@@ -23,7 +23,7 @@ async function makeDeal(env, body) {
 
 test("0002는 0001 위에 거래 일정 입력 칸 7개를 더하고 구조 번호를 2로 올리며, 규제 단계·매매 세부 종류·오피스텔 판정을 칸끼리 묶는다", () => {
   assert.deepEqual(migrationFiles.slice(0, 2), ["0001_init.sql", "0002_deal_schedule_inputs.sql"], "0001은 그대로 두고 0002를 새 파일로");
-  assert.deepEqual(migrationFiles.slice(2), ["0003_public_realprice.sql"], "그 뒤는 단계 P 0003만(새 구조 변경은 새 번호 파일로)");
+  assert.deepEqual(migrationFiles.slice(2), ["0003_public_realprice.sql", "0004_blog_drafts.sql"], "그 뒤는 단계 P 0003·P3 0004만(새 구조 변경은 새 번호 파일로)");
   const database = new DatabaseSync(":memory:");
   database.exec("PRAGMA foreign_keys = ON;");
   database.exec(migrationSql);

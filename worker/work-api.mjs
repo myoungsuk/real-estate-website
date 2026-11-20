@@ -14,7 +14,7 @@ import { handlePublicToolsApi, isPublicToolsRoute } from "./work-public-tools.mj
 export { withViewAudit, writeBatchWithAudit };
 
 export const WORK_API_ROOT = "/api/admin/v1/work";
-export const WORK_SCHEMA_VERSION = 3; // migrations/work 0003(단계 P 공개 실거래 자료)까지. 단계 2와 단계 P가 같은 번호를 쓴다
+export const WORK_SCHEMA_VERSION = 4; // migrations/work 0004(단계 P3 글 초안)까지. 단계 2와 단계 P가 같은 번호를 쓴다
 export const MAX_WORK_JSON_BYTES = 256 * 1024;
 const WRITE_METHODS = new Set(["POST", "PATCH", "PUT", "DELETE"]);
 const RAY_ID_PATTERN = /^[A-Za-z0-9-]{1,64}$/u;
@@ -154,7 +154,12 @@ export async function handleWorkApi(request, env, options = {}) {
 
   // 단계 P(공개 자료 도구)는 단계 2 켜기 값과 따로 켠다. Access 재검증은 admin-api.mjs에서 이미 끝났다(설계서 22.2절).
   if (isPublicToolsRoute(route)) {
-    return handlePublicToolsApi(request, env, { db, actor, requestId, now, auditLog, method, route });
+    // openaiFetch: OpenAI 요청에 쓸 fetch(시험은 가짜를 넣어 실제 OpenAI를 부르지 않음).
+    return handlePublicToolsApi(request, env, {
+      db, actor, requestId, now, auditLog, method, route,
+      randomUUID: options.randomUUID ?? (() => crypto.randomUUID()),
+      openaiFetch: options.openaiFetch ?? ((...args) => fetch(...args)),
+    });
   }
 
   const state = getWorkConfigState(env, db);

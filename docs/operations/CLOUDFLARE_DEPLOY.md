@@ -109,7 +109,7 @@ Access가 적용된 배포 환경에서 다음을 확인한다.
 
 ## 중개업무 도구 실거래가 받기(단계 P, Cron)
 
-`wrangler.jsonc`의 `triggers.crons` `*/10 * * * *`는 관리자 업무 도구 실거래가 탭(단계 P)의 자료 받기다. 같은 Worker의 `scheduled`가 10분마다 공공데이터포털 아파트 실거래가 API 4개에서 대전 동구 자료를 1개월 1종류씩 받아 D1 `WORK_DB`의 `rt_*` 표에 차이만 반영한다. 켜기 값이 없으면 D1·외부 요청 없이 끝나고 로그도 남기지 않는다. 상세는 `docs/work-tools/` 설계서 22장이다.
+`wrangler.jsonc`의 `triggers.crons` `*/10 * * * *`는 관리자 업무 도구 실거래가 탭(단계 P)의 자료 받기다. 같은 Worker의 `scheduled`가 10분마다 공공데이터포털 아파트 실거래가 API 4개에서 대전 동구 자료를 1개월 1종류씩 받아 D1 `WORK_DB`의 `rt_*` 표에 차이만 반영한다. 켜기 값이 없으면 D1·외부 요청 없이 끝나고 로그도 남기지 않는다(예외: 한국 시각 03:00 차례에는 원격 D1 구조 번호가 4 이상이면 글 초안 보관 정리를 먼저 한다, 아래 '중개업무 도구 글 초안' 절). 상세는 `docs/work-tools/` 설계서 22장이다.
 
 - Secret: 켜기 값 `WORK_REALPRICE_ENABLED`(정확히 `true`일 때만 켜짐)와 공공데이터포털 인증키 `MOLIT_RT_SERVICE_KEY`는 Worker Secret으로만 등록한다. 일반 변수로 넣으면 다음 배포 때 지워진다. 인증키는 운영자가 대시보드 또는 자기 터미널의 `npx wrangler secret put`으로 직접 입력하고, 대화·문서·저장소에 붙이지 않는다. 켜기 값만 있고 인증키·`ADMIN_CSRF_SECRET`(32자 이상)·허용 출처·D1 binding 가운데 하나가 빠졌으면 API는 503 `REALPRICE_CONFIG_MISSING`이고 Cron은 고정 코드 경고 로그만 남긴다.
 - 인증키 교체: 공공데이터포털에서 재발급한 뒤 운영자가 같은 이름의 Secret을 덮어쓴다. 키가 거부되면 받기를 모든 종류 1시간씩 미루므로, 교체 뒤 실거래가 화면의 다시 받기(`POST /api/admin/v1/work/realprice/refresh`)로 미룸을 지우고 최근 4개월(3종류 12건, 약 2시간)을 다시 받는다.
@@ -122,6 +122,19 @@ Access가 적용된 배포 환경에서 다음을 확인한다.
   - Cron 자체 문제: `wrangler.jsonc`에서 `*/10 * * * *`를 빼고 다시 배포한다(배포 설정 시험도 함께 고친다).
   - 자료가 틀림: 그 달의 `rt_fetch_months.next_due_at`을 지금으로 바꿔 다시 받는다. D1 Time Travel은 손님 자료까지 되돌리므로 쓰지 않는다.
   - 하루 쓰기·읽기가 계정 한도에 가까움: 켜기 값을 끈다. 예산(쓰기 4만 행, 읽기 첫 상한 150만·끝 상한 250만 행)은 코드 상수라 바꾸려면 PR이 필요하다.
+
+## 중개업무 도구 글 초안(단계 P P3, OpenAI)
+
+관리자 업무 도구 '글 초안'(`/admin/work/blog/`)은 공개 매물·단지 1건으로 Worker가 OpenAI Responses API(background, `store:false`)에 블로그 글 초안을 요청한다. 초안은 D1 `WORK_DB`의 `blog_drafts`(마이그레이션 `0004`, 구조 번호 4)에만 두고 공개 산출물에 넣지 않는다. 새 Cron은 없다(결과는 브라우저가 받아 감). 상세는 `docs/work-tools/` 설계서 22.11·22.15절이다.
+
+- Secret: 켜기 값 `WORK_BLOG_ENABLED`(정확히 `true`일 때만 켜짐), OpenAI 키 `OPENAI_API_KEY`(운영자가 직접 입력, 2026-11-19 입력함), 설정 `OPENAI_MODEL`·`OPENAI_REASONING_EFFORT`·`OPENAI_MAX_OUTPUT_TOKENS`(1,000 ~ 200,000)·`OPENAI_PRICES_JSON`(모델별 100만 토큰당 마이크로달러 `input`·`output`), 선택 `OPENAI_MODEL_BLOG`(비우면 `OPENAI_MODEL`). 모두 Worker Secret으로 등록한다(일반 변수는 다음 배포 때 지워짐). 켜기 값만 있고 설정 하나가 빠지거나 틀리면 글 초안 API와 업무 세션이 503 `BLOG_CONFIG_MISSING`이다. 키는 대화·문서·저장소에 붙이지 않는다.
+- AI 사용 한도: 하루 편수·월 예상 비용 상한은 Secret이 아니라 D1 `settings` 행이고, 마이그레이션이 넣지 않는다. 켜기 값을 켠 뒤 글 초안 화면 한도 칸에서 저장한다(처음 값 하루 10편·월 10달러, 운영자 결정 2026-11-20 15:36:44). 저장 전 만들기는 409 `AI_LIMITS_MISSING`으로 OpenAI를 부르지 않는다. OpenAI 프로젝트 예산 상한(월 20달러)이 그 뒤의 보호선이다.
+- 처음 켜는 순서: ① 실거래가가 켜져 있으면 Secret `WORK_REALPRICE_ENABLED`를 잠시 `false`로 ② 병합·자동 배포 뒤 marker 확인 ③ 원격 D1 백업(`npx wrangler d1 export leaderscity-work --remote --output <저장소 밖 경로>`) ④ `npx wrangler d1 migrations apply leaderscity-work --remote` 뒤 `settings.schema_version`이 `4`이고 `blog_drafts` 표와 `settings`의 `ai_limits_version`이 있는지 확인 ⑤ `WORK_REALPRICE_ENABLED`를 다시 `true`로 ⑥ OpenAI 설정 Secret이 모두 있는지 확인 ⑦ `WORK_BLOG_ENABLED=true` Secret 등록 ⑧ 글 초안 화면 한도 칸에서 한도 저장 ⑨ 가상 공개 매물 1건으로 만들고 OpenAI 사용량 화면과 앱 예상 비용을 비교, Workers 로그에 키·글 본문 0건 확인. 원격 D1 적용과 켜기 값 등록은 각각 운영자 승인 뒤에 한다. 한도 칸 API도 켜기 전에는 503이므로 ⑧은 ⑦ 뒤에만 된다.
+- 배포 ~ 원격 적용 사이: 코드의 구조 번호(4)가 원격 D1(3)보다 앞서 실거래가·업무 도구 경로가 `WORK_SCHEMA_OUTDATED`가 되므로 ①로 실거래가 경고가 쌓이지 않게 한다.
+- 매일 03:00(한국 시각) Cron 차례: 실거래가 Cron(`*/10 * * * *`)이 켜기 값을 보기 전에 글 초안 보관 정리(다 씀·취소 30일 뒤 삭제, 30일 닫지 않으면 자동으로 닫고 다시 30일 뒤 삭제)를 한다. 원격 D1 구조 번호가 4 이상이면 글 초안·실거래가 켜기 값과 상관없이 돌고, 로그는 `blog_cleanup`(지운 수·닫은 수)만 남는다.
+- 롤백(먼저 쓰는 것부터)
+  - 글 초안만 이상함: Secret `WORK_BLOG_ENABLED`를 지우거나 `false`로 바꾼다. API는 503이고, 남은 초안은 03:00 보관 정리로 계속 지워진다. 키 유출이 의심되면 OpenAI에서 키를 폐기하고 새 키로 Secret을 덮어쓴다.
+  - `0004` 적용 뒤 코드를 되돌려야 함: 통째로 되돌리면 코드 3 < D1 4라 업무 도구 경로가 `WORK_SCHEMA_AHEAD`가 된다. 켜기 값으로 먼저 막고, 꼭 되돌려야 하면 글 초안 경로만 빼고 구조 번호는 4로 두는 되돌리기 커밋을 쓴다.
 
 ## 출시 전 확인
 

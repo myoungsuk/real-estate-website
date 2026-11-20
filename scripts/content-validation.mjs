@@ -1332,3 +1332,71 @@ export function validateLegalRules(legalRules) {
   errors.push(...findSensitiveStrings(withoutLegalVersions(legalRules), { path }));
   return [...new Set(errors)];
 }
+
+// 글 초안(P3) 매물 종류별 명시사항 규칙(src/data/work/ad-disclosure-rules.json). 공개 법령·고시 기준만 담는다.
+// 화면·Worker가 이 표로 명시사항 빈 칸을 막으므로(DEC-WT-23) 칸 이름·분류가 틀리면 빌드 전에 멈춘다.
+const AD_DISCLOSURE_FIELDS = ["location", "area", "price", "kind", "tradeType", "totalFloors", "moveIn", "rooms", "bathrooms", "approvalDate", "parking", "managementFee", "direction"];
+const AD_DISCLOSURE_BASE_FIELDS = ["location", "area", "price", "kind", "tradeType"];
+const AD_DISCLOSURE_OFFICE_FIELDS = ["name", "address", "phone", "registrationNumber", "representative"];
+const AD_DISCLOSURE_CATEGORY_IDS = ["multi-family", "detached", "non-residential", "land"];
+const isShortText = (value, max = 100) => typeof value === "string" && value.trim().length > 0 && value.length <= max;
+const isTextList = (value, max = 40) => Array.isArray(value) && value.every((item) => isShortText(item, max)) && new Set(value).size === value.length;
+
+export function validateAdDisclosureRules(rules) {
+  const path = "adDisclosureRules";
+  if (!rules || typeof rules !== "object" || Array.isArray(rules)) return [`${path}: 객체여야 합니다.`];
+  const errors = [];
+  if (rules.schemaVersion !== 1) errors.push(`${path}.schemaVersion: 1이어야 합니다.`);
+  if (!isIsoDateOrNull(rules.checkedAt) || rules.checkedAt === null) errors.push(`${path}.checkedAt: 오늘 이하의 실제 YYYY-MM-DD 확인일이 필요합니다.`);
+  if (!Array.isArray(rules.sources) || rules.sources.length === 0
+    || !rules.sources.every((source) => isShortText(source?.title, 120) && isShortText(source?.version, 200))) {
+    errors.push(`${path}.sources: 법령·고시 이름(title)과 판(version)이 있는 출처가 한 개 이상 필요합니다.`);
+  }
+  if (!Array.isArray(rules.officeFields) || rules.officeFields.join(",") !== AD_DISCLOSURE_OFFICE_FIELDS.join(",")) {
+    errors.push(`${path}.officeFields: 사무소 5항목(${AD_DISCLOSURE_OFFICE_FIELDS.join(", ")})이어야 합니다.`);
+  }
+  const seenTypes = new Map();
+  const categories = Array.isArray(rules.categories) ? rules.categories : [];
+  if (categories.map((category) => category?.id).join(",") !== AD_DISCLOSURE_CATEGORY_IDS.join(",")) {
+    errors.push(`${path}.categories: 분류는 ${AD_DISCLOSURE_CATEGORY_IDS.join(", ")} 순서여야 합니다.`);
+  }
+  categories.forEach((category, index) => {
+    const categoryPath = `${path}.categories[${index}]`;
+    if (!isShortText(category?.label, 60)) errors.push(`${categoryPath}.label: 이름이 필요합니다.`);
+    if (!isTextList(category?.propertyTypes) || category.propertyTypes.length === 0) errors.push(`${categoryPath}.propertyTypes: 겹치지 않는 매물 종류가 한 개 이상 필요합니다.`);
+    for (const type of Array.isArray(category?.propertyTypes) ? category.propertyTypes : []) {
+      if (seenTypes.has(type)) errors.push(`${categoryPath}.propertyTypes: ${type}가 다른 분류에도 있습니다.`);
+      seenTypes.set(type, category?.id);
+    }
+    if (!isTextList(category?.kindChoices, 30)) errors.push(`${categoryPath}.kindChoices: 글자 목록이어야 합니다.`);
+    if (!isTextList(category?.directionBasisChoices, 20)) errors.push(`${categoryPath}.directionBasisChoices: 글자 목록이어야 합니다.`);
+    if (typeof category?.floorBandAllowed !== "boolean") errors.push(`${categoryPath}.floorBandAllowed: true 또는 false여야 합니다.`);
+    const required = Array.isArray(category?.required) ? category.required : null;
+    const optional = Array.isArray(category?.optional) ? category.optional : null;
+    if (!required || !optional) {
+      errors.push(`${categoryPath}.required·optional: 칸 이름 목록이어야 합니다.`);
+      return;
+    }
+    const all = [...required, ...optional];
+    if (all.some((field) => !AD_DISCLOSURE_FIELDS.includes(field)) || new Set(all).size !== all.length) {
+      errors.push(`${categoryPath}.required·optional: 정해진 칸 이름(${AD_DISCLOSURE_FIELDS.join(", ")})만 한 번씩 쓸 수 있습니다.`);
+    }
+    if (!AD_DISCLOSURE_BASE_FIELDS.every((field) => required.includes(field))) {
+      errors.push(`${categoryPath}.required: 기본 5칸(${AD_DISCLOSURE_BASE_FIELDS.join(", ")})은 늘 필수입니다.`);
+    }
+    if (all.includes("direction") && !(category.directionBasisChoices?.length > 0)) {
+      errors.push(`${categoryPath}.directionBasisChoices: 방향을 적는 분류는 방향 기준 고르기가 필요합니다.`);
+    }
+  });
+  if (!Array.isArray(rules.blockedPropertyTypes)) {
+    errors.push(`${path}.blockedPropertyTypes: 목록이어야 합니다.`);
+  } else {
+    rules.blockedPropertyTypes.forEach((entry, index) => {
+      const entryPath = `${path}.blockedPropertyTypes[${index}]`;
+      if (!isShortText(entry?.propertyType, 40)) errors.push(`${entryPath}.propertyType: 매물 종류가 필요합니다.`);
+      if (!isShortText(entry?.reason, 200)) errors.push(`${entryPath}.reason: 고를 수 없는 이유가 필요합니다.`);
+      if (seenTypes.has(entry?.propertyType)) errors.push(`${entryPath}.propertyType: 분류에도 있는 종류는 막을 수 없습니다.`);
+    });
+  }
+  return errors;
+}

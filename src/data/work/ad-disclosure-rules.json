@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "checkedAt": "2026-11-19",
+  "reviewNote": "고시 제10조에 따라 2025-01-01부터 3년마다 다시 검토한다. 고시가 바뀌면 이 표를 다시 확인한다.",
+  "sources": [
+    { "title": "공인중개사법 제18조의2", "version": "현행(국가법령정보센터 본문, 2026-11-19 확인)" },
+    { "title": "공인중개사법 시행령 제17조의2", "version": "대통령령 제36590호, 2026. 8. 18. 일부개정, 2026. 8. 28. 시행" },
+    { "title": "중개대상물의 표시·광고 명시사항 세부기준 제3조 ~ 제6조", "version": "국토교통부고시 제2024-748호, 2024. 12. 11. 일부개정, 2025. 1. 1. 시행" }
+  ],
+  "officeFields": ["name", "address", "phone", "registrationNumber", "representative"],
+  "categories": [
+    {
+      "id": "multi-family",
+      "label": "공동주택(아파트·연립·다세대)",
+      "propertyTypes": ["아파트", "빌라/연립"],
+      "kindChoices": ["아파트", "연립주택", "다세대주택"],
+      "directionBasisChoices": ["거실", "안방"],
+      "floorBandAllowed": true,
+      "required": ["location", "area", "price", "kind", "tradeType", "totalFloors", "moveIn", "rooms", "bathrooms", "approvalDate", "parking", "managementFee", "direction"],
+      "optional": []
+    },
+    {
+      "id": "detached",
+      "label": "단독주택·다가구주택",
+      "propertyTypes": ["단독/다가구"],
+      "kindChoices": ["단독주택", "다가구주택"],
+      "directionBasisChoices": ["거실", "안방"],
+      "floorBandAllowed": true,
+      "required": ["location", "area", "price", "kind", "tradeType", "totalFloors", "moveIn", "rooms", "bathrooms", "approvalDate", "parking", "managementFee", "direction"],
+      "optional": []
+    },
+    {
+      "id": "non-residential",
+      "label": "비주거 건축물(상가점포)",
+      "propertyTypes": ["상가점포"],
+      "kindChoices": [],
+      "directionBasisChoices": ["주된 출입구"],
+      "floorBandAllowed": false,
+      "required": ["location", "area", "price", "kind", "tradeType", "totalFloors", "moveIn", "bathrooms", "approvalDate", "parking", "direction"],
+      "optional": ["rooms", "managementFee"]
+    },
+    {
+      "id": "land",
+      "label": "토지",
+      "propertyTypes": ["토지"],
+      "kindChoices": [],
+      "directionBasisChoices": [],
+      "floorBandAllowed": false,
+      "required": ["location", "area", "price", "kind", "tradeType"],
+      "optional": []
+    }
+  ],
+  "blockedPropertyTypes": [
+    { "propertyType": "아파트분양권", "reason": "분양권은 명시 기준(사용승인일 대신 적을 것)을 확인하는 중이라 아직 고를 수 없습니다." }
+  ]
+}

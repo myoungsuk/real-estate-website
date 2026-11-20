@@ -1,0 +1,1553 @@
+---
+import AdminIcon from "../../../components/admin/AdminIcon.astro";
+import AdminPageHelp from "../../../components/admin/AdminPageHelp.astro";
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+
+// 글 초안(P3): 공개 매물·단지 하나 → 명시사항 빈 칸 채우기 → 글 성격 → AI 초안 → 사람이 고치고 복사(운영자 결정 2026-11-20 15:51:54 B안 단계 접기).
+// - 명시사항은 AI가 아니라 코드(ad-disclosure.mjs)가 붙인다. 빈 칸이 있으면 만들기부터 막는다(같은 결정).
+// - 소재지는 매번 직접 넣고 어디에도 저장하지 않는다(브라우저·D1·OpenAI 모두). 다시 열면 다시 넣어야 복사가 풀린다.
+// - 입력값·글 본문은 브라우저 저장소·주소에 넣지 않는다. 글을 고친 것은 서버에 저장하지 않으므로 떠날 때 경고한다.
+---
+
+<AdminLayout
+  title="글 초안 | 행복한부동산 관리자"
+  description="공개 매물·단지 하나로 블로그 글과 SNS 짧은 글 초안을 만드는 관리자 업무 도구입니다."
+>
+  <div class="work-ui work-doc bl-doc" data-bl-tool>
+    <header class="work-doc__header">
+      <span class="work-round-icon work-round-icon--title" data-tone="navy">
+        <AdminIcon name="page" size={22} />
+      </span>
+      <h1>글 초안</h1>
+      <span class="admin-stage-badge">AI 초안</span>
+    </header>
+    <p class="bl-usage" data-bl-usage hidden><span data-bl-usage-text></span><a href="#bl-limits" data-bl-usage-link>한도</a></p>
+
+    <AdminPageHelp page="/admin/work/blog/" />
+    <p class="work-doc__notice">
+      <AdminIcon name="shield" size={18} />
+      <span>공개 자료와 아래 칸에 넣은 값만 AI에 보냅니다(소재지는 보내지 않음). 손님 이름·전화번호는 넣지 마세요.</span>
+    </p>
+
+    <p class="bl-boot" role="status" data-bl-boot>글 초안 도구를 불러오고 있습니다…</p>
+
+    <section class="admin-panel bl-state" aria-labelledby="bl-state-title" data-bl-state hidden>
+      <div class="admin-empty-state">
+        <span aria-hidden="true" data-bl-state-symbol>!</span>
+        <div>
+          <h2 id="bl-state-title" data-bl-state-title></h2>
+          <p data-bl-state-body></p>
+          <button class="admin-secondary-button" type="button" data-bl-state-retry hidden>다시 불러오기</button>
+        </div>
+      </div>
+    </section>
+
+    <div data-bl-main hidden>
+      <section class="bl-fail" role="alert" aria-labelledby="bl-fail-title" data-bl-fail hidden>
+        <h2 id="bl-fail-title" tabindex="-1" data-bl-fail-title></h2>
+        <p data-bl-fail-body></p>
+        <div class="bl-fail__actions">
+          <button class="work-primary-button" type="button" data-bl-retry hidden>다시 만들기</button>
+          <button class="work-secondary-button" type="button" data-bl-fail-close>닫기</button>
+        </div>
+      </section>
+
+      <div class="bl-picked" data-bl-picked hidden>
+        <p><strong data-bl-picked-title></strong><span data-bl-picked-detail></span></p>
+        <button class="bl-step__change" type="button" data-bl-new>새 글 만들기</button>
+      </div>
+
+      <ol class="bl-steps" data-bl-steps>
+        <li class="bl-step" data-bl-step="1">
+          <div class="bl-step__head">
+            <span class="bl-step__no" aria-hidden="true" data-bl-step-no>1</span>
+            <h2 tabindex="-1">자료 고르기</h2>
+            <button class="bl-step__change" type="button" data-bl-change="1" hidden>바꾸기</button>
+          </div>
+          <p class="bl-step__summary" data-bl-summary hidden></p>
+          <div class="bl-step__body" data-bl-body>
+            <div class="work-segment bl-kind" role="radiogroup" aria-label="자료 종류">
+              <label class="work-choice"><input type="radio" name="bl-kind" value="listing" autocomplete="off" checked /><span data-bl-kind-label="listing">매물</span></label>
+              <label class="work-choice"><input type="radio" name="bl-kind" value="complex" autocomplete="off" /><span data-bl-kind-label="complex">단지 소개</span></label>
+            </div>
+            <div class="bl-find" role="search" aria-label="자료 찾기">
+              <label class="sr-only" for="bl-q">단지 이름·종류로 찾기</label>
+              <input id="bl-q" type="search" maxlength="30" placeholder="단지 이름이나 매물 종류로 찾기" autocomplete="off" enterkeyhint="search" data-bl-query />
+              <button type="button" data-bl-search>찾기</button>
+            </div>
+            <p class="bl-soft" role="status" data-bl-source-status></p>
+            <ul class="bl-cards" aria-label="고를 수 있는 자료" data-bl-cards></ul>
+            <button class="bl-more" type="button" data-bl-more hidden></button>
+          </div>
+        </li>
+        <li class="bl-step" data-bl-step="2">
+          <div class="bl-step__head">
+            <span class="bl-step__no" aria-hidden="true" data-bl-step-no>2</span>
+            <h2 tabindex="-1">명시사항 채우기</h2>
+            <button class="bl-step__change" type="button" data-bl-change="2" hidden>바꾸기</button>
+          </div>
+          <p class="bl-step__summary" data-bl-summary hidden></p>
+          <div class="bl-step__body" data-bl-body>
+            <div class="bl-facts">
+              <p class="bl-facts__head">공개 자료에서 가져옴 <small>(고칠 수 없음)</small></p>
+              <dl data-bl-facts></dl>
+            </div>
+            <p class="bl-count" role="status" data-bl-count></p>
+            <div data-bl-fields></div>
+            <p class="admin-inline-notice bl-alert" role="alert" tabindex="-1" data-bl-fields-alert hidden><span aria-hidden="true">!</span><span></span></p>
+            <button class="work-secondary-button bl-next" type="button" data-bl-next>다음: 글 성격</button>
+          </div>
+        </li>
+        <li class="bl-step" data-bl-step="3">
+          <div class="bl-step__head">
+            <span class="bl-step__no" aria-hidden="true" data-bl-step-no>3</span>
+            <h2 tabindex="-1">글 성격·만들기</h2>
+          </div>
+          <p class="bl-step__summary" data-bl-summary hidden></p>
+          <div class="bl-step__body" data-bl-body>
+            <div class="work-row" role="radiogroup" aria-labelledby="bl-style-label">
+              <span class="work-row__label" id="bl-style-label">글 성격</span>
+              <div class="work-row__control">
+                <div class="work-segment bl-styles" data-bl-styles></div>
+                <p class="bl-style-note" data-bl-style-note></p>
+              </div>
+            </div>
+            <div class="work-row">
+              <label class="work-row__label" for="bl-emphasis">강조점(선택)</label>
+              <div class="work-row__control">
+                <textarea id="bl-emphasis" rows="3" maxlength="200" placeholder="예: 2024년 욕실 수리, 남향 거실" autocomplete="off" data-bl-emphasis></textarea>
+                <small data-bl-emphasis-count>0 / 200자 · 저장하지 않고 이번에만 씁니다(숫자 표기만 검사용으로 남김).</small>
+              </div>
+            </div>
+            <p class="admin-inline-notice bl-alert" role="alert" tabindex="-1" data-bl-make-alert hidden><span aria-hidden="true">!</span><span></span></p>
+            <div class="bl-make">
+              <button class="work-primary-button" type="button" data-bl-make>글 초안 만들기</button>
+              <p class="bl-make__note" data-bl-make-note></p>
+            </div>
+          </div>
+        </li>
+      </ol>
+
+      <section class="bl-wait" aria-labelledby="bl-wait-title" data-bl-wait hidden>
+        <h2 id="bl-wait-title" tabindex="-1">글을 만들고 있습니다</h2>
+        <p role="status" data-bl-wait-text></p>
+        <p>보통 1 ~ 3분 걸립니다(추정). 처음 1분은 5초마다, 그 뒤에는 15초마다 확인합니다.</p>
+        <p class="bl-wait__note">화면을 닫아도 됩니다. <strong>10분 안에</strong> '보관 중인 초안'에서 다시 열면 결과를 받습니다. 10분이 지나면 결과를 잃고, 다시 만들면 새 비용이 듭니다.</p>
+        <button class="work-secondary-button" type="button" data-bl-cancel>만들기 취소</button>
+      </section>
+
+      <div class="bl-result" data-bl-result hidden>
+        <div class="bl-result__main">
+          <h2 class="bl-result__title" tabindex="-1">만든 글 <small data-bl-result-meta></small></h2>
+          <p class="admin-inline-notice bl-alert" role="alert" data-bl-source-gone hidden><span aria-hidden="true">!</span><span>고른 자료가 지금 공개 자료에 없어 명시사항을 붙일 수 없습니다. 이 초안은 복사할 수 없습니다.</span></p>
+          <div class="bl-check" role="status" data-bl-check></div>
+          <div class="bl-article">
+            <div class="work-row bl-para" data-bl-where="title">
+              <label class="work-row__label" for="bl-title">제목</label>
+              <div class="work-row__control">
+                <input id="bl-title" type="text" autocomplete="off" data-bl-title />
+                <small data-bl-title-count></small>
+                <small class="bl-para__issue" data-bl-issue hidden></small>
+              </div>
+            </div>
+            <div data-bl-paragraphs></div>
+            <div class="work-row bl-para" data-bl-where="tags">
+              <label class="work-row__label" for="bl-tags">해시태그</label>
+              <div class="work-row__control">
+                <input id="bl-tags" type="text" autocomplete="off" data-bl-tags />
+                <small>띄어쓰기로 나눕니다. 복사할 때 # 을 붙입니다.</small>
+                <small class="bl-para__issue" data-bl-issue hidden></small>
+              </div>
+            </div>
+            <div class="work-row bl-para" data-bl-where="sns">
+              <label class="work-row__label" for="bl-sns">SNS 짧은 글</label>
+              <div class="work-row__control">
+                <textarea id="bl-sns" rows="3" autocomplete="off" data-bl-sns></textarea>
+                <small data-bl-sns-count></small>
+                <small class="bl-para__issue" data-bl-issue hidden></small>
+              </div>
+            </div>
+          </div>
+        </div>
+        <aside class="bl-result__side" aria-label="복사와 명시사항">
+          <div class="work-row" data-bl-reloc-row>
+            <label class="work-row__label" for="bl-reloc">소재지 <span class="bl-need">필수</span></label>
+            <div class="work-row__control">
+              <input id="bl-reloc" type="text" maxlength="100" placeholder="예: 대전광역시 동구 ○○동 123" autocomplete="off" data-bl-reloc />
+              <small>저장하지 않습니다. 초안을 다시 열면 다시 넣어야 복사할 수 있습니다.</small>
+            </div>
+          </div>
+          <div class="bl-actions">
+            <button class="work-primary-button" type="button" data-bl-copy="blog">블로그 글 복사</button>
+            <button class="work-secondary-button" type="button" data-bl-copy="sns">SNS 글 복사</button>
+            <p class="bl-actions__why" role="status" data-bl-copy-status></p>
+            <div class="bl-actions__row">
+              <button class="work-secondary-button" type="button" data-bl-confirm>다 씀</button>
+              <button class="bl-text-button" type="button" data-bl-discard>이 초안 버리기</button>
+            </div>
+          </div>
+          <section class="bl-disc" aria-labelledby="bl-disc-title">
+            <h3 id="bl-disc-title">명시사항 <small>코드가 붙임 · AI가 쓰지 않음</small></h3>
+            <div data-bl-disclosure></div>
+          </section>
+          <details class="bl-fold bl-preview" data-bl-preview-fold>
+            <summary>복사할 글 미리 보기</summary>
+            <label class="sr-only" for="bl-preview">복사할 글</label>
+            <textarea id="bl-preview" rows="10" readonly data-bl-preview></textarea>
+          </details>
+        </aside>
+      </div>
+
+      <details class="bl-fold" data-bl-drafts-fold>
+        <summary data-bl-drafts-summary>보관 중인 초안</summary>
+        <p class="bl-soft" role="status" data-bl-drafts-status></p>
+        <ul class="bl-drafts" data-bl-drafts></ul>
+        <p class="bl-soft">다 씀·버린 초안은 30일 뒤 지웁니다. 그냥 둔 초안은 만든 지 30일에 닫히고, 다시 30일 뒤 지웁니다.</p>
+      </details>
+
+      <details class="bl-fold" id="bl-limits" data-bl-limits-fold>
+        <summary>AI 사용 한도 <span data-bl-limits-badge></span></summary>
+        <div class="bl-limits">
+          <div class="work-row">
+            <label class="work-row__label" for="bl-daily">하루 만들기</label>
+            <div class="work-row__control">
+              <div class="bl-unit"><input id="bl-daily" type="text" inputmode="numeric" autocomplete="off" data-bl-daily /> 편</div>
+              <small data-bl-daily-hint></small>
+            </div>
+          </div>
+          <div class="work-row">
+            <label class="work-row__label" for="bl-monthly">월 비용 상한</label>
+            <div class="work-row__control">
+              <div class="bl-unit"><input id="bl-monthly" type="text" inputmode="decimal" autocomplete="off" data-bl-monthly /> 달러</div>
+              <small data-bl-monthly-hint></small>
+            </div>
+          </div>
+          <p class="bl-soft" data-bl-limits-usage></p>
+          <p class="admin-inline-notice bl-alert" role="status" tabindex="-1" data-bl-limits-alert hidden><span aria-hidden="true">!</span><span></span></p>
+          <button class="work-secondary-button" type="button" data-bl-limits-save>한도 저장</button>
+        </div>
+      </details>
+    </div>
+
+    <div class="work-result-bar" data-bl-bar hidden>
+      <div class="work-result-bar__text" aria-hidden="true">
+        <span>만든 글</span>
+        <strong data-bl-bar-text></strong>
+      </div>
+      <button class="work-result-bar__copy" type="button" data-bl-bar-copy>블로그 글 복사</button>
+    </div>
+  </div>
+
+  <script>
+    import office from "../../../data/office.json";
+    import disclosureRules from "../../../data/work/ad-disclosure-rules.json";
+    import { DISCLOSURE_FIELD_LABELS, FEE_ITEMIZE_FROM_WON, FEE_ITEM_KEYS, FEE_ITEM_LABELS, buildDisclosure, formatArea, formatPrice, formatWon } from "../../../lib/work/ad-disclosure.mjs";
+    import { EMPHASIS_MAX, allowedStyles, checkBlogDraft, validateBlogInputs, validateEmphasis } from "../../../lib/work/blog-checks.mjs";
+    import { matchesBlogSourceQuery } from "../../../lib/work/blog-sources.mjs";
+    import {
+      BLOG_SOURCE_PAGE_SIZE,
+      apiErrorText,
+      blogCopyText,
+      checkView,
+      decimalFrom,
+      draftStatusText,
+      failView,
+      intFrom,
+      isOpenStatus,
+      limitsView,
+      normalizeHashtags,
+      pollDelayMs,
+      snsCopyText,
+      usdText,
+      usdToMicro,
+    } from "../../../lib/work/blog-view.mjs";
+    import { dateText, kstShort } from "../../../lib/work/realprice-view.mjs";
+    import {
+      WorkApiError,
+      closeBlogDraft,
+      createBlogDraft,
+      getWorkSession,
+      listBlogDrafts,
+      readBlogDraft,
+      readBlogLimits,
+      readBlogSources,
+      saveBlogLimits,
+      type BlogDraft,
+      type BlogDraftListItem,
+      type BlogLimits,
+      type BlogSource,
+      type BlogStyle,
+    } from "../../../lib/work-blog-client";
+
+    type Raw = Record<string, unknown>;
+    interface Category { id: string; label: string; propertyTypes: string[]; kindChoices: string[]; directionBasisChoices: string[]; floorBandAllowed: boolean; required: string[]; optional: string[] }
+    interface FieldState { inputs: Raw; missing: string[]; messages: Map<string, string>; unmapped: string[]; ok: boolean }
+    interface CheckLine { label: string; whereLabel: string; text: string; where: string }
+    type Mode = "compose" | "wait" | "result" | "fail";
+
+    const root = document.querySelector<HTMLElement>("[data-bl-tool]");
+    if (root) {
+      const main = root.querySelector<HTMLElement>("[data-bl-main]");
+      if (main) {
+        const pick = <T extends Element = HTMLElement>(selector: string, base: ParentNode = root) => base.querySelector<T>(selector) as T;
+        const officePhone = office.mobile;
+        const categories = (disclosureRules as unknown as { categories: Category[] }).categories;
+        const DIRECTIONS = ["남향", "남동향", "남서향", "동향", "서향", "북향", "북동향", "북서향"];
+        // 검사가 돌려주는 칸 이름 → 화면 줄 이름
+        const ROW_OF: Record<string, string> = { floorMode: "floor", floorNumber: "floor", floorBand: "floor", directionBasis: "direction", area: "areaM2" };
+        const ERROR_TEXT: Record<string, string> = {
+          areaM2: "㎡ 숫자를 확인합니다(소수 둘째 자리까지).",
+          floor: "층 숫자를 확인합니다(지하는 -1처럼).",
+          totalFloors: "1 ~ 100 사이 숫자를 넣습니다.",
+          rooms: "0 ~ 20 사이 숫자를 넣습니다.",
+          bathrooms: "0 ~ 20 사이 숫자를 넣습니다.",
+          moveIn: "날짜, 또는 연월과 초순·중순·하순을 확인합니다.",
+          parking: "대수를 확인합니다(세대당은 소수 둘째 자리까지).",
+          managementFee: "금액과 포함 비목(월 평균), 또는 비목별 금액(정액)을 확인합니다.",
+          approvalDate: "날짜를 확인합니다.",
+        };
+        const EMPHASIS_NOTE = "저장하지 않고 이번에만 씁니다(숫자 표기만 검사용으로 남김).";
+
+        const usage = pick("[data-bl-usage]");
+        const boot = pick("[data-bl-boot]");
+        const statePanel = pick("[data-bl-state]");
+        const failPanel = pick("[data-bl-fail]");
+        const pickedBar = pick("[data-bl-picked]");
+        const stepsList = pick("[data-bl-steps]");
+        const stepItems = [...root.querySelectorAll<HTMLElement>("[data-bl-step]")];
+        const kindLabels = [...root.querySelectorAll<HTMLElement>("[data-bl-kind-label]")];
+        const kindInputs = [...root.querySelectorAll<HTMLInputElement>('input[name="bl-kind"]')];
+        const queryInput = pick<HTMLInputElement>("[data-bl-query]");
+        const sourceStatus = pick("[data-bl-source-status]");
+        const cards = pick<HTMLUListElement>("[data-bl-cards]");
+        const moreButton = pick<HTMLButtonElement>("[data-bl-more]");
+        const factsList = pick("[data-bl-facts]");
+        const countLine = pick("[data-bl-count]");
+        const fieldsBox = pick("[data-bl-fields]");
+        const fieldsAlert = pick("[data-bl-fields-alert]");
+        const stylesBox = pick("[data-bl-styles]");
+        const styleNote = pick("[data-bl-style-note]");
+        const emphasisInput = pick<HTMLTextAreaElement>("[data-bl-emphasis]");
+        const emphasisCount = pick("[data-bl-emphasis-count]");
+        const makeAlert = pick("[data-bl-make-alert]");
+        const makeButton = pick<HTMLButtonElement>("[data-bl-make]");
+        const makeNote = pick("[data-bl-make-note]");
+        const waitPanel = pick("[data-bl-wait]");
+        const waitText = pick("[data-bl-wait-text]");
+        const cancelButton = pick<HTMLButtonElement>("[data-bl-cancel]");
+        const resultPanel = pick("[data-bl-result]");
+        const resultMeta = pick("[data-bl-result-meta]");
+        const sourceGone = pick("[data-bl-source-gone]");
+        const checkBox = pick("[data-bl-check]");
+        const titleInput = pick<HTMLInputElement>("[data-bl-title]");
+        const titleCount = pick("[data-bl-title-count]");
+        const paragraphsBox = pick("[data-bl-paragraphs]");
+        const tagsInput = pick<HTMLInputElement>("[data-bl-tags]");
+        const snsInput = pick<HTMLTextAreaElement>("[data-bl-sns]");
+        const snsCount = pick("[data-bl-sns-count]");
+        const relocRow = pick("[data-bl-reloc-row]");
+        const relocInput = pick<HTMLInputElement>("[data-bl-reloc]");
+        const copyBlogButton = pick<HTMLButtonElement>('[data-bl-copy="blog"]');
+        const copySnsButton = pick<HTMLButtonElement>('[data-bl-copy="sns"]');
+        const copyStatus = pick("[data-bl-copy-status]");
+        const confirmButton = pick<HTMLButtonElement>("[data-bl-confirm]");
+        const discardButton = pick<HTMLButtonElement>("[data-bl-discard]");
+        const disclosureBox = pick("[data-bl-disclosure]");
+        const previewFold = pick<HTMLDetailsElement>("[data-bl-preview-fold]");
+        const preview = pick<HTMLTextAreaElement>("[data-bl-preview]");
+        const draftsFold = pick<HTMLDetailsElement>("[data-bl-drafts-fold]");
+        const draftsStatus = pick("[data-bl-drafts-status]");
+        const draftsList = pick<HTMLUListElement>("[data-bl-drafts]");
+        const limitsFold = pick<HTMLDetailsElement>("[data-bl-limits-fold]");
+        const dailyInput = pick<HTMLInputElement>("[data-bl-daily]");
+        const monthlyInput = pick<HTMLInputElement>("[data-bl-monthly]");
+        const limitsAlert = pick("[data-bl-limits-alert]");
+        const limitsSave = pick<HTMLButtonElement>("[data-bl-limits-save]");
+        const bar = pick("[data-bl-bar]");
+        const barText = pick("[data-bl-bar-text]");
+        const barCopy = pick<HTMLButtonElement>("[data-bl-bar-copy]");
+
+        let sources: BlogSource[] = [];
+        let styles: BlogStyle[] = [];
+        let limits: BlogLimits | null = null;
+        let drafts: BlogDraftListItem[] = [];
+        let kind: "listing" | "complex" = "listing";
+        let query = "";
+        let shownCount = BLOG_SOURCE_PAGE_SIZE;
+        let picked: BlogSource | null = null;
+        let openStep = 1;
+        let fieldsTouched = false;
+        // 소재지는 이 화면 메모리에만 둔다(고른 자료 하나에 묶음). 저장·전송하지 않는다.
+        let locationValue = "";
+        let locationKey = "";
+        let draft: BlogDraft | null = null;
+        let mode: Mode = "compose";
+        let pollTimer = 0;
+        let tickTimer = 0;
+        let recheckTimer = 0;
+        let pollSeq = 0;
+        let busy = false;
+        let edited = false;
+        let copyReady = false;
+        let readers: ((raw: Raw) => void)[] = [];
+        let refreshers: (() => void)[] = [];
+        const rows = new Map<string, HTMLElement>();
+        let uid = 0;
+
+        const sourceKey = (source: { type: string; id: string } | null) => (source ? `${source.type}:${source.id}` : "");
+        const errorOf = (error: unknown) => (error instanceof WorkApiError ? { code: error.code, details: error.details } : { code: null, details: [] as string[] });
+        const nextId = (prefix: string) => `${prefix}-${(uid += 1)}`;
+        function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = "", text = "") {
+          const node = document.createElement(tag);
+          if (className) node.className = className;
+          if (text) node.textContent = text;
+          return node;
+        }
+        function setNotice(element: HTMLElement, text: string, icon = "!") {
+          const spans = element.querySelectorAll("span");
+          spans[0].textContent = icon;
+          spans[spans.length - 1].textContent = text;
+          element.hidden = !text;
+        }
+        function showState(title: string, body: string, { symbol = "!", retry = false } = {}) {
+          boot.hidden = true;
+          main!.hidden = true;
+          pick("[data-bl-state-symbol]").textContent = symbol;
+          pick("[data-bl-state-title]").textContent = title;
+          pick("[data-bl-state-body]").textContent = body;
+          pick("[data-bl-state-retry]").hidden = !retry;
+          statePanel.hidden = false;
+        }
+        const fieldLabel = (key: string) => (key === "areaM2" ? "면적" : (DISCLOSURE_FIELD_LABELS as Record<string, string>)[key] ?? key);
+
+        // ── 한도 ──
+
+        function fillLimitInputs() {
+          if (!limits) return;
+          dailyInput.value = String(limits.dailyCreateLimit ?? limits.defaults.dailyCreateLimit);
+          monthlyInput.value = usdText(limits.monthlyCostLimitMicroUsd ?? limits.defaults.monthlyCostLimitMicroUsd);
+        }
+        function renderLimits() {
+          const view = limitsView(limits);
+          pick("[data-bl-usage-text]").textContent = view.line;
+          usage.hidden = !view.line;
+          const badge = pick("[data-bl-limits-badge]");
+          badge.textContent = view.saved && limits ? `· 하루 ${limits.dailyCreateLimit}편 · 월 ${usdText(limits.monthlyCostLimitMicroUsd ?? 0)}달러` : "아직 없음";
+          badge.className = view.saved ? "" : "bl-need";
+          if (limits) {
+            pick("[data-bl-daily-hint]").textContent = `${limits.ranges.daily[0]} ~ ${limits.ranges.daily[1]}편. 한국 시각 0시에 다시 셉니다.`;
+            pick("[data-bl-monthly-hint]").textContent = `${usdText(limits.ranges.monthly[0])} ~ ${usdText(limits.ranges.monthly[1])}달러. 앱이 계산한 추정 비용이라 실제 청구와 다를 수 있습니다. OpenAI 쪽 상한보다 낮게 두면 이 앱이 먼저 멈춥니다.`;
+            pick("[data-bl-limits-usage]").textContent = `오늘 ${limits.usage.todayCreates}편 · 이번 달 ${usdText(limits.usage.monthCostMicroUsd)}달러(추정) · 한국 시각 기준`;
+          }
+          renderMake();
+        }
+        limitsSave.addEventListener("click", async () => {
+          if (!limits) return;
+          const daily = intFrom(dailyInput.value);
+          const monthly = usdToMicro(monthlyInput.value);
+          const [dailyMin, dailyMax] = limits.ranges.daily;
+          const [monthlyMin, monthlyMax] = limits.ranges.monthly;
+          if (daily === null || !Number.isSafeInteger(daily) || daily < dailyMin || daily > dailyMax || monthly === null || monthly < monthlyMin || monthly > monthlyMax) {
+            setNotice(limitsAlert, `하루 만들기는 ${dailyMin} ~ ${dailyMax}편, 월 비용 상한은 ${usdText(monthlyMin)} ~ ${usdText(monthlyMax)}달러로 넣습니다.`);
+            limitsAlert.focus();
+            return;
+          }
+          limitsSave.disabled = true;
+          try {
+            limits = await saveBlogLimits({ version: limits.version, dailyCreateLimit: daily, monthlyCostLimitMicroUsd: monthly });
+            fillLimitInputs();
+            renderLimits();
+            setNotice(limitsAlert, "한도를 저장했습니다.", "✓");
+          } catch (error) {
+            const { code } = errorOf(error);
+            if (code === "VERSION_CONFLICT") {
+              try {
+                limits = await readBlogLimits();
+                fillLimitInputs();
+                renderLimits();
+              } catch {
+                // 다시 불러오지 못하면 지금 값을 둔다.
+              }
+            }
+            setNotice(limitsAlert, apiErrorText(code));
+          } finally {
+            limitsSave.disabled = false;
+          }
+        });
+
+        // ── 자료 고르기 ──
+
+        function priceText(source: BlogSource) {
+          return source.type === "complex" ? (source.facts.areaName ?? "단지 소개") : formatPrice(source.facts);
+        }
+        function floorText(facts: BlogSource["facts"]) {
+          const floor = Number.isSafeInteger(facts.floor) ? `${facts.floor}층` : facts.floorBand ? `${facts.floorBand}층` : "";
+          return floor && facts.totalFloors ? `${floor} / ${facts.totalFloors}층` : floor;
+        }
+        function areaText(facts: BlogSource["facts"]) {
+          if (Number.isFinite(facts.exclusiveM2)) return `전용 ${formatArea(facts.exclusiveM2)}`;
+          if (Number.isFinite(facts.landM2)) return `대지 ${formatArea(facts.landM2)}`;
+          return (facts.otherAreasM2 ?? []).map((m2) => formatArea(m2)).join(" · ");
+        }
+        function sourceDetail(source: BlogSource) {
+          if (source.type === "complex") return source.facts.summary;
+          const facts = source.facts;
+          return [facts.propertyType, areaText(facts), floorText(facts), facts.direction].filter(Boolean).join(" · ");
+        }
+        function sourceFrom(source: BlogSource) {
+          const origin = source.type === "naver_listing" ? "네이버 매물" : source.type === "listing" ? "홈페이지 매물" : "단지 소개";
+          return source.facts.registeredAt ? `${origin} · 등록 ${dateText(source.facts.registeredAt.slice(0, 10))}` : origin;
+        }
+        const visibleSources = () => sources.filter((source) => (kind === "complex") === (source.type === "complex") && matchesBlogSourceQuery(source, query));
+        function renderSources() {
+          const listingCount = sources.filter((source) => source.type !== "complex").length;
+          for (const label of kindLabels) label.textContent = label.dataset.blKindLabel === "complex" ? `단지 소개 ${sources.length - listingCount}` : `매물 ${listingCount}`;
+          const list = visibleSources();
+          cards.replaceChildren(...list.slice(0, shownCount).map((source) => {
+            const li = el("li", "bl-card");
+            const chosen = sourceKey(source) === sourceKey(picked);
+            if (chosen) li.classList.add("is-chosen");
+            if (source.blockedReason) li.classList.add("is-blocked");
+            const text = el("div", "bl-card__text");
+            text.append(el("strong", "", source.title), el("span", "bl-card__price", priceText(source)));
+            const detail = sourceDetail(source);
+            if (detail) text.append(el("span", "", detail));
+            text.append(el("small", "", source.blockedReason ?? sourceFrom(source)));
+            const button = el("button", "bl-card__pick", chosen ? "✓ 고름" : "고르기");
+            button.type = "button";
+            button.disabled = Boolean(source.blockedReason);
+            button.setAttribute("aria-label", `${source.title} ${chosen ? "고름" : "고르기"}`);
+            button.addEventListener("click", () => choose(source));
+            li.append(text, button);
+            return li;
+          }));
+          sourceStatus.textContent = list.length === 0
+            ? (query ? `“${query}”에 맞는 자료가 없습니다. 찾기 칸을 비우고 '찾기'를 누르면 다시 전체를 봅니다.` : "고를 수 있는 자료가 없습니다.")
+            : query ? `“${query}” ${list.length}건` : `${list.length}건`;
+          moreButton.hidden = list.length <= shownCount;
+          moreButton.textContent = `더 보기(${Math.min(shownCount, list.length)} / ${list.length}건)`;
+        }
+        for (const input of kindInputs) {
+          input.addEventListener("change", () => {
+            kind = input.value === "complex" ? "complex" : "listing";
+            shownCount = BLOG_SOURCE_PAGE_SIZE;
+            renderSources();
+          });
+        }
+        const runSearch = () => {
+          query = queryInput.value.normalize("NFKC").trim().slice(0, 30);
+          shownCount = BLOG_SOURCE_PAGE_SIZE;
+          renderSources();
+        };
+        pick("[data-bl-search]").addEventListener("click", runSearch);
+        queryInput.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            runSearch();
+          }
+        });
+        moreButton.addEventListener("click", () => {
+          shownCount += BLOG_SOURCE_PAGE_SIZE;
+          renderSources();
+        });
+
+        function choose(source: BlogSource) {
+          if (sourceKey(source) !== locationKey) {
+            locationValue = "";
+            locationKey = sourceKey(source);
+          }
+          picked = source;
+          fieldsTouched = false;
+          setNotice(fieldsAlert, "");
+          setNotice(makeAlert, "");
+          buildFacts();
+          buildFields();
+          buildStyles();
+          renderSources();
+          openStep = 2;
+          renderSteps();
+          renderFieldState(evaluate());
+          focusStep(2);
+        }
+
+        // ── 단계(B안: 지금 단계만 펼치고 끝낸 단계는 한 줄 요약 + '바꾸기') ──
+
+        function focusStep(no: number) {
+          stepItems[no - 1].querySelector<HTMLElement>("h2")?.focus({ preventScroll: true });
+          stepItems[no - 1].scrollIntoView({ block: "nearest" });
+        }
+        function summaryText(no: number) {
+          if (!picked) return "";
+          if (no === 1) return `${picked.title} · ${priceText(picked)}`;
+          return picked.type === "complex" ? "단지 소개 글 · 사무소 명시사항만 붙음" : "명시사항 다 채움";
+        }
+        function renderSteps() {
+          stepItems.forEach((item, index) => {
+            const no = index + 1;
+            const state = no === openStep ? "open" : no < openStep ? "done" : "locked";
+            item.className = `bl-step bl-step--${state}`;
+            pick("[data-bl-step-no]", item).textContent = state === "done" ? "✓" : String(no);
+            const change = item.querySelector<HTMLElement>("[data-bl-change]");
+            if (change) change.hidden = state !== "done";
+            const summary = pick("[data-bl-summary]", item);
+            summary.className = state === "locked" ? "bl-step__locked" : "bl-step__summary";
+            summary.textContent = state === "done" ? summaryText(no) : state === "locked" ? (no === 2 ? "자료를 고르면 열립니다." : "명시사항을 채우면 열립니다. 빈 칸이 있으면 만들 수 없습니다.") : "";
+            summary.hidden = state === "open";
+            pick("[data-bl-body]", item).hidden = state !== "open";
+          });
+          renderMake();
+        }
+        for (const button of root.querySelectorAll<HTMLButtonElement>("[data-bl-change]")) {
+          button.addEventListener("click", () => {
+            openStep = Number(button.dataset.blChange);
+            renderSteps();
+            focusStep(openStep);
+          });
+        }
+
+        function buildFacts() {
+          if (!picked) return;
+          const facts = picked.facts;
+          const pairs: [string, string][] = picked.type === "complex"
+            ? [["단지", picked.title], ["동네", facts.areaName ?? ""], ...(facts.items ?? []).slice(0, 4).map((item): [string, string] => [item.label, item.value])]
+            : [["매물", picked.title], ["거래·가격", formatPrice(facts)], ["면적", areaText(facts)], ["층·방향", [floorText(facts), facts.direction].filter(Boolean).join(" · ")]];
+          factsList.replaceChildren(...pairs.filter(([, value]) => value).map(([label, value]) => {
+            const row = el("div");
+            row.append(el("dt", "", label), el("dd", "", value));
+            return row;
+          }));
+        }
+
+        // ── 명시사항 칸(매물 종류별 규칙 ad-disclosure-rules.json의 필수·선택 칸만) ──
+
+        function makeRow(key: string, label: string, { required = true, hint = "", group = false } = {}) {
+          const row = el("div", "work-row bl-row");
+          row.dataset.blRow = key;
+          const id = nextId("bl-f");
+          const labelEl = group ? el("span", "work-row__label", label) : el("label", "work-row__label", label);
+          if (group) {
+            labelEl.id = `${id}-label`;
+            row.setAttribute("role", "group");
+            row.setAttribute("aria-labelledby", labelEl.id);
+          } else {
+            (labelEl as HTMLLabelElement).htmlFor = id;
+          }
+          if (required) labelEl.append(" ", el("span", "bl-need", "필수"));
+          const control = el("div", "work-row__control");
+          row.append(labelEl, control);
+          rows.set(key, row);
+          fieldsBox.append(row);
+          return {
+            row,
+            control,
+            id,
+            finish() {
+              if (hint) control.append(el("small", "", hint));
+              const mark = el("small", "bl-empty-mark");
+              mark.dataset.blMark = "";
+              mark.hidden = true;
+              control.append(mark);
+            },
+          };
+        }
+        function textField(id: string, { inputMode = "", maxLength = 0, placeholder = "", value = "", type = "text", label = "" } = {}) {
+          const input = el("input");
+          input.type = type;
+          input.id = id;
+          input.autocomplete = "off";
+          if (inputMode) input.inputMode = inputMode;
+          if (maxLength) input.maxLength = maxLength;
+          if (placeholder) input.placeholder = placeholder;
+          if (label) input.setAttribute("aria-label", label);
+          input.value = value;
+          return input;
+        }
+        function segmentField(options: [string, string][], checked = "", label = "") {
+          const box = el("div", "work-segment bl-seg");
+          const name = nextId("bl-r");
+          box.dataset.cols = String(Math.min(options.length, 4));
+          box.setAttribute("role", "radiogroup");
+          if (label) box.setAttribute("aria-label", label);
+          for (const [value, text] of options) {
+            const choice = el("label", "work-choice");
+            const input = el("input");
+            input.type = "radio";
+            input.name = name;
+            input.value = value;
+            input.autocomplete = "off";
+            input.checked = value === checked;
+            choice.append(input, el("span", "", text));
+            box.append(choice);
+          }
+          return { box, value: () => box.querySelector<HTMLInputElement>("input:checked")?.value ?? "" };
+        }
+        function checkField(text: string) {
+          const label = el("label", "work-check");
+          const input = el("input");
+          input.type = "checkbox";
+          input.autocomplete = "off";
+          label.append(input, el("span", "", text));
+          return { label, input };
+        }
+        const feeLabel = (key: string) => (FEE_ITEM_LABELS as Record<string, string>)[key] ?? key;
+
+        function buildFields() {
+          readers = [];
+          refreshers = [];
+          rows.clear();
+          fieldsBox.replaceChildren();
+          const source = picked;
+          if (!source) return;
+          if (source.type === "complex") {
+            fieldsBox.append(el("p", "bl-soft", "단지 소개 글은 사무소 명시사항 5항목만 붙습니다. 채울 칸이 없습니다."));
+            return;
+          }
+          const category = categories.find((entry) => entry.id === source.category);
+          if (!category) return;
+          const facts = source.facts;
+          const want = new Set([...category.required, ...category.optional]);
+          const required = (key: string) => category.required.includes(key);
+          const land = category.id === "land";
+
+          {
+            const r = makeRow("location", "소재지", { hint: "광고에 적는 주소(지번)까지 넣습니다. 호수는 넣지 않습니다. 저장하지 않습니다." });
+            const input = textField(r.id, { maxLength: 100, placeholder: "예: 대전광역시 동구 ○○동 123", value: locationValue });
+            input.addEventListener("input", () => {
+              locationValue = input.value;
+            });
+            r.control.append(input);
+            r.finish();
+            readers.push((raw) => Object.assign(raw, { location: input.value }));
+          }
+
+          const knownArea = land ? facts.landM2 : facts.exclusiveM2;
+          if (!Number.isFinite(knownArea)) {
+            const r = makeRow("areaM2", land ? "토지 면적(㎡)" : "전용면적(㎡)", { hint: "공개 자료에 면적이 없어 직접 넣습니다. ㎡로 넣습니다(평 아님)." });
+            const input = textField(r.id, { inputMode: "decimal", placeholder: "예: 84.97" });
+            r.control.append(input);
+            r.finish();
+            readers.push((raw) => { raw.areaM2 = decimalFrom(input.value, 2); });
+          }
+
+          let kindValue = () => "";
+          {
+            const label = land ? "지목" : category.id === "non-residential" ? "건축물 용도" : "건물 종류";
+            if (category.kindChoices.length > 0) {
+              const r = makeRow("kind", label, { group: true, hint: "건축물대장의 용도로 고릅니다." });
+              const preset = category.kindChoices.includes(facts.propertyType ?? "") ? facts.propertyType ?? "" : "";
+              const segment = segmentField(category.kindChoices.map((choice): [string, string] => [choice, choice]), preset, label);
+              r.control.append(segment.box);
+              r.finish();
+              kindValue = segment.value;
+            } else {
+              const r = makeRow("kind", label, { hint: land ? "토지대장의 지목을 넣습니다." : "건축물대장의 용도를 넣습니다." });
+              const input = textField(r.id, { maxLength: 30, placeholder: land ? "예: 대" : "예: 제1종 근린생활시설" });
+              r.control.append(input);
+              r.finish();
+              kindValue = () => input.value;
+            }
+            readers.push((raw) => { raw.kind = kindValue(); });
+          }
+
+          if (!land) {
+            const r = makeRow("violation", "위반건축물·미등기", { group: true, hint: "건축물대장·등기부로 확인한 값을 고릅니다." });
+            const segment = segmentField([["none", "해당 없음"], ["violation", "위반건축물"], ["unregistered", "미등기"]], "", "위반건축물·미등기");
+            r.control.append(segment.box);
+            r.finish();
+            readers.push((raw) => { raw.violation = segment.value(); });
+          }
+
+          if (category.id === "multi-family" || category.id === "non-residential" || category.id === "detached") {
+            const r = makeRow("floor", "층(소재지에 붙음)", { group: true, hint: category.floorBandAllowed ? "의뢰인이 원하면 저·중·고로 적을 수 있습니다." : "" });
+            const startBand = !Number.isSafeInteger(facts.floor) && Boolean(facts.floorBand) && category.floorBandAllowed;
+            const modeField = category.floorBandAllowed ? segmentField([["number", "층 그대로"], ["band", "저·중·고로"]], startBand ? "band" : "number", "층 적는 방식") : null;
+            const number = textField(nextId("bl-f"), { inputMode: "numeric", value: Number.isSafeInteger(facts.floor) ? String(facts.floor) : "", placeholder: "예: 12 (지하는 -1)", label: "층 숫자" });
+            const band = segmentField([["저", "저층"], ["중", "중층"], ["고", "고층"]], facts.floorBand ?? "", "저·중·고");
+            if (modeField) r.control.append(modeField.box);
+            r.control.append(number, band.box);
+            r.finish();
+            const floorMode = () => (modeField ? modeField.value() : "number");
+            refreshers.push(() => {
+              number.hidden = floorMode() !== "number";
+              band.box.hidden = floorMode() !== "band";
+              r.row.hidden = category.id === "detached" && kindValue() !== "다가구주택";
+            });
+            readers.push((raw) => {
+              if (r.row.hidden) return;
+              raw.floorMode = floorMode();
+              if (floorMode() === "number") raw.floorNumber = intFrom(number.value);
+              else raw.floorBand = band.value() || null;
+            });
+          }
+
+          if (want.has("totalFloors")) {
+            const r = makeRow("totalFloors", "총 층수", { required: required("totalFloors"), hint: Number.isSafeInteger(facts.totalFloors) ? "공개 자료에서 채웠습니다." : "" });
+            const input = textField(r.id, { inputMode: "numeric", value: Number.isSafeInteger(facts.totalFloors) ? String(facts.totalFloors) : "", placeholder: "예: 25" });
+            r.control.append(input);
+            r.finish();
+            readers.push((raw) => { raw.totalFloors = intFrom(input.value); });
+          }
+
+          if (want.has("moveIn")) {
+            const r = makeRow("moveIn", "입주 가능일", { group: true, required: required("moveIn") });
+            const type = segmentField([["now", "즉시 입주"], ["date", "날짜"], ["period", "시기"]], "", "입주 가능일 적는 방식");
+            const date = textField(nextId("bl-f"), { type: "date", label: "입주 가능 날짜" });
+            const month = textField(nextId("bl-f"), { type: "month", placeholder: "예: 2026-12", label: "입주 가능 연월" });
+            const part = segmentField([["초순", "초순"], ["중순", "중순"], ["하순", "하순"]], "", "초순·중순·하순");
+            r.control.append(type.box, date, month, part.box);
+            r.finish();
+            refreshers.push(() => {
+              date.hidden = type.value() !== "date";
+              month.hidden = type.value() !== "period";
+              part.box.hidden = type.value() !== "period";
+            });
+            readers.push((raw) => {
+              const value = type.value();
+              if (value === "now") raw.moveIn = { type: "now" };
+              else if (value === "date" && date.value) raw.moveIn = { type: "date", date: date.value };
+              else if (value === "period" && (month.value || part.value())) raw.moveIn = { type: "period", month: month.value, part: part.value() };
+            });
+          }
+
+          for (const [key, label] of [["rooms", "방 수"], ["bathrooms", category.id === "non-residential" ? "화장실 수" : "욕실 수"]] as const) {
+            if (!want.has(key)) continue;
+            const r = makeRow(key, label, { required: required(key) });
+            const input = textField(r.id, { inputMode: "numeric", placeholder: "예: 2" });
+            r.control.append(input);
+            r.finish();
+            readers.push((raw) => { raw[key] = intFrom(input.value); });
+          }
+
+          if (want.has("approvalDate")) {
+            const r = makeRow("approvalDate", "사용승인일", { required: required("approvalDate"), hint: "건축물대장의 사용승인일(준공일)입니다." });
+            const input = textField(r.id, { type: "date" });
+            r.control.append(input);
+            r.finish();
+            readers.push((raw) => { raw.approvalDate = input.value; });
+          }
+
+          if (want.has("parking")) {
+            const r = makeRow("parking", "주차", { group: true, required: required("parking"), hint: "세대당은 소수 둘째 자리까지(예: 1.2). 실제로 쓸 수 있는 대수가 다르면 함께 넣습니다." });
+            const basis = segmentField([["perHousehold", "세대당"], ["total", "총 대수"]], "perHousehold", "주차 대수 기준");
+            const value = textField(nextId("bl-f"), { inputMode: "decimal", placeholder: "예: 1.2", label: "주차 대수" });
+            const actual = textField(nextId("bl-f"), { inputMode: "decimal", placeholder: "실제 사용 가능 대수(선택)", label: "실제 사용 가능 대수(선택)" });
+            r.control.append(basis.box, value, actual);
+            r.finish();
+            readers.push((raw) => {
+              const amount = basis.value() === "total" ? intFrom(value.value) : decimalFrom(value.value, 2);
+              if (amount === null) return;
+              const real = decimalFrom(actual.value, 2);
+              raw.parking = { basis: basis.value(), value: amount, ...(real === null ? {} : { actual: real }) };
+            });
+          }
+
+          if (want.has("managementFee")) {
+            const must = required("managementFee");
+            const r = makeRow("managementFee", "관리비", { group: true, required: must, hint: `월 ${formatWon(FEE_ITEMIZE_FROM_WON)} 이상 정액이면 비목별 금액이 필요합니다.` });
+            const options: [string, string][] = [["average", "월 평균"], ["fixed", "정액"]];
+            if (!must) options.push(["omit", "적지 않음"]);
+            const type = segmentField(options, "", "관리비 방식");
+            const won = textField(nextId("bl-f"), { inputMode: "numeric", placeholder: "예: 250000", label: "관리비(원)" });
+            const wonHint = el("small", "work-amount-hint");
+            const included = el("div", "work-checks bl-fee-items");
+            included.setAttribute("role", "group");
+            included.setAttribute("aria-label", "포함 비목");
+            const includedChecks = (FEE_ITEM_KEYS as string[]).map((key) => {
+              const check = checkField(feeLabel(key));
+              check.input.value = key;
+              included.append(check.label);
+              return check.input;
+            });
+            const fixedBox = el("div", "bl-fee-fixed");
+            const unknown = checkField("세부내역을 받지 못함(비목별 금액 확인 불가로 적음)");
+            const itemsGrid = el("div", "bl-fee-grid");
+            const itemInputs = (FEE_ITEM_KEYS as string[]).map((key) => {
+              const input = textField(nextId("bl-f"), { inputMode: "numeric", placeholder: "0", label: `${feeLabel(key)}(원)` });
+              const wrap = el("div", "bl-fee-item");
+              wrap.append(el("span", "", feeLabel(key)), input);
+              itemsGrid.append(wrap);
+              return input;
+            });
+            fixedBox.append(unknown.label, itemsGrid);
+            r.control.append(type.box, won, wonHint, included, fixedBox);
+            r.finish();
+            refreshers.push(() => {
+              const monthly = intFrom(won.value);
+              won.hidden = type.value() === "omit" || type.value() === "";
+              wonHint.textContent = won.hidden || monthly === null || Number.isNaN(monthly) ? "" : formatWon(monthly);
+              included.hidden = type.value() !== "average";
+              fixedBox.hidden = !(type.value() === "fixed" && monthly !== null && monthly >= FEE_ITEMIZE_FROM_WON);
+              itemsGrid.hidden = unknown.input.checked;
+            });
+            readers.push((raw) => {
+              const value = type.value();
+              if (value === "omit") {
+                raw.managementFee = { type: "omit" };
+                return;
+              }
+              const monthly = intFrom(won.value);
+              if (!value || monthly === null) return;
+              if (value === "average") {
+                raw.managementFee = { type: "average", monthlyWon: monthly, included: includedChecks.filter((input) => input.checked).map((input) => input.value) };
+                return;
+              }
+              const fee: Raw = { type: "fixed", monthlyWon: monthly };
+              if (monthly >= FEE_ITEMIZE_FROM_WON) {
+                if (unknown.input.checked) fee.itemsUnknown = true;
+                else if (itemInputs.some((input) => input.value.trim())) fee.items = Object.fromEntries((FEE_ITEM_KEYS as string[]).map((key, index) => [key, intFrom(itemInputs[index].value) ?? Number.NaN]));
+              }
+              raw.managementFee = fee;
+            });
+          }
+
+          if (want.has("direction")) {
+            const r = makeRow("direction", "방향", { group: true, required: required("direction") });
+            const select = el("select");
+            select.autocomplete = "off";
+            select.setAttribute("aria-label", "방향");
+            select.append(new Option("방향 고르기", ""), ...DIRECTIONS.map((direction) => new Option(direction, direction)));
+            select.value = DIRECTIONS.includes(facts.direction ?? "") ? facts.direction ?? "" : "";
+            const choices = category.directionBasisChoices;
+            const basis = segmentField(choices.map((choice): [string, string] => [choice, `${choice} 기준`]), choices.length === 1 ? choices[0] : "", "방향 기준");
+            r.control.append(select, basis.box);
+            r.finish();
+            readers.push((raw) => {
+              raw.direction = select.value || null;
+              raw.directionBasis = basis.value() || null;
+            });
+          }
+          for (const refresh of refreshers) refresh();
+        }
+
+        function evaluate(): FieldState {
+          const raw: Raw = {};
+          for (const read of readers) read(raw);
+          const source = picked;
+          if (!source) return { inputs: {}, missing: [], messages: new Map(), unmapped: [], ok: false };
+          const checked = validateBlogInputs(raw, { officePhone });
+          const disclosure = buildDisclosure({ source, inputs: checked.inputs, office, rules: disclosureRules });
+          const missing = disclosure.missing as string[];
+          const errors = checked.errors as string[];
+          const messages = new Map<string, string>();
+          const rowOf = (key: string) => ROW_OF[key] ?? key;
+          for (const key of missing) {
+            const row = rowOf(key);
+            if (!rows.has(row) || messages.has(row)) continue;
+            messages.set(row, key === "directionBasis" ? "방향 기준을 고릅니다." : key === "violation" ? "확인해 고릅니다." : "비어 있음 · 비면 만들 수 없습니다.");
+          }
+          for (const key of errors) messages.set(rowOf(key), ERROR_TEXT[rowOf(key)] ?? "형식이 맞지 않습니다.");
+          const fee = raw.managementFee as { type?: string } | undefined;
+          if (missing.includes("managementFee") && fee?.type === "fixed") {
+            messages.set("managementFee", `월 ${formatWon(FEE_ITEMIZE_FROM_WON)} 이상 정액이면 비목별 금액을 모두 넣거나 '세부내역을 받지 못함'을 고릅니다.`);
+          }
+          for (const key of checked.personal as string[]) messages.set(key, "주민등록번호·전화번호·이메일·호수처럼 보이는 글자는 넣을 수 없습니다.");
+          const unmapped = [...missing, ...errors].filter((key) => !rows.has(rowOf(key)));
+          return { inputs: checked.inputs as unknown as Raw, missing, messages, unmapped, ok: messages.size === 0 && unmapped.length === 0 };
+        }
+
+        function renderFieldState(state: FieldState) {
+          if (!picked) return;
+          if (picked.type === "complex") countLine.textContent = "✓ 채울 칸이 없습니다.";
+          else if (state.ok) countLine.textContent = "✓ 명시사항을 다 채웠습니다.";
+          else countLine.textContent = `빈 칸·고칠 칸 ${state.messages.size + state.unmapped.length}개: ${[...state.messages.keys(), ...state.unmapped].map(fieldLabel).join("·")}`;
+          for (const [key, row] of rows) {
+            const message = fieldsTouched ? state.messages.get(key) : undefined;
+            row.classList.toggle("bl-row--empty", Boolean(message));
+            const mark = row.querySelector<HTMLElement>("[data-bl-mark]");
+            if (mark) {
+              mark.textContent = message ?? "";
+              mark.hidden = !message;
+            }
+          }
+        }
+        const onFieldsChange = () => {
+          for (const refresh of refreshers) refresh();
+          renderFieldState(evaluate());
+        };
+        fieldsBox.addEventListener("input", onFieldsChange);
+        fieldsBox.addEventListener("change", onFieldsChange);
+
+        pick("[data-bl-next]").addEventListener("click", () => {
+          fieldsTouched = true;
+          const state = evaluate();
+          renderFieldState(state);
+          if (!state.ok) {
+            const unreadable = state.unmapped.some((key) => key === "price" || key === "tradeType");
+            setNotice(fieldsAlert, unreadable
+              ? "공개 자료에서 가격·거래 형태를 읽지 못했습니다. 다른 자료를 골라 주세요."
+              : `표시한 칸을 채우거나 고쳐 주세요: ${[...state.messages.keys(), ...state.unmapped].map(fieldLabel).join("·")}. 빈 칸이 있으면 만들 수 없습니다.`);
+            const first = [...rows.values()].find((row) => row.classList.contains("bl-row--empty"));
+            const control = first?.querySelector<HTMLElement>("input:not([hidden]), select, textarea");
+            if (control) control.focus();
+            else fieldsAlert.focus();
+            return;
+          }
+          setNotice(fieldsAlert, "");
+          openStep = 3;
+          renderSteps();
+          focusStep(3);
+        });
+
+        // ── 글 성격·만들기 ──
+
+        function buildStyles() {
+          if (!picked) return;
+          const allowed = allowedStyles(picked) as string[];
+          const previous = stylesBox.querySelector<HTMLInputElement>("input:checked")?.value ?? "";
+          const chosen = allowed.includes(previous) ? previous : allowed[0];
+          stylesBox.replaceChildren(...styles.map((style) => {
+            const choice = el("label", "work-choice");
+            const input = el("input");
+            input.type = "radio";
+            input.name = "bl-style";
+            input.value = style.id;
+            input.autocomplete = "off";
+            input.checked = style.id === chosen;
+            input.disabled = !allowed.includes(style.id);
+            if (input.disabled) choice.classList.add("is-off");
+            choice.append(input, el("span", "", style.label));
+            return choice;
+          }));
+          renderStyleNote();
+        }
+        const selectedStyle = () => stylesBox.querySelector<HTMLInputElement>("input:checked")?.value ?? "";
+        function renderStyleNote() {
+          const style = styles.find((entry) => entry.id === selectedStyle());
+          styleNote.replaceChildren(style?.note ?? "");
+          if (stylesBox.querySelector("input:disabled")) styleNote.append(el("span", "bl-soft", "이 자료의 거래 형태에 맞지 않는 성격은 잠갔습니다."));
+        }
+        stylesBox.addEventListener("change", renderStyleNote);
+        emphasisInput.addEventListener("input", () => {
+          emphasisCount.textContent = `${emphasisInput.value.length} / ${EMPHASIS_MAX}자 · ${EMPHASIS_NOTE}`;
+        });
+
+        function renderMake() {
+          const reason = limitsView(limits).reason as string | null;
+          makeButton.disabled = busy || Boolean(reason);
+          makeNote.textContent = busy ? "보내는 중입니다…" : reason ?? (limits ? `만들면 오늘 ${limits.usage.todayCreates + 1} / ${limits.dailyCreateLimit}편이 됩니다. 1 ~ 3분 걸립니다.` : "");
+          makeNote.classList.toggle("is-blocked", !busy && Boolean(reason));
+        }
+
+        makeButton.addEventListener("click", async () => {
+          if (!picked || busy) return;
+          const state = evaluate();
+          if (!state.ok) {
+            fieldsTouched = true;
+            openStep = 2;
+            renderSteps();
+            renderFieldState(state);
+            setNotice(fieldsAlert, "명시사항 빈 칸을 먼저 채워 주세요. 빈 칸이 있으면 만들 수 없습니다.");
+            fieldsAlert.focus();
+            return;
+          }
+          const style = selectedStyle();
+          const emphasis = validateEmphasis(emphasisInput.value, { officePhone });
+          if (!style || emphasis.error || emphasis.personal) {
+            setNotice(makeAlert, !style ? "글 성격을 고릅니다." : emphasis.error ? `강조점은 ${EMPHASIS_MAX}자 이하로 넣습니다.` : apiErrorText("PERSONAL_DATA_PATTERN"));
+            makeAlert.focus();
+            return;
+          }
+          busy = true;
+          setNotice(makeAlert, "");
+          renderMake();
+          try {
+            const created = await createBlogDraft({ source: { type: picked.type, id: picked.id }, style, inputs: state.inputs, emphasis: emphasis.emphasis });
+            showDraft(created.draft);
+          } catch (error) {
+            const { code, details } = errorOf(error);
+            const fieldError = code === "DISCLOSURE_INCOMPLETE" || ((code === "VALIDATION_FAILED" || code === "PERSONAL_DATA_PATTERN") && !details.every((key) => key === "emphasis" || key === "style"));
+            if (fieldError) {
+              fieldsTouched = true;
+              openStep = 2;
+              renderSteps();
+              renderFieldState(evaluate());
+              setNotice(fieldsAlert, apiErrorText(code, details));
+              fieldsAlert.focus();
+            } else {
+              setNotice(makeAlert, apiErrorText(code, details));
+              makeAlert.focus();
+            }
+            if (code === "AI_LIMITS_MISSING" || code === "AI_BUDGET_EXCEEDED") limitsFold.open = true;
+            if (code === "AI_STATE_UNKNOWN") draftsFold.open = true;
+          } finally {
+            busy = false;
+            renderMake();
+            void refreshSide();
+          }
+        });
+
+        // ── 초안 보기(기다림·결과·실패) ──
+
+        function setMode(next: Mode) {
+          mode = next;
+          stepsList.hidden = next !== "compose";
+          waitPanel.hidden = next !== "wait";
+          resultPanel.hidden = next !== "result";
+          failPanel.hidden = next !== "fail";
+          pickedBar.hidden = next === "compose" || !draft;
+          bar.hidden = next !== "result";
+          if (next !== "wait") {
+            window.clearTimeout(pollTimer);
+            window.clearInterval(tickTimer);
+          }
+        }
+        function renderPicked() {
+          if (!draft) return;
+          pick("[data-bl-picked-title]").textContent = draft.source.title;
+          pick("[data-bl-picked-detail]").textContent = draftStatusText(draft);
+        }
+        function backToCompose() {
+          draft = null;
+          pollSeq += 1;
+          edited = false;
+          if (!picked) openStep = 1;
+          setMode("compose");
+          renderSteps();
+        }
+
+        function showDraft(next: BlogDraft) {
+          draft = next;
+          pollSeq += 1;
+          renderPicked();
+          if (isOpenStatus(next.status) && !next.closed) {
+            setMode("wait");
+            tick();
+            tickTimer = window.setInterval(tick, 1000);
+            schedulePoll();
+            pick("h2", waitPanel).focus();
+            return;
+          }
+          if (next.result) {
+            renderResult(next);
+            setMode("result");
+            pick(".bl-result__title", resultPanel).focus();
+            return;
+          }
+          const view = next.closed === "cancelled"
+            ? { title: "취소한 초안입니다", body: "만들기를 취소해 글이 없습니다. 이미 든 비용은 되돌리지 못했을 수 있습니다(추정).", retry: true }
+            : failView(next);
+          pick("[data-bl-fail-title]").textContent = view.title;
+          pick("[data-bl-fail-body]").textContent = view.body;
+          pick("[data-bl-retry]").hidden = !(view.retry && picked && sourceKey(picked) === sourceKey(next.source));
+          setMode("fail");
+          pick("[data-bl-fail-title]").focus();
+        }
+
+        function tick() {
+          if (!draft) return;
+          const seconds = Math.max(0, Math.floor((Date.now() - Date.parse(draft.createdAt)) / 1000));
+          const passed = seconds >= 60 ? `${Math.floor(seconds / 60)}분 ${seconds % 60}초` : `${seconds}초`;
+          waitText.textContent = `${kstShort(draft.createdAt)}에 보냄 · ${passed} 지남`;
+        }
+        function schedulePoll() {
+          window.clearTimeout(pollTimer);
+          if (!draft || !isOpenStatus(draft.status) || draft.closed) return;
+          pollTimer = window.setTimeout(() => void poll(), pollDelayMs(Date.now() - Date.parse(draft.createdAt)));
+        }
+        async function poll() {
+          if (!draft || mode !== "wait") return;
+          if (document.hidden) return; // 다시 보일 때 바로 확인한다(visibilitychange).
+          const seq = pollSeq;
+          try {
+            const { draft: next } = await readBlogDraft(draft.id);
+            if (seq !== pollSeq) return;
+            if (isOpenStatus(next.status) && !next.closed) {
+              draft = next;
+              schedulePoll();
+              return;
+            }
+            showDraft(next);
+            void refreshSide();
+          } catch (error) {
+            if (seq !== pollSeq) return;
+            const { code } = errorOf(error);
+            if (code === "AUTH_REQUIRED" || code === "NOT_FOUND") {
+              window.clearInterval(tickTimer);
+              waitText.textContent = apiErrorText(code);
+              return;
+            }
+            waitText.textContent = "결과를 확인하지 못했습니다. 잠시 뒤 다시 확인합니다.";
+            schedulePoll();
+          }
+        }
+        document.addEventListener("visibilitychange", () => {
+          if (!document.hidden && mode === "wait") {
+            window.clearTimeout(pollTimer);
+            void poll();
+          }
+        });
+
+        cancelButton.addEventListener("click", async () => {
+          if (!draft || !window.confirm("만들기를 취소할까요? 이미 든 비용은 되돌리지 못할 수 있습니다.")) return;
+          cancelButton.disabled = true;
+          try {
+            await closeBlogDraft(draft.id, "cancel");
+            backToCompose();
+            setNotice(makeAlert, "만들기를 취소했습니다.", "✓");
+          } catch (error) {
+            waitText.textContent = apiErrorText(errorOf(error).code);
+          } finally {
+            cancelButton.disabled = false;
+            void refreshSide();
+          }
+        });
+        pick("[data-bl-retry]").addEventListener("click", () => {
+          backToCompose();
+          openStep = 3;
+          renderSteps();
+          focusStep(3);
+        });
+        pick("[data-bl-fail-close]").addEventListener("click", () => {
+          backToCompose();
+          focusStep(openStep);
+        });
+        pick("[data-bl-new]").addEventListener("click", () => {
+          if (edited && !window.confirm("고친 글은 저장되지 않습니다. 새 글을 만들까요?")) return;
+          picked = null;
+          locationValue = "";
+          locationKey = "";
+          emphasisInput.value = "";
+          emphasisCount.textContent = `0 / ${EMPHASIS_MAX}자 · ${EMPHASIS_NOTE}`;
+          buildFields();
+          backToCompose();
+          openStep = 1;
+          renderSources();
+          renderSteps();
+          focusStep(1);
+        });
+
+        // ── 결과: 고치기·검사·복사 ──
+
+        function renderResult(next: BlogDraft) {
+          const result = next.result;
+          if (!result) return;
+          titleInput.value = result.title;
+          tagsInput.value = result.hashtags.join(" ");
+          snsInput.value = result.snsShort;
+          paragraphsBox.replaceChildren(...result.paragraphs.map((text, index) => {
+            const wrap = el("div", "work-row bl-para");
+            wrap.dataset.blWhere = `p${index + 1}`;
+            const id = `bl-p${index + 1}`;
+            const label = el("label", "work-row__label", `문단 ${index + 1}`);
+            label.htmlFor = id;
+            const control = el("div", "work-row__control");
+            const area = el("textarea");
+            area.id = id;
+            area.rows = Math.min(8, Math.max(2, Math.ceil(text.length / 42)));
+            area.autocomplete = "off";
+            area.value = text;
+            const issue = el("small", "bl-para__issue");
+            issue.dataset.blIssue = "";
+            issue.hidden = true;
+            control.append(area, issue);
+            wrap.append(label, control);
+            return wrap;
+          }));
+          const closed = next.closed === "confirmed" ? " · 다 씀" : next.closed === "cancelled" ? " · 버림" : next.closed === "auto" ? " · 30일 지나 닫힘" : "";
+          resultMeta.textContent = `${kstShort(next.createdAt)} 만듦${closed} · 고치면 바로 다시 검사합니다. 고친 글은 저장되지 않습니다.`;
+          relocRow.hidden = !next.needsLocation;
+          relocInput.value = sourceKey(next.source) === locationKey ? locationValue : "";
+          sourceGone.hidden = next.sourcePublic;
+          confirmButton.hidden = Boolean(next.closed) || next.status !== "completed";
+          discardButton.hidden = Boolean(next.closed);
+          copyStatus.textContent = "";
+          delete copyStatus.dataset.state;
+          previewFold.open = false;
+          edited = false;
+          recheck();
+        }
+
+        const paragraphTexts = () => [...paragraphsBox.querySelectorAll<HTMLTextAreaElement>("textarea")].map((area) => area.value);
+        function currentDisclosure() {
+          if (!draft?.currentSource || !draft.sourcePublic) return null;
+          const inputs = { ...draft.inputs, ...(draft.needsLocation ? { location: relocInput.value } : {}) };
+          const checked = validateBlogInputs(inputs, { officePhone });
+          return {
+            disclosure: buildDisclosure({ source: draft.currentSource, inputs: checked.inputs, office, rules: disclosureRules }),
+            personal: checked.personal as string[],
+            errors: checked.errors as string[],
+          };
+        }
+        const lineOf = (item: CheckLine): [string, string] => [`${item.label}: ${item.whereLabel} ${item.text}`, item.where];
+
+        function recheck() {
+          const current = draft;
+          if (!current?.result) return;
+          const title = titleInput.value;
+          const paragraphs = paragraphTexts();
+          const view = checkView(current.currentSource
+            ? checkBlogDraft({ title, paragraphs, snsShort: snsInput.value, hashtags: normalizeHashtags(tagsInput.value) }, { source: current.currentSource, inputs: current.inputs, emphasis: current.emphasisNumbers })
+            : { blocks: [], warnings: [] });
+          const blocks = view.blocks as CheckLine[];
+          const warnings = view.warnings as CheckLine[];
+          const made = currentDisclosure();
+          const missing = made ? (made.disclosure.missing as string[]) : [];
+          const locationIssue = Boolean(made && (made.personal.includes("location") || made.errors.includes("location")));
+          const empty = !title.trim() || !paragraphs.some((text) => text.trim());
+          copyReady = Boolean(made) && blocks.length === 0 && missing.length === 0 && !locationIssue && !empty;
+
+          checkBox.replaceChildren();
+          checkBox.className = copyReady ? "bl-check bl-check--ok" : "bl-check";
+          const blockItems: [string, string | null][] = blocks.map(lineOf);
+          if (!made) blockItems.push(["명시사항을 붙일 수 없습니다(고른 자료가 공개 자료에 없음).", null]);
+          else if (locationIssue) blockItems.push(["소재지에 호수·전화번호처럼 보이는 글자가 있습니다.", "reloc"]);
+          else if (missing.length > 0) blockItems.push([`명시사항 빈 칸: ${missing.map(fieldLabel).join("·")}`, missing.includes("location") ? "reloc" : null]);
+          if (empty) blockItems.push(["제목이나 본문이 비어 있습니다.", "title"]);
+          const addList = (heading: string, items: [string, string | null][], className: string) => {
+            checkBox.append(el("p", className, heading));
+            const list = el("ul");
+            for (const [text, where] of items) {
+              const li = el("li", "", text);
+              if (where) {
+                const jump = el("button", "bl-jump", "그 자리로");
+                jump.type = "button";
+                jump.addEventListener("click", () => {
+                  const target = where === "reloc" ? relocInput : resultPanel.querySelector<HTMLElement>(`[data-bl-where="${where}"] input, [data-bl-where="${where}"] textarea`);
+                  target?.focus();
+                });
+                li.append(" ", jump);
+              }
+              list.append(li);
+            }
+            checkBox.append(list);
+          };
+          if (blockItems.length > 0) addList(`복사 전에 고칠 곳 ${blockItems.length}곳`, blockItems, "bl-check__title");
+          else checkBox.append(el("p", "bl-check__title", `✓ 복사할 수 있습니다${warnings.length ? ` · 확인할 곳 ${warnings.length}곳` : ""}`));
+          if (warnings.length > 0) addList(`확인할 곳 ${warnings.length}곳(복사는 됨)`, warnings.map(lineOf), "bl-check__title bl-check__title--warn");
+
+          for (const wrap of resultPanel.querySelectorAll<HTMLElement>("[data-bl-where]")) {
+            const where = wrap.dataset.blWhere;
+            const here = blocks.filter((item) => item.where === where);
+            const notes = warnings.filter((item) => item.where === where);
+            wrap.classList.toggle("bl-para--block", here.length > 0);
+            wrap.classList.toggle("bl-para--warn", here.length === 0 && notes.length > 0);
+            const issue = wrap.querySelector<HTMLElement>("[data-bl-issue]");
+            if (issue) {
+              const all = [...here, ...notes];
+              issue.textContent = all.length ? `${here.length ? "✕ 복사 막힘" : "! 확인"} · ${all.map((item) => `${item.label} ${item.text}`).join(" / ")}` : "";
+              issue.hidden = all.length === 0;
+            }
+          }
+          titleCount.textContent = `${title.length} / 60자`;
+          snsCount.textContent = `${snsInput.value.length} / 200자 · 복사할 때 명시사항이 함께 붙습니다.`;
+
+          disclosureBox.replaceChildren();
+          if (made) {
+            for (const line of (made.disclosure.text as string).split("\n")) disclosureBox.append(el("p", "", line));
+            if (missing.length > 0) {
+              const gap = el("p");
+              gap.append(el("mark", "bl-gap", "비어 있음"), ` ${missing.map(fieldLabel).join("·")}`);
+              disclosureBox.append(gap);
+            }
+          } else {
+            disclosureBox.append(el("p", "", "붙일 수 없음"));
+          }
+
+          copyBlogButton.disabled = !copyReady;
+          copySnsButton.disabled = !copyReady;
+          barCopy.disabled = !copyReady;
+          barText.textContent = copyReady ? "✓ 복사할 수 있음" : `고칠 곳 ${blockItems.length}곳 · 복사 막힘`;
+          if (!copyStatus.dataset.state) copyStatus.textContent = copyReady ? "" : "고칠 곳을 고치면 복사할 수 있습니다.";
+          preview.value = copyReady && made ? copyText("blog", made.disclosure.text as string) : "";
+        }
+
+        function copyText(which: "blog" | "sns", disclosureText: string) {
+          const hashtags = normalizeHashtags(tagsInput.value);
+          return which === "blog"
+            ? blogCopyText({ title: titleInput.value, paragraphs: paragraphTexts(), hashtags, disclosureText })
+            : snsCopyText({ snsShort: snsInput.value, hashtags, disclosureText });
+        }
+
+        resultPanel.addEventListener("input", (event) => {
+          if (event.target === relocInput) {
+            locationValue = relocInput.value;
+            if (draft) locationKey = sourceKey(draft.source);
+          } else if (event.target !== preview) {
+            edited = true;
+          }
+          delete copyStatus.dataset.state;
+          window.clearTimeout(recheckTimer);
+          recheckTimer = window.setTimeout(recheck, 250);
+        });
+
+        async function copy(which: "blog" | "sns") {
+          window.clearTimeout(recheckTimer);
+          recheck();
+          const made = currentDisclosure();
+          if (!copyReady || !made) return;
+          const text = copyText(which, made.disclosure.text as string);
+          const name = which === "blog" ? "블로그 글" : "SNS 글";
+          preview.value = text;
+          try {
+            await navigator.clipboard.writeText(text);
+            copyStatus.textContent = `✓ ${name}을 복사했습니다. 명시사항까지 함께 붙여 넣으세요.`;
+            copyStatus.dataset.state = "success";
+            edited = false;
+          } catch {
+            previewFold.open = true;
+            preview.focus({ preventScroll: true });
+            preview.select();
+            preview.scrollIntoView({ block: "nearest" });
+            copyStatus.textContent = "자동 복사가 막혔습니다. 펼친 '복사할 글 미리 보기'에서 골라 둔 글을 직접 복사해 주세요.";
+            copyStatus.dataset.state = "error";
+          }
+        }
+        copyBlogButton.addEventListener("click", () => void copy("blog"));
+        copySnsButton.addEventListener("click", () => void copy("sns"));
+        barCopy.addEventListener("click", () => copyBlogButton.click());
+
+        confirmButton.addEventListener("click", async () => {
+          if (!draft) return;
+          confirmButton.disabled = true;
+          try {
+            const { draft: next } = await closeBlogDraft(draft.id, "confirm");
+            // 고친 글은 화면에 그대로 둔다(서버에는 글을 다시 저장하지 않음).
+            draft = next;
+            renderPicked();
+            confirmButton.hidden = true;
+            discardButton.hidden = true;
+            copyStatus.textContent = "'다 씀'으로 표시했습니다. 30일 뒤 지웁니다.";
+            copyStatus.dataset.state = "success";
+            recheck();
+          } catch (error) {
+            copyStatus.textContent = apiErrorText(errorOf(error).code);
+            copyStatus.dataset.state = "error";
+          } finally {
+            confirmButton.disabled = false;
+            void refreshSide();
+          }
+        });
+        discardButton.addEventListener("click", async () => {
+          if (!draft || !window.confirm("이 초안을 버릴까요? 글은 30일 뒤 지워지고 되돌릴 수 없습니다.")) return;
+          discardButton.disabled = true;
+          try {
+            await closeBlogDraft(draft.id, "cancel");
+            backToCompose();
+            setNotice(makeAlert, "초안을 버렸습니다.", "✓");
+          } catch (error) {
+            copyStatus.textContent = apiErrorText(errorOf(error).code);
+            copyStatus.dataset.state = "error";
+          } finally {
+            discardButton.disabled = false;
+            void refreshSide();
+          }
+        });
+
+        // ── 보관 중인 초안 ──
+
+        function renderDrafts() {
+          pick("[data-bl-drafts-summary]").textContent = `보관 중인 초안 ${drafts.length}`;
+          if (drafts.length === 0) {
+            draftsList.replaceChildren(el("li", "bl-soft", "보관 중인 초안이 없습니다."));
+            return;
+          }
+          draftsList.replaceChildren(...drafts.map((item) => {
+            const li = el("li");
+            const name = item.title ?? item.source.title;
+            const open = el("button", "bl-drafts__open", "열기");
+            open.type = "button";
+            open.setAttribute("aria-label", `${name} 열기`);
+            open.addEventListener("click", () => void openDraft(item.id));
+            li.append(el("strong", "", name), el("span", "", draftStatusText(item)), open);
+            return li;
+          }));
+        }
+        async function openDraft(id: string) {
+          if (edited && !window.confirm("고친 글은 저장되지 않습니다. 다른 초안을 열까요?")) return;
+          draftsStatus.textContent = "초안을 여는 중입니다…";
+          try {
+            const { draft: next } = await readBlogDraft(id);
+            draftsStatus.textContent = "";
+            draftsFold.open = false;
+            showDraft(next);
+            pickedBar.scrollIntoView({ block: "nearest" });
+          } catch (error) {
+            draftsStatus.textContent = apiErrorText(errorOf(error).code);
+          }
+        }
+
+        async function refreshSide() {
+          const [nextLimits, nextDrafts] = await Promise.allSettled([readBlogLimits(), listBlogDrafts()]);
+          if (nextLimits.status === "fulfilled") {
+            limits = nextLimits.value;
+            renderLimits();
+          }
+          if (nextDrafts.status === "fulfilled") {
+            drafts = nextDrafts.value.items;
+            renderDrafts();
+          }
+        }
+
+        // 고친 글은 서버에 저장하지 않으므로, 복사하지 않고 떠나려 하면 브라우저 확인 창을 띄운다.
+        window.addEventListener("beforeunload", (event) => {
+          if (!edited) return;
+          event.preventDefault();
+        });
+
+        // ── 처음 불러오기 ──
+
+        async function start() {
+          statePanel.hidden = true;
+          main!.hidden = true;
+          boot.hidden = false;
+          try {
+            const session = await getWorkSession({ refresh: true });
+            if (!session.blogEnabled) throw new WorkApiError("disabled", { code: "BLOG_DISABLED" });
+            const [loaded, loadedLimits, loadedDrafts] = await Promise.all([readBlogSources(), readBlogLimits(), listBlogDrafts()]);
+            sources = loaded.items;
+            styles = loaded.styles;
+            limits = loadedLimits;
+            drafts = loadedDrafts.items;
+          } catch (error) {
+            const { code } = errorOf(error);
+            if (code === "BLOG_DISABLED") showState("글 초안 도구가 아직 켜지지 않았습니다", "켜기 값을 등록하면 쓸 수 있습니다. 켜기 값 등록은 개발 담당이 합니다.", { symbol: "–" });
+            else if (code === "BLOG_CONFIG_MISSING") showState("글 초안 설정이 빠져 있습니다", "OpenAI 키·모델 등 설정 가운데 빠진 것이 있어 글을 만들 수 없습니다. 개발 담당에게 '글 초안 설정 누락'이라고 알려 주세요.");
+            else showState("글 초안 도구를 불러오지 못했습니다", apiErrorText(code), { retry: code !== "AUTH_REQUIRED" });
+            return;
+          }
+          boot.hidden = true;
+          fillLimitInputs();
+          renderLimits();
+          limitsFold.open = !limitsView(limits).saved;
+          renderDrafts();
+          renderSources();
+          setMode("compose");
+          renderSteps();
+          main!.hidden = false;
+        }
+        pick("[data-bl-state-retry]").addEventListener("click", () => void start());
+
+        function reset() {
+          window.clearTimeout(pollTimer);
+          window.clearInterval(tickTimer);
+          window.clearTimeout(recheckTimer);
+          pollSeq += 1;
+          picked = null;
+          draft = null;
+          locationValue = "";
+          locationKey = "";
+          query = "";
+          queryInput.value = "";
+          kind = "listing";
+          for (const input of kindInputs) input.checked = input.value === "listing";
+          shownCount = BLOG_SOURCE_PAGE_SIZE;
+          openStep = 1;
+          fieldsTouched = false;
+          emphasisInput.value = "";
+          emphasisCount.textContent = `0 / ${EMPHASIS_MAX}자 · ${EMPHASIS_NOTE}`;
+          relocInput.value = "";
+          edited = false;
+          busy = false;
+          buildFields();
+          for (const notice of [fieldsAlert, makeAlert, limitsAlert]) setNotice(notice, "");
+          void start();
+        }
+        window.addEventListener("pageshow", (event) => {
+          if (event.persisted) reset();
+        });
+        reset();
+      }
+    }
+  </script>
+</AdminLayout>
+

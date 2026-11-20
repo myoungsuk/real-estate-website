@@ -36,7 +36,7 @@ test("경로 경계: /public-tools·/realprice·/blog와 그 아래만 단계 P�
 });
 
 test("TK-01 단계 P 켜기 값 둘 다 없으면 /work/public-tools/session은 200 { realpriceEnabled: false, blogEnabled: false, csrfToken: null }, D1 호출 0번", async () => {
-  for (const extra of [{}, { WORK_BLOG_ENABLED: "true" }]) {
+  for (const extra of [{}, { WORK_BLOG_ENABLED: "TRUE" }, { WORK_BLOG_ENABLED: "1" }]) {
     const { db } = freshDb();
     const env = workEnv(db, { WORK_TOOLS_ENABLED: undefined, ...extra });
     const result = await work(env, "/public-tools/session");
@@ -44,6 +44,10 @@ test("TK-01 단계 P 켜기 값 둘 다 없으면 /work/public-tools/session은 
     assert.deepEqual(result.json.data, { realpriceEnabled: false, blogEnabled: false, administrator: "o****@example.com", csrfToken: null, schemaVersion: null });
     assert.equal(db.stats.statements, 0);
   }
+  // P3부터: 글 초안 켜기 값은 true인데 OpenAI 설정이 없으면 세션도 503 BLOG_CONFIG_MISSING(실거래가 설정 누락과 같은 규칙), D1 호출 0번.
+  const { db } = freshDb();
+  const missing = await work(workEnv(db, { WORK_TOOLS_ENABLED: undefined, WORK_BLOG_ENABLED: "true" }), "/public-tools/session");
+  assert.deepEqual([missing.status, missing.json.error.code, db.stats.statements], [503, "BLOG_CONFIG_MISSING", 0]);
 });
 
 test("TK-02 WORK_REALPRICE_ENABLED가 없음·TRUE·1·' true'이면 /work/realprice/*는 503 REALPRICE_DISABLED, D1 호출 0번", async () => {
@@ -89,7 +93,7 @@ test("TK-04 단계 2만 켜면 /work/session과 단계 2 경로는 지금 그대
   const session = await work(env, "/session");
   assert.equal(session.status, 200);
   assert.deepEqual(Object.keys(session.json.data), ["enabled", "filesEnabled", "aiEnabled", "administrator", "csrfToken", "schemaVersion", "aiWarnings"]);
-  assert.deepEqual([session.json.data.enabled, session.json.data.schemaVersion], [true, 3]);
+  assert.deepEqual([session.json.data.enabled, session.json.data.schemaVersion], [true, 4]);
   const customer = await work(env, "/customers", { method: "POST", body: { displayName: "가상 손님" } });
   assert.equal(customer.status, 201, JSON.stringify(customer.json));
   assert.equal((await work(env, "/customers")).status, 200);
@@ -113,9 +117,9 @@ test("TK-05 단계 P만 켜면 /work/realprice/* 동작, 단계 2 경로는 503 
   assert.deepEqual([session.status, session.json.data.enabled, session.json.data.csrfToken], [200, false, null]);
   const tools = await work(env, "/public-tools/session");
   assert.equal(tools.status, 200);
-  assert.deepEqual([tools.json.data.realpriceEnabled, tools.json.data.blogEnabled, tools.json.data.schemaVersion], [true, false, 3]);
+  assert.deepEqual([tools.json.data.realpriceEnabled, tools.json.data.blogEnabled, tools.json.data.schemaVersion], [true, false, 4]);
   assert.match(tools.json.data.csrfToken, /^[0-9]+\.[A-Za-z0-9_-]+$/u);
-  assert.equal((await work(env, "/blog/drafts")).json.error.code, "BLOG_DISABLED", "글 초안은 P3 전까지 늘 꺼짐");
+  assert.equal((await work(env, "/blog/drafts")).json.error.code, "BLOG_DISABLED", "글 초안 켜기 값이 없으면 꺼짐");
   for (const path of ["/public-tools", "/public-tools/other", "/realprice", "/realprice/other"]) {
     const result = await work(env, path);
     assert.deepEqual([result.status, result.json.error.code], [404, "NOT_FOUND"], path);
@@ -154,8 +158,8 @@ test("TK-06 지금 다시 받기에 Origin 틀림·CSRF 없음·틀림·콘텐�
   assert.deepEqual([notJson.status, notJson.json.error.code, auditRows(database).length], [415, "CONTENT_TYPE_REQUIRED", 0]);
 });
 
-test("TK-07 구조 번호 2(0003 적용 전)·4(앞선 코드로 되돌림)이면 단계 P API는 503 WORK_SCHEMA_OUTDATED·AHEAD이고 신원 있는 거부로 남음", async () => {
-  for (const [value, code] of [["2", "WORK_SCHEMA_OUTDATED"], ["4", "WORK_SCHEMA_AHEAD"]]) {
+test("TK-07 구조 번호 2(0003 적용 전)·3(0004 적용 전)·5(앞선 코드로 되돌림)이면 단계 P API는 503 WORK_SCHEMA_OUTDATED·AHEAD이고 신원 있는 거부로 남음", async () => {
+  for (const [value, code] of [["2", "WORK_SCHEMA_OUTDATED"], ["3", "WORK_SCHEMA_OUTDATED"], ["5", "WORK_SCHEMA_AHEAD"]]) {
     const { database, db } = freshDb();
     database.exec(`UPDATE settings SET value_json = '${value}' WHERE key = 'schema_version'`);
     for (const path of ["/realprice/status", "/public-tools/session"]) {
