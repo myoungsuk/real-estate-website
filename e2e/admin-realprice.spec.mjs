@@ -895,7 +895,7 @@ test("P1-e TK-39 홍보물 화면: ids로만 다시 읽고 카드 PNG 1080×1350
   await page.getByRole("radio", { name: "인스타그램" }).check();
   await expect(page.locator("[data-promo-count]")).toHaveText(/자 \/ 2,200자 · 해시태그 \d+개$/u);
   const tags = texts.instagram.match(/#[^\s#]+/gu) ?? [];
-  expect(tags.length, "해시태그 15개 안").toBeLessThanOrEqual(15);
+  expect(tags.length, "해시태그 12개 안").toBeLessThanOrEqual(12);
   for (const tag of ["#대전동구", "#아파트실거래가", "#천동", "#가상숲1단지"]) expect(tags, `해시태그 ${tag}(고정·법정동·단지 이름)`).toContain(tag);
   await expect(page.locator("[data-promo-step-text]")).toContainText(`해시태그 ${tags.length}개 포함`);
 

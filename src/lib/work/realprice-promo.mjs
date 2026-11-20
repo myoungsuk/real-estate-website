@@ -193,7 +193,7 @@ export const disclosureLines = (office) => [
 // 전용면적 최대 2개(#전용84, ㎡ 소수점 버림) → 단지 이름 최대 3개(띄어쓰기·기호 뺌). 겹치면 하나, 모두 PROMO_HASHTAGS_MAX개 안.
 // 개수가 넘치면 단지 이름은 지키고 전용면적 → 법정동 순으로 줄인다. 동 번호는 넣지 않는다.
 export const PROMO_HASHTAGS_BASE = Object.freeze(["#대전동구", "#동구아파트", "#대전아파트", "#아파트실거래가"]);
-export const PROMO_HASHTAGS_MAX = 15;
+export const PROMO_HASHTAGS_MAX = 12; // 운영자 "10개 안팎"(11-20 13:18:32)에 맞춰 15 → 12(11-20 운영자 "추천하는 대로")
 const tagWord = (text) => String(text ?? "").normalize("NFKC").replace(/[^\p{L}\p{N}]/gu, "");
 const kindTag = (item) => {
   if (item.kind === "sale") return "#아파트매매";
