@@ -282,7 +282,7 @@ test("미리 그리기 규칙은 관리자 화면에만 있고 공개 화면에�
 
   // 브라우저의 주소 맞춤 규칙(URLPattern)으로, 나중에 생길 업무 도구 화면과 편집·인증 주소가 미리 그리기에 걸리지 않는지 확인한다.
   const matched = await page.evaluate((patterns) => {
-    const urls = ["/admin/work/fee/", "/admin/work/fee/?from=menu", "/admin/work/fee", "/admin/work/customers/", "/admin/listings/editor/", "/admin/listings/editor/?id=1", "/admin/listings/editor", "/cdn-cgi/access/logout", "/api/admin/v1/session"];
+    const urls = ["/admin/work/fee/", "/admin/work/fee/?from=menu", "/admin/work/fee", "/admin/work/customers/", "/admin/work/realprice/", "/admin/work/realprice/settings/", "/admin/listings/editor/", "/admin/listings/editor/?id=1", "/admin/listings/editor", "/cdn-cgi/access/logout", "/api/admin/v1/session"];
     const test = (pattern, url) => new URLPattern(pattern, location.href).test(new URL(url, location.href).href);
     return Object.fromEntries(urls.map((url) => [url, {
       prerender: patterns.prerender.some((pattern) => test(pattern, url)),
@@ -293,6 +293,9 @@ test("미리 그리기 규칙은 관리자 화면에만 있고 공개 화면에�
   expect(matched["/admin/work/fee/?from=menu"].prerender).toBe(true);
   expect(matched["/admin/work/fee"].prerender, "뒤 빗금 없는 주소는 prerender하지 않음(prefetch만)").toBe(false);
   expect(matched["/admin/work/customers/"].prerender, "단계 2 화면은 목록에 넣기 전까지 prerender하지 않음").toBe(false);
+  for (const url of ["/admin/work/realprice/", "/admin/work/realprice/settings/"]) {
+    expect(matched[url].prerender, `${url} 서버를 부르는 단계 P 화면은 prerender하지 않음(prefetch만, TK-37)`).toBe(false);
+  }
   for (const url of ["/admin/listings/editor/", "/admin/listings/editor/?id=1", "/admin/listings/editor", "/cdn-cgi/access/logout", "/api/admin/v1/session"]) {
     expect(matched[url].excluded, `${url} 두 규칙 모두에서 제외`).toBe(true);
   }
@@ -419,10 +422,10 @@ test("관리 화면 사용법 상자는 접혀 있다가 열리고, 자세한 �
   assertNoBrowserErrors();
 });
 
-test("관리 화면 13곳은 사용법 상자를 연 채로 360·390·768·1280px에서 가로로 넘치지 않는다", async ({ page }) => {
+test("관리 화면 15곳은 사용법 상자를 연 채로 360·390·768·1280px에서 가로로 넘치지 않는다", async ({ page }) => {
   await page.route("**/api/admin/**", (route) => route.fulfill({ status: 503, json: { ok: false, error: { code: "TEST_OFFLINE", message: "시험 중에는 관리 API를 부르지 않습니다." } } }));
   const paths = [
-    "/admin/", "/admin/work/", "/admin/work/fee/", "/admin/work/messages/", "/admin/work/schedule/", "/admin/listings/", "/admin/listings/editor/",
+    "/admin/", "/admin/work/", "/admin/work/fee/", "/admin/work/messages/", "/admin/work/schedule/", "/admin/work/realprice/", "/admin/work/realprice/settings/", "/admin/listings/", "/admin/listings/editor/",
     "/admin/content/", "/admin/external-links/", "/admin/complexes/", "/admin/deployment/", "/admin/history/", "/admin/help/",
   ];
   for (const width of [360, 390, 768, 1280]) {
