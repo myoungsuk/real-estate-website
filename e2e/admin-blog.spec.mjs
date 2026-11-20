@@ -334,3 +334,25 @@ test("글 초안 다시 열기 360px: 소재지는 저장하지 않아 다시 �
   await expect(page.locator("[data-bl-retry]"), "고른 자료가 없으면 '다시 만들기'를 숨김").toBeHidden();
   assertNoErrors();
 });
+
+test("글 초안 360px 명시사항 칸 밀림 0px: 칸을 고르거나 채워도 아래 칸 위치가 그대로(매물 안내지와 같은 칸)", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  await setup(page, { width: 360 });
+  await page.goto("/admin/work/blog/");
+  await page.getByRole("button", { name: "가상숲1단지 고르기" }).click();
+  const rowOf = (key) => page.locator(`[data-bl-row='${key}']`);
+  const topOf = (key) => rowOf(key).evaluate((element) => Math.round(element.getBoundingClientRect().top + window.scrollY));
+
+  const beforePick = await topOf("floor");
+  await rowOf("violation").locator("label:has(input[value='none'])").click();
+  await expect(page.locator("[data-bl-count]")).not.toContainText("위반건축물");
+  expect(await topOf("floor") - beforePick, "위반건축물을 고른 뒤 아래 칸").toBe(0);
+
+  await page.getByRole("button", { name: "다음: 글 성격" }).click();
+  await expect(rowOf("location").locator("[data-bl-mark]")).toBeVisible();
+  const beforeFill = await topOf("kind");
+  await rowOf("location").locator("input").fill("대전광역시 동구 가상동 100");
+  await expect(rowOf("location").locator("[data-bl-mark]")).toBeHidden();
+  expect(await topOf("kind") - beforeFill, "소재지를 채운 뒤 아래 칸").toBe(0);
+  assertNoErrors();
+});

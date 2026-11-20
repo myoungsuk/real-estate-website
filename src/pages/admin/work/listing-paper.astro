@@ -108,7 +108,7 @@ const metaOf = (source: (typeof sources)[number]) => {
     import office from "../../../data/office.json";
     import disclosureRules from "../../../data/work/ad-disclosure-rules.json";
     import { renderCompareCard, renderListingCard, type CompareSheet, type ListingSheet } from "../../../lib/work-listing-card";
-    import { createDisclosureFields, disclosureFieldLabel, type DisclosureSource } from "../../../lib/work-disclosure-fields";
+    import { createDisclosureFields, disclosureFieldLabel, keepHeight, type DisclosureSource } from "../../../lib/work-disclosure-fields";
     import { todayInKorea } from "../../../lib/work/legal-dates.mjs";
     import {
       LISTING_PICK_MAX,
@@ -203,6 +203,7 @@ const metaOf = (source: (typeof sources)[number]) => {
           const state = entry.fields.evaluate();
           const keys = [...state.messages.keys(), ...state.unmapped];
           entry.count.textContent = state.ok ? "✓ 명시사항을 다 채웠습니다." : `빈 칸·고칠 칸 ${keys.length}개: ${keys.map(disclosureFieldLabel).join("·")}`;
+          keepHeight(entry.count);
           entry.fields.renderMarks(state, touched);
           return state;
         }

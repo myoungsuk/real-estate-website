@@ -189,3 +189,33 @@ test("매물 비교표 1280px: 3건까지 담고 4건째는 잠금, 빼기, list
   expect(violations).toEqual([]);
   assertNoErrors();
 });
+
+// 칸을 고르거나 채울 때 그 아래 칸이 움직이지 않는다(보드 후보, 2026-11-21 측정: 고치기 전 26 ~ 28px 올라감).
+// ① '위반건축물·미등기 여부'를 고르면 위 '빈 칸·고칠 칸' 줄이 줄어듦 ② 빈 칸 표시가 켜진 뒤 소재지를 채우면 그 칸 안내 글이 사라짐.
+test("명시사항 칸 밀림 0px: 360·390·1280px에서 칸을 고르거나 채워도 아래 칸 위치가 그대로", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  await setup(page, 360);
+  const first = saleApartments[0];
+  const topOf = (key) => row(page, first.id, key).evaluate((element) => Math.round(element.getBoundingClientRect().top + window.scrollY));
+  for (const width of [360, 390, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(PAGE);
+    await page.locator(`[data-lp-pick='${first.id}']`).click();
+
+    const beforePick = await topOf("floor");
+    await row(page, first.id, "violation").locator("label:has(input[value='none'])").click();
+    await expect(page.locator(`[data-lp-form='${first.id}'] .bl-count`)).not.toContainText("위반건축물");
+    expect(await topOf("floor") - beforePick, `${width}px: 위반건축물을 고른 뒤 아래 칸`).toBe(0);
+
+    await page.locator("[data-lp-make]").click();
+    const mark = row(page, first.id, "location").locator("[data-bl-mark]");
+    await expect(mark).toBeVisible();
+    const beforeFill = await topOf("kind");
+    await row(page, first.id, "location").locator("input").fill("대전광역시 동구 가상동 100");
+    await expect(row(page, first.id, "location")).not.toHaveClass(/bl-row--empty/u);
+    await expect(mark, "채운 칸의 안내 글은 보이지 않음(자리만 남김)").toBeHidden();
+    expect(await topOf("kind") - beforeFill, `${width}px: 소재지를 채운 뒤 아래 칸`).toBe(0);
+    expect(await overflowOf(page), `${width}px 가로 넘침`).toBeLessThanOrEqual(0);
+  }
+  assertNoErrors();
+});
