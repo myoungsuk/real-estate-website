@@ -184,6 +184,41 @@ const amountFields = [
       </section>
     </div>
 
+    {/* 영수증(보드 45번 A, 운영자 결정 2026-11-20). 입력값은 이 화면 메모리에만 두고 저장·전송하지 않는다. */}
+    <details class="work-receipt" data-receipt>
+      <summary>영수증 만들기</summary>
+      <div class="work-row">
+        <label class="work-row__label" for="receipt-payer">받는 분(선택)</label>
+        <div class="work-row__control">
+          <input id="receipt-payer" type="text" maxlength="30" autocomplete="off" data-receipt-payer />
+          <small>비우면 그림·종이에는 손으로 적을 빈칸, 글에는 [받는 분]으로 남습니다.</small>
+        </div>
+      </div>
+      <div class="work-row">
+        <label class="work-row__label" for="receipt-issued-on">발급일</label>
+        <div class="work-row__control">
+          <input id="receipt-issued-on" type="date" autocomplete="off" data-receipt-issued-on />
+        </div>
+      </div>
+      <div class="work-row">
+        <label class="work-row__label" for="receipt-property">물건 표시(선택)</label>
+        <div class="work-row__control">
+          <input id="receipt-property" type="text" maxlength="60" autocomplete="off" placeholder="예: 리더스시티5블록 84㎡" data-receipt-property />
+        </div>
+      </div>
+      <p class="work-help">"이 영수증은 세금계산서·현금영수증이 아닙니다." 문구가 늘 붙습니다. 주민등록번호·휴대폰 번호·호수는 넣지 않습니다.</p>
+      <div class="work-receipt__actions">
+        <button class="work-secondary-button" type="button" data-receipt-copy disabled>영수증 글 복사</button>
+        <button class="work-secondary-button" type="button" data-receipt-make disabled>영수증 그림 만들기</button>
+        <a class="work-primary-button" data-receipt-download hidden>그림 저장</a>
+        <button class="work-secondary-button" type="button" data-receipt-print hidden>종이로 뽑기(A4)</button>
+      </div>
+      <p class="admin-form-status" role="status" aria-live="polite" data-receipt-status></p>
+      <textarea class="work-copy-fallback" rows="12" readonly aria-label="복사할 영수증 글" data-receipt-fallback hidden></textarea>
+      <canvas data-receipt-canvas hidden></canvas>
+    </details>
+    <div class="rt-print-sheet" data-receipt-sheet></div>
+
     <WorkLegalBasis ruleIds={legalRules.brokerageFeeRules.map((rule) => rule.id)} />
     <WorkResultBar tool="fee" />
   </div>
@@ -196,6 +231,9 @@ const amountFields = [
       calculateBrokerageFee,
       formatFeeResultText,
     } from "../../../lib/work/brokerage-fee.mjs";
+    import office from "../../../data/office.json";
+    import { renderFeeReceiptCard } from "../../../lib/work-fee-receipt-card";
+    import { buildFeeReceipt } from "../../../lib/work/fee-receipt.mjs";
     import { todayInKorea } from "../../../lib/work/legal-dates.mjs";
     import {
       WorkInputError,
@@ -230,8 +268,51 @@ const amountFields = [
         rent: "월세",
       };
       let latestText = "";
+      let latestCalculation: ReturnType<typeof calculateBrokerageFee> | null = null;
+      // 영수증 칸은 계산 칸(grid) 밖 아래에 있다. 입력값은 이 변수와 칸에만 있고 저장·전송하지 않는다.
+      const receipt = document.querySelector<HTMLDetailsElement>("[data-receipt]");
+      const receiptPayer = document.querySelector<HTMLInputElement>("[data-receipt-payer]");
+      const receiptIssuedOn = document.querySelector<HTMLInputElement>("[data-receipt-issued-on]");
+      const receiptProperty = document.querySelector<HTMLInputElement>("[data-receipt-property]");
+      const receiptCopy = document.querySelector<HTMLButtonElement>("[data-receipt-copy]");
+      const receiptMake = document.querySelector<HTMLButtonElement>("[data-receipt-make]");
+      const receiptDownload = document.querySelector<HTMLAnchorElement>("[data-receipt-download]");
+      const receiptPrint = document.querySelector<HTMLButtonElement>("[data-receipt-print]");
+      const receiptStatus = document.querySelector<HTMLElement>("[data-receipt-status]");
+      const receiptFallback = document.querySelector<HTMLTextAreaElement>("[data-receipt-fallback]");
+      const receiptCanvas = document.querySelector<HTMLCanvasElement>("[data-receipt-canvas]");
+      const receiptSheet = document.querySelector<HTMLElement>("[data-receipt-sheet]");
 
-      if (contractDate && officeRate && agreedRate && vat && message && result && notes && copyButton && copyStatus && copyFallback) {
+      if (
+        contractDate && officeRate && agreedRate && vat && message && result && notes && copyButton && copyStatus && copyFallback
+        && receipt && receiptPayer && receiptIssuedOn && receiptProperty && receiptCopy && receiptMake && receiptDownload
+        && receiptPrint && receiptStatus && receiptFallback && receiptCanvas && receiptSheet
+      ) {
+        // 입력이 바뀌면 만든 그림을 버린다(그림을 만드는 중에 바뀌면 끝난 그림도 버림).
+        let receiptToken = 0;
+        const currentReceipt = () => buildFeeReceipt(latestCalculation, {
+          payer: receiptPayer.value,
+          issuedOn: receiptIssuedOn.value,
+          property: receiptProperty.value,
+        }, office);
+        const setReceiptStatus = (text: string, state: "idle" | "success" | "error") => {
+          receiptStatus.textContent = text;
+          receiptStatus.dataset.state = state;
+        };
+        const refreshReceipt = () => {
+          receiptToken += 1;
+          receiptDownload.hidden = true;
+          receiptDownload.removeAttribute("href");
+          receiptPrint.hidden = true;
+          receiptSheet.replaceChildren();
+          receiptFallback.hidden = true;
+          const built = currentReceipt();
+          receiptCopy.disabled = !built.ok;
+          receiptMake.disabled = !built.ok;
+          if (built.ok) setReceiptStatus("", "idle");
+          else setReceiptStatus(built.error.message, built.error.code === "RESULT_MISSING" ? "idle" : "error");
+        };
+
         const amountInput = (key: AmountKey) => root.querySelector<HTMLInputElement>(`[data-fee-amount="${key}"]`);
         const amountHint = (key: AmountKey) => root.querySelector<HTMLElement>(`[data-fee-hint="${key}"]`);
         const fieldWrap = (key: AmountKey) => root.querySelector<HTMLElement>(`[data-fee-field="${key}"]`);
@@ -259,7 +340,9 @@ const amountFields = [
           message.dataset.state = state;
           result.hidden = true;
           latestText = "";
+          latestCalculation = null;
           copyButton.disabled = true;
+          refreshReceipt();
         };
 
         const updateVisibility = (propertyKind: string, dealType: string) => {
@@ -378,7 +461,9 @@ const amountFields = [
           }));
           result.hidden = false;
           latestText = formatFeeResultText(calculation);
+          latestCalculation = calculation;
           copyButton.disabled = false;
+          refreshReceipt();
         };
 
         const reset = () => {
@@ -396,6 +481,9 @@ const amountFields = [
           officeRate.value = formatRateBp(DEFAULT_OFFICE_OTHER_RATE_BP).replace("%", "");
           agreedRate.value = "";
           vat.checked = DEFAULT_VAT_DISPLAY;
+          receiptPayer.value = "";
+          receiptProperty.value = "";
+          receiptIssuedOn.value = todayInKorea();
           update();
         };
 
@@ -419,6 +507,48 @@ const amountFields = [
             copyStatus.dataset.state = "error";
           }
         });
+        receipt.addEventListener("input", refreshReceipt);
+        receipt.addEventListener("change", refreshReceipt);
+        receiptIssuedOn.addEventListener("focus", () => receiptIssuedOn.scrollIntoView({ block: "nearest" }));
+        receiptCopy.addEventListener("click", async () => {
+          const built = currentReceipt();
+          if (!built.ok) return refreshReceipt();
+          try {
+            await navigator.clipboard.writeText(built.receipt.text);
+            setReceiptStatus("✓ 영수증 글을 복사했습니다.", "success");
+          } catch {
+            receiptFallback.value = built.receipt.text;
+            receiptFallback.hidden = false;
+            receiptFallback.focus();
+            receiptFallback.select();
+            setReceiptStatus("자동 복사가 막혔습니다. 아래 선택된 글을 직접 복사해 주세요.", "error");
+          }
+        });
+        receiptMake.addEventListener("click", async () => {
+          const built = currentReceipt();
+          if (!built.ok) return refreshReceipt();
+          const token = receiptToken;
+          receiptMake.disabled = true;
+          try {
+            const dataUrl = await renderFeeReceiptCard(receiptCanvas, built.receipt);
+            if (token !== receiptToken) return;
+            // 파일 이름에는 받는 분 이름을 넣지 않는다(CLAUDE.md 원본 파일명 규칙).
+            receiptDownload.href = dataUrl;
+            receiptDownload.download = `중개보수-영수증-${receiptIssuedOn.value}.png`;
+            receiptDownload.hidden = false;
+            const printed = document.createElement("img");
+            printed.src = dataUrl;
+            printed.alt = "중개보수 영수증";
+            receiptSheet.replaceChildren(printed);
+            receiptPrint.hidden = false;
+            setReceiptStatus("✓ 그림을 만들었습니다. '그림 저장'으로 내려받거나 '종이로 뽑기(A4)'를 누르세요.", "success");
+          } catch {
+            if (token === receiptToken) setReceiptStatus("그림을 만들지 못했습니다. 다시 눌러 주세요.", "error");
+          } finally {
+            if (token === receiptToken) receiptMake.disabled = false;
+          }
+        });
+        receiptPrint.addEventListener("click", () => window.print());
         window.addEventListener("pageshow", (event) => {
           if (event.persisted) reset();
         });
