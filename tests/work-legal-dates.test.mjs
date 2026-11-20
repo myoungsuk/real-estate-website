@@ -184,3 +184,28 @@ test("날짜 검증: 없는 날짜·형식 오류·지원 시작일 이전·중�
   assert.equal(withPayments.events.find((item) => item.kind === "transactionReport").title, "거래신고 기한(가상단지 101동)");
   assert.match(todayInKorea(new Date("2026-11-15T15:30:00Z")), /^2026-11-16$/u);
 });
+
+test("중도금은 3번까지 넣을 수 있고, 여러 번이면 1차·2차·3차로 나누며 첫 번째 일정 종류는 그대로다(보드 45번 B)", () => {
+  const one = okSchedule(sale({ middlePaymentDates: ["2026-12-01", "", null] }));
+  assert.deepEqual(one.events.filter((item) => item.kind.startsWith("middlePayment")).map((item) => [item.kind, item.label]), [["middlePayment", "중도금"]]);
+  const three = okSchedule(sale({ middlePaymentDates: ["2026-12-01", "2026-12-15", "2027-01-05"], balanceDate: "2027-01-20", propertyLabel: "가상단지" }));
+  assert.deepEqual(
+    three.events.filter((item) => item.kind.startsWith("middlePayment")).map((item) => [item.kind, item.label, item.date, item.title]),
+    [
+      ["middlePayment", "1차 중도금", "2026-12-01", "1차 중도금(가상단지)"],
+      ["middlePayment2", "2차 중도금", "2026-12-15", "2차 중도금(가상단지)"],
+      ["middlePayment3", "3차 중도금", "2027-01-05", "3차 중도금(가상단지)"],
+    ],
+  );
+  assert.equal(schedule(sale({ middlePaymentDates: ["2026-12-01", "2026-12-02", "2026-12-03", "2026-12-04"] })).error.code, "MIDDLE_PAYMENT_TOO_MANY");
+  const reversed = schedule(sale({ middlePaymentDates: ["2026-12-15", "2026-12-01"] }));
+  assert.equal(reversed.error.code, "DATE_ORDER_INVALID");
+  assert.match(reversed.error.message, /2차 중도금일이 1차 중도금일보다 빠릅니다/u);
+  assert.equal(schedule(sale({ middlePaymentDates: ["2026-12-01", "2026-11-10"] })).error.code, "DATE_ORDER_INVALID");
+  const gap = schedule(sale({ middlePaymentDates: ["", "2026-12-15", ""] }));
+  assert.equal(gap.error.code, "MIDDLE_PAYMENT_GAP", "1차를 비우고 2차만 넣으면 막음");
+  assert.match(gap.error.message, /1차 중도금일부터/u);
+  assert.equal(schedule(sale({ middlePaymentDates: ["2026-12-01", "", "2027-01-05"] })).error.code, "MIDDLE_PAYMENT_GAP");
+  // 단계 2처럼 한 칸만 넘기면 전과 같다.
+  assert.deepEqual(kinds(okSchedule(sale({ middlePaymentDate: "2026-12-01" }))), ["contract", "middlePayment", "transactionReport"]);
+});

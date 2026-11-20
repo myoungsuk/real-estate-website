@@ -77,8 +77,17 @@ const ruleIds = [...legalRules.deadlineRules.map((rule) => rule.id), legalRules.
             <label class="work-row__label" for="schedule-middle-date">중도금일(선택)</label>
             <div class="work-row__control">
               <input id="schedule-middle-date" type="date" autocomplete="off" data-schedule-field="middlePaymentDate" />
+              <small>중도금을 나눠 내면 날짜를 넣은 뒤 아래에 2차·3차 칸이 생깁니다.</small>
             </div>
           </div>
+          {[2, 3].map((order) => (
+            <div class="work-row" data-schedule-section={`middle-${order}`} hidden>
+              <label class="work-row__label" for={`schedule-middle-date-${order}`}>{order}차 중도금일(선택)</label>
+              <div class="work-row__control">
+                <input id={`schedule-middle-date-${order}`} type="date" autocomplete="off" data-schedule-field={`middlePaymentDate${order}`} />
+              </div>
+            </div>
+          ))}
           <div class="work-row">
             <label class="work-row__label" for="schedule-balance-date">잔금일(선택)</label>
             <div class="work-row__control">
@@ -383,6 +392,12 @@ const ruleIds = [...legalRules.deadlineRules.map((rule) => rule.id), legalRules.
 
         const update = () => {
           status.textContent = "";
+          // 2·3차 중도금 칸은 앞 칸에 날짜가 있거나 자기 칸에 날짜가 남아 있을 때 보인다(값이 있는 칸은 숨기지 않음).
+          const middleValues = ["middlePaymentDate", "middlePaymentDate2", "middlePaymentDate3"].map((name) => field(name)?.value ?? "");
+          [2, 3].forEach((order) => {
+            const row = section(`middle-${order}`);
+            if (row) row.hidden = !(middleValues[order - 2] || middleValues[order - 1]);
+          });
           const dealKind = checkedValue("schedule-deal-kind");
           const target = checkedValue("schedule-target");
           const isPurchase = ["sale", "supply", "status_sale"].includes(dealKind);
@@ -419,7 +434,7 @@ const ruleIds = [...legalRules.deadlineRules.map((rule) => rule.id), legalRules.
             dealKind,
             target,
             contractDate: field("contractDate")?.value ?? "",
-            middlePaymentDate: field("middlePaymentDate")?.value ?? "",
+            middlePaymentDates: middleValues,
             balanceDate: field("balanceDate")?.value ?? "",
             propertyLabel: field("propertyLabel")?.value ?? "",
             priceWon: priceRead.value,
