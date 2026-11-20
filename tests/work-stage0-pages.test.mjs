@@ -15,11 +15,18 @@ const stage0Files = async () => [
   // 업무 도구 화면을 감싸는 관리자 공용 틀(메뉴·전체 메뉴 창 스크립트)도 같은 규칙을 지킨다.
   "src/layouts/AdminLayout.astro",
   "src/components/admin/AdminMenu.astro",
+  // 업무 도구 화면이 가져다 쓰는 그림·화면 모듈(work-*.ts)도 같은 규칙을 지킨다. 서버를 부르는 곳은 *-client.ts 한 곳씩뿐이라 그것만 뺀다.
+  ...(await listFiles("src/lib", ".ts")).filter((file) => /\/work-[^/]+\.ts$/u.test(file) && !file.endsWith("-client.ts")),
 ];
 
 test("T0-115 단계 0 모듈과 화면 스크립트는 서버 요청·브라우저 저장·주소 변경을 하지 않는다", async () => {
   const files = await stage0Files();
   assert.ok(files.length >= 10, files.join(", "));
+  // 그림 파일(보드 #91 리뷰): 카드 공통 그리기·거래 완료 알림·중개보수 영수증·실거래가 카드가 빠지지 않았는지 이름으로도 본다.
+  for (const file of ["src/lib/work-card-draw.ts", "src/lib/work-done-card.ts", "src/lib/work-fee-receipt-card.ts", "src/lib/work-realprice-card.ts"]) assert.ok(files.includes(file), `${file}: 검사 대상`);
+  // 빠지는 것은 서버 요청 모듈(*-client.ts)뿐이다.
+  const skipped = (await listFiles("src/lib", ".ts")).filter((file) => /\/work-[^/]+\.ts$/u.test(file) && !files.includes(file));
+  assert.deepEqual(skipped, skipped.filter((file) => file.endsWith("-client.ts")), `빠진 업무 모듈: ${skipped.join(", ")}`);
   const forbidden = [
     ["fetch", /\bfetch\s*\(/u],
     ["XMLHttpRequest", /XMLHttpRequest/u],
