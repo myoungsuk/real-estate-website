@@ -39,7 +39,8 @@ export async function openaiRequest(path, { method = "GET", body, timeoutMs } = 
     response = await fetcher(`${OPENAI_API_ROOT}${path}`, {
       method,
       headers: {
-        Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+        // Secret 끝 줄바꿈이 머리줄을 깨면 fetch가 실패해 시도마다 하루 편수·비용만 빠지므로 앞뒤 공백을 지운다.
+        Authorization: `Bearer ${String(env.OPENAI_API_KEY ?? "").trim()}`,
         "Content-Type": "application/json",
         "User-Agent": "leaderscityhappy-work-worker",
       },
@@ -117,6 +118,8 @@ export function readResponseOutput(json) {
     refusal,
     inputTokens: tokens(usage.input_tokens),
     outputTokens: tokens(usage.output_tokens),
+    // 사용량이 없거나 이상하면 0으로 정산하지 않고 예약한 최대 비용을 그대로 남긴다(예산을 적게 세지 않게).
+    usageKnown: Number.isSafeInteger(usage.input_tokens) && usage.input_tokens >= 0 && Number.isSafeInteger(usage.output_tokens) && usage.output_tokens >= 0,
     incompleteReason: typeof json?.incomplete_details?.reason === "string" ? json.incomplete_details.reason.slice(0, 40) : null,
   };
 }

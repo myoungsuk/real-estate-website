@@ -368,7 +368,7 @@ async function pollDraft(context, row) {
     const settle = [];
     if (tokens) {
       const prices = readModelPrices(env, row.model);
-      const actual = prices ? estimateCostMicroUsd(prices, tokens.input, tokens.output) : row.reserved_cost_micro_usd;
+      const actual = prices && tokens.known !== false ? estimateCostMicroUsd(prices, tokens.input, tokens.output) : row.reserved_cost_micro_usd;
       settle.push(settleUsageStatement(db, { draftId: row.id, day: row.usage_day, reservedCostMicroUsd: row.reserved_cost_micro_usd, actualCostMicroUsd: actual, inputTokens: tokens.input, outputTokens: tokens.output }));
       settle.push(db.prepare(`UPDATE blog_drafts SET status = ?2, result_json = ?3, check_json = ?4, error_code = ?5, actual_cost_micro_usd = ?6, input_tokens = ?7, output_tokens = ?8, updated_at = ?9
         WHERE id = ?1 AND status IN ('queued','in_progress') AND actual_cost_micro_usd IS NULL`).bind(row.id, status, resultJson, checkJson, errorCode, actual, tokens.input, tokens.output, at));
@@ -395,7 +395,7 @@ async function pollDraft(context, row) {
   }
   const output = readResponseOutput(json);
   logOpenAi(auditLog, { requestId, model: row.model, effort: row.reasoning_effort, status: output.status, inputTokens: output.inputTokens, outputTokens: output.outputTokens, ms: Date.now() - started });
-  const tokens = { input: output.inputTokens, output: output.outputTokens };
+  const tokens = { input: output.inputTokens, output: output.outputTokens, known: output.usageKnown };
   if (output.status === "queued" || output.status === "in_progress") {
     return output.status !== row.status ? stmtsFor(output.status, {}) : [];
   }

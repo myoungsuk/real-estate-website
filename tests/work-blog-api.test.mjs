@@ -620,3 +620,18 @@ test("buildOpenAiRequest는 설정의 모델·추론 수준·출력 상한만 �
   const body = buildOpenAiRequest({ model: "any-model-name", effort: "high", maxOutputTokens: 1234 }, { kind: "complex" });
   assert.deepEqual([body.model, body.reasoning.effort, body.max_output_tokens, body.store, body.background], ["any-model-name", "high", 1234, false, true]);
 });
+
+test("OpenAI 응답 읽기 보강(TR-11 #87): 사용량이 없으면 usageKnown false(예약 최대 비용을 그대로 남김), Secret 끝 줄바꿈은 지우고 보냄", async () => {
+  const { openaiRequest, readResponseOutput } = await import("../worker/openai-client.mjs");
+  assert.equal(readResponseOutput({ status: "completed", output: [], usage: { input_tokens: 10, output_tokens: 5 } }).usageKnown, true);
+  for (const usage of [undefined, {}, { input_tokens: 10 }, { input_tokens: -1, output_tokens: 5 }, { input_tokens: "10", output_tokens: 5 }]) {
+    assert.equal(readResponseOutput({ status: "completed", output: [], usage }).usageKnown, false, JSON.stringify(usage));
+  }
+  let sent = null;
+  const fetcher = async (url, init) => {
+    sent = init.headers.Authorization;
+    return new Response(JSON.stringify({ id: "resp_x", status: "queued" }), { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+  await openaiRequest("/responses/resp_x", {}, { OPENAI_API_KEY: "sk-test-fake-key\n" }, fetcher);
+  assert.equal(sent, "Bearer sk-test-fake-key");
+});

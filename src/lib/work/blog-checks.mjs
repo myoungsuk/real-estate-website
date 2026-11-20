@@ -37,7 +37,8 @@ const INPUT_KEYS = new Set(["location", "areaM2", "kind", "violation", "totalFlo
 
 // ── 개인정보 형식 ──
 const RRN = /(?<!\d)\d{6}\s*[-.‐-―−]?\s*[1-8]\d{6}(?!\d)/u;
-const PHONE = /(?<!\d)0(?:1[016789]|[2-6]\d{0,1}|70|50\d?)(?:[\s.-]?\d){7,8}(?!\d)/gu;
+// 구분 글자: 공백·점·괄호·하이픈과 줄표(‐ ‑ ‒ – — ― −). "(010)1234-5678"·"010–1234–5678"도 잡는다.
+const PHONE = /(?<!\d)0(?:1[016789]|[2-6]\d{0,1}|70|50\d?)(?:[\s.()\-‐-―−]{0,2}\d){7,8}(?!\d)/gu;
 const EMAIL = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/iu;
 const UNIT = /(?<!\d)\d{1,4}\s*호(?!선|점|기|차|텔)/u;
 const digitsOf = (value) => value.replace(/\D/gu, "");
@@ -199,6 +200,13 @@ export function validateBlogResult(value) {
 }
 
 // ── 글 속 숫자 읽기 ──
+// 읽기 전에 전각 숫자·쉼표·점을 반각으로 바꾸고(㎡ 같은 단위 글자는 그대로 두려고 NFKC 전체는 쓰지 않음),
+// "5천만"·"3천5백만"·"5천 원"의 천·백을 숫자로 푼다. 천·백 바로 뒤에 만·원이 올 때만 푼다("천동" 같은 땅 이름은 그대로).
+export function normalizeNumberText(text) {
+  return String(text ?? "").replace(/[０-９，．]/gu, (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
+    .replace(/(\d+(?:\.\d+)?)천(?:\s*(\d+)백)?(?=\s*(?:만|원))/gu, (_, thousand, hundred) => String(Math.round(Number(thousand) * 1000 + (hundred ? Number(hundred) * 100 : 0))))
+    .replace(/(\d+)백(?=\s*(?:만|원))/gu, (_, hundred) => String(Number(hundred) * 100));
+}
 const NUM = "\\d{1,3}(?:,\\d{3})+|\\d+(?:\\.\\d+)?";
 const toNumber = (text) => Number(String(text).replace(/,/gu, ""));
 // 금액: "2억 6,000만 원"·"2억6000만원"·"2.6억"·"26,000만 원"·"140만 원"·"3억". 원 단위 정수로.
@@ -244,7 +252,8 @@ export function allowedNumbers({ source, inputs = {}, emphasis = "" }) {
   const floors = new Set();
   const dates = new Set();
   const months = new Set();
-  const addText = (text) => {
+  const addText = (raw) => {
+    const text = normalizeNumberText(raw);
     for (const item of extractAllMoney(text)) money.add(item.won);
     for (const item of extractAreas(text)) areas.add(item.m2);
     for (const item of extractFloors(text)) floors.add(item.floor);
@@ -300,9 +309,10 @@ export function checkBlogDraft(draft, { source, inputs = {}, emphasis = "" }) {
   const inputText = [emphasis, source.title, source.facts.summary, ...(source.type === "complex" ? source.facts.items.map((fact) => `${fact.label} ${fact.value}`) : [])].join(" ");
   const blocks = [];
   const warnings = [];
-  const parts = [["title", draft.title], ...draft.paragraphs.map((text, index) => [`p${index + 1}`, text]), ["sns", draft.snsShort]];
+  // 해시태그도 복사하는 글에 들어가므로 같은 숫자 대조를 한다.
+  const parts = [["title", draft.title], ...draft.paragraphs.map((text, index) => [`p${index + 1}`, text]), ["sns", draft.snsShort], ["tags", (draft.hashtags ?? []).join(" ")]];
   for (const [where, raw] of parts) {
-    const text = String(raw ?? "");
+    const text = normalizeNumberText(raw);
     for (const item of extractAllMoney(text)) {
       if (allowed.complex) blocks.push({ kind: "complex_number", text: item.text, where });
       else if (!allowed.money.has(item.won)) blocks.push({ kind: "money", text: item.text, where });

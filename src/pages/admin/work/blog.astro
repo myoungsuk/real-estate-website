@@ -151,11 +151,12 @@ import AdminLayout from "../../../layouts/AdminLayout.astro";
               </div>
             </div>
             <div data-bl-paragraphs></div>
-            <div class="work-row">
+            <div class="work-row bl-para" data-bl-where="tags">
               <label class="work-row__label" for="bl-tags">해시태그</label>
               <div class="work-row__control">
                 <input id="bl-tags" type="text" autocomplete="off" data-bl-tags />
                 <small>띄어쓰기로 나눕니다. 복사할 때 # 을 붙입니다.</small>
+                <small class="bl-para__issue" data-bl-issue hidden></small>
               </div>
             </div>
             <div class="work-row bl-para" data-bl-where="sns">
@@ -1275,7 +1276,7 @@ import AdminLayout from "../../../layouts/AdminLayout.astro";
           const title = titleInput.value;
           const paragraphs = paragraphTexts();
           const view = checkView(current.currentSource
-            ? checkBlogDraft({ title, paragraphs, snsShort: snsInput.value }, { source: current.currentSource, inputs: current.inputs, emphasis: current.emphasisNumbers })
+            ? checkBlogDraft({ title, paragraphs, snsShort: snsInput.value, hashtags: normalizeHashtags(tagsInput.value) }, { source: current.currentSource, inputs: current.inputs, emphasis: current.emphasisNumbers })
             : { blocks: [], warnings: [] });
           const blocks = view.blocks as CheckLine[];
           const warnings = view.warnings as CheckLine[];

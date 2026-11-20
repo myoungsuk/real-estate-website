@@ -162,6 +162,29 @@ test("TK-48 숫자 대조: 입력과 다른 금액·면적·층·날짜는 막�
   assert.deepEqual(complexBlocks, ["complex_number", "complex_number"]);
 });
 
+test("TK-48 숫자 대조 보강(TR-11 #87): 천·백 표기·전각 숫자·해시태그도 대조하고, '천동' 같은 땅 이름은 숫자로 읽지 않음", () => {
+  const inputs = fullAptInputs();
+  const draft = (text, hashtags = []) => ({ title: "제목", paragraphs: [text], hashtags, snsShort: "짧은 글" });
+  const kinds = (text, hashtags) => checkBlogDraft(draft(text, hashtags), { source: APT, inputs }).blocks.map((item) => [item.kind, item.where]);
+  assert.deepEqual(extractAllMoney("보증금 5천만 원"), [], "검사 밖 함수 자체는 그대로(풀기는 검사 앞에서)");
+  assert.deepEqual(kinds("보증금 5천만 원"), [["money", "p1"]], "5천만 원 = 5,000만 원");
+  assert.deepEqual(kinds("1억 5천만 원"), [["money", "p1"]], "1억 5천만 원 = 1억 5,000만 원");
+  assert.deepEqual(kinds("3천5백만 원"), [["money", "p1"]]);
+  assert.deepEqual(kinds("２억 ７,０００만 원"), [["money", "p1"]], "전각 숫자");
+  assert.deepEqual(kinds("２억 ６,０００만 원"), [], "전각이라도 입력과 같으면 통과");
+  assert.deepEqual(kinds("2억 6천만 원"), [], "천 표기라도 입력과 같으면 통과");
+  assert.deepEqual(kinds("전용 84.77㎡ 천동 매물"), [], "천동은 숫자가 아님");
+  assert.deepEqual(kinds("본문", ["#3억대", "#천동"]), [["money", "tags"]], "해시태그 금액");
+  assert.deepEqual(kinds("본문", ["#15층"]), [["floor", "tags"]], "해시태그 층");
+});
+
+test("개인정보 형식 보강(TR-11 #87): 괄호·줄표로 쓴 휴대폰 번호도 잡음", () => {
+  for (const text of ["(010)1234-5678", "010–1234–5678", "010—1234—5678", "010‐1234‐5678"]) {
+    assert.deepEqual(findPersonalPatterns(text), ["phone"], text);
+  }
+  assert.deepEqual(findPersonalPatterns("전용 84.77㎡ 2억 6,000만 원"), []);
+});
+
 test("경고: 평 표기·입력에 없는 생활 편의·역 이름·도보 N분·직선거리·후기·가상 인물·보장 표현(급매·수익형·투자 결정 ④), 입력에 있는 낱말·지역 같은 낱말은 경고하지 않음", () => {
   const draft = (text) => ({ title: "제목", paragraphs: [text], hashtags: [], snsShort: "짧은 글" });
   const warn = (text) => checkBlogDraft(draft(text), { source: APT, inputs: fullAptInputs() }).warnings.map((item) => item.kind);

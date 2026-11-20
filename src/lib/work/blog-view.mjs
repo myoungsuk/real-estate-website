@@ -74,6 +74,7 @@ export function missingText(keys) {
 export function whereLabel(where) {
   if (where === "title") return "제목";
   if (where === "sns") return "SNS 짧은 글";
+  if (where === "tags") return "해시태그";
   const match = String(where).match(/^p(\d+)$/u);
   return match ? `문단 ${match[1]}` : String(where);
 }
