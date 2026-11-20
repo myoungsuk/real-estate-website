@@ -1168,12 +1168,14 @@
 .rt-pick-bar p { flex: 1 1 auto; min-width: 0; margin: 0; color: var(--ds-navy); font-weight: 800; }
 .rt-pick-bar .admin-primary-button,
 .rt-pick-bar .admin-secondary-button { min-height: 44px; padding: 0 16px; text-decoration: none; }
+/* 막대가 보이는 동안 키보드 포커스·본문 끝이 막대 뒤로 숨지 않게 한다. --rt-pick-bar-h는 화면 스크립트가 막대 실제 높이를 재서 넣고(줄이 바뀌어 높아져도 맞음), 못 재면 한 줄 높이 66px로 본다. */
+html:has(.rt-pick-bar:not([hidden])) { scroll-padding-bottom: calc(var(--rt-pick-bar-h, 66px) + 16px); }
 @media (max-width: 979px) {
   .rt-pick-bar { bottom: calc(56px + env(safe-area-inset-bottom)); flex-wrap: nowrap; gap: 8px; }
   .rt-pick-bar .admin-primary-button,
   .rt-pick-bar .admin-secondary-button { flex: 0 0 auto; padding: 0 12px; }
-  /* 막대가 보이는 동안 키보드 포커스·본문 끝이 아래 탭(56px)과 막대(약 66px) 뒤로 숨지 않게 한다(결과 막대와 같은 방법). */
-  html:has(.rt-pick-bar:not([hidden])) { scroll-padding-bottom: calc(130px + env(safe-area-inset-bottom)); }
+  /* 979px 이하는 아래 탭(56px)도 더한다(막대 66px이면 130px, 결과 막대와 같은 방법). */
+  html:has(.rt-pick-bar:not([hidden])) { scroll-padding-bottom: calc(56px + var(--rt-pick-bar-h, 66px) + 8px + env(safe-area-inset-bottom)); }
 }
 
 /* 1221px 이상: 표 */

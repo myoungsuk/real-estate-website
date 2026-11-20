@@ -665,6 +665,52 @@ test("P1-e 목록 고르기: 해제는 못 고름, 최대 6건에서 나머지 �
   assertNoErrors();
 });
 
+// TU-23(TR-11 결과 54절): 980px 이상에서도 Tab으로 옮긴 포커스가 아래 막대 뒤로 숨지 않는다(막대 높이는 화면이 재서 scroll-padding-bottom에 씀).
+// 표의 화면 읽기용 '고르기' 글자도 고르기 칸 안에 머문다(감싸개를 벗어나 문서를 넓히지 않음, PR #80).
+test("P1-e 목록 고르기 980px 이상: Tab 포커스가 아래 막대에 가리지 않고, 화면 읽기용 글자는 고르기 칸 안", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  await setup(page, { width: 1280, trades: () => envelope({ items: firstPage, nextCursor: null, recordHighReady: true, coverage: {}, warnings: [] }) });
+  // 문서는 부드러운 스크롤이라 Tab 직후에는 아직 움직이는 중이다. 움직임 줄이기 환경(바로 스크롤)에서 같은 scroll-padding 규칙을 본다.
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/admin/work/realprice/");
+  await expect(rows(page)).toHaveCount(30);
+  // 위치 기준(offsetParent)이 칸 밖(BODY)이면 표가 감싸개 안에서 밀릴 때 글자가 감싸개에 잘리지 않고 문서를 넓힌다.
+  const inside = await rows(page).first().locator("td.rt-pick").evaluate((td) => {
+    const text = td.querySelector(".admin-review-select span");
+    const cell = td.getBoundingClientRect();
+    const box = text.getBoundingClientRect();
+    return { base: td.contains(text.offsetParent), box: box.left >= cell.left && box.right <= cell.right && box.top >= cell.top && box.bottom <= cell.bottom };
+  });
+  expect(inside, "1280px 표: 화면 읽기용 '고르기' 글자의 위치 기준과 자리가 고르기 칸 안").toEqual({ base: true, box: true });
+  for (const width of [1024, 1280, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await rows(page).nth(0).getByRole("checkbox").check();
+    await rows(page).nth(1).getByRole("checkbox").check();
+    await expect(page.locator("[data-rt-pick-bar]")).toBeVisible();
+    // 브라우저가 포커스를 옮기며 스크롤하는 위치는 행 위치에 따라 달라, 여백이 막대 높이 이상인지도 직접 본다.
+    const room = await page.evaluate(() => ({ padding: parseFloat(getComputedStyle(document.documentElement).scrollPaddingBottom), bar: document.querySelector("[data-rt-pick-bar]").getBoundingClientRect().height }));
+    expect(room.padding, `${width}px: 아래 여백이 막대 높이(${room.bar}px) 이상`).toBeGreaterThanOrEqual(room.bar);
+    await rows(page).nth(1).getByRole("checkbox").focus();
+    const hidden = [];
+    for (let step = 0; step < 40; step += 1) {
+      await page.keyboard.press("Tab");
+      const where = await page.evaluate(() => {
+        const active = document.activeElement;
+        if (!active?.closest("[data-rt-rows]")) return null;
+        const box = active.closest("label")?.getBoundingClientRect() ?? active.getBoundingClientRect();
+        const bar = document.querySelector("[data-rt-pick-bar]").getBoundingClientRect();
+        return { row: [...document.querySelectorAll("[data-rt-rows] > tr")].indexOf(active.closest("tr")), covered: box.bottom > bar.top && box.top < bar.bottom };
+      });
+      if (!where) break;
+      if (where.covered) hidden.push(where.row);
+    }
+    expect(hidden, `${width}px: 막대에 가린 고르기 칸(행 번호)`).toEqual([]);
+    await page.getByRole("button", { name: "비우기" }).click();
+  }
+  assertNoErrors();
+});
+
 test("P1-e TK-39 홍보물 화면: ids로만 다시 읽고 카드 PNG 1080×1350·realprice-YYYYMMDD.png 내려받기, CSP 위반 0, 글 4가지 숫자 = 자료, 복사", async ({ page }) => {
   const assertNoErrors = collectErrors(page);
   const violations = await withProductionCsp(page);

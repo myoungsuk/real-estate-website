@@ -452,6 +452,13 @@ const defaults: Record<string, string | boolean> = DEFAULT_REALPRICE_FILTERS;
         syncPicks();
         live.textContent = "고른 거래를 비웠습니다.";
       });
+      // 막대 실제 높이를 아래 여백(admin.css의 scroll-padding-bottom)에 넘겨, Tab으로 옮긴 포커스가 막대 뒤로 숨지 않게 한다.
+      if (typeof ResizeObserver === "function") {
+        new ResizeObserver(() => {
+          if (pickBar.hidden) return;
+          document.documentElement.style.setProperty("--rt-pick-bar-h", `${Math.ceil(pickBar.getBoundingClientRect().height)}px`);
+        }).observe(pickBar);
+      }
 
       // 서버 값은 모두 textContent로 넣는다(HTML로 해석하지 않음).
       function rowOf(item: Trade, showHigh: boolean) {

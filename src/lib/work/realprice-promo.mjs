@@ -12,7 +12,7 @@ export const PROMO_COMPARE_FROM = "200601"; // REALPRICE_START_MONTHS.sale: 신�
 export const PROMO_PATH = "/admin/work/realprice/promo/";
 
 // 글자 수 상한(2026-11-20 확인): 스레드 글 500자는 Meta Threads API 문서("Text posts are limited to 500 characters", 이모지는 UTF-8 바이트 수로 셈).
-// 인스타그램 캡션 2,200자·해시태그 30개는 Instagram Graph API 미디어 참조의 caption 설명을 옮긴 글과 Meta 변경 기록(캡션 길이·해시태그 수 오류)으로 확인했다(Meta 참조 원문은 직접 열지 못함, 추가 확인 필요).
+// 인스타그램 캡션 2,200자·해시태그 30개는 Meta IG User Media 참조(2026-09-28 갱신)의 caption 설명 "Maximum 2200 characters, 30 hashtags, and 20 @ tags"(2026-11-20 확인).
 // 블로그·카카오톡 1:1 채팅은 이 글 길이에서 걸리는 상한이 없어 두지 않는다. 글에 이모지를 넣지 않아 글자 수는 코드 포인트로 센다.
 export const PROMO_LIMITS = Object.freeze({ threads: 500, instagram: 2200, instagramHashtags: 30 });
 export const PROMO_CARD_SIZE = Object.freeze({ width: 1080, height: 1350 });
