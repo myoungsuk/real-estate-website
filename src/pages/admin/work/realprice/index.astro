@@ -15,6 +15,8 @@ import {
 // 단계 P 실거래가(P1-d, P1-f). 운영자 결정 2026-11-20 13:36:35 D안: 위 상태 한 줄 → 보기 3칸(새 거래·주요 거래·관심 단지) → 찾기칸 →
 // 거르기 단추 6개(기간·평형·금액·신고가만·분양권만·더 보기) → 'n건 보는 중'·켜짐 줄·다 담기 → 목록(거래마다 '담기'). 휴대폰·PC가 같은 순서이고
 // 폭에 따른 모양은 CSS(admin.css '실거래가')가 나눈다. 서버를 부르므로 탭 미리 그리기 prerender 목록에 넣지 않는다.
+// 거래 흐름(보드 63번, 2026-11-20 운영자 "권하는 조합"): 매매 거래마다 12개월 흐름선·직전 거래·최고가 대비(앞선 최고 기준)·최근 3개월 건수.
+// 1221px 이상 표는 칸 3개(흐름 아래 3개월 건수, 거래 종류·표시는 금액 아래, 법정동·준공연도는 단지 아래 작은 줄), 1220px 이하 카드는 '흐름·직전 거래'를 눌러 펼친다. 쪽을 그린 뒤 보이는 매매 ID만 30개씩 한 번에 묻고 페이지 메모리에서 다시 쓴다.
 const settingsHref = "/admin/work/realprice/settings/";
 const mainLead = "대전 동구 아파트 실거래 신고 자료를 10분마다 조금씩 받아 둡니다. 계약일 기준이며, 신고 기한(30일) 때문에 최근 거래는 늘어날 수 있습니다.";
 const criterion = "같은 단지·같은 전용면적에서 계약일이 앞선 매매(해제·직거래 뺌)의 최고가보다 높은 거래";
@@ -217,11 +219,15 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
                 <th scope="col">단지</th>
                 <th scope="col">전용면적·층</th>
                 <th scope="col">금액</th>
-                <th scope="col">거래</th>
-                <th scope="col">표시</th>
+                <th scope="col" class="rt-only-card">거래</th>
+                <th scope="col" class="rt-only-card">표시</th>
+                <th scope="col" class="rt-only-table rt-th-wrap">흐름<wbr />(12개월)</th>
+                <th scope="col" class="rt-only-table rt-th-wrap">직전 거래</th>
+                <th scope="col" class="rt-only-table rt-th-wrap">최고가 대비</th>
                 <th scope="col">계약일</th>
-                <th scope="col">법정동</th>
+                <th scope="col" class="rt-only-card">법정동</th>
                 <th scope="col" class="rt-only-card">새로 들어옴</th>
+                <th scope="col" class="rt-only-card">흐름·직전 거래</th>
                 <th scope="col" class="rt-pick-col">담기</th>
               </tr>
             </thead>
@@ -277,6 +283,7 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
       takeVisible,
     } from "../../../../lib/work/realprice-promo.mjs";
     import { formatKoreanWon } from "../../../../lib/work/work-format.mjs";
+    import { INSIGHT_BUDGET_NOTICE, INSIGHT_ERROR_NOTICE, insightBatches, insightView, isInsightCandidate, sparkGeometry } from "../../../../lib/work/realprice-insight-view.mjs";
 
     interface Trade {
       tradeKey: string;
@@ -286,6 +293,7 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
       aptName: string | null;
       areaM2: number;
       floor: number | null;
+      buildYear: number | null;
       priceWon: number | null;
       depositWon: number | null;
       monthlyRentWon: number | null;
@@ -302,6 +310,12 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
       recordHighReady: boolean;
       warnings: { code: string; level?: string }[];
       major?: { since: string; days: number; top: number };
+    }
+    type Insight = { tradeKey: string; available: boolean; reason?: string; series?: { ym: string; medianWon: number | null; count: number }[] } & Record<string, unknown>;
+    interface InsightsResponse {
+      items: Insight[];
+      missing: string[];
+      warnings: { code: string; level?: string }[];
     }
     interface WatchResponse {
       version: number;
@@ -379,6 +393,10 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
       let controller: AbortController | null = null;
       // 홍보물에 넣을 거래(P1-e): 이 화면 메모리에만 둔다(브라우저 저장 없음). 거르기·보기를 바꿔도 남고, 최대 PROMO_IDS_MAX건.
       const picked = new Map<string, Trade>();
+      // 거래 흐름(보드 63번): 받은 결과를 거래 ID로 이 화면 메모리에만 둔다(브라우저 저장·주소 없음). 거르기·쪽을 바꿔도 같은 ID는 다시 묻지 않는다.
+      const insights = new Map<string, Insight>();
+      let insightSeq = 0;
+      let insightHigh = true;
 
       const show = (element: HTMLElement, visible: boolean) => { element.hidden = !visible; };
       const errorCode = (error: unknown) => (error instanceof WorkApiError ? error.code : null);
@@ -543,6 +561,10 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
         const strong = document.createElement("strong");
         strong.textContent = item.aptName || "단지명 없음";
         name.append(strong);
+        const sub = document.createElement("small");
+        sub.className = "rt-name__sub rt-only-table";
+        sub.textContent = [item.umdName, Number.isInteger(item.buildYear) ? `${item.buildYear}년` : ""].filter(Boolean).join(" · ");
+        name.append(sub);
         const size = cell("rt-size", "전용면적·층");
         size.textContent = sizeText(item);
         const price = cell("rt-price", "금액");
@@ -560,25 +582,197 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
           prev.textContent = `앞선 최고 ${formatKoreanWon(item.prevMaxWon)}`;
           price.append(prev);
         }
-        const kind = cell("rt-kind", "거래");
+        const kind = cell("rt-kind rt-only-card", "거래");
         kind.append(kindLabel(item));
         if (item.dealingGbn === "direct") {
           const direct = document.createElement("small");
           direct.textContent = "직거래";
           kind.append(direct);
         }
-        const flags = cell("rt-flags", "표시");
+        const flags = cell("rt-flags rt-only-card", "표시");
         if (high) flags.append(tag("신고가", "rt-tag--high"));
         if (item.cancelled) flags.append(tag("해제", "rt-tag--cancel"));
         if (item.isNew) flags.append(tag("새로 들어옴", "rt-tag--new rt-only-table"));
         const date = cell("rt-date", "계약일");
         date.textContent = dateText(item.dealDate);
-        const umd = cell("rt-umd", "법정동");
+        const umd = cell("rt-umd rt-only-card", "법정동");
         umd.textContent = item.umdName;
         const fresh = cell("rt-new rt-only-card", "새로 들어옴");
         if (item.isNew) fresh.append(tag("새로 들어옴", "rt-tag--new"));
-        tr.append(name, size, price, kind, flags, date, umd, fresh, pickCell(item));
+        // 1221px 이상 표: 거래 종류·직거래·표시를 금액 아래 작은 줄로(거래 흐름 칸 자리를 내려고, 보드 63번). 카드는 위 칸 그대로.
+        const meta = document.createElement("span");
+        meta.className = "rt-price__meta rt-only-table";
+        meta.append(item.dealingGbn === "direct" ? `${kindLabel(item)} · 직거래` : kindLabel(item));
+        if (high) meta.append(tag("신고가", "rt-mtag rt-mtag--high"));
+        if (item.cancelled) meta.append(tag("해제", "rt-mtag rt-mtag--cancel"));
+        if (item.isNew) meta.append(tag("새로 들어옴", "rt-mtag rt-mtag--new"));
+        price.append(meta);
+        const flow = cell("rt-flow rt-only-table", "흐름(12개월)");
+        const last = cell("rt-last rt-only-table", "직전 거래");
+        const ratio = cell("rt-ratio rt-only-table", "최고가 대비");
+        const fold = cell("rt-flowcell rt-only-card", "흐름·직전 거래");
+        tr.dataset.rtKey = item.tradeKey;
+        tr.append(name, size, price, kind, flags, flow, last, ratio, date, umd, fresh, fold, pickCell(item));
+        fillInsight(tr, item);
         return tr;
+      }
+
+      // ── 거래 흐름(보드 63번) ──
+
+      const SVG_NS = "http://www.w3.org/2000/svg";
+      const srOnly = (text: string) => {
+        const span = document.createElement("span");
+        span.className = "sr-only";
+        span.textContent = text;
+        return span;
+      };
+      const small = (text: string, className = "") => {
+        const element = document.createElement("small");
+        if (className) element.className = className;
+        element.textContent = text;
+        return element;
+      };
+      // 흐름선 그림(화면 읽기 프로그램에는 옆 글자로 알리고 그림은 숨김). 서버 숫자만 좌표로 쓴다.
+      function sparkSvg(series: Insight["series"], prevYm: string | null, width: number, height: number) {
+        const geo = sparkGeometry(series, { width, height, padX: 5, padTop: 5, padBottom: 5, prevYm });
+        if (!geo) return null;
+        const svg = document.createElementNS(SVG_NS, "svg");
+        svg.setAttribute("class", "rt-spark");
+        svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+        svg.setAttribute("width", String(width));
+        svg.setAttribute("height", String(height));
+        svg.setAttribute("aria-hidden", "true");
+        svg.setAttribute("focusable", "false");
+        const shape = (tag: string, attributes: Record<string, string | number>) => {
+          const element = document.createElementNS(SVG_NS, tag);
+          for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, String(value));
+          svg.append(element);
+        };
+        shape("path", { class: "rt-spark__area", d: geo.area });
+        shape("path", { class: "rt-spark__line", d: geo.line });
+        if (geo.prev) shape("circle", { class: "rt-spark__prev", cx: geo.prev.x, cy: geo.prev.y, r: 3.5 });
+        shape("circle", { class: "rt-spark__end", cx: geo.end.x, cy: geo.end.y, r: 4 });
+        return svg;
+      }
+
+      // 표 칸에만 까닭을 쓴다. 카드의 '흐름·직전 거래' 줄은 누를 것이 없으므로 비워 숨기고, 까닭은 목록 위 한 줄(신고가 준비 안내·showInsightNotice)로 알린다.
+      const failNote = (tr: HTMLTableRowElement, reasonText: string) => {
+        tr.querySelector<HTMLElement>(".rt-flow")?.replaceChildren(small(`흐름: ${reasonText}`, "rt-insight-note"));
+        tr.querySelector<HTMLElement>(".rt-flowcell")?.replaceChildren();
+      };
+
+      // 한 줄의 흐름 칸 4개(표)와 펼치기 칸(카드)을 채운다. 결과가 아직 없으면 기다림 표시, 계산하지 않는 거래는 빈 칸 + 화면 읽기용 까닭.
+      function fillInsight(tr: HTMLTableRowElement, item: Trade) {
+        const [flow, last, ratio, fold] = [".rt-flow", ".rt-last", ".rt-ratio", ".rt-flowcell"].map((selector) => tr.querySelector<HTMLElement>(selector) as HTMLElement);
+        if (!flow) return;
+        for (const element of [flow, last, ratio, fold]) element.replaceChildren();
+        flow.classList.remove("is-wait");
+        if (!isInsightCandidate(item)) {
+          flow.append(srOnly("흐름은 매매만 계산"));
+          return;
+        }
+        const insight = insights.get(item.tradeKey);
+        if (!insight) {
+          flow.classList.add("is-wait");
+          flow.append(srOnly("흐름 불러오는 중"));
+          return;
+        }
+        const view = insightView(insight, { high: insightHigh && item.recordHigh === true });
+        if (!view.available) {
+          // 한도·준비 중·불러오지 못함은 뜻을 글자로 보인다(빈 칸·0으로 두지 않음). 매매가 아닌 까닭은 화면 읽기에만.
+          if (["budget", "pending", "error"].includes(String(view.reason))) failNote(tr, String(view.reasonText));
+          else flow.append(srOnly(`흐름: ${view.reasonText}`));
+          return;
+        }
+        const chart = sparkSvg(insight.series, view.prevYm, 72, 34);
+        flow.append(chart ?? small("한 달만 거래", "rt-insight-note"), srOnly(view.chartNote ? String(view.chartNote) : `최근 12개월 가운데 거래 있는 달 ${view.months}개`), small(`3개월 ${view.recentText}`, "rt-flow__count"));
+        if (view.prevPrice) {
+          const won = document.createElement("span");
+          won.className = "rt-last__won";
+          // 표 칸은 '앞선 최고 …만'처럼 '원'을 뺀다(1221px 넓은 글꼴에서 표가 넘치지 않게). 카드 펼침 줄은 '원'까지 쓴다.
+          won.textContent = String(view.prevPrice).replace(/ 원$/u, "");
+          last.append(won, small(String(view.prevSub)));
+        }
+        else last.append(small("직전 거래 없음", "rt-insight-note"));
+        const strong = document.createElement("strong");
+        strong.textContent = String(view.ratioText);
+        ratio.append(strong);
+        if (view.maxText) ratio.append(small(`앞선 최고 ${String(view.maxText).replace(/ 원$/u, "")}`));
+        // 카드: '흐름·직전 거래'를 누르면 흐름선·직전 거래·칸 3개를 펼친다(처음에는 접힘).
+        const details = document.createElement("details");
+        details.className = "rt-flowfold";
+        const summary = document.createElement("summary");
+        summary.textContent = String(view.summary);
+        const box = document.createElement("div");
+        box.className = "rt-flowfold__box";
+        const wide = sparkSvg(insight.series, view.prevYm, 320, 64);
+        wide?.removeAttribute("width");
+        wide?.removeAttribute("height");
+        box.append(wide ?? small(String(view.chartNote), "rt-insight-note"));
+        const prevLine = document.createElement("p");
+        prevLine.className = "rt-flowfold__prev";
+        prevLine.textContent = `${view.prevPrice ? "○ " : ""}${view.prevLine}`;
+        const mini = document.createElement("dl");
+        mini.className = "rt-mini3";
+        for (const [label, value] of [["앞선 최고", view.maxText ? String(view.maxText).replace(/ 원$/u, "") : "없음"], ["최고가 대비", view.ratioText], ["최근 3개월", view.recentText]]) {
+          const group = document.createElement("div");
+          const dt = document.createElement("dt");
+          dt.textContent = String(label);
+          const dd = document.createElement("dd");
+          dd.textContent = String(value);
+          group.append(dt, dd);
+          mini.append(group);
+        }
+        box.append(prevLine, mini, small("같은 단지·같은 전용면적. 흐름선은 월별 가운데 값, 최고·직전은 실제 거래(계약일 기준).", "rt-flowfold__basis"));
+        details.append(summary, box);
+        fold.append(details);
+      }
+
+      function fillInsights() {
+        for (const tr of rows.querySelectorAll<HTMLTableRowElement>("tr[data-rt-key]")) {
+          const item = shown.find((trade) => trade.tradeKey === tr.dataset.rtKey);
+          if (item) fillInsight(tr, item);
+        }
+      }
+
+      // 지금 보이는 매매 가운데 아직 모르는 ID만 30개씩 묻는다. 그사이 목록이 바뀌면 남은 묶음은 묻지 않는다(받은 결과는 남겨 다시 씀).
+      async function loadInsights() {
+        const seq = ++insightSeq;
+        if (shown.some((item) => insights.get(item.tradeKey)?.reason === "budget")) showInsightNotice(INSIGHT_BUDGET_NOTICE);
+        for (const ids of insightBatches(shown, insights)) {
+          if (seq !== insightSeq) return;
+          try {
+            const data = await readWork<InsightsResponse>("/realprice/insights", `ids=${ids.join(",")}`);
+            for (const insight of data.items) insights.set(insight.tradeKey, insight);
+            for (const id of data.missing) insights.set(id, { tradeKey: id, available: false, reason: "error" });
+            if (data.warnings.some((warning) => warning.code === "RT_READ_BUDGET")) showInsightNotice(INSIGHT_BUDGET_NOTICE);
+            fillInsights();
+          } catch (error) {
+            // 하루 끝 상한(429)은 이 화면에서 다시 묻지 않고, 그 밖의 실패는 다음에 목록을 그릴 때 다시 묻는다.
+            if (errorCode(error) === "RT_READ_BUDGET") {
+              for (const id of ids) insights.set(id, { tradeKey: id, available: false, reason: "budget" });
+              showInsightNotice(INSIGHT_BUDGET_NOTICE);
+              fillInsights();
+              continue;
+            }
+            if (seq !== insightSeq) return;
+            for (const id of ids) {
+              const tr = rows.querySelector<HTMLTableRowElement>(`tr[data-rt-key="${CSS.escape(id)}"]`);
+              if (tr) {
+                tr.querySelector(".rt-flow")?.classList.remove("is-wait");
+                failNote(tr, "불러오지 못함");
+              }
+            }
+            showInsightNotice(INSIGHT_ERROR_NOTICE);
+          }
+        }
+      }
+
+      // 흐름 표시를 한도로 껐거나 불러오지 못했을 때 목록 위 안내(신고가 안내가 이미 있으면 그 안내를 그대로 둔다).
+      function showInsightNotice(text: string) {
+        if (!notice.hidden) return;
+        noticeText.textContent = text;
+        notice.hidden = false;
       }
 
       // 목록 이름(새 거래·주요 거래·관심 단지 거래)은 보기 3칸에 이미 보이므로 화면 읽기 프로그램에만 읽힌다(제목은 'n건 보는 중').
@@ -617,7 +811,7 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
 
       function highWaitText(current: Status | null) {
         const through = current?.coveredThrough ? `, 지금 ${monthText(current.coveredThrough)}까지` : "";
-        return `신고가 판정 준비 중(매매 과거 자료 채우는 중${through}). 과거 자료가 빠진 채 표시하면 신고가가 아닌 거래를 신고가로 보일 수 있어 다 채운 뒤 표시합니다.`;
+        return `신고가 판정 준비 중(매매 과거 자료 채우는 중${through}). 과거 자료가 빠진 채 표시하면 신고가가 아닌 거래를 신고가로 보일 수 있어 다 채운 뒤 표시합니다. 흐름·직전 거래도 그때 함께 보입니다.`;
       }
 
       function renderNotice(data: TradesResponse) {
@@ -649,8 +843,10 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
         for (const item of data.items) if (picked.has(item.tradeKey) && !isPromoSelectable(item)) picked.delete(item.tradeKey);
         // '신고가만'은 받은 거래에서 화면이 거른다(서버는 그대로, 2026-11-20 결정). 신고가 판정을 못 하는 때는 0건과 그 까닭을 보인다.
         shown = filters.highOnly ? (showHigh ? items.filter((item) => item.recordHigh === true) : []) : items;
+        insightHigh = showHigh;
         rows.replaceChildren(...shown.map((item) => rowOf(item, showHigh)));
         syncPicks();
+        void loadInsights();
         count.textContent = `${shown.length.toLocaleString("ko-KR")}건`;
         renderOnLine();
         show(tableWrap, shown.length > 0);

@@ -1,10 +1,11 @@
 // TK-53 실측 도구: 실제 규모 가상 실거래 자료(매매 6만·전월세 3만·분양권 1만 행, 한 단지·면적에 600건)를 로컬 D1에 넣고
-// 실거래가 조회(trades·complexes·watch)의 meta.rows_read를 잰다. npm test에는 들어가지 않는다(파일 이름이 .test.mjs가 아님).
+// 실거래가 조회(trades·complexes·watch·insights)의 meta.rows_read를 잰다. npm test에는 들어가지 않는다(파일 이름이 .test.mjs가 아님).
 //   실행: node tests/realprice-read-measure.mjs
 // - wrangler getPlatformProxy의 로컬 D1(miniflare)을 persist: false로 쓴다. 원격 D1·공공데이터포털은 부르지 않는다.
 // - 자료는 모두 가상이다(단지 번호 S000 ~ S149·HEAVY, 법정동 '가상동'). 결과는 JSON으로 화면에만 찍는다.
 import { readFileSync } from "node:fs";
 import { getPlatformProxy } from "wrangler";
+import { readRealpriceInsights } from "../worker/realprice-insights.mjs";
 import { listRealpriceTrades, readRealpriceWatch, searchRealpriceComplexes } from "../worker/realprice-query.mjs";
 import { REALPRICE_KINDS, expectedMonths, seedMonthsStatement } from "../worker/realprice-store.mjs";
 
@@ -105,13 +106,18 @@ async function measure(label, run) {
   return data;
 }
 const query = (text) => new URLSearchParams(text);
-await measure("기본(최근 3개월·30건)", () => listRealpriceTrades(db, query(""), { nowMs: NOW }));
-await measure("kind=sale 36개월", () => listRealpriceTrades(db, query("kind=sale&from=2023-12&to=2026-11"), { nowMs: NOW }));
+const basic = await measure("기본(최근 3개월·30건)", () => listRealpriceTrades(db, query(""), { nowMs: NOW }));
+const sale36 = await measure("kind=sale 36개월", () => listRealpriceTrades(db, query("kind=sale&from=2023-12&to=2026-11"), { nowMs: NOW }));
 const first = await measure("kind=all 36개월 첫 쪽", () => listRealpriceTrades(db, query("kind=all&from=2023-12&to=2026-11"), { nowMs: NOW }));
 await measure("kind=all 36개월 다음 쪽", () => listRealpriceTrades(db, query(`kind=all&from=2023-12&to=2026-11&cursor=${first.nextCursor}`), { nowMs: NOW }));
 await measure("kind=all 36개월 100건", () => listRealpriceTrades(db, query("kind=all&from=2023-12&to=2026-11&limit=100"), { nowMs: NOW }));
 await measure("관심 단지(watch=1, 최근 3개월)", () => listRealpriceTrades(db, query("watch=1"), { nowMs: NOW }));
-await measure("무거운 단지만(apt=HEAVY, 매매 36개월)", () => listRealpriceTrades(db, query("apt=HEAVY&kind=sale&from=2023-12&to=2026-11"), { nowMs: NOW }));
+const heavy = await measure("무거운 단지만(apt=HEAVY, 매매 36개월)", () => listRealpriceTrades(db, query("apt=HEAVY&kind=sale&from=2023-12&to=2026-11"), { nowMs: NOW }));
+// 거래 흐름(보드 63번): 위 쪽에 나온 거래 ID를 한 번에(최대 30개)
+const idsOf = (data) => `ids=${data.items.slice(0, 30).map((item) => item.tradeKey).join(",")}`;
+await measure("거래 흐름(기본 쪽 30건)", () => readRealpriceInsights(db, query(idsOf(basic)), { nowMs: NOW }));
+await measure("거래 흐름(매매 36개월 쪽 30건)", () => readRealpriceInsights(db, query(idsOf(sale36)), { nowMs: NOW }));
+await measure("거래 흐름(무거운 단지 30건)", () => readRealpriceInsights(db, query(idsOf(heavy)), { nowMs: NOW }));
 await measure("단지 찾기(q=리더스)", () => searchRealpriceComplexes(db, query("q=리더스"), { nowMs: NOW }));
 await measure("관심 단지 보기", () => readRealpriceWatch(db));
 await proxy.dispose();
