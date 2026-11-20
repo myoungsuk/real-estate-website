@@ -98,6 +98,7 @@ function emptyDropped() {
 function convertItem(kind, dealYmd, item, cleared) {
   const dealDate = toDealDate(item.dealYear, item.dealMonth, item.dealDay);
   if (!dealDate) return { drop: "invalidDate" };
+  // 조회 API의 달 창(realprice-query.mjs tradeMonthWindows)이 "거래 ID의 달 = 계약일의 달"인 이 규칙에 기댄다. 바꾸면 달 창 조회도 함께 고친다.
   if (dealDate.slice(0, 4) + dealDate.slice(5, 7) !== dealYmd) return { drop: "outOfMonth" };
   const areaX100 = toAreaX100(item.excluUseAr);
   if (areaX100 === null) return { drop: "missingArea" };

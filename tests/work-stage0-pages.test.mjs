@@ -107,7 +107,7 @@ test("관리자 메뉴는 모든 메뉴를 묶음에 한 번씩 넣고, 지금 �
   assert.deepEqual([...groupHrefs].sort(), [...navigationHrefs].sort(), "메뉴 묶음에 빠지거나 두 번 들어간 메뉴가 없음");
   assert.match(layout, /const currentState = \(href: string\): "page" \| "true" \| undefined => \(currentPath === href \? "page" : isCurrentPath\(href\) \? "true" : undefined\);/u);
   assert.match(layout, /<a href=\{item\.href\} aria-current=\{currentState\(item\.href\)\}>/u, "아래 탭은 지금 화면·지금 구역");
-  assert.match(layout, /<a href=\{item\.href\} aria-current=\{currentPath === item\.href \? "page" : undefined\}>/u, "작은 탭은 지금 화면만");
+  assert.match(layout, /<a href=\{item\.href\} aria-current=\{subCurrentState\(currentSection\.href, item\.href\)\}>/u, "작은 탭은 지금 화면, 그 아래 화면(실거래가 설정)에서는 지금 구역");
   assert.match(menu, /aria-current=\{item\.current\}/u);
   assert.match(menu, /aria-current=\{sub\.current\}/u);
   assert.match(styles, /\.admin-menu \[aria-current="page"\] \{[^}]*box-shadow: inset 4px 0 0 var\(--ds-navy\);[^}]*font-weight: 800;/u, "왼쪽 목록·전체 메뉴: 왼쪽 막대 4px + 굵기");

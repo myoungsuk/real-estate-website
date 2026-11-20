@@ -19,6 +19,8 @@ export type AdminIconName =
   | "clock"
   | "shield"
   | "external"
+  | "chart"
+  | "sliders"
   | "chevron-left"
   | "chevron-right";
 
@@ -161,6 +163,20 @@ const { name, size = 24 } = Astro.props;
       <circle cx="12" cy="12" r="8.75" />
       <path d="M9.6 9.6a2.5 2.5 0 0 1 4.85.85c0 1.65-2.45 2.05-2.45 3.8" />
       <path d="M12 17.25h.01" stroke-width="2.6" />
+    </>
+  )}
+  {name === "chart" && (
+    <>
+      <path d="M4 4.5v15h16" />
+      <path d="m7.5 15 3.5-4 3 2.5 5-6" />
+    </>
+  )}
+  {name === "sliders" && (
+    <>
+      <path d="M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1" />
+      <circle cx="15" cy="7" r="2" />
+      <circle cx="9" cy="12" r="2" />
+      <circle cx="17" cy="17" r="2" />
     </>
   )}
   {name === "chevron-left" && <path d="m14.5 6-6 6 6 6" />}

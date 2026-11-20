@@ -1,0 +1,409 @@
+---
+import AdminIcon from "../../../../components/admin/AdminIcon.astro";
+import AdminPageHelp from "../../../../components/admin/AdminPageHelp.astro";
+import complexes from "../../../../data/complexes.json";
+import AdminLayout from "../../../../layouts/AdminLayout.astro";
+
+// 단계 P 실거래가 설정(P1-d): 관심 단지 넣기·빼기(바로 저장), 과거 채우기·최근 실행, 지금 다시 받기.
+// 관심 단지의 홈페이지 단지 연결(complexSlug)은 고르는 칸 없이 받은 값을 그대로 돌려보내고, 지금 빌드의 공개 단지에 없는 값만 비운다(2026-11-19 대장 결정 ①안).
+// 공개 단지 이름·주소 이름(slug)만 data 속성으로 넘긴다(단지 소개 전체를 화면 스크립트에 넣지 않음).
+const publishedComplexes = complexes
+  .filter((complex) => complex.status === "published")
+  .map((complex) => ({ slug: complex.slug, name: complex.name }));
+---
+
+<AdminLayout
+  title="실거래가 설정 | 행복한부동산 관리자"
+  description="실거래가 관심 단지를 고르고 자료 받기 상태를 확인하는 관리자 업무 도구입니다."
+>
+  <div class="work-ui work-doc rt-doc" data-rt-settings data-published-complexes={JSON.stringify(publishedComplexes)}>
+    <header class="work-doc__header">
+      <span class="work-round-icon work-round-icon--title" data-tone="navy">
+        <AdminIcon name="sliders" size={22} />
+      </span>
+      <h1>실거래가 설정</h1>
+      <span class="admin-stage-badge">관리자 전용</span>
+    </header>
+
+    <AdminPageHelp page="/admin/work/realprice/settings/" />
+
+    <a class="admin-text-link rt-back" href="/admin/work/realprice/"><span aria-hidden="true">←</span> 실거래가로 돌아가기</a>
+
+    <p class="rt-boot" role="status" data-rt-boot>설정을 불러오고 있습니다…</p>
+
+    <section class="admin-panel rt-state" aria-labelledby="rt-state-title" data-rt-state hidden>
+      <div class="admin-empty-state">
+        <span aria-hidden="true" data-rt-state-symbol>!</span>
+        <div>
+          <h2 id="rt-state-title" data-rt-state-title></h2>
+          <p data-rt-state-body></p>
+          <button class="admin-secondary-button rt-state__action" type="button" data-rt-state-retry hidden>다시 불러오기</button>
+        </div>
+      </div>
+    </section>
+
+    <div data-rt-main hidden>
+      <section class="admin-panel rt-section" aria-labelledby="rt-watch-title">
+        <div class="admin-panel__heading">
+          <div>
+            <p class="admin-eyebrow">관심 단지</p>
+            <h2 id="rt-watch-title">관심 단지 고르기</h2>
+          </div>
+        </div>
+        <p class="admin-inline-notice rt-notice rt-notice--warn" role="alert" tabindex="-1" data-rt-watch-alert hidden><span aria-hidden="true">!</span><span data-rt-watch-alert-text></span></p>
+        <p class="admin-inline-notice rt-notice admin-inline-notice--ready" role="status" tabindex="-1" data-rt-watch-done hidden><span aria-hidden="true">✓</span><span data-rt-watch-done-text></span></p>
+        <div data-rt-watch-empty hidden>
+          <p class="admin-inline-notice rt-notice"><span aria-hidden="true">i</span><span>관심 단지를 아직 고르지 않았습니다. 국토교통부 단지명은 홈페이지 이름과 표기가 달라 자동으로 맞히지 않습니다. 아래 단추를 누르거나 단지명을 찾아 넣어 주세요.</span></p>
+          <div class="rt-seeds" role="group" aria-labelledby="rt-seeds-title" data-rt-seeds hidden>
+            <h3 class="rt-sub" id="rt-seeds-title">홈페이지 단지 이름으로 찾기</h3>
+            <div class="rt-seeds__buttons" data-rt-seed-buttons></div>
+          </div>
+        </div>
+        <ul class="rt-watch" aria-label="관심 단지 목록" data-rt-watch-list hidden></ul>
+        <p class="rt-watch-count" data-rt-watch-count hidden></p>
+
+        <div class="admin-field rt-search" role="search" aria-label="단지 찾기">
+          <label for="rt-complex-q">단지 찾기(받은 자료에서)</label>
+          <div class="admin-input-action">
+            <input id="rt-complex-q" type="search" maxlength="30" placeholder="단지명 1 ~ 30자" autocomplete="off" enterkeyhint="search" data-rt-query />
+            <button class="admin-secondary-button" type="button" data-rt-search>찾기</button>
+          </div>
+          <small class="rt-search__hint">찾기를 누를 때만 찾습니다(최근 3년 매매 기준).</small>
+        </div>
+        <p class="rt-search__status" role="status" data-rt-search-status></p>
+        <h3 class="rt-sub" id="rt-result-title" data-rt-result-title hidden></h3>
+        <ul class="rt-results" aria-labelledby="rt-result-title" data-rt-results hidden></ul>
+      </section>
+
+      <section class="admin-panel rt-section" aria-labelledby="rt-fetch-title">
+        <div class="admin-panel__heading">
+          <div>
+            <p class="admin-eyebrow">자료 받기 상태</p>
+            <h2 id="rt-fetch-title">과거 채우기와 최근 실행</h2>
+          </div>
+        </div>
+        <p class="admin-inline-notice rt-notice rt-notice--warn" data-rt-problem hidden><span aria-hidden="true">!</span><span data-rt-problem-text></span></p>
+        <div class="rt-backfill rt-backfill--inline" data-rt-bars></div>
+        <dl class="rt-usage">
+          <div><dt>오늘 호출</dt><dd data-rt-usage="calls"></dd></div>
+          <div><dt>오늘 쓰기</dt><dd data-rt-usage="writes"></dd></div>
+          <div><dt>오늘 읽기</dt><dd data-rt-usage="reads"></dd></div>
+          <div><dt>단지 번호를 못 찾은 매매</dt><dd data-rt-usage="unmatched"></dd></div>
+        </dl>
+        <h3 class="rt-sub">최근 실행 10번</h3>
+        <p data-rt-runs-empty hidden>아직 실행 기록이 없습니다.</p>
+        <div class="admin-table-wrap" data-rt-runs-wrap>
+          <table class="admin-table rt-runs">
+            <caption class="sr-only">최근 자료 받기 실행 10번</caption>
+            <thead>
+              <tr>
+                <th scope="col">시작</th>
+                <th scope="col">받은 달 수</th>
+                <th scope="col">호출</th>
+                <th scope="col">새로·바뀜·지움</th>
+                <th scope="col">쓴 행</th>
+                <th scope="col">결과</th>
+              </tr>
+            </thead>
+            <tbody data-rt-runs></tbody>
+          </table>
+        </div>
+        <p class="admin-inline-notice rt-notice admin-inline-notice--ready" role="status" data-rt-refresh-done hidden><span aria-hidden="true">✓</span><span data-rt-refresh-done-text></span></p>
+        <p class="admin-inline-notice rt-notice rt-notice--warn" role="alert" data-rt-refresh-error hidden><span aria-hidden="true">!</span><span data-rt-refresh-error-text></span></p>
+        <div class="rt-refresh">
+          <div>
+            <h3 class="rt-sub">지금 다시 받기</h3>
+            <p>최근 4개월 자료(매매·전월세·분양권)를 다시 받을 차례에 넣습니다. 10분마다 하나씩 받아 약 2시간 안에 끝납니다. 받는 동안 목록은 지금 자료로 볼 수 있습니다.</p>
+          </div>
+          <button class="admin-primary-button" type="button" data-rt-refresh>지금 다시 받기</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    import { getWorkSession, readWork, writeWork, WorkApiError } from "../../../../lib/work-realprice-client";
+    import { renderBackfillBars } from "../../../../lib/work-realprice-dom";
+    import {
+      REALPRICE_VIEW_WATCH_MAX,
+      apiErrorText,
+      cleanComplexQuery,
+      dateText,
+      kstShort,
+      runOutcome,
+      seedWords,
+      statusProblem,
+      usageView,
+      watchPutItems,
+    } from "../../../../lib/work/realprice-view.mjs";
+
+    interface WatchItem { aptSeq: string; displayName: string; complexSlug: string | null }
+    interface WatchResponse { version: number; items: WatchItem[] }
+    interface ComplexResult { aptSeq: string; aptName: string; umdName: string; tradeCount: number; lastDealDate: string; suggestedSlug: string | null }
+    interface Run { startedAt: string; monthsDone: number; apiCalls: number; inserted: number; updated: number; deleted: number; rowsWritten: number; outcome: string; errorCode: string | null }
+
+    const root = document.querySelector<HTMLElement>("[data-rt-settings]");
+    if (root) {
+      const pick = <T extends Element = HTMLElement>(selector: string) => root.querySelector<T>(selector) as T;
+      const published: { slug: string; name: string }[] = JSON.parse(root.dataset.publishedComplexes ?? "[]");
+      const publishedSlugs = published.map((complex) => complex.slug);
+      const boot = pick("[data-rt-boot]");
+      const statePanel = pick("[data-rt-state]");
+      const main = pick("[data-rt-main]");
+      const watchAlert = pick("[data-rt-watch-alert]");
+      const watchDone = pick("[data-rt-watch-done]");
+      const watchEmpty = pick("[data-rt-watch-empty]");
+      const seeds = pick("[data-rt-seeds]");
+      const seedButtons = pick("[data-rt-seed-buttons]");
+      const watchList = pick<HTMLUListElement>("[data-rt-watch-list]");
+      const watchCount = pick("[data-rt-watch-count]");
+      const query = pick<HTMLInputElement>("[data-rt-query]");
+      const searchButton = pick<HTMLButtonElement>("[data-rt-search]");
+      const searchStatus = pick("[data-rt-search-status]");
+      const resultTitle = pick("[data-rt-result-title]");
+      const results = pick<HTMLUListElement>("[data-rt-results]");
+      const refreshButton = pick<HTMLButtonElement>("[data-rt-refresh]");
+
+      let watch: WatchResponse = { version: 0, items: [] };
+      let lastResults: { query: string; items: ComplexResult[] } | null = null;
+      let saving = false;
+      let searchSeq = 0;
+
+      const errorCode = (error: unknown) => (error instanceof WorkApiError ? error.code : null);
+      const show = (element: HTMLElement, visible: boolean) => { element.hidden = !visible; };
+      const button = (text: string, className: string, label?: string) => {
+        const element = document.createElement("button");
+        element.type = "button";
+        element.className = className;
+        element.textContent = text;
+        if (label) element.setAttribute("aria-label", label);
+        return element;
+      };
+      const nameBlock = (title: string, detail: string) => {
+        const box = document.createElement("div");
+        const strong = document.createElement("strong");
+        strong.textContent = title;
+        box.append(strong);
+        if (detail) {
+          const small = document.createElement("small");
+          small.textContent = detail;
+          box.append(small);
+        }
+        return box;
+      };
+      const setNotice = (element: HTMLElement, text: string) => {
+        (element.querySelector("span:last-child") as HTMLElement).textContent = text;
+        element.hidden = !text;
+      };
+
+      function showState(title: string, body: string, { symbol = "!", retry = false } = {}) {
+        boot.hidden = true;
+        pick("[data-rt-state-symbol]").textContent = symbol;
+        pick("[data-rt-state-title]").textContent = title;
+        pick("[data-rt-state-body]").textContent = body;
+        show(pick("[data-rt-state-retry]"), retry);
+        statePanel.hidden = false;
+      }
+
+      // ── 관심 단지 ──
+
+      function renderWatch() {
+        const full = watch.items.length >= REALPRICE_VIEW_WATCH_MAX;
+        watchList.replaceChildren(...watch.items.map((item) => {
+          const li = document.createElement("li");
+          const home = published.find((complex) => complex.slug === item.complexSlug);
+          const remove = button("빼기", "admin-secondary-button rt-remove", `${item.displayName} 관심 단지에서 빼기`);
+          remove.disabled = saving;
+          remove.addEventListener("click", () => void saveWatch({ removeAptSeq: item.aptSeq }, item.displayName));
+          li.append(nameBlock(item.displayName, home ? `홈페이지 단지: ${home.name}` : ""), remove);
+          return li;
+        }));
+        show(watchList, watch.items.length > 0);
+        watchCount.textContent = `${watch.items.length}곳 / 최대 ${REALPRICE_VIEW_WATCH_MAX}곳${full ? " · 더 넣으려면 먼저 하나를 빼 주세요" : ""}`;
+        show(watchCount, watch.items.length > 0);
+        show(watchEmpty, watch.items.length === 0);
+        renderResults();
+      }
+
+      function renderResults() {
+        if (!lastResults) return;
+        const watched = new Set(watch.items.map((item) => item.aptSeq));
+        const full = watch.items.length >= REALPRICE_VIEW_WATCH_MAX;
+        resultTitle.textContent = `“${lastResults.query}” 찾은 단지 ${lastResults.items.length}곳`;
+        results.replaceChildren(...lastResults.items.map((item) => {
+          const li = document.createElement("li");
+          li.className = "rt-result";
+          const detail = `${item.umdName} · 최근 3년 매매 ${item.tradeCount.toLocaleString("ko-KR")}건 · 마지막 계약 ${dateText(item.lastDealDate)}`;
+          li.append(nameBlock(item.aptName, detail));
+          if (watched.has(item.aptSeq)) {
+            const done = document.createElement("span");
+            done.className = "rt-result__done";
+            done.textContent = "관심 단지에 있음";
+            li.append(done);
+          } else {
+            const add = button("넣기", "admin-secondary-button", `${item.aptName} 관심 단지에 넣기`);
+            add.disabled = saving || full;
+            add.addEventListener("click", () => void saveWatch({ add: item }, item.aptName));
+            li.append(add);
+          }
+          return li;
+        }));
+        show(resultTitle, true);
+        show(results, lastResults.items.length > 0);
+      }
+
+      // 넣기·빼기는 바로 저장한다(통째로 바꾸는 PUT, version으로 다른 창과 겹치면 409).
+      async function saveWatch(change: { add?: ComplexResult; removeAptSeq?: string }, name: string) {
+        if (saving) return;
+        saving = true;
+        setNotice(watchAlert, "");
+        setNotice(watchDone, "");
+        for (const control of main.querySelectorAll<HTMLButtonElement>(".rt-remove, .rt-result button")) control.disabled = true;
+        const { items, droppedSlugs } = watchPutItems(watch.items, { add: change.add ?? null, removeAptSeq: change.removeAptSeq ?? null }, publishedSlugs);
+        try {
+          watch = await writeWork<WatchResponse>("/realprice/watch", "PUT", { version: watch.version, items });
+          const dropped = droppedSlugs > 0 ? ` 홈페이지에서 내린 단지 연결 ${droppedSlugs}곳은 비웠습니다.` : "";
+          setNotice(watchDone, `${change.add ? "관심 단지에 넣었습니다" : "관심 단지에서 뺐습니다"}: ${name}.${dropped}`);
+        } catch (error) {
+          const code = errorCode(error);
+          if (code === "VERSION_CONFLICT") {
+            try {
+              watch = await readWork<WatchResponse>("/realprice/watch");
+            } catch {
+              // 다시 읽기가 실패하면 아래 문장만 보인다.
+            }
+          }
+          setNotice(watchAlert, apiErrorText(code));
+        } finally {
+          saving = false;
+          renderWatch();
+          // 누른 단추가 다시 그려져 사라지므로 키보드 위치를 결과 문장으로 옮긴다.
+          (watchAlert.hidden ? watchDone : watchAlert).focus();
+        }
+      }
+
+      // ── 단지 찾기(찾기 단추·Enter·검색어 단추를 누를 때만 부른다) ──
+
+      async function search(value: string) {
+        const text = cleanComplexQuery(value);
+        if (!text) {
+          searchStatus.textContent = "단지명을 1 ~ 30자로 넣어 주세요.";
+          return;
+        }
+        const request = ++searchSeq;
+        searchButton.disabled = true;
+        searchStatus.textContent = "찾는 중입니다…";
+        try {
+          const data = await readWork<{ items: ComplexResult[] }>("/realprice/complexes", new URLSearchParams({ q: text }).toString());
+          if (request !== searchSeq) return;
+          lastResults = { query: text, items: data.items };
+          searchStatus.textContent = data.items.length === 0
+            ? `“${text}”와(과) 이름이 맞는 단지가 없습니다. 최근 3년 안에 매매가 있었던 단지만 찾습니다. 단지명 일부만 넣어 보세요.`
+            : "";
+          renderResults();
+        } catch (error) {
+          if (request !== searchSeq) return;
+          const retryAt = error instanceof WorkApiError ? error.retryAt : null;
+          searchStatus.textContent = apiErrorText(errorCode(error), { retryAt });
+        } finally {
+          if (request === searchSeq) searchButton.disabled = false;
+        }
+      }
+      searchButton.addEventListener("click", () => void search(query.value));
+      query.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" || event.isComposing) return;
+        event.preventDefault();
+        void search(query.value);
+      });
+      for (const word of seedWords(published)) {
+        const seed = button(word, "admin-secondary-button", `${word}(으)로 단지 찾기`);
+        seed.addEventListener("click", () => {
+          query.value = word;
+          void search(word);
+        });
+        seedButtons.append(seed);
+      }
+      show(seeds, seedButtons.childElementCount > 0);
+
+      // ── 자료 받기 상태 ──
+
+      function renderStatus(status: { runs?: Run[] } & Record<string, unknown>) {
+        const problem = statusProblem(status);
+        setNotice(pick("[data-rt-problem]"), problem ? `${problem.stop ? "받기 멈춤" : "확인 필요"} · ${problem.label}. ${problem.message}` : "");
+        renderBackfillBars(pick("[data-rt-bars]"), status);
+        const usage = usageView(status);
+        for (const [key, text] of Object.entries(usage)) pick(`[data-rt-usage="${key}"]`).textContent = text;
+        const runs = (status.runs ?? []).slice(0, 10);
+        pick("[data-rt-runs]").replaceChildren(...runs.map((run) => {
+          const tr = document.createElement("tr");
+          const values: [string, string][] = [
+            ["시작", kstShort(run.startedAt)],
+            ["받은 달 수", String(run.monthsDone)],
+            ["호출", `${run.apiCalls}회`],
+            ["새로·바뀜·지움", `${run.inserted.toLocaleString("ko-KR")} · ${run.updated.toLocaleString("ko-KR")} · ${run.deleted.toLocaleString("ko-KR")}`],
+            ["쓴 행", run.rowsWritten.toLocaleString("ko-KR")],
+          ];
+          for (const [label, text] of values) {
+            const td = document.createElement("td");
+            td.dataset.label = label;
+            td.textContent = text;
+            tr.append(td);
+          }
+          const outcome = runOutcome(run);
+          const td = document.createElement("td");
+          td.dataset.label = "결과";
+          const badge = document.createElement("span");
+          badge.className = `admin-badge admin-badge--${outcome.tone}`;
+          badge.textContent = outcome.text;
+          td.append(badge);
+          tr.append(td);
+          return tr;
+        }));
+        show(pick("[data-rt-runs-wrap]"), runs.length > 0);
+        show(pick("[data-rt-runs-empty]"), runs.length === 0);
+      }
+
+      refreshButton.addEventListener("click", async () => {
+        refreshButton.disabled = true;
+        setNotice(pick("[data-rt-refresh-error]"), "");
+        try {
+          const data = await writeWork<{ queuedMonths: number; estimatedMinutes: number }>("/realprice/refresh", "POST", {});
+          const time = data.estimatedMinutes >= 60 ? `약 ${Math.round(data.estimatedMinutes / 60)}시간` : `약 ${data.estimatedMinutes}분`;
+          setNotice(pick("[data-rt-refresh-done]"), `다시 받기를 차례에 넣었습니다. 최근 자료 ${data.queuedMonths}건(4개월 × 3종류)을 ${time} 안에 모두 다시 받습니다. 그동안 목록은 지금 자료로 볼 수 있습니다.`);
+          refreshButton.textContent = `다시 받는 중(${time})`;
+        } catch (error) {
+          setNotice(pick("[data-rt-refresh-error]"), apiErrorText(errorCode(error)));
+          refreshButton.disabled = false;
+        }
+      });
+
+      // ── 처음 불러오기 ──
+
+      async function start() {
+        statePanel.hidden = true;
+        boot.hidden = false;
+        let status;
+        try {
+          const session = await getWorkSession({ refresh: true });
+          if (!session.realpriceEnabled) throw new WorkApiError("disabled", { code: "REALPRICE_DISABLED" });
+          [watch, status] = await Promise.all([
+            readWork<WatchResponse>("/realprice/watch"),
+            readWork<{ runs?: Run[] } & Record<string, unknown>>("/realprice/status"),
+          ]);
+        } catch (error) {
+          const code = errorCode(error);
+          if (code === "REALPRICE_DISABLED") showState("실거래가 탭이 아직 켜지지 않았습니다", "켜기 값을 등록하면 자료 받기와 설정이 켜집니다. 켜기 값 등록은 개발 담당이 합니다.", { symbol: "–" });
+          else if (code === "REALPRICE_CONFIG_MISSING") showState("실거래가 설정이 빠져 있습니다", "자료를 받는 데 필요한 연결 설정 가운데 빠진 것이 있어 설정을 보일 수 없습니다. 개발 담당에게 '실거래가 설정 누락'이라고 알려 주세요. 받아 둔 자료는 지워지지 않았습니다.");
+          else showState("설정을 불러오지 못했습니다", apiErrorText(code), { retry: code !== "AUTH_REQUIRED" });
+          return;
+        }
+        boot.hidden = true;
+        renderWatch();
+        renderStatus(status);
+        main.hidden = false;
+      }
+      pick("[data-rt-state-retry]").addEventListener("click", () => void start());
+      void start();
+    }
+  </script>
+</AdminLayout>

@@ -18,6 +18,22 @@ export const ADMIN_HELP_FACTS = Object.freeze({
   deploymentDelayMinutes: 10,
   // src/lib/admin-content-client.ts 변환 뒤 사진 크기 한도, worker/github-content.mjs MAX_IMAGE_BYTES
   imageMaxMegabytes: 2,
+  // 실거래가(단계 P): worker/realprice-store.mjs REALPRICE_CRON_MINUTES, wrangler.jsonc crons "*/10 * * * *"
+  realpriceFetchMinutes: 10,
+  // worker/realprice-query.mjs REALPRICE_TRADES_LIMIT_DEFAULT(화면 '30건 더 보기')
+  realpricePageSize: 30,
+  // worker/realprice-query.mjs REALPRICE_WATCH_MAX
+  realpriceWatchMax: 20,
+  // worker/realprice-query.mjs REALPRICE_COMPLEX_SEARCH_MONTHS / 12
+  realpriceSearchYears: 3,
+  // worker/realprice-store.mjs REALPRICE_RECENT_MONTHS
+  realpriceRefreshMonths: 4,
+  // worker/realprice-store.mjs refreshStatements의 estimatedMinutes(4개월 × 3종류 ÷ REALPRICE_MONTHS_PER_RUN × 10분) / 60
+  realpriceRefreshHours: 2,
+  // worker/realprice-query.mjs nextReadBudgetReset(다음 UTC 0시 = 한국 오전 9시)
+  realpriceReadResetTime: "오전 9시",
+  // worker/realprice-query.mjs REALPRICE_NEW_DAYS('새로 들어옴' 표시 기간)
+  realpriceNewDays: 7,
 });
 
 const facts = ADMIN_HELP_FACTS;
@@ -85,6 +101,33 @@ export const ADMIN_PAGE_HELP = Object.freeze({
       "달력에 넣을 일정만 체크하고 '.ics 내려받기'를 누릅니다.",
     ],
     cautions: ["기한은 주말이어도 미루지 않고 공휴일은 계산에 넣지 않으니 직접 확인해 주세요."],
+  },
+  "/admin/work/realprice/": {
+    anchor: "work-realprice",
+    steps: [
+      "'새 거래'는 동구 전체, '관심 단지'는 설정에서 고른 단지의 거래입니다.",
+      "'거르기'에서 기간·거래 종류·금액 등을 고릅니다. 휴대폰은 '펼치기'를 먼저 누릅니다.",
+      "'신고가'는 같은 단지·같은 전용면적의 앞선 매매 최고가보다 비싼 매매입니다.",
+      `더 지난 거래는 '${facts.realpricePageSize}건 더 보기'를 누릅니다.`,
+      "관심 단지·다시 받기는 '설정·다시 받기'에서 합니다. 휴대폰은 위쪽 '자세히'를 먼저 누릅니다.",
+    ],
+    cautions: [
+      "계약일 기준이라 최근 거래는 신고 기한(30일) 동안 늘어날 수 있습니다.",
+      "'해제'는 취소된 거래입니다. 처음 매매 자료를 채우는 동안과 조회가 많은 날에는 신고가 표시가 잠시 꺼집니다.",
+    ],
+  },
+  "/admin/work/realprice/settings/": {
+    anchor: "work-realprice-settings",
+    steps: [
+      "'단지 찾기'에 단지명을 넣고 '찾기'를 누릅니다. 비어 있을 때는 '홈페이지 단지 이름으로 찾기' 단추도 됩니다.",
+      `맞는 단지의 '넣기'를 누르면 바로 저장됩니다(최대 ${facts.realpriceWatchMax}곳). 뺄 때는 '빼기'를 누릅니다.`,
+      "'과거 채우기와 최근 실행'에서 받기 진행과 최근 결과를 봅니다.",
+      `최근 자료가 이상하면 '지금 다시 받기'를 누릅니다. 최근 ${facts.realpriceRefreshMonths}개월을 약 ${facts.realpriceRefreshHours}시간 안에 다시 받습니다.`,
+    ],
+    cautions: [
+      "국토교통부 단지명은 홈페이지와 표기가 달라(예: 블록 → BL) 자동으로 맞히지 않습니다. 법정동·거래 수를 보고 골라 주세요.",
+      "다른 창에서 먼저 바꿨으면 저장하지 않고 새 목록을 보여 드립니다.",
+    ],
   },
   "/admin/listings/": {
     anchor: "listings",
@@ -211,7 +254,7 @@ export const ADMIN_HELP_GUIDE = Object.freeze([
             type: "list",
             items: [
               "'홈': 대시보드로 갑니다.",
-              "'업무 도구': 중개보수 계산·안내 문자·계약 일정",
+              "'업무 도구': 중개보수 계산·안내 문자·계약 일정·실거래가",
               "'매물': 네이버 매물 관리",
               "'전체 메뉴': 모든 메뉴가 담긴 창이 열립니다. 다 보고 나면 '닫기'를 누르거나 바깥 어두운 곳을 누릅니다.",
             ],
@@ -321,6 +364,64 @@ export const ADMIN_HELP_GUIDE = Object.freeze([
             ],
           },
           { type: "text", text: "기한은 주말이어도 미루지 않습니다. 공휴일은 계산에 넣지 않으니 직접 확인해 주세요." },
+        ],
+      },
+      {
+        id: "work-realprice",
+        level: 3,
+        title: "실거래가",
+        screens: ["/admin/work/realprice/"],
+        blocks: [
+          { type: "text", text: `국토교통부가 공개하는 대전 동구 아파트 실거래 신고 자료(매매·전월세·분양권)를 ${facts.realpriceFetchMinutes}분마다 조금씩 받아 둔 것을 봅니다. 업무 도구 안에서만 보이고 홈페이지에는 나오지 않습니다.` },
+          {
+            type: "steps",
+            items: [
+              "휴대폰은 화면 위 작은 탭, 컴퓨터는 왼쪽 메뉴의 '실거래가'를 누릅니다.",
+              "'새 거래'(동구 전체)와 '관심 단지'(설정에서 고른 단지) 가운데 하나를 고릅니다.",
+              "'거르기'에서 기간·거래 종류·전용면적·금액(전월세는 보증금)·법정동을 고릅니다. '해제 빼기'는 처음부터 켜져 있고, '직거래 빼기'는 필요할 때 켭니다.",
+              `목록은 계약일 최근순입니다. 더 지난 거래는 '${facts.realpricePageSize}건 더 보기'를 누릅니다.`,
+            ],
+          },
+          {
+            type: "table",
+            head: ["표시", "뜻"],
+            rows: [
+              ["신고가", "같은 단지·같은 전용면적에서 계약일이 앞선 매매(해제·직거래 뺌)의 최고가보다 비싸게 거래된 매매"],
+              ["해제", "계약이 취소된 거래. 신고가 판정에 쓰지 않고 금액에 줄을 긋습니다"],
+              ["새로 들어옴", `최근 ${facts.realpriceNewDays}일 안에 새로 받은 거래(처음 자료 채우기로 들어온 과거 거래는 빼고)`],
+              ["직거래", "중개사무소를 거치지 않고 신고된 거래"],
+            ],
+          },
+          { type: "note", title: "신고가 표시가 안 보일 때", text: `처음 매매 자료를 다 채울 때까지와 조회가 많은 날에는 신고가 표시를 잠시 끕니다. 조회가 많은 날은 다음 날 ${facts.realpriceReadResetTime}에 다시 켜집니다. 목록은 그대로 볼 수 있습니다.` },
+          { type: "text", text: "계약일 기준이라 신고 기한(30일) 안의 최근 거래는 나중에 늘어날 수 있습니다. 위쪽 상태 줄에서 마지막으로 받은 시각을 확인하세요." },
+        ],
+      },
+      {
+        id: "work-realprice-settings",
+        level: 3,
+        title: "실거래가 설정",
+        screens: ["/admin/work/realprice/settings/", "/admin/work/realprice/"],
+        blocks: [
+          { type: "heading", text: "관심 단지 고르기" },
+          {
+            type: "steps",
+            items: [
+              "'실거래가' 화면의 '설정·다시 받기'를 누릅니다(휴대폰은 위쪽 '자세히'를 먼저 누름).",
+              `'단지 찾기'에 단지명 일부를 넣고 '찾기'를 누릅니다. 최근 ${facts.realpriceSearchYears}년 안에 매매가 있었던 동구 단지가 거래 많은 순으로 나옵니다. 관심 단지가 비어 있으면 '홈페이지 단지 이름으로 찾기' 아래 단추로도 찾을 수 있습니다.`,
+              `법정동과 거래 수를 보고 맞는 단지의 '넣기'를 누릅니다. 바로 저장되고 최대 ${facts.realpriceWatchMax}곳까지 넣을 수 있습니다.`,
+              "뺄 단지는 '빼기'를 누릅니다. 이것도 바로 저장됩니다.",
+            ],
+          },
+          { type: "note", title: "단지 이름이 다를 수 있습니다", text: "국토교통부 자료는 단지 이름을 홈페이지와 다르게 적습니다(예: “4블록” 대신 “4BL”, “SK뷰” 대신 “SKVIEW”). 그래서 자동으로 맞히지 않고 직접 고르게 했습니다." },
+          { type: "heading", text: "자료 받기 상태와 다시 받기" },
+          {
+            type: "list",
+            items: [
+              "'과거 채우기와 최근 실행'에서 매매·분양권·전월세의 과거 자료 채우기 진행과 최근 실행 10번 결과를 봅니다.",
+              `최근 자료가 이상하거나 빠진 것 같으면 '지금 다시 받기'를 누릅니다. 최근 ${facts.realpriceRefreshMonths}개월 자료(3종류)를 약 ${facts.realpriceRefreshHours}시간 안에 다시 받고, 그동안 목록은 지금 자료로 볼 수 있습니다.`,
+              "'받기 멈춤'이 보이면 함께 나온 할 일(예: 인증키 연장)을 하거나 홈페이지 담당자에게 화면을 캡처해 보내 주세요.",
+            ],
+          },
         ],
       },
       {

@@ -54,6 +54,7 @@ const navigationSubItems: Record<string, { href: string; label: string }[]> = {
     { href: "/admin/work/fee/", label: "중개보수 계산" },
     { href: "/admin/work/messages/", label: "안내 문자" },
     { href: "/admin/work/schedule/", label: "계약 일정" },
+    { href: "/admin/work/realprice/", label: "실거래가" },
   ],
   "/admin/listings/": [
     { href: "/admin/listings/", label: "매물 현황" },
@@ -75,6 +76,9 @@ const isCurrentPath = (href: string) =>
 const currentState = (href: string): "page" | "true" | undefined => (currentPath === href ? "page" : isCurrentPath(href) ? "true" : undefined);
 const currentSection = navigation.find((item) => isCurrentPath(item.href));
 const currentSubItems = currentSection ? navigationSubItems[currentSection.href] : undefined;
+// 아래 단계: 지금 화면이면 "page", 지금 화면이 그 아래 단계의 더 아래 화면이면 "true"(예: 실거래가 설정 → 실거래가). 구역 첫 주소(업무 도구 처음 등)는 앞부분이 늘 같으므로 "true"로 보지 않는다.
+const subCurrentState = (sectionHref: string, href: string): "page" | "true" | undefined =>
+  currentPath === href ? "page" : href !== sectionHref && currentPath.startsWith(href) ? "true" : undefined;
 
 const menuGroups = navigationGroups.map((group) => ({
   label: group.label,
@@ -88,7 +92,7 @@ const menuGroups = navigationGroups.map((group) => ({
       // 아래 단계가 있는 메뉴는 아래 단계 쪽에 "page"를 두고, 위 메뉴는 지금 구역("true")만 알린다.
       current: subItems ? (isCurrentPath(href) ? ("true" as const) : undefined) : currentState(href),
       sub: subItems && isCurrentPath(href)
-        ? subItems.map((sub) => ({ ...sub, current: currentPath === sub.href ? ("page" as const) : undefined }))
+        ? subItems.map((sub) => ({ ...sub, current: subCurrentState(href, sub.href) }))
         : undefined,
     };
   }),
@@ -168,7 +172,7 @@ const speculationRules = {
             <ul>
               {currentSubItems.map((item) => (
                 <li>
-                  <a href={item.href} aria-current={currentPath === item.href ? "page" : undefined}>{item.label}</a>
+                  <a href={item.href} aria-current={subCurrentState(currentSection.href, item.href)}>{item.label}</a>
                 </li>
               ))}
             </ul>
@@ -251,6 +255,15 @@ const speculationRules = {
           else if (box.right > bounds.right - gap) delta = Math.min(box.right - bounds.right + gap, box.left - bounds.left - gap);
           if (delta !== 0) strip.scrollBy({ left: delta, behavior: stripMotion.matches ? "auto" : "smooth" });
         });
+        // 처음 열 때 지금 화면의 작은 탭이 줄 오른쪽 밖으로 잘리면 그 줄만 가로로 옮겨 둔다(업무 도구 다섯째 탭 '실거래가'는 360px에서 잘림, TK-37).
+        for (const strip of document.querySelectorAll<HTMLElement>(strips)) {
+          const current = strip.querySelector<HTMLElement>("[aria-current]");
+          if (!current || strip.scrollWidth <= strip.clientWidth) continue;
+          const gap = 16;
+          const bounds = strip.getBoundingClientRect();
+          const box = current.getBoundingClientRect();
+          if (box.right > bounds.right - gap) strip.scrollLeft += Math.min(box.right - bounds.right + gap, box.left - bounds.left - gap);
+        }
       }
     </script>
   </body>
