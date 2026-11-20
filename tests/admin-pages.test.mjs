@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { access, readFile } from "node:fs/promises";
+import { access, readFile, readdir } from "node:fs/promises";
 import test from "node:test";
 
 const readSource = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
@@ -332,6 +332,18 @@ test("관리자 편집 화면은 'admin-write-ready' 신호 대신 공유 세션
   const listings = await readSource("src/pages/admin/listings/index.astro");
   assert.doesNotMatch(listings, /addEventListener\("admin-write-ready"/u, "매물 목록에는 AdminWriteGate가 없으므로 신호를 기다리지 않음");
   assert.match(listings, /void getAdminSession\(\)\.then\(\(session\) => \{\s*reviewWriteEnabled = session\.writeEnabled;/u, "매물 목록은 세션 결과를 직접 기다려 확인 완료 단추를 켬(신호 순서와 무관)");
+});
+
+test("관리 화면·부품 어디에도 'admin-write-ready' 신호만 기다리는 코드가 다시 생기지 않는다", async () => {
+  const found = [];
+  for (const dir of ["src/pages/admin", "src/components/admin"]) {
+    for (const name of await readdir(new URL(`../${dir}/`, import.meta.url), { recursive: true })) {
+      if (!/\.(astro|ts|mjs|js)$/u.test(name)) continue;
+      const path = `${dir}/${name.replaceAll("\\", "/")}`;
+      if (/addEventListener\(\s*["']admin-write-ready["']/u.test(await readSource(path))) found.push(path);
+    }
+  }
+  assert.deepEqual(found, [], "신호는 세션보다 늦게 붙으면 놓치므로 getAdminSession() 공유 Promise를 기다림");
 });
 
 test("네이버 매물 관리 화면은 검색·유형·재확인 필터와 기준 미설정 안전 상태를 제공한다", async () => {
