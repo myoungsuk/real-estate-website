@@ -10,6 +10,33 @@ const PRODUCTION_CSP = /^\s*Content-Security-Policy: (.+)$/mu.exec(readFileSync(
 const naver = JSON.parse(readFileSync(new URL("../src/data/naver-listings.json", import.meta.url), "utf8"));
 const pngSize = (bytes) => ({ width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20), signature: bytes.subarray(1, 4).toString("ascii") });
 const overflowOf = (page) => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+// 보이는 명시사항 선택 단추(.bl-seg)마다 글자 노드가 놓인 줄 수를 세어 두 줄 이상인 단추 이름을 돌려준다.
+// 좁은 폭에서 '다세대주택'·'위반건축물'이 두 줄로 꺾이면 단추가 높아져 아래 칸이 밀린다.
+const twoLineChoices = (page) => page.evaluate(() => [...document.querySelectorAll(".bl-seg .work-choice")].filter((choice) => choice.offsetParent).flatMap((choice) => {
+  const walker = document.createTreeWalker(choice, NodeFilter.SHOW_TEXT);
+  const tops = new Set();
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    if (!node.textContent.trim()) continue;
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    for (const rect of range.getClientRects()) tops.add(Math.round(rect.top));
+  }
+  return tops.size > 1 ? [`${choice.textContent.trim()}(${choice.querySelector("input")?.checked ? "고름" : "안 고름"})`] : [];
+}));
+// 고르기 전에 한 번, 보이는 단추를 하나씩 고를 때마다 한 번 잰다. 누른 단추 이름을 돌려준다.
+async function expectOneLineChoices(page, label) {
+  expect(await twoLineChoices(page), `${label}: 고르기 전 두 줄 단추`).toEqual([]);
+  const choices = page.locator(".bl-seg .work-choice:visible");
+  const names = [];
+  for (let index = 0; index < await choices.count(); index++) {
+    const choice = choices.nth(index);
+    names.push((await choice.innerText()).trim());
+    await choice.click();
+    expect(await twoLineChoices(page), `${label}: '${names.at(-1)}'을 고른 뒤 두 줄 단추`).toEqual([]);
+  }
+  expect(names, `${label}: 긴 단추도 눌러 봄`).toEqual(expect.arrayContaining(["다세대주택", "위반건축물"]));
+  return names;
+}
 // 매매 아파트(층 숫자가 있는 것) 4건, 월세 아파트 1건, 분양권 1건을 공개 목록에서 고른다.
 const saleApartments = naver.items.filter((item) => item.tradeType === "sale" && item.propertyType === "아파트" && /^\d+\/\d+층$/u.test(item.floorLabel ?? ""));
 const rentApartment = naver.items.find((item) => item.tradeType !== "sale" && item.propertyType === "아파트");
@@ -192,7 +219,7 @@ test("매물 비교표 1280px: 3건까지 담고 4건째는 잠금, 빼기, list
 
 // 칸을 고르거나 채울 때 그 아래 칸이 움직이지 않는다(보드 후보, 2026-11-21 측정: 고치기 전 26 ~ 28px 올라감).
 // ① '위반건축물·미등기 여부'를 고르면 위 '빈 칸·고칠 칸' 줄이 줄어듦 ② 빈 칸 표시가 켜진 뒤 소재지를 채우면 그 칸 안내 글이 사라짐.
-test("명시사항 칸 밀림 0px: 360·390·1280px에서 칸을 고르거나 채워도 아래 칸 위치가 그대로", async ({ page }) => {
+test("명시사항 칸 밀림 0px: 360·390·1280px에서 칸을 고르거나 채워도 아래 칸 위치가 그대로, 선택 단추 글자는 늘 한 줄", async ({ page }) => {
   const assertNoErrors = collectErrors(page);
   await setup(page, 360);
   const first = saleApartments[0];
@@ -216,6 +243,7 @@ test("명시사항 칸 밀림 0px: 360·390·1280px에서 칸을 고르거나 �
     await expect(mark, "채운 칸의 안내 글은 보이지 않음(자리만 남김)").toBeHidden();
     expect(await topOf("kind") - beforeFill, `${width}px: 소재지를 채운 뒤 아래 칸`).toBe(0);
     expect(await overflowOf(page), `${width}px 가로 넘침`).toBeLessThanOrEqual(0);
+    await expectOneLineChoices(page, `${width}px`);
   }
   assertNoErrors();
 });

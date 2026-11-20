@@ -1601,12 +1601,12 @@ html:has(.rt-pick-bar:not([hidden])) { scroll-padding-bottom: calc(var(--rt-pick
 .bl-empty-mark[data-bl-held] { visibility: hidden; }
 .work-ui .bl-seg[data-cols="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .work-ui .bl-seg[data-cols="3"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-/* 고르면 붙는 "✓" 때문에 좁은 폭(360px)에서 '✓ 해당 없음'이 두 줄로 늘어 아래 칸이 밀리지 않게:
-   고르지 않은 칸에도 보이지 않는 "✓" 자리를 두고(고르면 보이기만 함), 좌우 안쪽 여백은 실거래가 보기 3칸과 같은 6px로 줄인다. */
+/* 고르면 붙는 "✓"가 글자 폭을 차지하면 좁은 폭(360px)에서 '✓ 다세대주택'이 두 줄로 늘어 아래 칸이 밀린다.
+   "✓"는 글자 흐름에서 빼 단추 왼쪽 위 빈 곳(한 줄 글자 위 약 13px)에 작게(10px) 두고, 글자는 늘 가운데·한 줄로 둔다.
+   좌우 안쪽 여백은 실거래가 보기 3칸과 같은 6px. */
 .work-ui .bl-seg .work-choice { padding-inline: 6px; }
 @supports selector(:has(*)) {
-  .work-ui .bl-seg .work-choice::before { content: "✓"; font-weight: 900; visibility: hidden; }
-  .work-ui .bl-seg .work-choice:has(input:checked)::before { visibility: visible; }
+  .work-ui .bl-seg .work-choice:has(input:checked)::before { position: absolute; top: 1px; left: 3px; font-size: 0.625rem; line-height: 1; }
 }
 .work-ui .bl-seg[data-cols="4"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .bl-fee-items { grid-template-columns: repeat(2, minmax(0, 1fr)); }
