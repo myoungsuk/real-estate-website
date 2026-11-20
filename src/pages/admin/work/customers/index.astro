@@ -1,0 +1,337 @@
+---
+import AdminIcon from "../../../../components/admin/AdminIcon.astro";
+import AdminPageHelp from "../../../../components/admin/AdminPageHelp.astro";
+import WorkCustomerFields from "../../../../components/admin/WorkCustomerFields.astro";
+import AdminLayout from "../../../../layouts/AdminLayout.astro";
+import { CUSTOMER_QUERY_MAX, CUSTOMER_STATUS_LABELS, CUSTOMER_STATUS_ORDER } from "../../../../lib/work/customers-view.mjs";
+
+// 손님 목록(단계 2, 사용자 선택 2026-11-21 02:26:01 "A 한 열 카드", 메모 창고는 "손님 화면 안 링크로만").
+// - 서버 요청은 work-customers-client.ts 한 곳. 업무 세션이 꺼져 있으면(enabled:false) 손님 자료를 부르지 않는다.
+// - 서버를 부르므로 탭 미리 그리기 prerender 목록에 넣지 않는다(AdminLayout prerenderPages).
+// - 찾는 말·상태는 이 화면 메모리에만 둔다(주소·브라우저 저장소에 넣지 않음). 손님 카드 주소에는 무작위 ID만 들어간다.
+const statusLabels = CUSTOMER_STATUS_LABELS as Record<string, string>;
+---
+
+<AdminLayout
+  title="손님 | 행복한부동산 관리자"
+  description="손님 이름·찾는 조건·마지막 연락을 한 열 카드로 보고 찾는 관리자 업무 도구입니다."
+>
+  <div class="work-ui work-doc cu-doc" data-cu-list-page>
+    <header class="work-doc__header">
+      <span class="work-round-icon work-round-icon--title" data-tone="navy">
+        <AdminIcon name="person" size={22} />
+      </span>
+      <h1>손님</h1>
+      <span class="admin-stage-badge">서버에 저장 · 관리자만</span>
+    </header>
+    <AdminPageHelp page="/admin/work/customers/" />
+    <p class="cu-links"><a class="admin-text-link" href="/admin/work/notes/">메모 창고 <span aria-hidden="true">→</span></a></p>
+
+    <p class="rt-boot cu-boot" role="status" data-cu-boot>손님 목록을 불러오고 있습니다…</p>
+    <section class="admin-panel rt-state cu-state" aria-labelledby="cu-state-title" data-cu-state hidden>
+      <div class="admin-empty-state">
+        <span aria-hidden="true" data-cu-state-symbol>!</span>
+        <div>
+          <h2 id="cu-state-title" data-cu-state-title></h2>
+          <p data-cu-state-body></p>
+          <button class="work-secondary-button cu-state__go" type="button" data-cu-state-retry hidden>다시 불러오기</button>
+          <a class="admin-text-link" href="/admin/work/" data-cu-state-home hidden>업무 도구 처음으로</a>
+        </div>
+      </div>
+    </section>
+
+    <div data-cu-main hidden>
+      <div class="cu-top">
+        <div class="rt-find" role="search" aria-label="손님 찾기">
+          <label class="sr-only" for="cu-q">이름·찾는 조건·전화번호</label>
+          <input id="cu-q" type="search" maxlength={CUSTOMER_QUERY_MAX} placeholder="이름·찾는 조건·전화번호" enterkeyhint="search" autocomplete="off" data-cu-q />
+          <button class="rt-find__go" type="button" data-cu-q-go>찾기</button>
+        </div>
+        <button class="work-primary-button cu-new" type="button" aria-expanded="false" aria-controls="cu-new-panel" data-cu-new>
+          <AdminIcon name="person" size={20} /><span>새 손님</span>
+        </button>
+      </div>
+
+      <section class="cu-form" id="cu-new-panel" aria-labelledby="cu-new-title" data-cu-new-panel hidden>
+        <h2 id="cu-new-title" class="cu-block__title">새 손님</h2>
+        <WorkCustomerFields idPrefix="cu-new" />
+        <div class="cu-actions">
+          <button class="work-primary-button cu-save" type="button" data-cu-new-save>손님 저장</button>
+          <button class="work-secondary-button" type="button" data-cu-new-cancel>그만두기</button>
+        </div>
+        <p class="admin-form-status" role="status" aria-live="polite" data-cu-new-status></p>
+      </section>
+      <p class="cu-done" role="status" aria-live="polite" data-cu-done hidden><span data-cu-done-text></span> <a class="admin-text-link" href="#" data-cu-done-link>손님 카드 열기</a></p>
+
+      <div class="rt-chips cu-chips" role="group" aria-label="상태로 거르기">
+        <button class="rt-chip" type="button" aria-pressed="true" data-cu-filter="">전체</button>
+        {CUSTOMER_STATUS_ORDER.map((status: string) => (
+          <button class="rt-chip" type="button" aria-pressed="false" data-cu-filter={status}>{statusLabels[status]}</button>
+        ))}
+      </div>
+
+      <section class="cu-list" aria-labelledby="cu-count">
+        <div class="rt-strip cu-strip">
+          <div class="rt-strip__text"><h2 id="cu-count" data-cu-count>손님</h2></div>
+          <button class="rt-strip__clear" type="button" data-cu-clear hidden>찾기·거르기 지우기</button>
+        </div>
+        <ul class="cu-cards" data-cu-cards></ul>
+        <section class="admin-panel rt-state cu-state" aria-labelledby="cu-empty-title" data-cu-empty hidden>
+          <div class="admin-empty-state">
+            <span aria-hidden="true">0</span>
+            <div>
+              <h2 id="cu-empty-title" data-cu-empty-title></h2>
+              <p data-cu-empty-body></p>
+              <button class="work-primary-button cu-state__go" type="button" data-cu-empty-new hidden>새 손님</button>
+              <button class="work-secondary-button cu-state__go" type="button" data-cu-empty-clear hidden>찾기·거르기 지우기</button>
+            </div>
+          </div>
+        </section>
+        <div class="cu-more-line">
+          <button class="work-secondary-button cu-more" type="button" data-cu-more hidden>20명 더 보기</button>
+          <p class="admin-form-status" role="status" aria-live="polite" data-cu-list-status></p>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    import { WorkApiError, createCustomer, getCustomerSession, listCustomers, type Customer } from "../../../../lib/work-customers-client";
+    import { customerCard, fillFields, readFields, setStatus, showFieldErrors } from "../../../../lib/work-customers-dom";
+    import { todayInKorea } from "../../../../lib/work/legal-dates.mjs";
+    import { checkCustomerInput, cleanQuery, customerCountText, customerErrorText, customerHref, customerListQuery, isRetryable } from "../../../../lib/work/customers-view.mjs";
+
+    const root = document.querySelector<HTMLElement>("[data-cu-list-page]");
+    if (root) {
+      const pick = <T extends HTMLElement>(selector: string) => {
+        const found = root.querySelector<T>(selector);
+        if (!found) throw new Error(`손님 목록 화면 칸이 없습니다: ${selector}`);
+        return found;
+      };
+      const boot = pick("[data-cu-boot]");
+      const statePanel = pick("[data-cu-state]");
+      const main = pick("[data-cu-main]");
+      const query = pick<HTMLInputElement>("[data-cu-q]");
+      const newButton = pick<HTMLButtonElement>("[data-cu-new]");
+      const newPanel = pick("[data-cu-new-panel]");
+      const newSave = pick<HTMLButtonElement>("[data-cu-new-save]");
+      const newStatus = pick("[data-cu-new-status]");
+      const done = pick("[data-cu-done]");
+      const doneLink = pick<HTMLAnchorElement>("[data-cu-done-link]");
+      const filters = [...root.querySelectorAll<HTMLButtonElement>("[data-cu-filter]")];
+      const count = pick("[data-cu-count]");
+      const clear = pick<HTMLButtonElement>("[data-cu-clear]");
+      const cards = pick("[data-cu-cards]");
+      const empty = pick("[data-cu-empty]");
+      const more = pick<HTMLButtonElement>("[data-cu-more]");
+      const listStatus = pick("[data-cu-list-status]");
+
+      let items: Customer[] = [];
+      let cursor: string | null = null;
+      let applied = { q: "", status: "" };
+      let loadToken = 0;
+      let today = todayInKorea();
+      const errorCode = (error: unknown) => (error instanceof WorkApiError ? error.code : null);
+
+      function showState(title: string, body: string, { symbol = "!", retry = false, home = false } = {}) {
+        boot.hidden = true;
+        main.hidden = true;
+        pick("[data-cu-state-symbol]").textContent = symbol;
+        pick("[data-cu-state-title]").textContent = title;
+        pick("[data-cu-state-body]").textContent = body;
+        pick("[data-cu-state-retry]").hidden = !retry;
+        pick("[data-cu-state-home]").hidden = !home;
+        statePanel.hidden = false;
+      }
+
+      function showDisabled() {
+        showState(
+          "손님 자료 저장이 아직 켜지지 않았습니다",
+          "손님 이름·전화·메모를 서버에 저장하는 기능은 운영자가 켜야 쓸 수 있습니다. 켜기 전에는 아무것도 저장하지 않습니다. 중개보수 계산·안내 문자·계약 일정은 지금도 쓸 수 있습니다.",
+          { symbol: "–", home: true },
+        );
+      }
+
+      function showBootError(error: unknown) {
+        const code = errorCode(error);
+        if (code === "WORK_DISABLED") {
+          showDisabled();
+          return;
+        }
+        showState("손님 목록을 불러오지 못했습니다", customerErrorText(code), { retry: isRetryable(code) });
+      }
+
+      function renderFilters() {
+        for (const button of filters) button.setAttribute("aria-pressed", String((button.dataset.cuFilter ?? "") === applied.status));
+        clear.hidden = !applied.q && !applied.status;
+      }
+
+      function renderList() {
+        cards.replaceChildren(...items.map((customer) => customerCard(customer, today)));
+        count.textContent = customerCountText(items.length, { more: Boolean(cursor), ...applied });
+        more.hidden = !cursor;
+        const filtered = Boolean(applied.q || applied.status);
+        empty.hidden = items.length > 0;
+        if (items.length === 0) {
+          pick("[data-cu-empty-title]").textContent = filtered ? "찾는 손님이 없습니다" : "아직 손님이 없습니다";
+          pick("[data-cu-empty-body]").textContent = filtered
+            ? "이름·찾는 조건·전화번호(숫자 3자리 이상)로 찾습니다. 찾는 말이나 상태 거르기를 지우고 다시 보세요."
+            : "손님을 넣으면 이름·찾는 조건·마지막 연락이 여기에 쌓입니다. 이름은 '가상 손님 1'처럼 줄여 써도 됩니다.";
+          pick("[data-cu-empty-new]").hidden = filtered;
+          pick("[data-cu-empty-clear]").hidden = !filtered;
+        }
+        renderFilters();
+      }
+
+      async function loadList({ append = false } = {}) {
+        const mine = ++loadToken;
+        more.disabled = true;
+        setStatus(listStatus, append ? "더 불러오고 있습니다…" : "불러오고 있습니다…", "saving");
+        try {
+          const page = await listCustomers(customerListQuery({ ...applied, cursor: append ? cursor : null }));
+          if (mine !== loadToken) return;
+          items = append ? [...items, ...page.items] : page.items;
+          cursor = page.nextCursor;
+          setStatus(listStatus, "", "idle");
+          renderList();
+        } catch (error) {
+          if (mine !== loadToken) return;
+          const code = errorCode(error);
+          if (!append && code === "WORK_DISABLED") {
+            showDisabled();
+            return;
+          }
+          setStatus(listStatus, `목록을 불러오지 못했습니다. ${customerErrorText(code)}`, "error");
+        } finally {
+          if (mine === loadToken) more.disabled = false;
+        }
+      }
+
+      function applySearch() {
+        query.value = cleanQuery(query.value);
+        applied = { ...applied, q: query.value };
+        void loadList();
+      }
+      pick("[data-cu-q-go]").addEventListener("click", applySearch);
+      query.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && !event.isComposing) {
+          event.preventDefault();
+          applySearch();
+        }
+      });
+      for (const button of filters) {
+        button.addEventListener("click", () => {
+          applied = { ...applied, status: button.dataset.cuFilter ?? "" };
+          void loadList();
+        });
+      }
+      const clearAll = () => {
+        query.value = "";
+        applied = { q: "", status: "" };
+        void loadList();
+      };
+      clear.addEventListener("click", clearAll);
+      pick("[data-cu-empty-clear]").addEventListener("click", clearAll);
+      more.addEventListener("click", () => {
+        if (cursor) void loadList({ append: true });
+      });
+
+      // ── 새 손님 ──
+      let saving = false;
+      function openNew(open: boolean) {
+        newPanel.hidden = !open;
+        newButton.setAttribute("aria-expanded", String(open));
+        if (open) {
+          done.hidden = true;
+          fillFields(newPanel, null);
+          setStatus(newStatus, "", "idle");
+          newPanel.querySelector<HTMLInputElement>('[data-cu-field="displayName"]')?.focus();
+        }
+      }
+      newButton.addEventListener("click", () => openNew(Boolean(newPanel.hidden)));
+      pick("[data-cu-empty-new]").addEventListener("click", () => openNew(true));
+      pick("[data-cu-new-cancel]").addEventListener("click", () => {
+        openNew(false);
+        newButton.focus();
+      });
+      newSave.addEventListener("click", async () => {
+        if (saving) return;
+        const checked = checkCustomerInput(readFields(newPanel));
+        if (!checked.ok) {
+          showFieldErrors(newPanel, checked.errors);
+          setStatus(newStatus, "빨간 글자가 있는 칸을 고쳐 주세요.", "error");
+          return;
+        }
+        showFieldErrors(newPanel, {});
+        saving = true;
+        newSave.disabled = true;
+        setStatus(newStatus, "저장하고 있습니다…", "saving");
+        try {
+          const { customer } = await createCustomer(checked.value);
+          openNew(false);
+          pick("[data-cu-done-text]").textContent = `✓ '${customer.displayName}'을(를) 넣었습니다.`;
+          doneLink.href = customerHref(customer.id);
+          done.hidden = false;
+          // 새 손님이 맨 위에 보이게 찾기·거르기를 지우고 다시 불러온다.
+          query.value = "";
+          applied = { q: "", status: "" };
+          await loadList();
+          doneLink.focus();
+        } catch (error) {
+          const code = errorCode(error);
+          setStatus(newStatus, `저장하지 못했습니다. ${customerErrorText(code)}`, "error");
+        } finally {
+          saving = false;
+          newSave.disabled = false;
+        }
+      });
+
+      // 넣던 새 손님 칸이 있으면 떠나기 전에 묻는다(서버에 아직 저장하지 않은 글).
+      window.addEventListener("beforeunload", (event) => {
+        if (newPanel.hidden) return;
+        const values = readFields(newPanel);
+        if (!values.displayName.trim() && !values.phone.trim() && !values.needs.trim()) return;
+        event.preventDefault();
+      });
+
+      // ── 처음 불러오기: 업무 세션(켜짐) → 목록 ──
+      async function start() {
+        statePanel.hidden = true;
+        main.hidden = true;
+        boot.hidden = false;
+        today = todayInKorea();
+        try {
+          const session = await getCustomerSession({ refresh: true });
+          if (!session.enabled) {
+            showDisabled();
+            return;
+          }
+        } catch (error) {
+          showBootError(error);
+          return;
+        }
+        boot.hidden = true;
+        main.hidden = false;
+        await loadList();
+      }
+      pick("[data-cu-state-retry]").addEventListener("click", () => void start());
+
+      // 열 때마다(뒤로 가기 캐시 복원 포함) 찾는 말·새 손님 칸을 비우고 다시 불러온다.
+      const reset = () => {
+        query.value = "";
+        applied = { q: "", status: "" };
+        items = [];
+        cursor = null;
+        cards.replaceChildren();
+        openNew(false);
+        done.hidden = true;
+        fillFields(newPanel, null);
+        void start();
+      };
+      window.addEventListener("pageshow", (event) => {
+        if (event.persisted) reset();
+      });
+      reset();
+    }
+  </script>
+</AdminLayout>

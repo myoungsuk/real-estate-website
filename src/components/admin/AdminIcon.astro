@@ -22,7 +22,10 @@ export type AdminIconName =
   | "chart"
   | "sliders"
   | "chevron-left"
-  | "chevron-right";
+  | "chevron-right"
+  | "person"
+  | "note"
+  | "phone";
 
 interface Props {
   name: AdminIconName;
@@ -45,6 +48,19 @@ const { name, size = 24 } = Astro.props;
   aria-hidden="true"
   focusable="false"
 >
+  {name === "person" && (
+    <>
+      <circle cx="12" cy="8" r="3.6" />
+      <path d="M4.5 20c.8-4 3.8-6 7.5-6s6.7 2 7.5 6" />
+    </>
+  )}
+  {name === "note" && (
+    <>
+      <path d="M6 3.5h9l3.5 3.5v13.5H6z" />
+      <path d="M14.5 3.5V7.5h4" />
+      <path d="M9 12h6M9 15.5h6" />
+    </>
+  )}
   {name === "home" && (
     <>
       <rect x="3.5" y="3.5" width="7" height="7" rx="2" />
@@ -53,6 +69,7 @@ const { name, size = 24 } = Astro.props;
       <rect x="13.5" y="13.5" width="7" height="7" rx="2" />
     </>
   )}
+  {name === "phone" && <path d="M6.5 3.5h3l1.5 4-2 1.5a11 11 0 0 0 6 6l1.5-2 4 1.5v3a2 2 0 0 1-2 2A16 16 0 0 1 4.5 5.5a2 2 0 0 1 2-2z" />}
   {name === "fee" && (
     <>
       <rect x="5" y="2.75" width="14" height="18.5" rx="3" />
