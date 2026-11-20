@@ -147,6 +147,7 @@ npm run sync:external:dry-run
 - `/admin/` → 관리자 대시보드와 관리 API 연결 상태
 - `/admin/deployment/` → 마지막 관리자 저장 commit·resource digest와 Production marker v2를 비교한 배포 중·공개 완료·최신 배포 포함·지연·확인 불가 상태
 - `/admin/history/` → 허용 공개 JSON별 현재 `master` 변경 이력, 과거 JSON과 현재 JSON의 안전한 diff, 현재 스키마 재검증, 정확한 2차 문구와 최신 blob SHA를 요구하는 새 커밋 복원
+- `/admin/help/` → 관리 화면 14곳 제목 아래 처음에는 접힌 '이 화면 사용법' 상자와 같은 글을 사진 없이 모은 사용 안내(메뉴 '확인' 묶음 끝, 휴대폰 아래 탭 제외). 문구는 `src/lib/admin-help.mjs` 한 곳에 두고, 작은따옴표로 적은 단추·칸 이름과 숫자를 `tests/admin-help.test.mjs`가 화면 원본·코드와 대조한다. 관리 화면의 단추 이름·시각·개수를 바꾸면 이 문구도 함께 고친다.
 - `/admin/listings/`, `/admin/listings/editor/` → 네이버 공개 매물 현황·검색·유형·재확인 출처 필터와 확인일 정렬, 부동산뱅크 EUC-KR HTML-table `.xls` 브라우저 가져오기, 그 밖의 네이버 매물 직접 등록·수정·등록 종료. 원본 XLS는 서버로 보내지 않고 정제된 공개 목록과 재확인 상태를 한 Git 커밋으로 저장한다. 직접 등록 매물의 단건 `확인 완료`는 공통 변경 미리보기·최신 SHA 검증 뒤 `lastReviewedAt`만 새 커밋으로 갱신하며 변경 이력에서 복원할 수 있다. 재확인 정책이 미설정이면 관리자 화면도 `기준 미설정`으로 표시한다.
 - `/properties/` → 공개 매물을 거래·유형·단지·가격·면적으로 좁히고, 공개 ID만 브라우저 `localStorage`에 최대 30개 관심 매물로 저장하며 최대 3개를 비교 선택한다. `/properties/compare/?ids=...`는 공개 ID만 복원하고 `noindex,follow`, canonical `/properties/`를 사용한다. 문의 조건과 자유 메모는 현재 페이지 메모리에서만 문장으로 만든다.
 - `/blog/`, `/youtube/` → 지역 콘텐츠를 원문 종류별로 분리하고, 유튜브는 일반 영상을 기본으로 `일반 영상·Shorts 보기`를 전환하며 독립 페이지에서 6개 단위로 탐색
