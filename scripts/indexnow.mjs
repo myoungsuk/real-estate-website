@@ -59,6 +59,21 @@ function addSitemapGroup(paths, sitemapUrls, matcher) {
   }
 }
 
+// 관리자 화면에서만 쓰는 코드·자료. 공개 화면은 이 경로를 가져다 쓰지 않으므로(tests/indexnow.test.mjs가 확인) 바뀌어도 공개 URL을 알리지 않는다.
+const ADMIN_ONLY_PREFIXES = Object.freeze([
+  "src/components/admin/",
+  "src/data/work/",
+  "src/lib/admin/",
+  "src/lib/admin-",
+  "src/lib/work/",
+  "src/lib/work-",
+]);
+const ADMIN_ONLY_FILES = new Set(["src/layouts/AdminLayout.astro", "src/styles/admin.css"]);
+
+export function isAdminOnlyPath(path) {
+  return ADMIN_ONLY_FILES.has(path) || ADMIN_ONLY_PREFIXES.some((prefix) => path.startsWith(prefix));
+}
+
 function routeFromAstroPage(path) {
   if (!path.startsWith("src/pages/") || !path.endsWith(".astro")) return null;
   const relativePath = path.slice("src/pages/".length, -".astro".length);
@@ -76,7 +91,7 @@ export function planIndexNowUrls(changedFiles, sitemapUrls) {
 
   for (const value of changedFiles) {
     const path = normalizeRepositoryPath(value);
-    if (!path) continue;
+    if (!path || isAdminOnlyPath(path)) continue;
 
     const exactRoutes = exactDataRoutes.get(path);
     if (exactRoutes) {
