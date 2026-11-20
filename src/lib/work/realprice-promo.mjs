@@ -4,6 +4,7 @@
 // - 해제된 거래는 고를 수 없고, 고른 뒤 해제로 바뀌었으면 빼고 알린다. recordHigh가 true가 아니면(false·null) '신고가' 말을 쓰지 않는다.
 import { formatKoreanWon } from "./work-format.mjs";
 import { areaText, dateText, floorText, kindLabel, priceParts } from "./realprice-view.mjs";
+import { promoBasisLine, promoFlow } from "./realprice-insight-view.mjs";
 
 // 서버 상수와 같은 값(tests/work-realprice-promo.test.mjs가 worker 상수와 대조한다).
 export const PROMO_IDS_MAX = 6; // REALPRICE_IDS_MAX
@@ -327,7 +328,8 @@ export function textCount(kind, text) {
 
 // ── 카드 그림 자료(그리기는 src/lib/work-realprice-card.ts) ──
 
-const cardItem = (item) => ({
+// flow: 거래 흐름(보드 63번). 계산하지 못한 거래·흐름을 받지 못한 때는 null이라 지금 모양 그대로 그린다.
+const cardItem = (item, insight) => ({
   name: item.aptName,
   dong: item.umdName,
   kind: kindLabel(item),
@@ -338,25 +340,31 @@ const cardItem = (item) => ({
   floor: floorText(item.floor),
   date: dateText(item.dealDate),
   prev: isHigh(item) ? formatKoreanWon(item.prevMaxWon) : "",
+  flow: item.kind === "sale" && insight ? promoFlow(insight, { high: isHigh(item), buildYear: item.buildYear ?? null }) : null,
 });
 
 // 3건씩 나눠 최대 2장. 여러 장이면 제목 끝에 " · 1/2장". 아래 칸은 출처·받은 시각·안내, 신고가가 있는 장만 판정 기준, 명시사항.
-export function promoCards({ items, receivedAt, office }) {
+// insights: 거래 ID → 거래 흐름 응답 한 개(없거나 못 받았으면 빈 값). basis는 그 장에 실제로 그린 흐름 항목만 적는다.
+export function promoCards({ items, receivedAt, office, insights = {} }) {
   if (promoBlockReason({ items, receivedAt, office })) return [];
   const pages = [];
   for (let at = 0; at < items.length && pages.length < Math.ceil(PROMO_IDS_MAX / PROMO_CARD_ROWS); at += PROMO_CARD_ROWS) pages.push(items.slice(at, at + PROMO_CARD_ROWS));
   const title = promoTitle(items);
-  return pages.map((pageItems, index) => ({
+  return pages.map((pageItems, index) => {
+    const cardItems = pageItems.map((item) => cardItem(item, insights[item.tradeKey] ?? null));
+    return {
     title: pages.length > 1 ? `${title} · ${index + 1}/${pages.length}장` : title,
     allHigh: pages.length === 1 && allHigh(pageItems), // 한 장에 모두 신고가면 제목에 "신고가"가 있어 줄마다 표를 달지 않음
     areaLabel: PROMO_AREA_LABEL,
     range: dealRange(pageItems),
-    items: pageItems.map(cardItem),
+    items: cardItems,
+    basis: promoBasisLine(cardItems.map((item) => item.flow)),
     source: `출처 ${PROMO_SOURCE}`,
     received: `${receivedText(receivedAt)} 받은 자료. ${PROMO_NOTICE}`,
     highRule: anyHigh(pageItems) ? PROMO_HIGH_RULE : "",
     disclosure: disclosureLines(office),
-  }));
+    };
+  });
 }
 
 // 내려받는 파일 이름: 날짜만(realprice-YYYYMMDD.png, 두 장이면 -1·-2). todayKst는 "YYYY-MM-DD".

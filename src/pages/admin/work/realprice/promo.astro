@@ -335,7 +335,18 @@ const listHref = "/admin/work/realprice/";
           return;
         }
         texts = promoTexts(input) as Record<Kind, string>;
-        const cards = promoCards(input) as PromoCard[];
+        // 거래 흐름(보드 63번): 담은 매매의 흐름을 한 번에 묻는다. 못 받거나 계산하지 못한 거래는 지금 모양 그대로 그린다(글 4가지는 바꾸지 않음).
+        let insights: Record<string, unknown> = {};
+        const saleIds = selection.items.filter((item: PromoItem) => item.kind === "sale").map((item: PromoItem) => item.tradeKey);
+        if (saleIds.length > 0) {
+          try {
+            const flow = await readWork<{ items: { tradeKey: string }[] }>("/realprice/insights", `ids=${saleIds.join(",")}`);
+            insights = Object.fromEntries(flow.items.map((item) => [item.tradeKey, item]));
+          } catch {
+            insights = {};
+          }
+        }
+        const cards = promoCards({ ...input, insights }) as PromoCard[];
         cardTotal = cards.length;
         renderPicked(selection.items as PromoItem[]);
         boot.hidden = true;

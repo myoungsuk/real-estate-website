@@ -57,13 +57,26 @@ const secondPage = Array.from({ length: 5 }, (_, index) => trade(index + 31));
 const cancelledTrade = trade(99, { cancelled: true, cancelledOn: "2026-11-15" });
 
 const envelope = (data) => ({ json: { ok: true, data, requestId: "test" } });
+// 거래 흐름(보드 63번) 가짜 응답: 첫 거래는 앞선 최고 3억 9,500만(신고가 101.5%), 넷째 거래(가상숲4단지)는 첫 거래·한 달만, 나머지는 평범한 흐름.
+function insightOf(id) {
+  const item = [...firstPage, ...secondPage].find((trade) => trade.tradeKey === id);
+  if (!item || item.kind !== "sale" || item.dealingGbn === "direct") return { tradeKey: id, available: false, reason: item ? "not_sale" : "error" };
+  const months = ["2025-12", "2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09", "2026-10", "2026-11"];
+  if (item === firstPage[3]) {
+    return { tradeKey: id, available: true, series: months.map((ym, index) => ({ ym, medianWon: index === 11 ? item.priceWon : null, count: index === 11 ? 1 : 0 })), prev: null, prevMaxWon: null, ratioPct: null, recent3m: 1, households: null };
+  }
+  const series = months.map((ym, index) => ({ ym, medianWon: index % 3 === 1 ? null : 380_000_000 + index * 1_000_000, count: index % 3 === 1 ? 0 : 1 }));
+  const prevMaxWon = item === firstPage[0] ? 395_000_000 : item.priceWon + 5_000_000;
+  return { tradeKey: id, available: true, series, prev: { dealDate: "2026-10-02", floor: 9, priceWon: 390_000_000 }, prevMaxWon, ratioPct: Math.round((item.priceWon * 1000) / prevMaxWon) / 10, recent3m: 3, households: null };
+}
+const defaultInsights = (ids) => envelope({ items: ids.map(insightOf), missing: [], basis: { months: 12, recentMonths: 3 }, recordHighReady: true, warnings: [] });
 const failure = (status, code, extra = {}) => ({ status, json: { ok: false, error: { code, message: "시험 오류", retryable: false, ...extra }, requestId: "test" } });
 
 // 늘 같은 시각에서 보이게 시계를 고정하고, 실제 서버는 부르지 않는다(맞지 않는 관리 API는 503).
-async function setup(page, { width = 390, session = { realpriceEnabled: true }, status = okStatus, trades, watch, complexes, put, refresh } = {}) {
+async function setup(page, { width = 390, session = { realpriceEnabled: true }, status = okStatus, trades, watch, complexes, put, refresh, insights } = {}) {
   await page.clock.setFixedTime(NOW);
   await page.setViewportSize({ width, height: 900 });
-  const calls = { trades: [], complexes: [], puts: [], refresh: [], session: 0, watchGets: 0 };
+  const calls = { trades: [], complexes: [], puts: [], refresh: [], session: 0, watchGets: 0, insights: [] };
   await page.route("**/api/admin/**", (route) => route.fulfill(failure(503, "TEST_OFFLINE")));
   await page.route(`${WORK}/public-tools/session`, (route) => {
     calls.session += 1;
@@ -77,6 +90,11 @@ async function setup(page, { width = 390, session = { realpriceEnabled: true }, 
     if (trades) return route.fulfill(trades(params, calls.trades.length));
     const items = params.get("cursor") === "c2" ? secondPage : params.get("cancelled") === "include" ? [cancelledTrade, ...firstPage] : firstPage;
     return route.fulfill(envelope({ items, nextCursor: params.get("cursor") ? null : "c2", recordHighReady: true, coverage: {}, warnings: [] }));
+  });
+  await page.route(`${WORK}/realprice/insights**`, (route) => {
+    const value = new URL(route.request().url()).searchParams.get("ids") ?? "";
+    calls.insights.push(value);
+    return route.fulfill((insights ?? defaultInsights)(value.split(",")));
   });
   let watchState = watch ?? { version: 3, items: [{ aptSeq: "A1", displayName: "가상숲1단지", complexSlug: "leaders-city-4" }, { aptSeq: "A2", displayName: "가상숲2단지", complexSlug: "retired-slug" }] };
   await page.route(`${WORK}/realprice/watch`, (route) => {
@@ -152,7 +170,7 @@ test("실거래가 D안 390px: 상태 한 줄은 접힘, 찾기칸·거르기 �
   await expect(first.locator(".rt-size")).toHaveText("84.97㎡ · 10층 · 103동");
   await expect(first.locator(".rt-price")).toContainText("4억 100만 원");
   await expect(first.locator(".rt-prev"), "앞선 최고는 카드에서 숨김").toBeHidden();
-  await expect(rows(page).nth(1).locator(".rt-price")).toHaveText("보증금 2,000만 / 월 85만 원");
+  await expect(rows(page).nth(1).locator(".rt-price")).toHaveText("보증금 2,000만 / 월 85만 원", { useInnerText: true });
   await expect(rows(page).nth(1).locator(".rt-kind")).toHaveText("월세");
   await expect(rows(page).nth(2).locator(".rt-kind")).toHaveText("매매직거래");
   await expect(rows(page).nth(2).locator(".rt-size")).toContainText("지하 1층");
@@ -299,7 +317,7 @@ test("실거래가 D안 PC: 1280px은 같은 순서에 찾기칸·단추가 한 
   await expect(page.getByRole("columnheader", { name: "담기" })).toBeVisible();
   expect(await rows(page).first().evaluate((row) => getComputedStyle(row).display)).toBe("table-row");
   await expect(rows(page).first().locator(".rt-prev")).toHaveText("앞선 최고 3억 9,500만 원");
-  await expect(rows(page).first().locator(".rt-flags .rt-tag--new")).toBeVisible();
+  await expect(rows(page).first().locator(".rt-price__meta .rt-mtag--new"), "표에서는 표시가 금액 아래 작은 줄(보드 63번)").toBeVisible();
   await expect(page.locator('.admin-menu__subitem[href="/admin/work/realprice/"]').first()).toHaveAttribute("aria-current", "page");
   for (const width of [1221, 1220]) {
     await page.setViewportSize({ width, height: 900 });
@@ -525,9 +543,11 @@ test("실거래가 979px 이하: 과거 자료를 채우는 동안에도 막대�
 test("실거래가 979px 이하: 매매를 채우는 동안 신고가 준비 안내는 상태 줄 끝과 '자세히' 안으로 옮겨 390×844 첫 화면에 첫 거래가 다 들어오고, 980px 이상은 목록 위 안내 그대로", async ({ page }) => {
   const assertNoErrors = collectErrors(page);
   const saleFilling = { ...okStatus, coveredThrough: "2010-04", recordHighReady: false, backfill: { sale: { done: 200, total: 251 }, presale: { done: 0, total: 234 }, rent: { done: 0, total: 191 } } };
-  await setup(page, {
+  const calls = await setup(page, {
     status: saleFilling,
     trades: () => envelope({ items: firstPage.map((item) => ({ ...item, recordHigh: null, prevMaxWon: null })), nextCursor: null, recordHighReady: false, coverage: {}, warnings: [] }),
+    // 판정 준비 전에는 서버가 흐름도 pending으로 돌려준다(보드 63번). 카드의 '흐름·직전 거래' 줄은 숨기고 까닭은 위 안내가 맡는다.
+    insights: (ids) => envelope({ items: ids.map((id) => ({ tradeKey: id, available: false, reason: "pending" })), missing: [], basis: { months: 12, recentMonths: 3 }, recordHighReady: false, warnings: [] }),
   });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/admin/work/realprice/");
@@ -537,18 +557,21 @@ test("실거래가 979px 이하: 매매를 채우는 동안 신고가 준비 안
   await expect(page.locator("[data-rt-notice]")).toBeHidden();
   await expect(page.locator(".rt-tag--high")).toHaveCount(0);
   await expect(page.locator("[data-rt-criterion]:visible")).toHaveCount(0);
+  await expect.poll(() => calls.insights.length).toBe(1);
+  await expect(rows(page).first().locator(".rt-flowcell"), "채우는 동안 카드에는 누를 것 없는 흐름 줄을 두지 않음").toBeHidden();
   const first = await rows(page).first().boundingBox();
   const tabbar = await page.locator(".admin-tabbar").boundingBox();
   expect(first.y + first.height, "매매를 채우는 동안에도 첫 거래 카드가 아래 탭 위에 다 보임").toBeLessThanOrEqual(tabbar.y);
   await page.locator("[data-rt-sum] > summary").click();
   await expect(page.locator("[data-rt-sum-high]")).toBeVisible();
-  await expect(page.locator("[data-rt-sum-high]")).toHaveText("신고가 판정 준비 중(매매 과거 자료 채우는 중, 지금 2010년 4월까지). 과거 자료가 빠진 채 표시하면 신고가가 아닌 거래를 신고가로 보일 수 있어 다 채운 뒤 표시합니다.");
+  await expect(page.locator("[data-rt-sum-high]")).toHaveText("신고가 판정 준비 중(매매 과거 자료 채우는 중, 지금 2010년 4월까지). 과거 자료가 빠진 채 표시하면 신고가가 아닌 거래를 신고가로 보일 수 있어 다 채운 뒤 표시합니다. 흐름·직전 거래도 그때 함께 보입니다.");
   await expect(page.locator("[data-rt-backfill]")).toBeVisible();
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.reload();
   await expect(rows(page)).toHaveCount(30);
   await expect(page.locator("[data-rt-notice]")).toBeVisible();
   await expect(page.locator("[data-rt-notice-text]")).toContainText("신고가 판정 준비 중(매매 과거 자료 채우는 중, 지금 2010년 4월까지)");
+  await expect(rows(page).first().locator(".rt-flow")).toHaveText("흐름: 과거 자료 채우는 중");
   await expect(page.locator("[data-rt-sum-high]")).toBeHidden();
   await expect(page.locator("[data-rt-sum-fill]")).toBeHidden();
   assertNoErrors();
@@ -976,5 +999,120 @@ test("P1-e TK-40 인쇄: 메뉴·단추·설명은 숨기고 카드 그림만 A4
   expect((pdf.match(/\/Type\s*\/Page(?!s)/gu) ?? []).length, "A4 한 장").toBe(1);
   await page.emulateMedia({ media: "screen" });
   await expect(page.locator(".rt-print-sheet")).toBeHidden();
+  assertNoErrors();
+});
+
+// ── 거래 흐름(보드 63번) ──
+
+test("거래 흐름 390px: 매매 카드마다 접힌 '흐름·직전 거래', 펼치면 흐름선·직전 거래·칸 3개, 전월세·직거래는 없음, 보이는 매매 ID만 한 번에 묻고 다시 묻지 않음", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const calls = await setup(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/admin/work/realprice/");
+  await expect(rows(page)).toHaveCount(30);
+  const first = rows(page).first();
+  const fold = first.locator(".rt-flowfold");
+  await expect(fold.locator("summary")).toHaveText("흐름·직전 거래 · 대비 ▲ 101.5%");
+  await expect(fold).not.toHaveAttribute("open", /.*/u);
+  await expect(rows(page).nth(1).locator(".rt-flowcell"), "월세는 계산하지 않음").toBeHidden();
+  await expect(rows(page).nth(2).locator(".rt-flowcell"), "직거래는 계산하지 않음").toBeHidden();
+  expect(calls.insights.length, "쪽을 그린 뒤 한 번").toBe(1);
+  const asked = calls.insights[0].split(",");
+  expect(asked.length).toBe(28);
+  expect(asked.includes(firstPage[1].tradeKey) || asked.includes(firstPage[2].tradeKey), "전월세·직거래 ID는 묻지 않음").toBe(false);
+  await fold.locator("summary").click();
+  await expect(fold.locator(".rt-spark")).toBeVisible();
+  await expect(fold.locator(".rt-flowfold__prev")).toHaveText("○ 직전 거래 2026. 10. 2. · 9층 · 3억 9,000만 원");
+  await expect(fold.locator(".rt-mini3 dd")).toHaveText(["3억 9,500만", "▲ 101.5%", "3건"]);
+  const pickBox = await first.locator(".rt-pick-button").boundingBox();
+  const miniBox = await fold.locator(".rt-mini3").boundingBox();
+  expect(pickBox.y, "펼쳐도 '담기'가 칸 3개를 가리지 않음").toBeGreaterThan(miniBox.y + miniBox.height - 1);
+  expect(await overflowOf(page), "390px 가로 넘침").toBeLessThanOrEqual(0);
+  await page.locator("[data-rt-toggle='highOnly']").click();
+  await expect(rows(page)).toHaveCount(1);
+  await page.locator("[data-rt-toggle='highOnly']").click();
+  await expect(rows(page)).toHaveCount(30);
+  await expect(rows(page).first().locator(".rt-flowfold summary")).toBeVisible();
+  expect(calls.insights.length, "같은 ID는 화면 메모리에서 다시 씀").toBe(1);
+  await page.locator("[data-rt-more-button]").click();
+  await expect(rows(page)).toHaveCount(35);
+  await expect.poll(() => calls.insights.length).toBe(2);
+  expect(calls.insights[1].split(",").length, "더 불러온 5건만").toBe(5);
+  assertNoErrors();
+});
+
+test("거래 흐름 1280px 표: 칸 3개(흐름·직전 거래·최고가 대비), 거래 종류·표시는 금액 아래, 법정동·준공연도는 단지 아래, 첫 거래·한 달만", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  await setup(page, { width: 1280 });
+  await page.goto("/admin/work/realprice/");
+  await expect(rows(page)).toHaveCount(30);
+  for (const name of ["흐름(12개월)", "직전 거래", "최고가 대비"]) await expect(page.getByRole("columnheader", { name })).toBeVisible();
+  for (const name of ["거래", "표시", "법정동"]) await expect(page.getByRole("columnheader", { name, exact: true })).toBeHidden();
+  const first = rows(page).first();
+  await expect(first.locator(".rt-flow .rt-spark")).toBeVisible();
+  await expect(first.locator(".rt-flow .rt-flow__count")).toHaveText("3개월 3건");
+  await expect(first.locator(".rt-last")).toHaveText("3억 9,000만10. 2. · 9층", { useInnerText: false });
+  await expect(first.locator(".rt-ratio strong")).toHaveText("▲ 101.5%");
+  await expect(first.locator(".rt-ratio small")).toHaveText("앞선 최고 3억 9,500만");
+  await expect(first.locator(".rt-price__meta")).toContainText("매매");
+  await expect(first.locator(".rt-price__meta .rt-mtag--high")).toHaveText("신고가");
+  await expect(first.locator(".rt-name__sub")).toHaveText("천동 · 2020년");
+  await expect(rows(page).nth(2).locator(".rt-price__meta")).toContainText("매매 · 직거래");
+  await expect(rows(page).nth(3).locator(".rt-ratio strong")).toHaveText("첫 거래");
+  await expect(rows(page).nth(3).locator(".rt-last")).toHaveText("직전 거래 없음");
+  await expect(rows(page).nth(3).locator(".rt-flow")).toContainText("한 달만 거래");
+  await expect(rows(page).nth(1).locator(".rt-flow"), "월세는 비우고 화면 읽기에만 까닭").toHaveText("흐름은 매매만 계산");
+  assertNoErrors();
+});
+
+test("거래 흐름 한도·실패: 첫 상한은 '오늘 조회 한도'(빈 칸·0 아님)와 목록 위 안내, 끝 상한 429도 같은 글, 그 밖의 실패는 '불러오지 못함'", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  let mode = "soft";
+  await setup(page, {
+    width: 1280,
+    insights: (ids) => {
+      if (mode === "hard") return failure(429, "RT_READ_BUDGET", { retryAt: "2026-11-20T00:00:00.000Z" });
+      if (mode === "down") return failure(503, "STORAGE_UNAVAILABLE");
+      return envelope({ items: ids.map((id) => ({ tradeKey: id, available: false, reason: "budget" })), missing: [], basis: { months: 12, recentMonths: 3 }, recordHighReady: true, warnings: [{ code: "RT_READ_BUDGET", level: "soft" }] });
+    },
+  });
+  for (const next of ["soft", "hard", "down"]) {
+    mode = next;
+    await page.goto("/admin/work/realprice/");
+    await expect(rows(page)).toHaveCount(30);
+    const flow = rows(page).first().locator(".rt-flow");
+    if (next === "down") {
+      await expect(flow).toHaveText("흐름: 불러오지 못함");
+      await expect(page.locator("[data-rt-notice-text]")).toHaveText("흐름·직전 거래를 불러오지 못했습니다. 목록은 그대로 볼 수 있습니다. 잠시 뒤 화면을 새로 고치면 다시 불러옵니다.");
+    } else {
+      await expect(flow, next).toHaveText("흐름: 오늘 조회 한도");
+      await expect(page.locator("[data-rt-notice-text]"), next).toHaveText("오늘 조회가 많아 흐름·직전 거래 표시를 잠시 껐습니다. 한국 시각 오전 9시 뒤에 다시 보입니다. 목록은 그대로 볼 수 있습니다.");
+    }
+    await expect(rows(page).first().locator(".rt-ratio")).toHaveText("");
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(rows(page).first().locator(".rt-flowcell"), "카드에는 누를 것 없는 흐름 줄을 두지 않고 까닭은 목록 위 안내로").toBeHidden();
+  await expect(page.locator("[data-rt-notice-text]")).toBeVisible();
+  assertNoErrors();
+});
+
+test("거래 흐름 홍보물: 담은 매매 ID만 한 번 묻고, 흐름을 못 받아도 카드는 그대로 만든다", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  let down = false;
+  const calls = await setup(page, {
+    trades: (params) => {
+      const ids = (params.get("ids") ?? "").split(",");
+      const items = [...firstPage, cancelledTrade].filter((item) => ids.includes(item.tradeKey));
+      return envelope({ items, missing: [], receivedAt: "2026-11-19T03:10:00.000Z", recordHighReady: true, warnings: [] });
+    },
+    insights: (ids) => (down ? failure(503, "STORAGE_UNAVAILABLE") : defaultInsights(ids)),
+  });
+  const ids = [firstPage[0].tradeKey, firstPage[1].tradeKey, firstPage[3].tradeKey].join(",");
+  for (const state of ["ok", "down"]) {
+    down = state === "down";
+    await page.goto(`/admin/work/realprice/promo/?ids=${ids}`);
+    await expect(page.locator(".rt-promo__card img").first()).toHaveAttribute("src", /^data:image\/png;base64,/u);
+    expect(calls.insights.at(-1), state).toBe([firstPage[0].tradeKey, firstPage[3].tradeKey].join(","));
+  }
   assertNoErrors();
 });

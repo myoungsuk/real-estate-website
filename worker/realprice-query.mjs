@@ -57,7 +57,7 @@ const COVERAGE_PENDING_MAX = 12;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MONTH_PATTERN = /^(\d{4})-(0[1-9]|1[0-2])$/u;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
-const TRADE_KEY_PATTERN = /^(sale|rent|presale):\d{6}:[0-9a-f]{20}:\d{1,4}$/u;
+export const TRADE_KEY_PATTERN = /^(sale|rent|presale):\d{6}:[0-9a-f]{20}:\d{1,4}$/u;
 const APT_SEQ_PATTERN = /^[0-9A-Za-z-]{1,20}$/u;
 const AREA_PATTERN = /^\d{1,4}(?:\.\d{1,2})?$/u;
 const PRICE_PATTERN = /^\d{1,13}$/u;
@@ -111,6 +111,8 @@ WHERE trade_key IN (SELECT value FROM json_each(?1))`;
 // ① 가장 이른 계약일 앞의 비교 대상 최고가 1행(deal_date NULL)과 ② 가장 이른 ~ 가장 늦은 계약일 사이(늦은 날은 빼고)의 비교 대상 거래를 돌려준다.
 // 행마다 하위 질의를 돌리면 같은 묶음의 옛 거래를 행 수만큼 다시 읽으므로(TK-53 실측: 한 묶음 600건 × 30행 = 1만 8천 행) 묶음마다 한 번만 읽는다.
 // 비교 대상: 매매, 해제 아님, 중개(또는 중개 구분이 없던 옛 자료). 앞선 거래만 비교하는 것은 부르는 쪽(previousMaxByRow)이 계약일로 가른다.
+// 비교 대상 조건(p = rt_trades 별칭)은 거래 흐름(realprice-insights.mjs)도 같은 문자열을 쓴다(보드 63번, 앞선 최고가 어긋나지 않게).
+export const REALPRICE_COMPARABLE_WHERE = "p.cancelled = 0 AND (p.dealing_gbn IS NULL OR p.dealing_gbn = 'broker')";
 export const REALPRICE_PRIOR_SQL = `WITH g AS MATERIALIZED (
   SELECT json_extract(value, '$[0]') AS cmp_seq, json_extract(value, '$[1]') AS area_x100,
     json_extract(value, '$[2]') AS first_date, json_extract(value, '$[3]') AS last_date
@@ -119,14 +121,14 @@ export const REALPRICE_PRIOR_SQL = `WITH g AS MATERIALIZED (
 SELECT g.cmp_seq, g.area_x100, NULL AS deal_date, (
   SELECT MAX(p.price_won) FROM rt_trades p
   WHERE p.kind = 'sale' AND p.cmp_seq = g.cmp_seq AND p.area_x100 = g.area_x100 AND p.deal_date < g.first_date
-    AND p.cancelled = 0 AND (p.dealing_gbn IS NULL OR p.dealing_gbn = 'broker')
+    AND ${REALPRICE_COMPARABLE_WHERE}
 ) AS price_won
 FROM g
 UNION ALL
 SELECT p.cmp_seq, p.area_x100, p.deal_date, p.price_won
 FROM g JOIN rt_trades p ON p.kind = 'sale' AND p.cmp_seq = g.cmp_seq AND p.area_x100 = g.area_x100
   AND p.deal_date >= g.first_date AND p.deal_date < g.last_date
-WHERE p.cancelled = 0 AND (p.dealing_gbn IS NULL OR p.dealing_gbn = 'broker')`;
+WHERE ${REALPRICE_COMPARABLE_WHERE}`;
 
 // 단지 찾기: 최근 36개월 매매 범위(?1 ~ ?2)에서 띄어쓰기를 뺀 단지명에 찾는 말(?3)이 든 단지. 이름·법정동은 가장 최근 거래의 값.
 export const REALPRICE_COMPLEXES_SQL = `SELECT apt_seq, apt_nm, umd_nm, COUNT(*) AS trade_count, MAX(deal_date) AS last_deal_date
@@ -337,7 +339,7 @@ export function tradeMonthWindows(query) {
 // ── 신고가 ──
 
 // 신고가를 판정하는 행: 매매, 해제 아님, 직거래 아님, 단지 고유번호 있음(모호 '*' 아님). 그 밖의 행은 recordHigh false(22.8절).
-const isRecordHighTarget = (row) => row.kind === "sale" && Number(row.cancelled) === 0 && row.dealing_gbn !== "direct"
+export const isRecordHighTarget = (row) => row.kind === "sale" && Number(row.cancelled) === 0 && row.dealing_gbn !== "direct"
   && typeof row.cmp_seq === "string" && row.cmp_seq !== "" && row.cmp_seq !== "*";
 const groupKey = (cmpSeq, areaX100) => `${cmpSeq}\u0000${Number(areaX100)}`;
 
@@ -439,7 +441,7 @@ export function tradesCoverage(monthRows, query, currentYmd) {
   };
 }
 
-async function addReadUsage(db, nowMs, rowsRead) {
+export async function addReadUsage(db, nowMs, rowsRead) {
   // 사용량 쓰기가 실패해도 이미 읽은 자료는 돌려준다(읽기 예산이 조금 덜 세어질 뿐 자료를 바꾸지 않음).
   try {
     await addUsageStatement(db, nowMs, { rowsRead }).run();
@@ -479,7 +481,7 @@ export function tradesReceivedAt(monthRows, tradeRows) {
 }
 
 // 목록과 고른 거래 다시 읽기가 함께 쓰는 앞부분: 하루 읽기 끝 상한(429)·첫 상한, 받은 달 기록, 신고가 판정 준비.
-async function readTradesContext(db, nowMs) {
+export async function readTradesContext(db, nowMs) {
   const usage = await readTodayUsage(db, nowMs);
   if (usage.rowsRead >= REALPRICE_DAILY_READ_HARD) throw readBudgetExceededError(nowMs);
   const readSoftExceeded = usage.rowsRead >= REALPRICE_DAILY_READ_SOFT;
