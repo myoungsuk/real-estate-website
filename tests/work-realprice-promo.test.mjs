@@ -112,8 +112,8 @@ test("P1-f 다 담기: 보이는 순서대로 해제·이미 담은 거래를 �
   assert.equal(takeResultText(2, 0, 5), "2건을 담았습니다. 담은 거래 5건.");
 });
 
-test("P1-f 해시태그: 고정 4개 → 거래 종류 → #신고가 → 법정동 3 → 전용면적 2 → 단지 이름 3, 겹치면 하나, 15개 안이고 넘치면 단지 이름을 지킴", () => {
-  assert.deepEqual(hashtags(THREE), ["#대전동구", "#동구아파트", "#대전아파트", "#아파트실거래가", "#아파트매매", "#신고가", "#천동", "#신흥동", "#전용84", "#전용59", "#가상숲1단지", "#가상숲2단지", "#가상들마을"]);
+test("P1-f 해시태그: 고정 4개 → 거래 종류 → #신고가 → 법정동 3 → 전용면적 2 → 단지 이름 3, 겹치면 하나, 12개 안이고 넘치면 단지 이름을 지킴", () => {
+  assert.deepEqual(hashtags(THREE), ["#대전동구", "#동구아파트", "#대전아파트", "#아파트실거래가", "#아파트매매", "#신고가", "#천동", "#신흥동", "#전용84", "#가상숲1단지", "#가상숲2단지", "#가상들마을"]);
   assert.deepEqual(hashtags([PLAIN]), ["#대전동구", "#동구아파트", "#대전아파트", "#아파트실거래가", "#아파트매매", "#신흥동", "#전용101", "#가상들마을"], "신고가가 아니면 #신고가 없음");
   const spaced = { ...PLAIN, aptName: "가상 숲(2단지)", umdName: "신흥동" };
   assert.deepEqual(hashtags([spaced]).at(-1), "#가상숲2단지", "띄어쓰기·괄호를 뺌");
@@ -143,8 +143,8 @@ test("TK-38 글 4가지(가상 거래 3건): 출처·받은 시각·계약일 �
     assert.ok(text.includes("2006년 1월 이후"), `${kind}: 비교 범위`);
   }
   assert.match(PROMO_HIGH_RULE, /2006년 1월 이후 매매와 비교/u);
-  assert.ok(texts.instagram.endsWith(`\n${hashtags(THREE).join(" ")}`), "인스타그램 끝에 해시태그 13개(P1-f)");
-  assert.equal(textCount("instagram", texts.instagram).tags, 13);
+  assert.ok(texts.instagram.endsWith(`\n${hashtags(THREE).join(" ")}`), "인스타그램 끝에 해시태그 12개(P1-f)");
+  assert.equal(textCount("instagram", texts.instagram).tags, 12);
   assert.match(texts.blog, /^제목: 대전 동구 아파트 실거래 3건\(2026년 10 ~ 11월 계약\)/u);
   assert.match(texts.blog, /중개사무소 명칭: .+\n소재지: .+\n연락처: .+\n등록번호: .+\n대표 성명: .+$/u, "블로그 끝 명시사항 5줄");
   assert.ok(texts.threads.startsWith("[대전 동구 아파트 실거래가] 실거래 3건(2026년 10 ~ 11월 계약)"));
@@ -250,9 +250,9 @@ test("파일 이름은 날짜만(realprice-YYYYMMDD.png, 두 장이면 -1·-2), 
 test("P1-f 홍보물 순서 글: 올릴 곳 4가지(인스타그램 먼저)마다 ① 그림 저장 ② 글 복사(글자 수·해시태그 수) ③ 붙여 넣기", () => {
   assert.deepEqual(PROMO_PLACES.map(([kind]) => kind), ["instagram", "threads", "blog", "kakao"], "인스타그램이 처음 골라진 곳");
   assert.deepEqual([...PROMO_PLACES.map(([kind]) => kind)].sort(), [...PROMO_TEXT_KINDS.map(([kind]) => kind)].sort(), "글 종류와 같은 4가지");
-  const insta = promoSteps("instagram", { cardCount: 2, counted: { count: 1234, limit: 2200, tags: 13, over: false } });
+  const insta = promoSteps("instagram", { cardCount: 2, counted: { count: 1234, limit: 2200, tags: 12, over: false } });
   assert.equal(insta.image, "카드 그림 2장을 휴대폰에 저장합니다.");
-  assert.equal(insta.text, "글을 복사합니다(해시태그 13개 포함, 2,200자 중 1,234자).");
+  assert.equal(insta.text, "글을 복사합니다(해시태그 12개 포함, 2,200자 중 1,234자).");
   assert.match(insta.post, /^인스타그램 앱에서 새 게시물/u);
   const threads = promoSteps("threads", { counted: { count: 620, limit: 500, tags: 0, over: true } });
   assert.equal(threads.image, "카드 그림을 휴대폰에 저장합니다.", "한 장이면 장 수를 쓰지 않음");
