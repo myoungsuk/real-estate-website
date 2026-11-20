@@ -1438,6 +1438,23 @@ html:has(.rt-pick-bar:not([hidden])) { scroll-padding-bottom: calc(var(--rt-pick
 .paper-card h2 { margin: 0 0 8px; color: var(--ds-navy); font-size: 1.25rem; font-weight: 800; }
 .paper-done__preview { margin: 16px 0 0; }
 .paper-done__preview img { display: block; width: min(100%, 432px); height: auto; border: 1px solid var(--ds-edge); }
+/* 매물 안내지(보드 45번 D): 담기 목록 → 매물마다 명시사항 칸(글 초안과 같은 bl-row) → 그림. 인쇄는 홍보 종이 인쇄 칸을 같이 쓴다. */
+.lp-step { margin-top: 28px; }
+.lp-step h2 { display: flex; align-items: center; gap: 10px; margin: 0 0 8px; color: var(--ds-navy); font-size: 1.25rem; font-weight: 800; }
+.lp-step__no { display: inline-grid; place-items: center; flex: none; width: 32px; height: 32px; border-radius: 50%; background: var(--ds-navy); color: var(--ds-paper); font-size: 1rem; }
+.lp-picked { margin: 12px 0 8px; color: var(--ds-ink); font-weight: 800; }
+.lp-list { display: grid; gap: 8px; max-height: min(60vh, 560px); margin: 0; padding: 0 2px 0 0; overflow-y: auto; list-style: none; }
+.lp-item[hidden] { display: none; }
+.lp-item__pick { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; box-sizing: border-box; width: 100%; min-height: 44px; padding: 12px 14px; border: 1px solid var(--ds-edge); border-radius: 8px; background: var(--ds-paper); color: var(--ds-ink); font: inherit; text-align: left; cursor: pointer; }
+.lp-item__name { font-weight: 800; overflow-wrap: anywhere; }
+.lp-item__meta { grid-column: 1; color: var(--ds-ink-soft); font-size: 1rem; overflow-wrap: anywhere; }
+.lp-item__mark { grid-column: 2; grid-row: 1 / span 2; align-self: center; color: var(--ds-navy); font-size: 1rem; font-weight: 800; white-space: nowrap; }
+.lp-item__pick:disabled { background: var(--ds-paper-2); color: var(--ds-ink-soft); cursor: not-allowed; }
+.lp-item__pick:disabled .lp-item__mark { color: var(--ds-ink-soft); }
+.lp-item--picked .lp-item__pick { border: 2px solid var(--ds-navy); padding: 11px 13px; }
+.lp-item__reason { display: block; margin: 4px 2px 0; color: var(--ds-ink-soft); font-size: 0.875rem; }
+.lp-form { padding: 16px 0 4px; border-top: 1px solid var(--ds-edge); }
+.lp-form__title { margin: 0 0 8px; color: var(--ds-ink); font-size: 1.0625rem; font-weight: 800; overflow-wrap: anywhere; }
 .bc-stage { container-type: inline-size; display: grid; gap: 16px; margin: 12px 0; }
 .bc-stage figure { margin: 0; }
 .bc-stage figcaption { margin-top: 6px; color: var(--ds-ink-soft); font-size: 0.875rem; }
