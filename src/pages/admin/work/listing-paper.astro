@@ -1,0 +1,348 @@
+---
+import AdminIcon from "../../../components/admin/AdminIcon.astro";
+import AdminPageHelp from "../../../components/admin/AdminPageHelp.astro";
+import naverListings from "../../../data/naver-listings.json";
+import office from "../../../data/office.json";
+import disclosureRules from "../../../data/work/ad-disclosure-rules.json";
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import { formatDate } from "../../../lib/work/ad-disclosure.mjs";
+import { LISTING_PICK_MAX, bigPriceText, listingOfficeBlockReason, listingPaperSources } from "../../../lib/work/listing-paper.mjs";
+
+// 매물 안내지·비교표(보드 45번 D, 운영자 결정 2026-11-20 23:32:49 "관리자 화면에서만", 23:41:16 "A 매물 종이"·"만들 때마다 넣고 저장 안 함"·"넣지 않기").
+// - 공개 매물(naver-listings.json)만 빌드 때 목록으로 그린다. 고른 매물마다 글 초안(P3)과 같은 명시사항 칸(work-disclosure-fields.ts)을 채운다.
+// - 공동주택 필수 13항목은 1:1로 보내는 그림에도 늘 넣는다. 빈 필수 항목이 있으면 그림을 만들지 않는다.
+// - 넣은 값은 이 화면 메모리에만 두고 저장·서버 전송·URL·브라우저 저장소에 넣지 않는다.
+const sources = listingPaperSources(naverListings, disclosureRules);
+// 브라우저에는 빌드 때 만든 목록을 JSON으로만 넘긴다. 브라우저 묶음이 가격 읽기(naver-listing-filter.mjs)를 끌어오면 공개 /properties/ 묶음까지 바뀌기 때문.
+// "<"는 JSON 이스케이프(\u003c)로 바꿔 글 안의 </script>가 칸을 끊지 못하게 한다.
+const pageData = JSON.stringify({ checkedAt: naverListings.checkedAt, sources }).replace(/</gu, "\\u003c");
+const officeBlocked = listingOfficeBlockReason(office);
+const tradeLabels: Record<string, string> = { sale: "매매", jeonse: "전세", "monthly-rent": "월세" };
+const metaOf = (source: (typeof sources)[number]) => {
+  const facts = source.facts as Record<string, unknown>;
+  const area = typeof facts.exclusiveM2 === "number" ? `전용 ${facts.exclusiveM2}㎡` : null;
+  return [tradeLabels[String(facts.tradeType)] ?? null, facts.propertyType, bigPriceText(facts) || null, area].filter(Boolean).join(" · ");
+};
+---
+
+<AdminLayout
+  title="매물 안내지 | 행복한부동산 관리자"
+  description="공개 매물 1 ~ 3건으로 손님에게 보낼 매물 안내지·비교표 그림을 만드는 관리자 업무 도구입니다."
+>
+  <div class="work-ui work-doc paper lp" data-lp>
+    <header class="work-doc__header">
+      <span class="work-round-icon work-round-icon--title" data-tone="navy">
+        <AdminIcon name="page" size={22} />
+      </span>
+      <h1>매물 안내지</h1>
+      <span class="admin-stage-badge">저장하지 않음</span>
+    </header>
+
+    <p class="work-doc__lead">공개 매물 1건은 안내지로, 2 ~ {LISTING_PICK_MAX}건은 비교표로 그림을 만듭니다. 넣은 값은 저장하지 않고 화면을 닫으면 사라집니다.</p>
+
+    <AdminPageHelp page="/admin/work/listing-paper/" />
+
+    <p class="work-doc__notice">
+      <AdminIcon name="shield" size={18} />
+      <span>손님에게 1:1로 보내는 그림에도 매물 명시사항(아파트는 13항목)과 사무소 5항목을 늘 넣습니다. 빈 칸이 있으면 만들지 않습니다.</span>
+    </p>
+
+    {officeBlocked ? (
+      <p class="work-message" role="status">{officeBlocked}</p>
+    ) : (
+      <>
+        <section class="work-tool lp-step" aria-labelledby="lp-pick-title">
+          <h2 id="lp-pick-title"><span class="lp-step__no" aria-hidden="true">1</span>매물 담기</h2>
+          <p class="work-help">한 장에 {LISTING_PICK_MAX}건까지, 처음 담은 매물과 종류·거래 형태가 같은 매물만 담습니다. 분양권은 명시 기준을 정하지 않아 담을 수 없습니다. 네이버 부동산 공개 매물 {sources.length}건({formatDate(naverListings.checkedAt)} 확인).</p>
+          <div class="work-row">
+            <label class="work-row__label" for="lp-query">매물 찾기</label>
+            <div class="work-row__control">
+              <input id="lp-query" type="search" maxlength="30" autocomplete="off" placeholder="예: 휴먼시아, 아파트" data-lp-query />
+            </div>
+          </div>
+          <p class="lp-picked" role="status" aria-live="polite" data-lp-picked>담은 매물 0 / {LISTING_PICK_MAX}</p>
+          <ul class="lp-list" data-lp-list>
+            {sources.map((source) => (
+              <li class="lp-item" data-lp-item={source.id}>
+                <button class="lp-item__pick" type="button" aria-pressed="false" disabled={Boolean(source.blockedReason)} data-lp-pick={source.id}>
+                  <span class="lp-item__name">{source.title}</span>
+                  <span class="lp-item__meta">{metaOf(source)}</span>
+                  <span class="lp-item__mark" aria-hidden="true" data-lp-mark>{source.blockedReason ? "담을 수 없음" : "담기"}</span>
+                </button>
+                <small class="lp-item__reason" data-lp-reason hidden={!source.blockedReason}>{source.blockedReason ?? ""}</small>
+              </li>
+            ))}
+          </ul>
+          <p class="bl-soft" data-lp-empty hidden>찾는 매물이 없습니다.</p>
+        </section>
+
+        <section class="work-tool lp-step" aria-labelledby="lp-fill-title">
+          <h2 id="lp-fill-title"><span class="lp-step__no" aria-hidden="true">2</span>명시사항 채우기</h2>
+          <p class="bl-soft" data-lp-fill-empty>먼저 매물을 담습니다.</p>
+          <div class="lp-forms" data-lp-forms></div>
+        </section>
+
+        <section class="work-tool lp-step" aria-labelledby="lp-make-title">
+          <h2 id="lp-make-title"><span class="lp-step__no" aria-hidden="true">3</span>그림 만들기</h2>
+          <p class="work-help">그림에는 담은 순서대로 싣고, '가장 낮은' 같은 표시는 하지 않습니다. 호수·손님 정보는 넣지 않고 파일 이름에는 날짜만 들어갑니다.</p>
+          <div class="work-receipt__actions">
+            <button class="work-primary-button" type="button" disabled data-lp-make>안내지 그림 만들기</button>
+            <a class="work-primary-button" data-lp-download hidden>그림 저장</a>
+            <button class="work-secondary-button" type="button" data-lp-print hidden>종이로 뽑기(A4)</button>
+          </div>
+          <p class="admin-form-status" role="status" aria-live="polite" data-lp-status></p>
+          <figure class="paper-done__preview" data-lp-preview hidden>
+            <img alt="" data-lp-image />
+          </figure>
+          <canvas data-lp-canvas hidden></canvas>
+        </section>
+      </>
+    )}
+
+    {/* 인쇄할 때만 보이는 칸(홍보 종이와 같은 인쇄 CSS: body[data-paper-print="done"]). */}
+    <div class="paper-print paper-print--done" data-lp-sheet></div>
+    <script type="application/json" data-lp-data set:html={pageData}></script>
+  </div>
+
+  <script>
+    import office from "../../../data/office.json";
+    import disclosureRules from "../../../data/work/ad-disclosure-rules.json";
+    import { renderCompareCard, renderListingCard, type CompareSheet, type ListingSheet } from "../../../lib/work-listing-card";
+    import { createDisclosureFields, disclosureFieldLabel, type DisclosureSource } from "../../../lib/work-disclosure-fields";
+    import { todayInKorea } from "../../../lib/work/legal-dates.mjs";
+    import {
+      LISTING_PICK_MAX,
+      buildCompareSheet,
+      buildListingSheet,
+      checkListingInputs,
+      listingFileName,
+      pickBlockReason,
+    } from "../../../lib/work/listing-paper.mjs";
+    import { matchesBlogSourceQuery } from "../../../lib/work/blog-sources.mjs";
+
+    type Source = DisclosureSource & { blockedReason: string | null; facts: Record<string, unknown> };
+    type Picked = { source: Source; box: HTMLElement; count: HTMLElement; fields: ReturnType<typeof createDisclosureFields> };
+
+    const root = document.querySelector<HTMLElement>("[data-lp]");
+
+    if (root) {
+      const list = root.querySelector<HTMLElement>("[data-lp-list]");
+      if (list) {
+        const pick = <T extends HTMLElement>(selector: string) => root.querySelector<T>(selector) as T;
+        const query = pick<HTMLInputElement>("[data-lp-query]");
+        const pickedLine = pick<HTMLElement>("[data-lp-picked]");
+        const empty = pick<HTMLElement>("[data-lp-empty]");
+        const forms = pick<HTMLElement>("[data-lp-forms]");
+        const fillEmpty = pick<HTMLElement>("[data-lp-fill-empty]");
+        const make = pick<HTMLButtonElement>("[data-lp-make]");
+        const download = pick<HTMLAnchorElement>("[data-lp-download]");
+        const print = pick<HTMLButtonElement>("[data-lp-print]");
+        const status = pick<HTMLElement>("[data-lp-status]");
+        const preview = pick<HTMLElement>("[data-lp-preview]");
+        const image = pick<HTMLImageElement>("[data-lp-image]");
+        const canvas = pick<HTMLCanvasElement>("[data-lp-canvas]");
+        const sheetBox = pick<HTMLElement>("[data-lp-sheet]");
+
+        const pageData = JSON.parse(root.querySelector("[data-lp-data]")?.textContent ?? "{}") as { checkedAt?: string; sources?: Source[] };
+        const sources = pageData.sources ?? [];
+        const byId = new Map(sources.map((source) => [source.id, source]));
+        const items = [...list.querySelectorAll<HTMLElement>("[data-lp-item]")];
+        // 담은 매물과 칸 값은 이 배열(화면 메모리)에만 있다. 저장·전송하지 않는다.
+        let picked: Picked[] = [];
+        let touched = false;
+        let token = 0;
+        let formNo = 0;
+
+        const setStatus = (text: string, state: "idle" | "success" | "error") => {
+          status.textContent = text;
+          status.dataset.state = state;
+        };
+        // 칸이나 담은 매물이 바뀌면 만든 그림을 버린다(만드는 중에 바뀌면 끝난 그림도 버림).
+        const clearImage = () => {
+          token += 1;
+          download.hidden = true;
+          download.removeAttribute("href");
+          download.removeAttribute("download");
+          print.hidden = true;
+          preview.hidden = true;
+          image.removeAttribute("src");
+          image.alt = "";
+          sheetBox.replaceChildren();
+        };
+
+        function renderList() {
+          const needle = query.value;
+          let shown = 0;
+          for (const li of items) {
+            const id = li.dataset.lpItem ?? "";
+            const source = byId.get(id);
+            const button = li.querySelector<HTMLButtonElement>("[data-lp-pick]");
+            const mark = li.querySelector<HTMLElement>("[data-lp-mark]");
+            const reasonEl = li.querySelector<HTMLElement>("[data-lp-reason]");
+            if (!source || !button || !mark || !reasonEl) continue;
+            const isPicked = picked.some((entry) => entry.source.id === id);
+            const reason = isPicked ? null : pickBlockReason(source, picked.map((entry) => entry.source));
+            button.setAttribute("aria-pressed", String(isPicked));
+            button.disabled = Boolean(reason);
+            li.classList.toggle("lp-item--picked", isPicked);
+            mark.textContent = isPicked ? "✓ 담음 · 빼기" : reason ? "담을 수 없음" : "담기";
+            reasonEl.textContent = reason ?? "";
+            reasonEl.hidden = !reason;
+            const visible = isPicked || matchesBlogSourceQuery(source, needle);
+            li.hidden = !visible;
+            if (visible) shown += 1;
+          }
+          empty.hidden = shown > 0;
+          pickedLine.textContent = `담은 매물 ${picked.length} / ${LISTING_PICK_MAX}`;
+          fillEmpty.hidden = picked.length > 0;
+          make.disabled = picked.length === 0;
+          make.textContent = picked.length > 1 ? "비교표 그림 만들기" : "안내지 그림 만들기";
+        }
+
+        function renderCount(entry: Picked) {
+          const state = entry.fields.evaluate();
+          const keys = [...state.messages.keys(), ...state.unmapped];
+          entry.count.textContent = state.ok ? "✓ 명시사항을 다 채웠습니다." : `빈 칸·고칠 칸 ${keys.length}개: ${keys.map(disclosureFieldLabel).join("·")}`;
+          entry.fields.renderMarks(state, touched);
+          return state;
+        }
+
+        function addPicked(source: Source) {
+          formNo += 1;
+          const box = document.createElement("div");
+          box.className = "lp-form";
+          box.dataset.lpForm = source.id;
+          const head = document.createElement("h3");
+          head.className = "lp-form__title";
+          head.textContent = source.title;
+          const count = document.createElement("p");
+          count.className = "bl-count";
+          count.setAttribute("role", "status");
+          const fieldsBox = document.createElement("div");
+          box.append(head, count, fieldsBox);
+          forms.append(box);
+          const fields = createDisclosureFields(fieldsBox, { rules: disclosureRules, office, officePhone: office.mobile, idPrefix: `lp${formNo}` });
+          fields.build(source);
+          const entry: Picked = { source, box, count, fields };
+          const onChange = () => {
+            fields.refresh();
+            renderCount(entry);
+            clearImage();
+            setStatus("", "idle");
+          };
+          fieldsBox.addEventListener("input", onChange);
+          fieldsBox.addEventListener("change", onChange);
+          picked.push(entry);
+          renderCount(entry);
+          // 이 칸 묶음 번호를 매긴다(그림에 싣는 순서).
+          renumber();
+        }
+        function renumber() {
+          picked.forEach((entry, index) => {
+            const head = entry.box.querySelector<HTMLElement>(".lp-form__title");
+            if (head) head.textContent = picked.length > 1 ? `${index + 1}. ${entry.source.title}` : entry.source.title;
+          });
+        }
+
+        list.addEventListener("click", (event) => {
+          const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-lp-pick]");
+          if (!button || button.disabled) return;
+          const source = byId.get(button.dataset.lpPick ?? "");
+          if (!source) return;
+          const at = picked.findIndex((entry) => entry.source.id === source.id);
+          if (at >= 0) {
+            picked[at].box.remove();
+            picked.splice(at, 1);
+            renumber();
+          } else if (!pickBlockReason(source, picked.map((entry) => entry.source))) {
+            addPicked(source);
+          }
+          clearImage();
+          setStatus("", "idle");
+          renderList();
+        });
+        query.addEventListener("input", renderList);
+
+        // 인쇄: 홍보 종이와 같은 인쇄 칸 표시를 body에 달고, 인쇄 창이 닫히면 뗀다.
+        print.addEventListener("click", () => {
+          document.body.dataset.paperPrint = "done";
+          window.print();
+        });
+        window.addEventListener("afterprint", () => {
+          delete document.body.dataset.paperPrint;
+        });
+
+        make.addEventListener("click", async () => {
+          if (picked.length === 0) return;
+          touched = true;
+          clearImage();
+          const ready: { title: string; price: string }[] = [];
+          for (const [index, entry] of picked.entries()) {
+            const state = renderCount(entry);
+            const label = picked.length > 1 ? `${index + 1}번 매물` : "매물";
+            if (!state.ok) {
+              const keys = [...state.messages.keys(), ...state.unmapped];
+              setStatus(`${label}의 표시한 칸을 채우거나 고쳐 주세요: ${keys.map(disclosureFieldLabel).join("·")}. 빈 칸이 있으면 만들 수 없습니다.`, "error");
+              const first = entry.box.querySelector<HTMLElement>(".bl-row--empty input:not([hidden]), .bl-row--empty select");
+              first?.focus();
+              return;
+            }
+            const checked = checkListingInputs(entry.source, state.raw, { office, rules: disclosureRules });
+            if (!checked.ok || !checked.item) {
+              setStatus(`${label}의 명시사항을 다시 확인해 주세요: ${[...(checked.missing ?? []), ...(checked.errors ?? []), ...(checked.personal ?? [])].map(disclosureFieldLabel).join("·")}.`, "error");
+              return;
+            }
+            ready.push(checked.item);
+          }
+          const compare = ready.length > 1;
+          const built = compare ? buildCompareSheet(ready, office, pageData.checkedAt ?? null) : buildListingSheet(ready[0], office);
+          if (!built.ok || !built.sheet) {
+            setStatus(built.error ?? "그림을 만들 수 없습니다.", "error");
+            return;
+          }
+          const mine = ++token;
+          make.disabled = true;
+          try {
+            const result = compare ? await renderCompareCard(canvas, built.sheet as CompareSheet) : await renderListingCard(canvas, built.sheet as ListingSheet);
+            if (mine !== token) return;
+            if (result.overflow) {
+              setStatus("글이 길어 그림에 다 들어가지 않습니다. 관리비·주차처럼 긴 칸을 줄이거나 담은 매물을 줄여 주세요.", "error");
+              return;
+            }
+            const alt = compare ? `매물 비교: ${ready.map((item) => item.title).join(", ")}` : `매물 안내: ${ready[0]?.title ?? ""} · ${ready[0]?.price ?? ""}`;
+            image.src = result.dataUrl;
+            image.alt = alt;
+            preview.hidden = false;
+            download.href = result.dataUrl;
+            download.download = listingFileName(todayInKorea(), ready.length);
+            download.hidden = false;
+            const printed = document.createElement("img");
+            printed.src = result.dataUrl;
+            printed.alt = alt;
+            sheetBox.replaceChildren(printed);
+            print.hidden = false;
+            setStatus("✓ 그림을 만들었습니다. 보내기 전에 숫자를 한 번 더 확인하고 '그림 저장'이나 '종이로 뽑기(A4)'를 누르세요.", "success");
+          } catch {
+            if (mine === token) setStatus("그림을 만들지 못했습니다. 다시 눌러 주세요.", "error");
+          } finally {
+            if (mine === token) make.disabled = picked.length === 0;
+          }
+        });
+
+        const reset = () => {
+          for (const entry of picked) entry.box.remove();
+          picked = [];
+          touched = false;
+          query.value = "";
+          clearImage();
+          setStatus("", "idle");
+          renderList();
+        };
+        window.addEventListener("pageshow", (event) => {
+          if (event.persisted) reset();
+        });
+        reset();
+      }
+    }
+  </script>
+</AdminLayout>
