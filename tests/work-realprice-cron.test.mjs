@@ -92,7 +92,7 @@ test("TK-22 켜기 값이 꺼짐(없음·TRUE·1·' true')이면 D1·외부 요�
   assert.equal(calls.length, 0);
 });
 
-test("TK-07·TK-22 구조 번호 2(0003 적용 전 D1)·5(앞선 코드로 되돌림)이면 공공데이터포털 호출 0번·D1 쓰기 0·경고 로그만", async () => {
+test("TK-07·TK-22 구조 번호 2(0003 적용 전 D1)·6(앞선 코드로 되돌림)이면 공공데이터포털 호출 0번·D1 쓰기 0·경고 로그만", async () => {
   const database = new DatabaseSync(":memory:");
   database.exec("PRAGMA foreign_keys = ON;");
   for (const sql of allMigrationSql.slice(0, 2)) database.exec(sql);
@@ -105,7 +105,7 @@ test("TK-07·TK-22 구조 번호 2(0003 적용 전 D1)·5(앞선 코드로 되�
   assert.deepEqual(log, [{ event: "realprice_cron", level: "warn", code: "WORK_SCHEMA_OUTDATED" }]);
 
   const ahead = freshDb();
-  ahead.database.exec("UPDATE settings SET value_json = '5' WHERE key = 'schema_version'");
+  ahead.database.exec("UPDATE settings SET value_json = '6' WHERE key = 'schema_version'");
   assert.equal((await cron(cronEnv(ahead.db), { fetcher })).code, "WORK_SCHEMA_AHEAD");
   assert.equal(calls.length, 0);
   assert.equal(ahead.db.stats.batches.length, 0);
