@@ -154,11 +154,14 @@ export function checkNoteBody(body) {
 }
 
 // 손님 지우기 결과 문장. 남긴 메모가 있으면 그 메모에 지운 손님 정보가 남아 있을 수 있음을 알린다.
+// 지운 거래에 이은 장부 줄은 지우지 않고 거래 연결만 끊어 남긴다(2026-11-21 사용자 결정 "나").
 export function deleteResultText(result) {
   const { deals = 0, notes = 0 } = result?.deleted ?? {};
   const kept = result?.kept?.notes ?? 0;
+  const ledger = result?.kept?.ledger ?? 0;
   const parts = [`손님을 지웠습니다. 함께 지운 것: 이 손님만의 거래 ${deals}건, 메모 ${notes}개.`];
   if (kept > 0) parts.push(`다른 손님과 함께인 거래의 메모 ${kept}개는 그 거래 기록이라 남겼습니다. 그 메모 글에 지운 손님 이름·전화가 있으면 직접 고쳐 주세요.`);
+  if (ledger > 0) parts.push(`장부 줄 ${ledger}개는 매출장부에 남습니다(거래 연결만 끊김). 그 줄의 물건 표시·메모에 손님 이름이 있으면 매출장부에서 고쳐 주세요.`);
   return parts.join(" ");
 }
 

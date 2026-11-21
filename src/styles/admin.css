@@ -1826,3 +1826,127 @@ html:has(.rt-pick-bar:not([hidden])) { scroll-padding-bottom: calc(var(--rt-pick
   .cu-two { grid-template-columns: minmax(300px, 360px) minmax(0, 1fr); gap: 32px; align-items: start; }
   .cu-two__side { position: sticky; top: 16px; }
 }
+/* ── 업무 도구 아래 단계 묶음(사용자 선택 2026-11-21 03:09:45 B안): PC 왼쪽 목록은 보이는 작은 제목, 휴대폰 작은 탭은 세로 줄로 나눔(제목은 화면 읽기 도구용) ── */
+.admin-menu__subhead { margin: 8px 0 2px; padding: 0 10px; color: var(--ds-ink-soft); font-size: 0.875rem; font-weight: 800; }
+.admin-subtabs ul ul { gap: 18px; width: auto; min-width: 0; padding: 0; }
+/* 묶음 제목(sr-only, position: absolute)이 가로로 밀리는 줄 밖 문서 폭을 늘리지 않게 묶음 안에 가둔다. */
+.admin-subtabs__group { position: relative; display: flex; align-items: center; }
+.admin-subtabs__group::before { content: ""; align-self: center; width: 1px; height: 22px; margin-right: 12px; background: var(--ds-field-edge); }
+
+/* ── 매출장부(단계 2, /admin/work/ledger/, 시안 2026-11-21 03:09:45 "이 시안대로"). 상태·경고는 색만이 아니라 글자·기호로 ── */
+.lg-notice { display: flex; align-items: center; gap: 8px; margin: -4px 0 12px; color: var(--ds-ink-soft); font-size: 1rem; font-weight: 700; }
+.lg-notice::before { content: "ⓘ"; color: var(--ds-navy); }
+.lg-filters { display: grid; gap: 10px; margin: 0 0 12px; }
+.lg-year { display: flex; align-items: center; gap: 6px; }
+.lg-year__now { min-width: 6.5rem; color: var(--ds-navy); font-size: 1.25rem; font-weight: 800; text-align: center; font-variant-numeric: tabular-nums; }
+.lg-year .rt-chip { min-width: 44px; justify-content: center; }
+.lg-seg { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.lg-seg__label { margin-right: 4px; color: var(--ds-ink-soft); font-weight: 800; }
+@media (min-width: 760px) { .lg-filters { grid-template-columns: auto 1fr; align-items: center; column-gap: 24px; } }
+.lg-undated { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 0 0 12px; padding: 10px 14px; border: 1.5px solid #8a6424; border-radius: 2px; background: var(--ds-paper-2); color: var(--ds-ink); font-weight: 700; }
+.lg-undated strong { color: #8a6424; }
+.lg-undated strong::before { content: "! "; }
+.lg-sum { margin: 0 0 8px; padding: 16px 0 4px; border-top: 2px solid var(--ds-navy); }
+.lg-sum__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 10px; }
+.lg-sum__head h2 { margin: 0; color: var(--ds-navy); font-size: 1.125rem; }
+.lg-sum__head h2 small { color: var(--ds-ink-soft); font-size: 1rem; font-weight: 700; }
+.lg-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.lg-tile { display: grid; gap: 2px; align-content: start; padding: 10px 12px; border: 1px solid var(--ds-edge); border-radius: 2px; background: var(--ds-paper); }
+.lg-tile dt { color: var(--ds-ink-soft); font-size: 1rem; font-weight: 800; }
+.lg-tile dd { margin: 0; color: var(--ds-ink); font-size: 1.1875rem; font-weight: 800; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.lg-tile small { color: var(--ds-ink-soft); font-size: 1rem; font-weight: 600; }
+.lg-tile--net { grid-column: 1 / -1; border: 1.5px solid var(--ds-navy); }
+.lg-tile--net dd { color: var(--ds-navy); font-size: 1.375rem; }
+.lg-tile--due dd::before { content: "! "; }
+@media (min-width: 760px) { .lg-tiles { grid-template-columns: repeat(5, minmax(0, 1fr)); } .lg-tile--net { grid-column: auto; } }
+.lg-months { width: 100%; margin: 12px 0 4px; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.lg-months caption { margin: 0 0 6px; color: var(--ds-ink); font-weight: 800; text-align: left; }
+.lg-months caption small { color: var(--ds-ink-soft); font-size: 1rem; font-weight: 400; }
+.lg-months th, .lg-months td { padding: 8px 6px; border-top: 1px solid var(--ds-edge); text-align: right; white-space: nowrap; }
+.lg-months th:first-child, .lg-months td:first-child { text-align: left; }
+.lg-months thead th { color: var(--ds-ink-soft); font-size: 1rem; font-weight: 800; border-top: 0; }
+.lg-months tbody tr.is-empty td { color: var(--ds-ink-soft); font-weight: 400; }
+.lg-months tfoot td { border-top: 2px solid var(--ds-navy); font-weight: 800; }
+.lg-months .is-due { color: var(--ds-ink); font-weight: 800; }
+.lg-months .is-due::before { content: "! "; }
+.lg-months.lg-only-narrow th, .lg-months.lg-only-narrow td { padding: 8px 4px; }
+.lg-months-empty { margin: 4px 0 0; color: var(--ds-ink-soft); font-size: 1rem; }
+.lg-only-wide { display: none; }
+@media (min-width: 980px) { .lg-only-wide { display: table; } .lg-only-narrow { display: none !important; } }
+.lg-tools { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 4px; }
+.lg-tools .work-primary-button, .lg-tools .work-secondary-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: auto; padding: 0 20px; text-decoration: none; }
+.lg-tools .work-primary-button { flex: 1 1 200px; }
+.lg-tools .work-secondary-button { flex: 1 1 140px; }
+@media (min-width: 760px) { .lg-tools .work-primary-button, .lg-tools .work-secondary-button { flex: 0 0 auto; } }
+.lg-csv-note { margin: 0 0 10px; color: var(--ds-ink-soft); font-size: 1rem; }
+.lg-kind { display: inline-flex; align-items: center; min-height: 26px; padding: 0 8px; border: 1px solid var(--ds-field-edge); border-radius: 2px; font-size: 1rem; font-weight: 800; white-space: nowrap; }
+.lg-kind--fee { border-color: var(--ds-navy); color: var(--ds-navy); }
+.lg-kind--expense { border-style: dashed; color: var(--ds-ink-soft); }
+.lg-kind--other_income { background: var(--ds-paper-2); }
+.lg-rows { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.lg-row { display: grid; gap: 4px; padding: 12px 14px; border: 1px solid var(--ds-edge); border-radius: 2px; background: var(--ds-paper); }
+.lg-row p { margin: 0; }
+.lg-row__top { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; color: var(--ds-ink-soft); font-weight: 700; font-variant-numeric: tabular-nums; }
+.lg-row__label { color: var(--ds-ink); font-size: 1.0625rem; font-weight: 800; overflow-wrap: anywhere; }
+.lg-row__money { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; font-variant-numeric: tabular-nums; }
+.lg-row__money strong { font-size: 1.125rem; }
+.lg-row__money span { color: var(--ds-ink-soft); }
+.lg-row__pay { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; }
+.lg-pay--paid { color: var(--ds-ink-soft); font-weight: 700; }
+.lg-pay--paid::before { content: "✓ "; }
+.lg-pay--due, .lg-pay--over { color: var(--ds-ink); font-weight: 800; }
+.lg-pay--due::before, .lg-pay--over::before { content: "! "; }
+.lg-pay--none { color: var(--ds-ink-soft); font-weight: 700; }
+.lg-row.is-saved { border: 2px solid var(--ds-navy); }
+.lg-warn { display: grid; gap: 4px; margin: 4px 0 0; padding: 8px 10px; border-left: 4px solid var(--ds-stamp); background: var(--ds-paper-2); list-style: none; }
+.lg-warn li { color: var(--ds-ink); font-weight: 800; }
+.lg-warn li::before { content: "! "; color: var(--ds-stamp); }
+.lg-table { display: none; width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.lg-table th, .lg-table td { padding: 10px 8px; border-top: 1px solid var(--ds-edge); text-align: left; vertical-align: top; }
+.lg-table td:first-child { white-space: nowrap; }
+.lg-table thead th { color: var(--ds-ink-soft); font-weight: 800; border-top: 2px solid var(--ds-navy); white-space: nowrap; }
+.lg-table td.num, .lg-table th.num { text-align: right; white-space: nowrap; }
+.lg-table td small { display: block; color: var(--ds-ink-soft); font-size: 1rem; }
+.lg-table tr.is-saved td { background: var(--ds-paper-2); }
+.lg-table tr.is-saved td:first-child { box-shadow: inset 4px 0 0 var(--ds-navy); }
+@media (min-width: 1221px) { .lg-table { display: table; } .lg-rows { display: none; } }
+.lg-form { display: grid; gap: 4px; margin: 0 0 12px; padding: 14px; border: 1.5px solid var(--ds-navy); border-radius: 2px; background: var(--ds-paper); }
+.lg-form h2 { margin: 0 0 6px; color: var(--ds-navy); font-size: 1.125rem; }
+.lg-form .work-row { margin: 0; }
+.lg-form__fixed { margin: 0; font-weight: 800; }
+.lg-deal-picks { display: grid; gap: 6px; margin-top: 6px; }
+.lg-deal-pick { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 8px 12px; border: 1px solid var(--ds-field-edge); border-radius: 2px; cursor: pointer; }
+.lg-deal-pick:has(input:checked) { border: 2px solid var(--ds-navy); }
+.lg-deal-pick input { flex: none; width: 20px; height: 20px; accent-color: var(--ds-navy); }
+.lg-deal-pick span { display: grid; gap: 2px; min-width: 0; }
+.lg-deal-pick small { color: var(--ds-ink-soft); font-size: 1rem; }
+.lg-cap { display: grid; gap: 6px; margin: 6px 0; padding: 10px 12px; border: 1px dashed var(--ds-navy); border-radius: 2px; background: var(--ds-paper-2); }
+.lg-cap p { margin: 0; font-variant-numeric: tabular-nums; }
+.lg-cap strong { color: var(--ds-navy); }
+.lg-cap small { font-size: 0.88rem; }
+.lg-cap .work-secondary-button { justify-self: start; width: auto; padding: 0 16px; }
+.lg-money { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
+.lg-money .work-row { grid-template-columns: 1fr !important; align-content: start; }
+.lg-money input { width: 100%; min-width: 0; box-sizing: border-box; font-variant-numeric: tabular-nums; text-align: right; }
+@media (max-width: 479px) { .lg-money { grid-template-columns: 1fr !important; } }
+@media (min-width: 760px) { .lg-money { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.lg-inline-link { justify-self: start; min-height: 44px; font-size: 1rem; }
+.lg-total-line { margin: 4px 0 0; color: var(--ds-ink); font-weight: 800; font-variant-numeric: tabular-nums; }
+.lg-doc [hidden] { display: none !important; }
+.lg-deal-ledger { margin: 10px 0 0; padding: 10px 0 0; border-top: 1px dashed var(--ds-edge); }
+.lg-deal-ledger h4 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin: 0 0 6px; color: var(--ds-navy); font-size: 1rem; }
+.lg-deal-ledger > div > ul { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.lg-deal-ledger > div > ul > li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; padding: 8px 0; border-top: 1px solid var(--ds-edge); font-variant-numeric: tabular-nums; }
+.lg-deal-ledger > div > ul > li > span:last-child { justify-self: end; }
+.lg-deal-ledger > button[aria-expanded] { margin-bottom: 8px; }
+/* 보수 줄 만들기의 낸 쪽(체크 상자): 라디오 단추처럼 상자는 화면에서만 숨기고 고른 칸은 남색 바탕과 ✓로 보인다. */
+@supports selector(:has(*)) {
+  .lg-pair .work-segment .work-choice input[type="checkbox"] { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; margin: 0; opacity: 0; cursor: pointer; }
+}
+.lg-deal-ledger .lg-warn { grid-column: 1 / -1; }
+.lg-pair { display: grid; gap: 10px; margin-top: 10px; }
+.lg-pair__one { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid var(--ds-edge); border-radius: 2px; }
+.lg-pair__one legend, .lg-pair__one h5 { margin: 0; padding: 0; color: var(--ds-navy); font-size: 1rem; font-weight: 800; }
+.lg-pair .lg-money { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+@media (max-width: 479px) { .lg-pair .lg-money { grid-template-columns: 1fr !important; } }
+.lg-skel { display: block; height: 1.1em; margin: 4px 0; border-radius: 2px; background: var(--ds-paper-2); }

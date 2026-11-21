@@ -12,6 +12,7 @@ import {
   invalid,
   isUuid,
   parseLedgerCreate,
+  parseLedgerExport,
   parseLedgerPatch,
   parseLedgerQuery,
   parseLedgerSummaryQuery,
@@ -316,7 +317,19 @@ async function deleteEntry(ctx, id) {
   return { data: { deleted: true } };
 }
 
-// 경로가 장부(/ledger, /ledger/summary, /ledger/:id)면 { status?, data }를, 아니면 null을 돌려준다.
+// CSV 내려받기 감사(2026-11-21 대장 지시): 화면이 CSV를 만들기 전에 부른다. 자료는 돌려주지 않고 감사 export.ledger 한 줄만 남긴다.
+// 감사를 남기지 못하면 503이고, 화면은 200 { recorded: true }를 받은 뒤에만 CSV를 만든다.
+async function recordExport(ctx) {
+  const input = parseLedgerExport(ctx.body);
+  try {
+    await auditStatement(ctx.db, { ...auditBase(ctx, "export.ledger", { reason: `result_count=${input.count}` }), outcome: "ok" }).run();
+  } catch {
+    throw new WorkApiError("AUDIT_UNAVAILABLE", "작업 기록을 남기지 못해 내려받기를 멈췄습니다.", 503, true);
+  }
+  return { data: { recorded: true } };
+}
+
+// 경로가 장부(/ledger, /ledger/summary, /ledger/export, /ledger/:id)면 { status?, data }를, 아니면 null을 돌려준다.
 export async function routeWorkLedger(ctx) {
   const [collection, id, extra] = ctx.route.split("/").filter(Boolean);
   if (collection !== "ledger" || extra !== undefined) return null;
@@ -328,6 +341,10 @@ export async function routeWorkLedger(ctx) {
   if (id === "summary") {
     if (ctx.method === "GET") return { data: await summary(ctx) };
     throw methodNotAllowed("GET");
+  }
+  if (id === "export") {
+    if (ctx.method === "POST") return recordExport(ctx);
+    throw methodNotAllowed("POST");
   }
   if (!isUuid(id)) throw notFound();
   if (ctx.method === "PATCH") return updateEntry(ctx, id);

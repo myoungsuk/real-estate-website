@@ -48,17 +48,20 @@ const navigationGroups = [
 ];
 
 // 아래 단계가 있는 구역. 지금 구역이면 PC 왼쪽 목록에서 펼치고, 휴대폰은 위 제목 줄 아래 작은 탭으로 보여 준다.
-const navigationSubItems: Record<string, { href: string; label: string }[]> = {
+// group: 이웃한 같은 group끼리 한 묶음(role="group" + 보이는 제목 aria-labelledby)으로 보인다. 업무 도구 묶음 3개는 사용자 선택 2026-11-21 03:09:45 B안.
+type NavigationSubItem = { href: string; label: string; group?: string };
+const navigationSubItems: Record<string, NavigationSubItem[]> = {
   "/admin/work/": [
     { href: "/admin/work/", label: "업무 도구 처음" },
-    { href: "/admin/work/customers/", label: "손님" },
-    { href: "/admin/work/fee/", label: "중개보수 계산" },
-    { href: "/admin/work/messages/", label: "안내 문자" },
-    { href: "/admin/work/schedule/", label: "계약 일정" },
-    { href: "/admin/work/realprice/", label: "실거래가" },
-    { href: "/admin/work/blog/", label: "글 초안" },
-    { href: "/admin/work/paper/", label: "홍보 종이" },
-    { href: "/admin/work/listing-paper/", label: "매물 안내지" },
+    { href: "/admin/work/customers/", label: "손님", group: "손님·돈" },
+    { href: "/admin/work/ledger/", label: "매출장부", group: "손님·돈" },
+    { href: "/admin/work/fee/", label: "중개보수 계산", group: "상담 도구" },
+    { href: "/admin/work/messages/", label: "안내 문자", group: "상담 도구" },
+    { href: "/admin/work/schedule/", label: "계약 일정", group: "상담 도구" },
+    { href: "/admin/work/realprice/", label: "실거래가", group: "상담 도구" },
+    { href: "/admin/work/blog/", label: "글 초안", group: "홍보 만들기" },
+    { href: "/admin/work/paper/", label: "홍보 종이", group: "홍보 만들기" },
+    { href: "/admin/work/listing-paper/", label: "매물 안내지", group: "홍보 만들기" },
   ],
   "/admin/listings/": [
     { href: "/admin/listings/", label: "매물 현황" },
@@ -83,6 +86,17 @@ const currentSubItems = currentSection ? navigationSubItems[currentSection.href]
 // 아래 단계: 지금 화면이면 "page", 지금 화면이 그 아래 단계의 더 아래 화면이면 "true"(예: 실거래가 설정 → 실거래가). 구역 첫 주소(업무 도구 처음 등)는 앞부분이 늘 같으므로 "true"로 보지 않는다.
 const subCurrentState = (sectionHref: string, href: string): "page" | "true" | undefined =>
   currentPath === href ? "page" : href !== sectionHref && currentPath.startsWith(href) ? "true" : undefined;
+// 아래 단계를 차례 그대로 묶음으로 나눈다(group이 없는 항목은 제목 없는 묶음). 키보드 순서는 바뀌지 않는다.
+function groupSubItems<T extends NavigationSubItem>(items: T[]) {
+  const groups: { label?: string; items: T[] }[] = [];
+  for (const item of items) {
+    const last = groups.at(-1);
+    if (last && last.label === item.group) last.items.push(item);
+    else groups.push({ label: item.group, items: [item] });
+  }
+  return groups;
+}
+const currentSubGroups = currentSubItems ? groupSubItems(currentSubItems) : undefined;
 
 const menuGroups = navigationGroups.map((group) => ({
   label: group.label,
@@ -96,7 +110,7 @@ const menuGroups = navigationGroups.map((group) => ({
       // 아래 단계가 있는 메뉴는 아래 단계 쪽에 "page"를 두고, 위 메뉴는 지금 구역("true")만 알린다.
       current: subItems ? (isCurrentPath(href) ? ("true" as const) : undefined) : currentState(href),
       sub: subItems && isCurrentPath(href)
-        ? subItems.map((sub) => ({ ...sub, current: subCurrentState(href, sub.href) }))
+        ? groupSubItems(subItems.map((sub) => ({ ...sub, current: subCurrentState(href, sub.href) })))
         : undefined,
     };
   }),
@@ -146,7 +160,7 @@ const speculationRules = {
           </span>
         </a>
 
-        <AdminMenu label="관리자 메뉴" groups={menuGroups} />
+        <AdminMenu label="관리자 메뉴" idPrefix="admin-side" groups={menuGroups} />
 
         <div class="admin-side__foot">
           <p>Access 보호 영역입니다. 저장은 별도 GitHub 연결이 필요합니다.</p>
@@ -171,14 +185,25 @@ const speculationRules = {
           </a>
         </header>
 
-        {currentSection && currentSubItems && (
+        {currentSection && currentSubGroups && (
           <nav class="admin-subtabs" aria-label={`${currentSection.label} 메뉴`}>
             <ul>
-              {currentSubItems.map((item) => (
+              {currentSubGroups.map((group, index) => group.label ? (
+                <li class="admin-subtabs__group">
+                  <span class="sr-only" id={`admin-subtabs-group-${index}`}>{group.label}</span>
+                  <ul role="group" aria-labelledby={`admin-subtabs-group-${index}`}>
+                    {group.items.map((item) => (
+                      <li>
+                        <a href={item.href} aria-current={subCurrentState(currentSection.href, item.href)}>{item.label}</a>
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              ) : group.items.map((item) => (
                 <li>
                   <a href={item.href} aria-current={subCurrentState(currentSection.href, item.href)}>{item.label}</a>
                 </li>
-              ))}
+              )))}
             </ul>
           </nav>
         )}
@@ -213,7 +238,7 @@ const speculationRules = {
         <strong id="admin-sheet-title">전체 메뉴</strong>
         <button type="button" data-admin-menu-close>닫기</button>
       </div>
-      <AdminMenu label="전체 메뉴" groups={menuGroups} />
+      <AdminMenu label="전체 메뉴" idPrefix="admin-sheet" groups={menuGroups} />
       <a class="admin-public-link" href="/">
         공개 홈페이지
         <AdminIcon name="external" size={15} />

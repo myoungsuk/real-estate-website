@@ -1,0 +1,968 @@
+---
+import AdminIcon from "../../../components/admin/AdminIcon.astro";
+import AdminPageHelp from "../../../components/admin/AdminPageHelp.astro";
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import { LEDGER_BASIS_LABELS, LEDGER_BASES, LEDGER_DEAL_QUERY_MAX, LEDGER_KIND_LABELS, LEDGER_LABEL_MAX, LEDGER_MEMO_MAX, LEDGER_NARROW_MONTHS_NOTE, LEDGER_NOTICE, LEDGER_PAYER_LABELS, LEDGER_UNPAID_ALL_YEARS_NOTE } from "../../../lib/work/ledger-view.mjs";
+
+// 매출장부(단계 2, 설계서 6.12절, 시안 2026-11-21 03:09:45 "이 시안대로"). 참고용 집계이며 세무 장부가 아니다.
+// - 서버 요청은 work-ledger-client.ts 한 곳. 업무 세션이 꺼져 있으면(enabled:false) 장부 자료를 부르지 않는다.
+// - 서버를 부르므로 탭 미리 그리기 prerender 목록에 넣지 않는다(AdminLayout prerenderPages).
+// - 연도·기준일·거르기는 이 화면 메모리에만 둔다(주소·브라우저 저장소에 넣지 않음). 물건 표시·메모는 화면에만 보인다.
+// - 부가세 포함·제외는 같은 합계 응답으로 단추만 바꾼다(서버를 다시 부르지 않음).
+const kindLabels = LEDGER_KIND_LABELS as Record<string, string>;
+const payerLabels = LEDGER_PAYER_LABELS as Record<string, string>;
+const basisLabels = LEDGER_BASIS_LABELS as Record<string, string>;
+---
+
+<AdminLayout
+  title="매출장부 | 행복한부동산 관리자"
+  description="받은 중개보수·지출·기타 수입을 적고 달별 합계와 미입금을 보는 관리자 업무 도구입니다. 참고용 집계이며 세무 장부가 아닙니다."
+>
+  <div class="work-ui work-doc cu-doc cu-doc--wide lg-doc" data-lg-page>
+    <header class="work-doc__header">
+      <span class="work-round-icon work-round-icon--title" data-tone="navy">
+        <AdminIcon name="ledger" size={22} />
+      </span>
+      <h1>매출장부</h1>
+      <span class="admin-stage-badge">서버에 저장 · 관리자만</span>
+    </header>
+    <AdminPageHelp page="/admin/work/ledger/" />
+    <p class="lg-notice">{LEDGER_NOTICE}</p>
+
+    <p class="rt-boot cu-boot" role="status" data-lg-boot>매출장부를 불러오고 있습니다…</p>
+    <section class="admin-panel rt-state cu-state" aria-labelledby="lg-state-title" data-lg-state hidden>
+      <div class="admin-empty-state">
+        <span aria-hidden="true" data-lg-state-symbol>!</span>
+        <div>
+          <h2 id="lg-state-title" data-lg-state-title></h2>
+          <p data-lg-state-body></p>
+          <button class="work-secondary-button cu-state__go" type="button" data-lg-state-retry hidden>다시 불러오기</button>
+          <a class="admin-text-link" href="/admin/work/fee/" data-lg-state-fee hidden>중개보수 계산으로</a>
+        </div>
+      </div>
+    </section>
+
+    <div data-lg-main hidden>
+      <div class="lg-filters">
+        <div class="lg-year" role="group" aria-label="연도">
+          <button class="rt-chip" type="button" aria-label="앞 해" data-lg-year-prev>‹</button>
+          <span class="lg-year__now" aria-live="polite" data-lg-year></span>
+          <button class="rt-chip" type="button" aria-label="다음 해" data-lg-year-next>›</button>
+        </div>
+        <div class="lg-seg" role="group" aria-labelledby="lg-basis-label">
+          <span class="lg-seg__label" id="lg-basis-label">기준일</span>
+          {LEDGER_BASES.map((basis: string) => (
+            <button class="rt-chip" type="button" aria-pressed={basis === "balance" ? "true" : "false"} data-lg-basis={basis}>{basisLabels[basis]}</button>
+          ))}
+        </div>
+      </div>
+      <p class="lg-undated" role="status" data-lg-undated hidden>
+        <strong data-lg-undated-text></strong>
+        <button class="admin-text-link cu-linkbtn" type="button" data-lg-undated-show>그 줄만 보기</button>
+      </p>
+
+      <section class="lg-sum" aria-labelledby="lg-sum-title" data-lg-sum>
+        <div class="lg-sum__head">
+          <h2 id="lg-sum-title"><span data-lg-sum-year></span> 합계 <small data-lg-basis-note></small></h2>
+          <div class="lg-seg" role="group" aria-label="보수에 부가세">
+            <button class="rt-chip" type="button" aria-pressed="true" data-lg-vat="0">부가세 빼고</button>
+            <button class="rt-chip" type="button" aria-pressed="false" data-lg-vat="1">부가세 넣고</button>
+          </div>
+        </div>
+        <dl class="lg-tiles" data-lg-tiles></dl>
+        <table class="lg-months lg-only-narrow">
+          <caption>달별 <small>(단위 원)</small></caption>
+          <thead><tr><th scope="col">달</th><th scope="col">보수</th><th scope="col">미입금</th><th scope="col">순수익</th></tr></thead>
+          <tbody data-lg-narrow></tbody>
+        </table>
+        <p class="lg-months-empty lg-only-narrow">{LEDGER_NARROW_MONTHS_NOTE}</p>
+        <p class="lg-months-empty lg-only-narrow" data-lg-empty-months></p>
+        <table class="lg-months lg-only-wide">
+          <caption>달별 합계</caption>
+          <thead><tr data-lg-wide-head></tr></thead>
+          <tbody data-lg-wide></tbody>
+          <tfoot><tr data-lg-wide-total></tr></tfoot>
+        </table>
+      </section>
+
+      <section class="cu-list" aria-labelledby="lg-count">
+        <div class="lg-tools">
+          <button class="work-primary-button" type="button" aria-expanded="false" aria-controls="lg-form" data-lg-new>
+            <span aria-hidden="true">＋</span><span>장부 줄 만들기</span>
+          </button>
+          <button class="work-secondary-button" type="button" data-lg-csv>CSV 내려받기</button>
+        </div>
+        <p class="lg-csv-note" data-lg-csv-note hidden></p>
+        <p class="admin-form-status" role="status" aria-live="polite" data-lg-csv-status></p>
+        <a class="admin-text-link" data-lg-csv-link hidden>CSV 파일 저장</a>
+
+        <section class="lg-form" id="lg-form" aria-labelledby="lg-form-title" data-lg-form hidden>
+          <h2 id="lg-form-title" data-lg-form-title>장부 줄 만들기</h2>
+          <div class="work-row" role="radiogroup" aria-labelledby="lg-kind-label" data-lg-kind-row>
+            <span class="work-row__label" id="lg-kind-label">종류</span>
+            <div class="work-segment">
+              {Object.keys(kindLabels).map((kind) => (
+                <label class="work-choice">
+                  <input type="radio" name="lg-kind" value={kind} checked={kind === "fee"} autocomplete="off" data-lg-kind-choice />
+                  <span>{kindLabels[kind]}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+          <p class="lg-form__fixed" data-lg-fixed hidden></p>
+          <div class="work-row" data-lg-deal-row>
+            <label class="work-row__label" for="lg-deal-q">거래에 잇기</label>
+            <div class="work-row__control">
+              <div class="rt-find" role="search" aria-label="거래 찾기">
+                <input id="lg-deal-q" type="search" maxlength={LEDGER_DEAL_QUERY_MAX} placeholder="거래 이름·물건 표시" enterkeyhint="search" autocomplete="off" data-lg-deal-q />
+                <button class="rt-find__go" type="button" data-lg-deal-find>찾기</button>
+              </div>
+              <div class="lg-deal-picks" role="radiogroup" aria-label="이을 거래" data-lg-deal-picks></div>
+              <small data-lg-deal-status>거래에 이으면 그 거래의 잔금일·계약일로 합계에 들어갑니다. 잇지 않아도 됩니다.</small>
+            </div>
+          </div>
+          <div class="work-row" role="radiogroup" aria-labelledby="lg-payer-label" data-lg-payer-row>
+            <span class="work-row__label" id="lg-payer-label">낸 쪽</span>
+            <div class="work-segment">
+              {Object.keys(payerLabels).map((role) => (
+                <label class="work-choice">
+                  <input type="radio" name="lg-payer" value={role} autocomplete="off" data-lg-payer-choice />
+                  <span>{payerLabels[role]}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+          <div class="work-row">
+            <label class="work-row__label" for="lg-label">물건 표시·내용</label>
+            <div class="work-row__control">
+              <input id="lg-label" type="text" maxlength={LEDGER_LABEL_MAX} placeholder="예: 가상숲1단지 84㎡ 매매" autocomplete="off" aria-describedby="lg-label-help lg-label-error" data-lg-f="label" />
+              <small id="lg-label-help">손님 이름·호수는 넣지 않습니다. 손님·거래를 지워도 장부 줄은 남습니다.</small>
+              <small class="cu-error" id="lg-label-error" data-lg-error="label"></small>
+            </div>
+          </div>
+          <div class="lg-cap" role="note" data-lg-cap hidden>
+            <p data-lg-cap-text></p>
+            <button class="work-secondary-button" type="button" data-lg-cap-fill hidden>상한으로 채우기</button>
+          </div>
+          <div class="work-row" data-lg-entry-row>
+            <label class="work-row__label" for="lg-entry-on">날짜 <span class="cu-required" data-lg-entry-required>필수</span></label>
+            <div class="work-row__control">
+              <input id="lg-entry-on" type="date" autocomplete="off" aria-describedby="lg-entry-help lg-entry-error" data-lg-f="entryOn" />
+              <small id="lg-entry-help" data-lg-entry-help></small>
+              <small class="cu-error" id="lg-entry-error" data-lg-error="entryOn"></small>
+            </div>
+          </div>
+          <div class="lg-money">
+            <div class="work-row">
+              <label class="work-row__label" for="lg-amount" data-lg-amount-label>공급가액(원)</label>
+              <div class="work-row__control">
+                <input id="lg-amount" type="text" inputmode="numeric" autocomplete="off" aria-describedby="lg-amount-error" data-lg-f="amount" />
+                <small class="cu-error" id="lg-amount-error" data-lg-error="amount"></small>
+              </div>
+            </div>
+            <div class="work-row">
+              <label class="work-row__label" for="lg-vat">부가세(원)</label>
+              <div class="work-row__control">
+                <input id="lg-vat" type="text" inputmode="numeric" autocomplete="off" aria-describedby="lg-vat-error" data-lg-f="vat" />
+                <button class="admin-text-link cu-linkbtn lg-inline-link" type="button" data-lg-vat-fill>10%로 채우기</button>
+                <small class="cu-error" id="lg-vat-error" data-lg-error="vat"></small>
+              </div>
+            </div>
+            <div class="work-row" data-lg-received-row>
+              <label class="work-row__label" for="lg-received">입금액(원)</label>
+              <div class="work-row__control">
+                <input id="lg-received" type="text" inputmode="numeric" autocomplete="off" aria-describedby="lg-received-error" data-lg-f="received" />
+                <small class="cu-error" id="lg-received-error" data-lg-error="received"></small>
+              </div>
+            </div>
+            <div class="work-row" data-lg-received-on-row>
+              <label class="work-row__label" for="lg-received-on">입금일</label>
+              <div class="work-row__control">
+                <input id="lg-received-on" type="date" autocomplete="off" aria-describedby="lg-received-on-error" data-lg-f="receivedOn" />
+                <small class="cu-error" id="lg-received-on-error" data-lg-error="receivedOn"></small>
+              </div>
+            </div>
+          </div>
+          <p class="lg-total-line" aria-live="polite" data-lg-total></p>
+          <div class="work-row">
+            <label class="work-row__label" for="lg-memo">메모</label>
+            <div class="work-row__control">
+              <textarea id="lg-memo" rows="2" maxlength={LEDGER_MEMO_MAX} autocomplete="off" aria-describedby="lg-memo-help lg-memo-error" data-lg-f="memo"></textarea>
+              <small id="lg-memo-help">손님 이름·전화번호는 적지 마세요. 주민등록번호처럼 보이는 숫자는 저장할 때 가려집니다.</small>
+              <small class="cu-error" id="lg-memo-error" data-lg-error="memo"></small>
+            </div>
+          </div>
+          <p class="admin-form-status" role="status" aria-live="polite" data-lg-form-status></p>
+          <div class="cu-actions">
+            <button class="work-primary-button cu-save" type="button" data-lg-save>장부 줄 저장</button>
+            <button class="work-secondary-button" type="button" data-lg-reload hidden>새 값 보기</button>
+            <button class="work-secondary-button" type="button" data-lg-cancel>그만두기</button>
+            <button class="admin-text-link cu-linkbtn cu-danger" type="button" data-lg-delete hidden>이 장부 줄 지우기</button>
+          </div>
+          <div class="cu-form cu-panel cu-panel--danger" data-lg-delete-panel hidden>
+            <p><strong>이 장부 줄을 지울까요?</strong> 지우면 되돌릴 수 없습니다.</p>
+            <div class="cu-actions">
+              <button class="work-primary-button cu-save cu-delete-go" type="button" data-lg-delete-go>지우기</button>
+              <button class="work-secondary-button" type="button" data-lg-delete-cancel>그만두기</button>
+            </div>
+          </div>
+        </section>
+
+        <p class="admin-form-status" role="status" aria-live="polite" data-lg-saved></p>
+        <div class="rt-chips cu-chips" role="group" aria-label="장부 줄 거르기" data-lg-chips>
+          <button class="rt-chip" type="button" aria-pressed="true" data-lg-kind="">전체</button>
+          {Object.keys(kindLabels).map((kind) => (
+            <button class="rt-chip" type="button" aria-pressed="false" data-lg-kind={kind}>{kindLabels[kind]}</button>
+          ))}
+          <button class="rt-chip" type="button" aria-pressed="false" data-lg-unpaid>미입금만</button>
+        </div>
+        <div class="rt-strip cu-strip">
+          <div class="rt-strip__text"><h2 id="lg-count" data-lg-count>장부 줄</h2></div>
+          <button class="rt-strip__clear" type="button" data-lg-back hidden>전체 줄로 돌아가기</button>
+        </div>
+        <p class="lg-csv-note" role="note" data-lg-unpaid-note hidden>{LEDGER_UNPAID_ALL_YEARS_NOTE}</p>
+        <ol class="lg-rows" data-lg-rows></ol>
+        <table class="lg-table">
+          <caption class="sr-only">장부 줄</caption>
+          <thead>
+            <tr><th scope="col">기준일</th><th scope="col">종류</th><th scope="col">물건 표시·내용</th><th scope="col" class="num">금액</th><th scope="col" class="num">입금</th><th scope="col" class="num">미입금</th><th scope="col"><span class="sr-only">고치기</span></th></tr>
+          </thead>
+          <tbody data-lg-tbody></tbody>
+        </table>
+        <section class="admin-panel rt-state cu-state" aria-labelledby="lg-empty-title" data-lg-empty hidden>
+          <div class="admin-empty-state">
+            <span aria-hidden="true" data-lg-empty-symbol>0</span>
+            <div>
+              <h2 id="lg-empty-title" data-lg-empty-title></h2>
+              <p data-lg-empty-body></p>
+              <button class="work-primary-button cu-state__go" type="button" data-lg-empty-new hidden>장부 줄 만들기</button>
+            </div>
+          </div>
+        </section>
+        <div class="cu-more-row">
+          <button class="work-secondary-button cu-more" type="button" data-lg-more hidden>50개 더 보기</button>
+          <p class="admin-form-status" role="status" aria-live="polite" data-lg-list-status></p>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    import {
+      WorkApiError,
+      createLedgerEntry,
+      deleteLedgerEntry,
+      getLedgerSession,
+      listDeals,
+      listLedger,
+      readLedgerSummary,
+      recordLedgerExport,
+      updateLedgerEntry,
+      type DealSummary,
+      type LedgerBasis,
+      type LedgerEntry,
+      type LedgerKind,
+      type LedgerSummary,
+    } from "../../../lib/work-ledger-client";
+    import { element, setStatus } from "../../../lib/work-customers-dom";
+    import { entryCard, entryRow } from "../../../lib/work-ledger-dom";
+    import legalRules from "../../../data/work/legal-rules.json";
+    import { todayInKorea } from "../../../lib/work/legal-dates.mjs";
+    import { customerErrorText, isRetryable } from "../../../lib/work/customers-view.mjs";
+    import { calculateVatWon } from "../../../lib/work/brokerage-fee.mjs";
+    import {
+      LEDGER_DEAL_QUERY_MAX,
+      LEDGER_KIND_LABELS,
+      LEDGER_PAGE_SIZE,
+      LEDGER_READ_ALL_PAGES,
+      basisNote,
+      checkLedgerInput,
+      dealFeeCap,
+      ledgerChanges,
+      ledgerCountText,
+      ledgerCsv,
+      ledgerCsvFileName,
+      ledgerDateText,
+      ledgerErrorText,
+      ledgerListQuery,
+      numberText,
+      parseWon,
+      summaryView,
+      undatedText,
+      unpaidAllYears,
+      wonText,
+    } from "../../../lib/work/ledger-view.mjs";
+
+    const root = document.querySelector<HTMLElement>("[data-lg-page]");
+    if (root) {
+      const pick = <T extends HTMLElement>(selector: string) => {
+        const found = root.querySelector<T>(selector);
+        if (!found) throw new Error(`매출장부 화면 칸이 없습니다: ${selector}`);
+        return found;
+      };
+      const kindLabels = LEDGER_KIND_LABELS as Record<string, string>;
+      const boot = pick("[data-lg-boot]");
+      const statePanel = pick("[data-lg-state]");
+      const main = pick("[data-lg-main]");
+      const yearText = pick("[data-lg-year]");
+      const yearPrev = pick<HTMLButtonElement>("[data-lg-year-prev]");
+      const yearNext = pick<HTMLButtonElement>("[data-lg-year-next]");
+      const basisButtons = [...root.querySelectorAll<HTMLButtonElement>("[data-lg-basis]")];
+      const undated = pick("[data-lg-undated]");
+      const undatedShow = pick<HTMLButtonElement>("[data-lg-undated-show]");
+      const sum = pick("[data-lg-sum]");
+      const vatButtons = [...root.querySelectorAll<HTMLButtonElement>("[data-lg-vat]")];
+      const newButton = pick<HTMLButtonElement>("[data-lg-new]");
+      const csvButton = pick<HTMLButtonElement>("[data-lg-csv]");
+      const csvNote = pick("[data-lg-csv-note]");
+      const csvStatus = pick("[data-lg-csv-status]");
+      const csvLink = pick<HTMLAnchorElement>("[data-lg-csv-link]");
+      const form = pick("[data-lg-form]");
+      const formTitle = pick("[data-lg-form-title]");
+      const kindRow = pick("[data-lg-kind-row]");
+      const kindChoices = [...root.querySelectorAll<HTMLInputElement>("[data-lg-kind-choice]")];
+      const fixed = pick("[data-lg-fixed]");
+      const dealRow = pick("[data-lg-deal-row]");
+      const dealQuery = pick<HTMLInputElement>("[data-lg-deal-q]");
+      const dealPicks = pick("[data-lg-deal-picks]");
+      const dealStatus = pick("[data-lg-deal-status]");
+      const payerRow = pick("[data-lg-payer-row]");
+      const payerChoices = [...root.querySelectorAll<HTMLInputElement>("[data-lg-payer-choice]")];
+      const cap = pick("[data-lg-cap]");
+      const capText = pick("[data-lg-cap-text]");
+      const capFill = pick<HTMLButtonElement>("[data-lg-cap-fill]");
+      const entryRowBox = pick("[data-lg-entry-row]");
+      const entryRequired = pick("[data-lg-entry-required]");
+      const entryHelp = pick("[data-lg-entry-help]");
+      const amountLabel = pick("[data-lg-amount-label]");
+      const receivedRow = pick("[data-lg-received-row]");
+      const receivedOnRow = pick("[data-lg-received-on-row]");
+      const total = pick("[data-lg-total]");
+      const formStatus = pick("[data-lg-form-status]");
+      const save = pick<HTMLButtonElement>("[data-lg-save]");
+      const reload = pick<HTMLButtonElement>("[data-lg-reload]");
+      const deleteButton = pick<HTMLButtonElement>("[data-lg-delete]");
+      const deletePanel = pick("[data-lg-delete-panel]");
+      const deleteGo = pick<HTMLButtonElement>("[data-lg-delete-go]");
+      const saved = pick("[data-lg-saved]");
+      const chips = pick("[data-lg-chips]");
+      const kindButtons = [...root.querySelectorAll<HTMLButtonElement>("[data-lg-kind]")];
+      const unpaidButton = pick<HTMLButtonElement>("[data-lg-unpaid]");
+      const count = pick("[data-lg-count]");
+      const back = pick<HTMLButtonElement>("[data-lg-back]");
+      const cards = pick("[data-lg-rows]");
+      const tbody = pick("[data-lg-tbody]");
+      const empty = pick("[data-lg-empty]");
+      const emptyNew = pick<HTMLButtonElement>("[data-lg-empty-new]");
+      const more = pick<HTMLButtonElement>("[data-lg-more]");
+      const listStatus = pick("[data-lg-list-status]");
+      const field = <T extends HTMLInputElement | HTMLTextAreaElement>(name: string) => pick<T>(`[data-lg-f="${name}"]`);
+      const errorCode = (error: unknown) => (error instanceof WorkApiError ? error.code : null);
+      const errorText = (code: string | null) => ledgerErrorText(code, customerErrorText(code));
+
+      const thisYear = () => Number(todayInKorea().slice(0, 4));
+      let year = thisYear();
+      let basis: LedgerBasis = "balance";
+      let vat = false;
+      let kind: LedgerKind | "" = "";
+      let unpaid = false;
+      let undatedMode = false;
+      let summary: LedgerSummary | null = null;
+      let items: LedgerEntry[] = [];
+      let cursor: string | null = null;
+      let savedId: string | null = null;
+      let loadToken = 0;
+      let busy = false;
+      let csvUrl: string | null = null;
+      // 줄 넣기·고치기 칸의 상태
+      let editing: LedgerEntry | null = null;
+      let chosenDeal: DealSummary | null = null;
+      let foundDeals: DealSummary[] = [];
+      let autoLabel = "";
+      let formSnapshot = "";
+
+      function showState(title: string, body: string, { symbol = "!", retry = false, fee = false } = {}) {
+        boot.hidden = true;
+        main.hidden = true;
+        pick("[data-lg-state-symbol]").textContent = symbol;
+        pick("[data-lg-state-title]").textContent = title;
+        pick("[data-lg-state-body]").textContent = body;
+        pick("[data-lg-state-retry]").hidden = !retry;
+        pick("[data-lg-state-fee]").hidden = !fee;
+        statePanel.hidden = false;
+      }
+      const showDisabled = () => showState(
+        "업무 도구가 꺼져 있습니다",
+        "매출장부는 운영자가 업무 자료 저장을 켜야 쓸 수 있습니다. 중개보수 계산·안내 문자·계약 일정은 지금도 쓸 수 있습니다.",
+        { symbol: "–", fee: true },
+      );
+      function showLoadError(error: unknown) {
+        const code = errorCode(error);
+        if (code === "WORK_DISABLED") showDisabled();
+        else if (code === "WORK_SCHEMA_OUTDATED") showState("자료 구조 갱신 전입니다", errorText(code));
+        else showState("매출장부를 불러오지 못했습니다", `${errorText(code)} 넣던 글은 지워지지 않았습니다.`, { retry: isRetryable(code) });
+      }
+
+      // ── 합계 ──
+      function renderSummary() {
+        yearText.textContent = `${year}년`;
+        yearPrev.disabled = year <= 2000;
+        yearNext.disabled = year >= thisYear() + 1;
+        for (const button of basisButtons) button.setAttribute("aria-pressed", String(button.dataset.lgBasis === basis));
+        for (const button of vatButtons) button.setAttribute("aria-pressed", String((button.dataset.lgVat === "1") === vat));
+        pick("[data-lg-sum-year]").textContent = `${year}년`;
+        pick("[data-lg-basis-note]").textContent = `· ${basisNote(basis)}`;
+        const n = summary?.undatedCount ?? 0;
+        undated.hidden = n === 0;
+        pick("[data-lg-undated-text]").textContent = undatedText(basis, n);
+        csvNote.hidden = n === 0;
+        csvNote.textContent = n > 0 ? `기준일이 없는 장부 줄 ${n}건은 파일에 들어가지 않습니다.` : "";
+        if (!summary) return;
+        const view = summaryView(summary, { vat });
+        // 그 해에 장부 줄이 하나도 없으면(기준일 없는 줄도 없음) 합계 칸 대신 0건 안내만 보인다.
+        sum.hidden = view.isEmpty && n === 0 && !kind && !unpaid;
+        pick("[data-lg-tiles]").replaceChildren(...view.tiles.map((tile) => {
+          const box = element("div", `lg-tile lg-tile--${tile.key}${tile.due ? " lg-tile--due" : ""}`);
+          box.append(element("dt", "", tile.label), element("dd", "", tile.value));
+          if (tile.note) box.append(element("small", "", tile.note));
+          if (tile.key === "unpaid" && tile.due) {
+            const link = element("button", "admin-text-link cu-linkbtn", "미입금만 보기");
+            link.type = "button";
+            link.addEventListener("click", () => setUnpaid(true));
+            box.append(link);
+          }
+          return box;
+        }));
+        pick("[data-lg-narrow]").replaceChildren(...view.narrowRows.map((row) => {
+          const tr = element("tr");
+          tr.append(element("td", "", row.month), element("td", "", row.fee), element("td", row.due ? "is-due" : "", row.unpaid), element("td", "", row.net));
+          return tr;
+        }));
+        pick("[data-lg-empty-months]").textContent = view.emptyText;
+        pick("[data-lg-wide-head]").replaceChildren(...view.wideHead.map((text) => {
+          const th = element("th", "", text);
+          th.scope = "col";
+          return th;
+        }));
+        pick("[data-lg-wide]").replaceChildren(...view.wideRows.map((row) => {
+          const tr = element("tr", row.empty ? "is-empty" : "");
+          tr.append(element("td", "", row.month), ...row.cells.map((text, index) => element("td", row.due && index === (vat ? 2 : 3) ? "is-due" : "", text)));
+          return tr;
+        }));
+        pick("[data-lg-wide-total]").replaceChildren(element("td", "", "합계"), ...view.wideTotal.map((text, index) => element("td", index === (vat ? 2 : 3) && Number(summary?.total.unpaidWon) > 0 ? "is-due" : "", text)));
+      }
+
+      // ── 장부 줄 목록 ──
+      function renderList() {
+        cards.replaceChildren(...items.map((entry) => entryCard(entry, year, entry.id === savedId)));
+        tbody.replaceChildren(...items.map((entry) => entryRow(entry, year, entry.id === savedId)));
+        count.textContent = ledgerCountText(items.length, { more: Boolean(cursor), unpaid, undated: undatedMode, basis });
+        more.hidden = !cursor || undatedMode;
+        chips.hidden = undatedMode;
+        back.hidden = !undatedMode;
+        for (const button of kindButtons) button.setAttribute("aria-pressed", String((button.dataset.lgKind ?? "") === kind));
+        unpaidButton.setAttribute("aria-pressed", String(unpaid));
+        pick("[data-lg-unpaid-note]").hidden = undatedMode || !unpaidAllYears({ basis, unpaid });
+        empty.hidden = items.length > 0;
+        if (items.length === 0) {
+          const filtered = Boolean(kind) || unpaid;
+          pick("[data-lg-empty-symbol]").textContent = unpaid ? "✓" : "0";
+          pick("[data-lg-empty-title]").textContent = undatedMode ? "기준일이 없는 장부 줄이 없습니다" : unpaid ? "미입금이 없습니다" : filtered ? "고른 종류의 장부 줄이 없습니다" : `${year}년 장부 줄이 없습니다`;
+          pick("[data-lg-empty-body]").textContent = unpaid
+            ? unpaidAllYears({ basis, unpaid }) ? "받을 돈이 모두 들어왔습니다." : `${year}년 ${basisNote(basis).split(" · ")[0]}으로 받을 돈이 모두 들어왔습니다.`
+            : filtered || undatedMode
+              ? "다른 종류를 고르거나 '전체'로 돌아가 주세요."
+              : "받은 보수·지출을 적으면 달별 합계가 여기에 나옵니다. 손님 카드의 거래 칸에서 '보수 줄 만들기'로도 넣을 수 있습니다.";
+          pick("[data-lg-empty-new]").hidden = filtered || undatedMode;
+        }
+      }
+
+      async function loadSummary() {
+        summary = await readLedgerSummary(year, basis);
+      }
+      async function loadList({ append = false } = {}) {
+        const page = await listLedger(ledgerListQuery({ year, basis, kind, unpaid, cursor: append ? cursor : null }));
+        items = append ? [...items, ...page.items] : page.items;
+        cursor = page.nextCursor;
+      }
+      // 기준일 없는 줄: 서버 목록은 연도를 주면 기준일 있는 줄만 주므로, 연도 없이 쪽을 이어 읽어 기준일이 빈 줄만 고른다.
+      async function readAll({ withYear }: { withYear: boolean }) {
+        const all: LedgerEntry[] = [];
+        let next: string | null = null;
+        for (let pageIndex = 0; pageIndex < LEDGER_READ_ALL_PAGES; pageIndex += 1) {
+          const page = await listLedger(ledgerListQuery({ year, basis, all: !withYear, cursor: next, limit: LEDGER_PAGE_SIZE }));
+          all.push(...page.items);
+          next = page.nextCursor;
+          if (!next) return { entries: all, complete: true };
+        }
+        return { entries: all, complete: false };
+      }
+
+      async function refresh({ keepSaved = false } = {}) {
+        const mine = ++loadToken;
+        if (!keepSaved) savedId = null;
+        setStatus(listStatus, "불러오고 있습니다…", "saving");
+        try {
+          if (undatedMode) {
+            await loadSummary();
+            const { entries, complete } = await readAll({ withYear: false });
+            if (mine !== loadToken) return;
+            items = entries.filter((entry) => !entry.basisOn);
+            cursor = null;
+            setStatus(listStatus, complete ? "" : "장부 줄이 많아 앞쪽 일부에서만 찾았습니다.", complete ? "idle" : "error");
+          } else {
+            await Promise.all([loadSummary(), loadList()]);
+            if (mine !== loadToken) return;
+            setStatus(listStatus, "", "idle");
+          }
+          renderSummary();
+          renderList();
+        } catch (error) {
+          if (mine !== loadToken) return;
+          const code = errorCode(error);
+          if (code === "WORK_DISABLED" || code === "WORK_SCHEMA_OUTDATED" || !summary) showLoadError(error);
+          else setStatus(listStatus, `장부를 불러오지 못했습니다. ${errorText(code)}`, "error");
+        }
+      }
+
+      function setYear(next: number) {
+        year = next;
+        undatedMode = false;
+        void refresh();
+      }
+      yearPrev.addEventListener("click", () => setYear(year - 1));
+      yearNext.addEventListener("click", () => setYear(year + 1));
+      for (const button of basisButtons) button.addEventListener("click", () => {
+        basis = (button.dataset.lgBasis as LedgerBasis) ?? "balance";
+        void refresh();
+      });
+      for (const button of vatButtons) button.addEventListener("click", () => {
+        vat = button.dataset.lgVat === "1";
+        renderSummary();
+      });
+      for (const button of kindButtons) button.addEventListener("click", () => {
+        kind = (button.dataset.lgKind as LedgerKind | "") ?? "";
+        void refresh();
+      });
+      function setUnpaid(next: boolean) {
+        unpaid = next;
+        undatedMode = false;
+        void refresh();
+      }
+      unpaidButton.addEventListener("click", () => setUnpaid(!unpaid));
+      undatedShow.addEventListener("click", () => {
+        undatedMode = true;
+        void refresh();
+      });
+      back.addEventListener("click", () => {
+        undatedMode = false;
+        void refresh();
+      });
+      more.addEventListener("click", async () => {
+        if (!cursor) return;
+        more.disabled = true;
+        setStatus(listStatus, "더 불러오고 있습니다…", "saving");
+        try {
+          await loadList({ append: true });
+          setStatus(listStatus, "", "idle");
+          renderList();
+        } catch (error) {
+          setStatus(listStatus, `더 불러오지 못했습니다. ${errorText(errorCode(error))}`, "error");
+        } finally {
+          more.disabled = false;
+        }
+      });
+
+      // ── CSV(감사 export.ledger를 남긴 뒤에만 만든다) ──
+      csvButton.addEventListener("click", async () => {
+        if (busy) return;
+        busy = true;
+        csvButton.disabled = true;
+        csvLink.hidden = true;
+        setStatus(csvStatus, "파일을 만들고 있습니다…", "saving");
+        try {
+          const { entries, complete } = await readAll({ withYear: true });
+          if (!complete) {
+            setStatus(csvStatus, "장부 줄이 너무 많아 파일을 만들지 않았습니다. 개발 담당에게 알려 주세요.", "error");
+            return;
+          }
+          const recorded = await recordLedgerExport({ year, basis, count: entries.length });
+          if (!recorded.recorded) throw new WorkApiError("작업 기록을 남기지 못했습니다.", { code: "AUDIT_UNAVAILABLE" });
+          if (csvUrl) URL.revokeObjectURL(csvUrl);
+          csvUrl = URL.createObjectURL(new Blob([ledgerCsv(entries)], { type: "text/csv;charset=utf-8" }));
+          const name = ledgerCsvFileName(year, basis);
+          csvLink.href = csvUrl;
+          csvLink.download = name;
+          csvLink.hidden = false;
+          csvLink.click();
+          setStatus(csvStatus, `✓ '${name}'(장부 줄 ${entries.length}개)을 내려받았습니다. 받아지지 않았으면 'CSV 파일 저장'을 눌러 주세요.`, "success");
+        } catch (error) {
+          setStatus(csvStatus, `내려받지 않았습니다. ${errorCode(error) === "AUDIT_UNAVAILABLE" ? "작업 기록을 남기지 못해 파일을 만들지 않았습니다. 잠시 뒤 다시 해 주세요." : errorText(errorCode(error))}`, "error");
+        } finally {
+          busy = false;
+          csvButton.disabled = false;
+        }
+      });
+
+      // ── 줄 넣기·고치기 ──
+      const checkedKind = () => (kindChoices.find((input) => input.checked)?.value ?? "fee") as LedgerKind;
+      const currentKind = () => (editing ? editing.kind : checkedKind());
+      const hasDeal = () => Boolean(editing ? editing.dealId : chosenDeal);
+      const hasSnap = () => Boolean(editing && (editing.snapContractOn || editing.snapBalanceOn));
+      const needsEntryOn = () => currentKind() !== "fee" && !hasDeal() && !hasSnap();
+      const readValues = () => ({
+        label: field("label").value,
+        entryOn: field("entryOn").value,
+        amount: field("amount").value,
+        vat: field("vat").value,
+        received: field("received").value,
+        receivedOn: field("receivedOn").value,
+        memo: field<HTMLTextAreaElement>("memo").value,
+        payerRole: payerChoices.find((input) => input.checked)?.value ?? "",
+      });
+      const snapshotOf = () => JSON.stringify({ ...readValues(), kind: currentKind(), deal: chosenDeal?.id ?? null });
+      const isDirty = () => !form.hidden && snapshotOf() !== formSnapshot;
+
+      function showErrors(errors: Record<string, string>) {
+        for (const node of root!.querySelectorAll<HTMLElement>("[data-lg-error]")) {
+          const name = node.dataset.lgError ?? "";
+          node.textContent = errors[name] ?? "";
+          const input = root!.querySelector<HTMLElement>(`[data-lg-f="${name}"]`);
+          if (input) {
+            if (errors[name]) input.setAttribute("aria-invalid", "true");
+            else input.removeAttribute("aria-invalid");
+          }
+        }
+      }
+
+      function updateTotal() {
+        const amount = parseWon(field("amount").value) ?? 0;
+        const vatWon = parseWon(field("vat").value) ?? 0;
+        const received = parseWon(field("received").value) ?? 0;
+        if ([amount, vatWon, received].some(Number.isNaN)) {
+          total.textContent = "";
+          return;
+        }
+        total.textContent = currentKind() === "expense"
+          ? `합계 ${wonText(amount + vatWon)}`
+          : `합계 ${wonText(amount + vatWon)} · ${received > amount + vatWon ? `초과 입금 ${wonText(received - amount - vatWon)}` : `미입금 ${wonText(Math.max(0, amount + vatWon - received))}`}`;
+      }
+
+      // 종류·거래에 따라 보일 칸을 고른다.
+      function syncForm() {
+        const k = currentKind();
+        payerRow.hidden = k !== "fee";
+        receivedRow.hidden = k === "expense";
+        receivedOnRow.hidden = k === "expense";
+        amountLabel.textContent = k === "fee" ? "공급가액(원)" : "금액(원)";
+        entryRowBox.hidden = hasDeal() || hasSnap();
+        entryRequired.hidden = !needsEntryOn();
+        entryHelp.textContent = k === "expense"
+          ? "거래에 이으면 그 거래의 잔금일, 잇지 않으면 이 날짜로 합계에 들어갑니다(입금일 기준에서도 같음)."
+          : k === "other_income"
+            ? "잔금일·계약일 기준 합계에는 이 날짜로, 입금일 기준 합계에는 입금일로 들어갑니다."
+            : "거래 없는 보수 줄은 날짜를 비워 둘 수 있습니다(비우면 '기준일 없는 줄'로 셉니다).";
+        // 법정 상한: 새 보수 줄을 거래에 이을 때만(고칠 때는 거래 자료를 따로 읽지 않음)
+        const capInfo = !editing && k === "fee" && chosenDeal ? dealFeeCap(chosenDeal, legalRules) : null;
+        cap.hidden = !capInfo;
+        if (capInfo) {
+          capText.textContent = capInfo.ok ? `${capInfo.text} (${capInfo.detail})` : capInfo.reason;
+          capFill.hidden = !capInfo.ok;
+        }
+        updateTotal();
+      }
+
+      function renderDealPicks() {
+        const none = element("label", "lg-deal-pick");
+        const noneInput = element("input");
+        noneInput.type = "radio";
+        noneInput.name = "lg-deal";
+        noneInput.value = "";
+        noneInput.autocomplete = "off";
+        noneInput.checked = !chosenDeal;
+        none.append(noneInput, element("span", "", "거래에 잇지 않음"));
+        const options = foundDeals.map((deal) => {
+          const option = element("label", "lg-deal-pick");
+          const input = element("input");
+          input.type = "radio";
+          input.name = "lg-deal";
+          input.value = deal.id;
+          input.autocomplete = "off";
+          input.checked = chosenDeal?.id === deal.id;
+          const text = element("span");
+          const dates = [deal.contractOn ? `계약 ${ledgerDateText(deal.contractOn, year)}` : "", deal.balanceOn ? `잔금 ${ledgerDateText(deal.balanceOn, year)}` : "잔금일 없음"].filter(Boolean).join(" · ");
+          const entries = deal.ledger?.entryCount ? ` · 장부 줄 ${deal.ledger.entryCount}개` : "";
+          text.append(element("strong", "", deal.title), element("small", "", `${dates}${entries}`));
+          option.append(input, text);
+          return option;
+        });
+        dealPicks.replaceChildren(none, ...options);
+      }
+      dealPicks.addEventListener("change", () => {
+        const id = dealPicks.querySelector<HTMLInputElement>('input[name="lg-deal"]:checked')?.value ?? "";
+        chosenDeal = foundDeals.find((deal) => deal.id === id) ?? null;
+        // 물건 표시가 비었거나 앞서 고른 거래 제목 그대로면 새로 고른 거래 제목으로 바꾼다(직접 쓴 글은 그대로 둔다).
+        const label = field("label");
+        if (!label.value.trim() || label.value === autoLabel) {
+          autoLabel = chosenDeal ? chosenDeal.title.slice(0, 120) : "";
+          label.value = autoLabel;
+        }
+        syncForm();
+      });
+      async function findDeals() {
+        const q = dealQuery.value.trim().slice(0, LEDGER_DEAL_QUERY_MAX);
+        dealQuery.value = q;
+        setStatus(dealStatus, "찾고 있습니다…", "saving");
+        try {
+          const query = new URLSearchParams({ limit: "5" });
+          if (q) query.set("q", q);
+          const page = await listDeals(query);
+          foundDeals = page.items;
+          if (chosenDeal && !foundDeals.some((deal) => deal.id === chosenDeal?.id)) foundDeals = [chosenDeal, ...foundDeals];
+          renderDealPicks();
+          setStatus(dealStatus, page.items.length === 0 ? "찾는 거래가 없습니다. 거래 없이 저장해도 됩니다." : `거래 ${page.items.length}건을 찾았습니다. 이을 거래를 고르세요.`, page.items.length === 0 ? "error" : "idle");
+        } catch (error) {
+          setStatus(dealStatus, `거래를 찾지 못했습니다. ${errorText(errorCode(error))}`, "error");
+        }
+      }
+      pick("[data-lg-deal-find]").addEventListener("click", () => void findDeals());
+      dealQuery.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && !event.isComposing) {
+          event.preventDefault();
+          void findDeals();
+        }
+      });
+
+      function fillForm(entry: LedgerEntry | null) {
+        field("label").value = entry?.label ?? "";
+        field("entryOn").value = entry?.entryOn ?? (entry ? "" : todayInKorea());
+        field("amount").value = entry ? numberText(entry.amountWon) : "";
+        field("vat").value = entry ? numberText(entry.vatWon) : "";
+        field("received").value = entry && entry.kind !== "expense" ? numberText(entry.receivedWon) : "";
+        field("receivedOn").value = entry?.receivedOn ?? "";
+        field<HTMLTextAreaElement>("memo").value = entry?.memo ?? "";
+        for (const input of payerChoices) input.checked = Boolean(entry?.payerRole) && input.value === entry?.payerRole;
+      }
+
+      function openForm(entry: LedgerEntry | null) {
+        editing = entry;
+        chosenDeal = null;
+        foundDeals = [];
+        autoLabel = "";
+        dealQuery.value = "";
+        renderDealPicks();
+        setStatus(dealStatus, "거래에 이으면 그 거래의 잔금일·계약일로 합계에 들어갑니다. 잇지 않아도 됩니다.", "idle");
+        formTitle.textContent = entry ? "장부 줄 고치기" : "장부 줄 만들기";
+        kindRow.hidden = Boolean(entry);
+        dealRow.hidden = Boolean(entry);
+        fixed.hidden = !entry;
+        fixed.textContent = entry ? `종류: ${kindLabels[entry.kind] ?? entry.kind} · ${entry.dealId ? "거래에 이은 줄" : entry.snapBalanceOn || entry.snapContractOn ? "거래를 지워 연결이 끊긴 줄" : "거래 없는 줄"} (종류·거래를 바꾸려면 지우고 새로 만듭니다)` : "";
+        if (!entry) for (const input of kindChoices) input.checked = input.value === "fee";
+        fillForm(entry);
+        showErrors({});
+        setStatus(formStatus, "", "idle");
+        reload.hidden = true;
+        deleteButton.hidden = !entry;
+        deletePanel.hidden = true;
+        save.disabled = false;
+        form.hidden = false;
+        newButton.setAttribute("aria-expanded", "true");
+        syncForm();
+        formSnapshot = snapshotOf();
+        form.scrollIntoView({ block: "start" });
+        (entry ? field("amount") : kindChoices[0]).focus({ preventScroll: true });
+      }
+      function closeForm() {
+        form.hidden = true;
+        editing = null;
+        chosenDeal = null;
+        newButton.setAttribute("aria-expanded", "false");
+      }
+      newButton.addEventListener("click", () => {
+        if (!form.hidden && !editing) {
+          closeForm();
+          return;
+        }
+        openForm(null);
+      });
+      emptyNew.addEventListener("click", () => openForm(null));
+      pick("[data-lg-cancel]").addEventListener("click", () => {
+        closeForm();
+        newButton.focus();
+      });
+      for (const input of kindChoices) input.addEventListener("change", syncForm);
+      for (const name of ["amount", "vat", "received"]) field(name).addEventListener("input", updateTotal);
+      pick("[data-lg-vat-fill]").addEventListener("click", () => {
+        const amount = parseWon(field("amount").value);
+        if (amount === null || Number.isNaN(amount)) {
+          showErrors({ amount: "금액을 먼저 숫자로 넣어 주세요." });
+          field("amount").focus();
+          return;
+        }
+        field("vat").value = numberText(calculateVatWon(amount));
+        updateTotal();
+      });
+      capFill.addEventListener("click", () => {
+        const capInfo = chosenDeal ? dealFeeCap(chosenDeal, legalRules) : null;
+        if (!capInfo?.ok) return;
+        field("amount").value = numberText(capInfo.maxFeeWon);
+        field("vat").value = numberText(capInfo.vatWon);
+        updateTotal();
+        setStatus(formStatus, "법정 상한으로 채웠습니다. 실제 받은 금액이 다르면 고친 뒤 저장해 주세요.", "idle");
+      });
+      root.addEventListener("click", (event) => {
+        const target = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-lg-edit]");
+        if (!target) return;
+        const entry = items.find((item) => item.id === target.dataset.lgEdit);
+        if (entry) openForm(entry);
+      });
+
+      save.addEventListener("click", async () => {
+        if (busy) return;
+        const k = currentKind();
+        const checked = checkLedgerInput(readValues(), { kind: k, hasDeal: hasDeal() || hasSnap(), needsEntryOn: needsEntryOn() });
+        if (!checked.ok) {
+          showErrors(checked.errors);
+          setStatus(formStatus, "빨간 글자가 있는 칸을 고쳐 주세요.", "error");
+          root!.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+          return;
+        }
+        showErrors({});
+        let body: Record<string, unknown>;
+        if (editing) {
+          body = ledgerChanges(editing, checked.value);
+          if (Object.keys(body).length === 0) {
+            setStatus(formStatus, "바뀐 것이 없습니다.", "idle");
+            return;
+          }
+        } else {
+          body = { kind: k, ...checked.value, ...(chosenDeal ? { dealId: chosenDeal.id } : {}) };
+        }
+        busy = true;
+        save.disabled = true;
+        setStatus(formStatus, "저장하고 있습니다…", "saving");
+        try {
+          const result = editing
+            ? await updateLedgerEntry(editing.id, { ...body, version: editing.version })
+            : await createLedgerEntry(body);
+          savedId = result.entry.id;
+          closeForm();
+          setStatus(saved, result.warnings.length > 0 ? "✓ 장부 줄을 저장했습니다. 아래 굵은 경고를 확인하세요(저장은 그대로 됩니다)." : "✓ 장부 줄을 저장했습니다.", "success");
+          await refresh({ keepSaved: true });
+          newButton.focus();
+        } catch (error) {
+          const code = errorCode(error);
+          setStatus(formStatus, `저장하지 못했습니다. ${errorText(code)}`, "error");
+          reload.hidden = !(editing && (code === "VERSION_CONFLICT" || code === "NOT_FOUND"));
+        } finally {
+          busy = false;
+          save.disabled = false;
+        }
+      });
+      // 다른 곳에서 먼저 고쳤을 때: 목록을 새로 읽어 그 줄의 새 값으로 다시 채운다(넣던 값은 그때까지 칸에 남아 있음).
+      reload.addEventListener("click", async () => {
+        if (busy || !editing) return;
+        const id = editing.id;
+        busy = true;
+        try {
+          await refresh();
+          const fresh = items.find((item) => item.id === id);
+          if (fresh) {
+            openForm(fresh);
+            setStatus(formStatus, "새 값을 불러왔습니다. 다시 고친 뒤 저장해 주세요.", "idle");
+          } else {
+            setStatus(formStatus, "새 값을 지금 목록에서 찾지 못했습니다. 지워졌거나 다른 연도·기준일에 있습니다. '그만두기'를 눌러 주세요.", "error");
+          }
+        } finally {
+          busy = false;
+        }
+      });
+      deleteButton.addEventListener("click", () => {
+        deletePanel.hidden = false;
+        deleteGo.focus();
+      });
+      pick("[data-lg-delete-cancel]").addEventListener("click", () => {
+        deletePanel.hidden = true;
+        deleteButton.focus();
+      });
+      deleteGo.addEventListener("click", async () => {
+        if (busy || !editing) return;
+        busy = true;
+        deleteGo.disabled = true;
+        setStatus(formStatus, "지우고 있습니다…", "saving");
+        try {
+          await deleteLedgerEntry(editing.id);
+          closeForm();
+          setStatus(saved, "✓ 장부 줄을 지웠습니다.", "success");
+          await refresh();
+          newButton.focus();
+        } catch (error) {
+          setStatus(formStatus, `지우지 못했습니다. ${errorText(errorCode(error))}`, "error");
+        } finally {
+          busy = false;
+          deleteGo.disabled = false;
+        }
+      });
+
+      // 저장하지 않은 줄 넣기·고치기가 있으면 떠나기 전에 묻는다.
+      window.addEventListener("beforeunload", (event) => {
+        if (!isDirty()) return;
+        event.preventDefault();
+      });
+
+      // ── 처음 불러오기: 업무 세션(켜짐) → 합계·목록 ──
+      async function start() {
+        statePanel.hidden = true;
+        main.hidden = true;
+        boot.hidden = false;
+        try {
+          const session = await getLedgerSession({ refresh: true });
+          if (!session.enabled) {
+            showDisabled();
+            return;
+          }
+          await Promise.all([loadSummary(), loadList()]);
+        } catch (error) {
+          showLoadError(error);
+          return;
+        }
+        boot.hidden = true;
+        main.hidden = false;
+        renderSummary();
+        renderList();
+      }
+      pick("[data-lg-state-retry]").addEventListener("click", () => void start());
+
+      // 열 때마다(뒤로 가기 캐시 복원 포함) 넣던 칸·거르기를 비우고 다시 불러온다.
+      const reset = () => {
+        year = thisYear();
+        basis = "balance";
+        vat = false;
+        kind = "";
+        unpaid = false;
+        undatedMode = false;
+        summary = null;
+        items = [];
+        cursor = null;
+        savedId = null;
+        busy = false;
+        closeForm();
+        cards.replaceChildren();
+        tbody.replaceChildren();
+        setStatus(saved, "", "idle");
+        setStatus(csvStatus, "", "idle");
+        setStatus(listStatus, "", "idle");
+        csvLink.hidden = true;
+        void start();
+      };
+      window.addEventListener("pageshow", (event) => {
+        if (event.persisted) reset();
+      });
+      window.addEventListener("pagehide", () => {
+        if (csvUrl) URL.revokeObjectURL(csvUrl);
+        csvUrl = null;
+      });
+      reset();
+    }
+  </script>
+</AdminLayout>
