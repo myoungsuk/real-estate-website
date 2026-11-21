@@ -59,7 +59,7 @@ test("단계 0 화면은 form 제출이 없고 입력칸 자동 완성을 끈다
     }
     if (controls.length > 0) {
       assert.match(source, /window\.addEventListener\("pageshow"/u, `${file}: 뒤로 가기 캐시 복원 때 입력값을 지운다`);
-      assert.match(source, /\breset\(\);\s*\n\s*\}\s*\n\s*\}\s*\n\s*<\/script>/u, `${file}: 열 때마다 기본값으로 다시 채운다`);
+      assert.match(source, /\breset\(\);\s*\n(?:\s*\}\s*\n){1,2}\s*<\/script>/u, `${file}: 열 때마다 기본값으로 다시 채운다`);
     }
   }
 });
@@ -91,7 +91,7 @@ test("업무 도구 네 화면은 관리자 공용 틀의 아래 단계 메뉴(P
   ]);
   for (const href of ["/admin/work/fee/", "/admin/work/messages/", "/admin/work/schedule/"]) {
     assert.ok(index.includes(`href: "${href}"`), `첫 화면 바로가기 ${href}`);
-    assert.match(layout, new RegExp(`\\{ href: "${href.replaceAll("/", "\\/")}", label: "[^"]+" \\},`, "u"), `아래 단계 메뉴 ${href}`);
+    assert.match(layout, new RegExp(`\\{ href: "${href.replaceAll("/", "\\/")}", label: "[^"]+"(?:, group: "[^"]+")? \\},`, "u"), `아래 단계 메뉴 ${href}`);
   }
   assert.match(layout, /"\/admin\/work\/": \[\r?\n\s*\{ href: "\/admin\/work\/", label: "업무 도구 처음" \},/u, "아래 단계 맨 위는 첫 화면");
   for (const page of [index, ...toolPages]) {

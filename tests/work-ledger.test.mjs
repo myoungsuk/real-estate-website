@@ -607,6 +607,50 @@ test("장부 목록: 연도·기준일·종류·거래·미입금으로 거르�
   assert.equal((await work(env, "/ledger/summary/x")).status, 404);
 });
 
+test("T2-96a POST /work/ledger/export: CSV 내려받기 전 감사 export.ledger 한 줄(reason result_count만)을 남기고 자료는 돌려주지 않으며, 잘못된 본문은 400, 꺼짐·구조 번호 4는 503", async () => {
+  const { database, db } = freshDb();
+  const env = workEnv(db);
+  await makeEntry(env, { kind: "expense", entryOn: "2026-11-05", label: "가상 내려받기 지출", amountWon: 33_000 });
+  const before = audit(database).length;
+  const ok = await work(env, "/ledger/export", { method: "POST", body: { year: 2026, basis: "received", count: 1 } });
+  assert.equal(ok.status, 200, JSON.stringify(ok.json));
+  assert.deepEqual(ok.json.data, { recorded: true });
+  const added = audit(database).slice(before);
+  assert.deepEqual(added.map((row) => [row.action, row.target_type, row.target_id, row.outcome, row.reason]), [["export.ledger", null, null, "ok", "result_count=1"]]);
+  assert.doesNotMatch(JSON.stringify(added), /2026|received|가상 내려받기|33000/u, "감사에는 줄 수만");
+  assert.equal((await work(env, "/ledger/export", { method: "POST", body: { year: "2026", basis: "balance", count: 0 } })).status, 200, "글자 연도·0줄도 받음");
+
+  for (const [body, fields] of [
+    [{ basis: "balance", count: 1 }, ["year"]],
+    [{ year: 1999, basis: "balance", count: 1 }, ["year"]],
+    [{ year: 2026.5, basis: "balance", count: 1 }, ["year"]],
+    [{ year: 2026, count: 1 }, ["basis"]],
+    [{ year: 2026, basis: "paid", count: 1 }, ["basis"]],
+    [{ year: 2026, basis: "balance", count: -1 }, ["count"]],
+    [{ year: 2026, basis: "balance", count: 1.5 }, ["count"]],
+    [{ year: 2026, basis: "balance", count: "3" }, ["count"]],
+    [{ year: 2026, basis: "balance", count: 100_001 }, ["count"]],
+    [{ year: 2026, basis: "balance", count: 1, rows: [] }, ["rows"]],
+  ]) {
+    const result = await work(env, "/ledger/export", { method: "POST", body });
+    assert.deepEqual([result.status, result.json.error.code, result.json.error.details], [400, "VALIDATION_FAILED", fields], JSON.stringify(body));
+  }
+  const wrongMethod = await work(env, "/ledger/export");
+  assert.deepEqual([wrongMethod.status, wrongMethod.response.headers.get("Allow")], [405, "POST"]);
+  assert.equal(audit(database).filter((row) => row.action === "export.ledger").length, 2, "실패한 요청은 감사를 남기지 않음");
+
+  const off = freshDb();
+  const disabled = await work(workEnv(off.db, { WORK_TOOLS_ENABLED: undefined }), "/ledger/export", { method: "POST", body: { year: 2026, basis: "balance", count: 1 } });
+  assert.deepEqual([disabled.status, disabled.json.error.code], [503, "WORK_DISABLED"]);
+  assert.equal(off.db.stats.statements, 0);
+  const old = new DatabaseSync(":memory:");
+  old.exec("PRAGMA foreign_keys = ON;");
+  for (const sql of allMigrationSql.slice(0, 4)) old.exec(sql);
+  const outdated = await work(workEnv(createD1(old)), "/ledger/export", { method: "POST", body: { year: 2026, basis: "balance", count: 1 } });
+  assert.deepEqual([outdated.status, outdated.json.error.code], [503, "WORK_SCHEMA_OUTDATED"]);
+  assert.deepEqual(audit(old).map((row) => [row.action, row.outcome]), [["request.denied", "denied"]]);
+});
+
 test("T2-104 업무 도구가 꺼져 있으면 장부·거래 목록 모두 503 WORK_DISABLED(D1 0), 구조 번호 4인 D1이면 503 WORK_SCHEMA_OUTDATED(거부 기록 외 쓰기 0)", async () => {
   const paths = [["/ledger?year=2026", "GET"], ["/ledger/summary?year=2026", "GET"], ["/deals", "GET"], ["/ledger", "POST"]];
   const off = freshDb();

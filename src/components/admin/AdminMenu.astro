@@ -8,12 +8,18 @@ interface MenuSubItem {
   current?: "page" | "true";
 }
 
+// 아래 단계 묶음. label이 있으면 보이는 제목 + role="group"(aria-labelledby)으로 묶는다.
+interface MenuSubGroup {
+  label?: string;
+  items: MenuSubItem[];
+}
+
 interface MenuItem {
   href: string;
   label: string;
   icon: AdminIconName;
   current?: "page" | "true";
-  sub?: MenuSubItem[];
+  sub?: MenuSubGroup[];
 }
 
 interface MenuGroup {
@@ -23,10 +29,12 @@ interface MenuGroup {
 
 interface Props {
   label: string;
+  // 한 화면에 메뉴가 두 번(PC 왼쪽 목록·휴대폰 전체 메뉴 창) 들어가므로 묶음 제목 id 앞머리를 다르게 받는다.
+  idPrefix: string;
   groups: MenuGroup[];
 }
 
-const { label, groups } = Astro.props;
+const { label, idPrefix, groups } = Astro.props;
 ---
 
 <nav class="admin-menu" aria-label={label}>
@@ -42,11 +50,22 @@ const { label, groups } = Astro.props;
             </a>
             {item.sub && (
               <ul class="admin-menu__sub">
-                {item.sub.map((sub) => (
+                {item.sub.map((group, index) => group.label ? (
+                  <li class="admin-menu__subgroup">
+                    <p class="admin-menu__subhead" id={`${idPrefix}-sub-${index}`}>{group.label}</p>
+                    <ul role="group" aria-labelledby={`${idPrefix}-sub-${index}`}>
+                      {group.items.map((sub) => (
+                        <li>
+                          <a class="admin-menu__subitem" href={sub.href} aria-current={sub.current}>{sub.label}</a>
+                        </li>
+                      ))}
+                    </ul>
+                  </li>
+                ) : group.items.map((sub) => (
                   <li>
                     <a class="admin-menu__subitem" href={sub.href} aria-current={sub.current}>{sub.label}</a>
                   </li>
-                ))}
+                )))}
               </ul>
             )}
           </li>

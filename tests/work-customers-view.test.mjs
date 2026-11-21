@@ -97,6 +97,9 @@ test("메모 글은 비울 수 없고 20,000자까지다", () => {
 test("손님 지우기 결과 문장은 함께 지운 것과, 다른 손님과 함께인 거래라 남긴 메모를 알린다", () => {
   assert.equal(deleteResultText({ deleted: { deals: 1, notes: 2 }, kept: { notes: 0 } }), "손님을 지웠습니다. 함께 지운 것: 이 손님만의 거래 1건, 메모 2개.");
   assert.match(deleteResultText({ deleted: { deals: 0, notes: 0 }, kept: { notes: 3 } }), /메모 3개는 그 거래 기록이라 남겼습니다/u);
+  // 매출장부: 지운 거래의 장부 줄은 남기고 그 수를 알린다. 0개면 말하지 않는다.
+  assert.match(deleteResultText({ deleted: { deals: 1, notes: 0 }, kept: { notes: 0, ledger: 2 } }), /장부 줄 2개는 매출장부에 남습니다/u);
+  assert.doesNotMatch(deleteResultText({ deleted: { deals: 1, notes: 0 }, kept: { notes: 0, ledger: 0 } }), /장부 줄/u);
 });
 
 test("서버 오류 코드마다 쉬운 문장이 있고, 다시 해 볼 수 없는 오류에는 '다시 불러오기'를 보이지 않는다", () => {

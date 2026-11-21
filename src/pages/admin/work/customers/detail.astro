@@ -74,6 +74,7 @@ import { NOTE_BODY_MAX } from "../../../../lib/work/customers-view.mjs";
           <section class="cu-form cu-panel cu-panel--danger" id="cu-delete-panel" aria-labelledby="cu-delete-title" data-cu-delete-panel hidden>
             <h3 id="cu-delete-title" class="cu-panel__title">손님 지우기</h3>
             <p>지우면 되돌릴 수 없습니다. 이 손님의 메모와, 이 손님만 참여한 거래·일정이 함께 지워집니다. 다른 손님과 함께인 거래는 남깁니다.</p>
+            <p>지운 거래에 이은 장부 줄은 매출장부에 남습니다. 거래 제목이 그 줄의 물건 표시로 남아 있을 수 있으니 손님 이름이 들어 있으면 매출장부에서 고쳐 주세요.</p>
             <div class="work-row">
               <label class="work-row__label" for="cu-delete-confirm">확인하려면 손님 이름 <strong data-cu-delete-name></strong>을(를) 그대로 넣으세요</label>
               <div class="work-row__control">
@@ -147,7 +148,11 @@ import { NOTE_BODY_MAX } from "../../../../lib/work/customers-view.mjs";
       type CustomerDetail,
     } from "../../../../lib/work-customers-client";
     import { element, fillFields, noteItem, readFields, setStatus, showFieldErrors, statusBadge } from "../../../../lib/work-customers-dom";
+    import { createLedgerEntry, listLedger, readDeal, type DealSummary, type LedgerEntry } from "../../../../lib/work-ledger-client";
+    import { dealLedgerItem } from "../../../../lib/work-ledger-dom";
+    import legalRules from "../../../../data/work/legal-rules.json";
     import { todayInKorea } from "../../../../lib/work/legal-dates.mjs";
+    import { LEDGER_LABEL_MAX, LEDGER_PAGE_SIZE, checkLedgerInput, dealFeeCap, ledgerErrorText, ledgerListQuery, numberText, payerSides, wonText } from "../../../../lib/work/ledger-view.mjs";
     import {
       DEAL_STATUS_LABELS,
       DEAL_TYPE_LABELS,
@@ -281,10 +286,237 @@ import { NOTE_BODY_MAX } from "../../../../lib/work/customers-view.mjs";
             }
             article.append(list);
           }
+          article.append(ledgerBlock(deal.id, deal.title));
           return article;
         }));
         pick("[data-cu-deals-count]").textContent = `${deals.size}건`;
         pick("[data-cu-deals-empty]").hidden = deals.size > 0;
+      }
+
+      // ── 거래의 장부 칸(매출장부, 설계서 6.12절) ──
+      // 거래 금액·종류·계약일과 참여 손님은 손님 카드 응답에 없으므로, '장부 보기'를 눌렀을 때만 거래 하나(GET /work/deals/:id)와
+      // 그 거래의 장부 줄(GET /work/ledger?dealId=)을 읽는다. 손님 카드를 다시 그려도 열어 둔 장부 칸은 다시 연다.
+      const openLedgers = new Set<string>();
+      function ledgerBlock(dealId: string, dealTitle: string) {
+        const box = element("div", "lg-deal-ledger");
+        const panelId = `cu-ledger-${dealId}`;
+        const toggle = element("button", "work-secondary-button", "장부 보기");
+        toggle.type = "button";
+        toggle.setAttribute("aria-expanded", "false");
+        toggle.setAttribute("aria-controls", panelId);
+        toggle.dataset.cuLedgerToggle = dealId;
+        const panel = element("div");
+        panel.id = panelId;
+        panel.hidden = true;
+        panel.dataset.cuLedger = dealId;
+        box.append(toggle, panel);
+        let loaded = false;
+
+        async function load(savedText = "") {
+          const status = element("p", "admin-form-status", "장부를 불러오고 있습니다…");
+          status.setAttribute("role", "status");
+          panel.replaceChildren(status);
+          try {
+            const [dealDetail, page] = await Promise.all([
+              readDeal(dealId),
+              listLedger(ledgerListQuery({ dealId, all: true, limit: LEDGER_PAGE_SIZE })),
+            ]);
+            loaded = true;
+            render(dealDetail.deal, dealDetail.parties.map((party) => party.role), page.items, Boolean(page.nextCursor), savedText);
+          } catch (error) {
+            const code = errorCode(error);
+            setStatus(status, `장부를 불러오지 못했습니다. ${ledgerErrorText(code, customerErrorText(code))}`, "error");
+            if (isRetryable(code)) {
+              const retry = element("button", "work-secondary-button", "다시 불러오기");
+              retry.type = "button";
+              retry.addEventListener("click", () => void load(savedText));
+              panel.append(retry);
+            }
+          }
+        }
+
+        function render(deal: DealSummary, roles: string[], entries: LedgerEntry[], more: boolean, savedText: string) {
+          const year = today.slice(0, 4);
+          const unpaid = entries.reduce((sum, entry) => sum + (entry.kind === "expense" ? 0 : Number(entry.unpaidWon ?? 0)), 0);
+          const head = element("h4", "", "장부 ");
+          head.append(element("span", "cu-block__n", entries.length === 0 ? "아직 없음" : `${entries.length}줄${more ? " 이상" : ""} · 미입금 ${wonText(unpaid)}`));
+          const parts: HTMLElement[] = [head];
+          if (entries.length > 0) {
+            const list = element("ul");
+            list.append(...entries.map((entry) => dealLedgerItem(entry, year)));
+            parts.push(list);
+          } else {
+            parts.push(element("p", "cu-soft", "이 거래에 이은 장부 줄이 없습니다."));
+          }
+          const actions = element("div", "cu-actions");
+          const make = element("button", "work-secondary-button", "보수 줄 만들기");
+          make.type = "button";
+          make.setAttribute("aria-expanded", "false");
+          const go = element("a", "admin-text-link", "매출장부에서 보기");
+          go.href = "/admin/work/ledger/";
+          actions.append(make, go);
+          const saved = element("p", "admin-form-status");
+          saved.setAttribute("role", "status");
+          saved.setAttribute("aria-live", "polite");
+          setStatus(saved, savedText, savedText.startsWith("✓") ? "success" : savedText ? "error" : "idle");
+          const form = feeForm(deal, roles, (text) => {
+            loaded = false;
+            void load(text).then(() => toggle.focus());
+          }, () => {
+            form.hidden = true;
+            make.setAttribute("aria-expanded", "false");
+            make.focus();
+          });
+          form.hidden = true;
+          make.addEventListener("click", () => {
+            const next = Boolean(form.hidden);
+            form.hidden = !next;
+            make.setAttribute("aria-expanded", String(next));
+            if (next) form.querySelector<HTMLInputElement>("input")?.focus();
+          });
+          parts.push(actions, saved, form);
+          panel.replaceChildren(...parts);
+        }
+
+        // 보수 줄 만들기: 거래의 두 쪽 중 손님으로 붙은 쪽을 미리 고르고(둘 다면 쌍방), 고른 쪽마다 장부 줄 하나를 만든다.
+        // 법정 상한은 주택 거래만 채운다(dealFeeCap). 물건 표시는 거래 제목으로 넣는다.
+        function feeForm(deal: DealSummary, roles: string[], done: (text: string) => void, cancel: () => void) {
+          const form = element("section", "lg-pair");
+          form.setAttribute("aria-label", "보수 줄 만들기");
+          const capInfo = dealFeeCap(deal, legalRules);
+          const capNote = element("p", "lg-cap", capInfo.ok ? `${capInfo.text} (${capInfo.detail}). 고른 쪽마다 이 값으로 채웠습니다. 실제 받은 금액으로 고친 뒤 저장해 주세요.` : capInfo.reason);
+          capNote.setAttribute("role", "note");
+          const pickRow = element("div", "work-segment");
+          pickRow.setAttribute("role", "group");
+          pickRow.setAttribute("aria-label", "낸 쪽");
+          const fields = [
+            ["amount", "공급가액(원)", "text", capInfo.ok ? numberText(capInfo.maxFeeWon) : ""],
+            ["vat", "부가세(원)", "text", capInfo.ok ? numberText(capInfo.vatWon) : ""],
+            ["received", "입금액(원)", "text", "0"],
+            ["receivedOn", "입금일", "date", ""],
+          ] as const;
+          const boxes = payerSides(deal.dealType, roles).map((side) => {
+            const base = `cu-lg-${dealId}-${side.role}`;
+            const choice = element("label", "work-choice");
+            const check = element("input");
+            check.type = "checkbox";
+            check.autocomplete = "off";
+            check.checked = side.checked;
+            check.value = side.role;
+            choice.append(check, element("span", "", side.label));
+            pickRow.append(choice);
+            const one = element("div", "lg-pair__one");
+            one.hidden = !side.checked;
+            one.append(element("h5", "", side.label));
+            const money = element("div", "lg-money");
+            const inputs: Record<string, HTMLInputElement> = {};
+            const errors: Record<string, HTMLElement> = {};
+            for (const [name, label, type, value] of fields) {
+              const row = element("div", "work-row");
+              const labelNode = element("label", "work-row__label", label);
+              labelNode.htmlFor = `${base}-${name}`;
+              const control = element("div", "work-row__control");
+              const input = element("input");
+              input.id = `${base}-${name}`;
+              input.type = type;
+              input.autocomplete = "off";
+              if (type === "text") input.inputMode = "numeric";
+              input.value = value;
+              const error = element("small", "cu-error");
+              error.id = `${base}-${name}-error`;
+              input.setAttribute("aria-describedby", error.id);
+              control.append(input, error);
+              row.append(labelNode, control);
+              money.append(row);
+              inputs[name] = input;
+              errors[name] = error;
+            }
+            one.append(money);
+            return { role: side.role, check, one, inputs, errors };
+          });
+          const status = element("p", "admin-form-status");
+          status.setAttribute("role", "status");
+          status.setAttribute("aria-live", "polite");
+          const actions = element("div", "cu-actions");
+          const save = element("button", "work-primary-button cu-save");
+          save.type = "button";
+          const stop = element("button", "work-secondary-button", "그만두기");
+          stop.type = "button";
+          stop.addEventListener("click", cancel);
+          actions.append(save, stop);
+          const chosen = () => boxes.filter((box) => box.check.checked);
+          const syncSave = () => {
+            save.textContent = `보수 줄 ${chosen().length}개 저장`;
+            save.disabled = chosen().length === 0;
+          };
+          for (const box of boxes) box.check.addEventListener("change", () => {
+            box.one.hidden = !box.check.checked;
+            syncSave();
+          });
+          syncSave();
+          save.addEventListener("click", async () => {
+            if (busy) return;
+            const bodies: Record<string, unknown>[] = [];
+            let firstBad: HTMLInputElement | null = null;
+            for (const box of chosen()) {
+              const checked = checkLedgerInput({
+                amount: box.inputs.amount.value,
+                vat: box.inputs.vat.value,
+                received: box.inputs.received.value,
+                receivedOn: box.inputs.receivedOn.value,
+              }, { kind: "fee", hasDeal: true });
+              for (const [name, error] of Object.entries(box.errors)) {
+                const text = checked.ok ? "" : checked.errors[name] ?? "";
+                error.textContent = text;
+                if (text) box.inputs[name].setAttribute("aria-invalid", "true");
+                else box.inputs[name].removeAttribute("aria-invalid");
+                if (text && !firstBad) firstBad = box.inputs[name];
+              }
+              if (checked.ok) bodies.push({ ...checked.value, kind: "fee", dealId, payerRole: box.role, label: dealTitle.slice(0, LEDGER_LABEL_MAX) });
+            }
+            if (firstBad) {
+              setStatus(status, "빨간 글자가 있는 칸을 고쳐 주세요.", "error");
+              (firstBad as HTMLInputElement).focus();
+              return;
+            }
+            busy = true;
+            save.disabled = true;
+            setStatus(status, "저장하고 있습니다…", "saving");
+            let made = 0;
+            let warned = false;
+            try {
+              for (const body of bodies) {
+                const result = await createLedgerEntry(body);
+                made += 1;
+                if (result.warnings.length > 0) warned = true;
+              }
+              done(`✓ 보수 줄 ${made}개를 저장했습니다.${warned ? " 굵은 경고를 확인하세요(저장은 그대로 됩니다)." : ""}`);
+            } catch (error) {
+              const code = errorCode(error);
+              const reason = ledgerErrorText(code, customerErrorText(code));
+              // 한 줄이라도 저장됐으면 목록을 다시 읽어 실제 저장된 줄을 보인다(같은 줄을 두 번 만들지 않게).
+              if (made > 0) done(`보수 줄 ${made}개만 저장했습니다. 나머지는 저장하지 못했습니다. ${reason}`);
+              else setStatus(status, `저장하지 못했습니다. ${reason}`, "error");
+            } finally {
+              busy = false;
+              syncSave();
+            }
+          });
+          form.append(capNote, pickRow, ...boxes.map((box) => box.one), status, actions);
+          return form;
+        }
+
+        const open = (next: boolean) => {
+          panel.hidden = !next;
+          toggle.setAttribute("aria-expanded", String(next));
+          toggle.textContent = next ? "장부 접기" : "장부 보기";
+          if (next) openLedgers.add(dealId);
+          else openLedgers.delete(dealId);
+          if (next && !loaded) void load();
+        };
+        toggle.addEventListener("click", () => open(Boolean(panel.hidden)));
+        if (openLedgers.has(dealId)) open(true);
+        return box;
       }
 
       function renderNotes() {

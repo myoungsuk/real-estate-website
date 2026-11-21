@@ -643,6 +643,26 @@ export function parseLedgerSummaryQuery(params) {
   return { year: parseYear(params.get("year"), { required: true }), basis: parseBasis(params.get("basis"), LEDGER_BASES) };
 }
 
+// CSV 내려받기 감사(POST /work/ledger/export): { year, basis, count }. 장부 자료는 받지 않고, 감사 reason에 줄 수만 남긴다.
+// year는 장부 목록·합계와 같은 검사(숫자 2026 또는 글자 "2026"), basis는 세 값 중 하나(빠지면 400), count는 0 이상 정수.
+export const LEDGER_EXPORT_COUNT_MAX = 100_000;
+export function parseLedgerExport(body) {
+  if (!isPlainObject(body)) throw invalid(["body"]);
+  rejectUnknown(body, ["year", "basis", "count"]);
+  const wrong = [];
+  const yearText = Number.isInteger(body.year) ? String(body.year) : typeof body.year === "string" ? body.year : "";
+  let year = null;
+  try {
+    year = parseYear(yearText, { required: true });
+  } catch {
+    wrong.push("year");
+  }
+  if (!LEDGER_BASES.includes(body.basis)) wrong.push("basis");
+  if (!Number.isSafeInteger(body.count) || body.count < 0 || body.count > LEDGER_EXPORT_COUNT_MAX) wrong.push("count");
+  if (wrong.length > 0) throw invalid(wrong);
+  return { year, basis: body.basis, count: body.count };
+}
+
 // 거래 목록: ?status=a,b&basis=balance|contract&month=YYYY-MM|year=YYYY&q=&cursor=&limit=. 상태는 쉼표로 여러 값.
 // 기간(month 또는 year)을 주면 고른 기준일로 거르고 기준일·id 내림차순, 주지 않으면 고친 시각·id 내림차순.
 export function parseDealListQuery(params) {
