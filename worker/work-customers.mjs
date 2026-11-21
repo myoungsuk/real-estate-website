@@ -30,6 +30,15 @@ const EXCLUSIVE_DEALS_OF = "SELECT p.deal_id FROM deal_parties p WHERE p.custome
 const NOTE_LINK_OK = "(? IS NULL OR EXISTS (SELECT 1 FROM customers WHERE id = ?))"
   + " AND (? IS NULL OR EXISTS (SELECT 1 FROM deals WHERE id = ?))"
   + " AND (? IS NULL OR ? IS NULL OR EXISTS (SELECT 1 FROM deal_parties WHERE deal_id = ? AND customer_id = ?))";
+// 장부 줄의 거래 연결 끊기(DEC-WT-38): 거래의 계약일·잔금일을 snap_*로, label이 비었으면 거래 제목을 옮기고 deal_id를 비운다.
+// SET의 식은 모두 바꾸기 전 행 값으로 계산되므로 하위 질의의 ledger_entries.deal_id는 끊기 전 거래를 가리킨다. entry_on은 그대로 NULL이다.
+// 거래가 지워지기 전에 돌아야 한다(거래 삭제는 dealDelete 앞, 손님 삭제는 exclusiveDealsDelete 앞). 뒤에 붙는 WHERE만 호출하는 쪽이 정한다.
+// ? 하나(updated_at). 거래 삭제(work-deals.mjs)도 이 문장을 쓴다.
+export const LEDGER_DETACH_SET =
+  "UPDATE ledger_entries SET snap_contract_on = (SELECT d.contract_on FROM deals d WHERE d.id = ledger_entries.deal_id),"
+  + " snap_balance_on = (SELECT d.balance_on FROM deals d WHERE d.id = ledger_entries.deal_id),"
+  + " label = CASE WHEN label = '' THEN coalesce((SELECT substr(d.title, 1, 120) FROM deals d WHERE d.id = ledger_entries.deal_id), '') ELSE label END,"
+  + " deal_id = NULL, version = version + 1, updated_at = ?";
 
 const SQL = Object.freeze({
   customerList:
@@ -87,6 +96,9 @@ const SQL = Object.freeze({
   exclusiveDealOnlyNotesDelete: "DELETE FROM notes WHERE customer_id IS NULL AND deal_id IN (" + EXCLUSIVE_DEALS_OF + ")",
   notesDeleteByCustomer: "DELETE FROM notes WHERE customer_id = ?",
   exclusiveDealEventsDelete: "DELETE FROM deal_events WHERE deal_id IN (" + EXCLUSIVE_DEALS_OF + ")",
+  // 지우는 단독 거래의 장부 줄은 지우지 않고 거래 연결만 끊는다(DEC-WT-38). 거래 날짜를 옮겨야 하므로 exclusiveDealsDelete 앞에 둔다.
+  // 다른 손님과 함께인 거래는 지우지 않으므로 그 장부 줄은 그대로다.
+  exclusiveDealLedgerDetach: LEDGER_DETACH_SET + " WHERE deal_id IN (" + EXCLUSIVE_DEALS_OF + ")",
   exclusiveDealsDelete: "DELETE FROM deals WHERE id IN (" + EXCLUSIVE_DEALS_OF + ")",
   customerPartiesDelete: "DELETE FROM deal_parties WHERE customer_id = ?",
   dealExists: "SELECT id FROM deals WHERE id = ?",
@@ -311,6 +323,7 @@ async function deleteCustomer(ctx, id) {
     ctx.db.prepare(SQL.exclusiveDealOnlyNotesDelete).bind(id, id),
     ctx.db.prepare(SQL.notesDeleteByCustomer).bind(id),
     ctx.db.prepare(SQL.exclusiveDealEventsDelete).bind(id, id),
+    ctx.db.prepare(SQL.exclusiveDealLedgerDetach).bind(at, id, id),
     ctx.db.prepare(SQL.exclusiveDealsDelete).bind(id, id),
     ctx.db.prepare(SQL.customerPartiesDelete).bind(id),
     ctx.db.prepare(SQL.customerDelete).bind(id),
@@ -326,7 +339,8 @@ async function deleteCustomer(ctx, id) {
   // 지운·남긴 개수는 미리 센 값이 아니라 batch 결과로 센다. 남기는 메모 본문에 지운 손님 정보가 있을 수 있어 개수를 알린다(화면 경고용).
   const kept = changesOf(results[2]) + changesOf(results[3]);
   const notes = changesOf(results[4]) + changesOf(results[5]);
-  return { data: { deleted: { customers: 1, deals: changesOf(results[7]), notes, files: 0 }, kept: { notes: kept } } };
+  // kept.ledger: 지운 단독 거래에서 연결만 끊고 남긴 장부 줄 수(거래 삭제와 같은 꼴, 감사 reason 꼴은 그대로).
+  return { data: { deleted: { customers: 1, deals: changesOf(results[8]), notes, files: 0 }, kept: { notes: kept, ledger: changesOf(results[7]) } } };
 }
 
 async function listNotes(ctx) {

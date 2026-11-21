@@ -1,6 +1,7 @@
 // 업무 도구 API 입력 검사·정규화(순수 함수). 오류 메시지는 고정 문구만 쓰고 입력값을 담지 않는다(설계서 10.1절).
 import { WorkApiError } from "./work-security.mjs";
 import { DEFAULT_ALARM_TRIGGERS, isAllowedAlarmTriggers } from "./work-calendar.mjs";
+import { cleanMultiLine, cleanSingleLine } from "../src/lib/work/work-format.mjs";
 
 export const CUSTOMER_STATUSES = Object.freeze(["consulting", "contracting", "completed", "on_hold"]);
 export const LIST_LIMIT_DEFAULT = 20;
@@ -476,4 +477,202 @@ export function parseCalculate(body) {
   rejectUnknown(body, ["replaceCalculated"]);
   if (body.replaceCalculated !== true) throw invalid(["replaceCalculated"]);
   return { replaceCalculated: true };
+}
+
+// 정렬 칸이 날짜(YYYY-MM-DD)나 0 이상 정수인 목록의 커서: { k: 값, i: UUID }를 base64url JSON으로 묶는다(시각 커서 encodeCursor와 같은 꼴).
+// 길이·형식이 틀리면 400. type은 "date" 또는 "int".
+export function encodeKeyCursor(key, id) {
+  return btoa(JSON.stringify({ k: key, i: id })).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/u, "");
+}
+
+export function decodeKeyCursor(value, type) {
+  if (value === null || value === undefined || value === "") return null;
+  if (value.length > MAX_CURSOR_LENGTH || !/^[A-Za-z0-9_-]+$/u.test(value)) throw invalid(["cursor"]);
+  let parsed;
+  try {
+    const padded = value.replaceAll("-", "+").replaceAll("_", "/").padEnd(Math.ceil(value.length / 4) * 4, "=");
+    parsed = JSON.parse(atob(padded));
+  } catch {
+    throw invalid(["cursor"]);
+  }
+  const keyOk = type === "date" ? isCalendarDate(parsed?.k) : Number.isSafeInteger(parsed?.k) && parsed.k >= 0;
+  if (!isPlainObject(parsed) || Object.keys(parsed).length !== 2 || !keyOk || !isUuid(parsed.i)) throw invalid(["cursor"]);
+  return { key: parsed.k, id: parsed.i };
+}
+
+// 매출장부(설계서 6.12·10.2절, 단계 2). 줄 종류·낸 쪽 역할·합계 기준일.
+export const LEDGER_KINDS = Object.freeze(["fee", "expense", "other_income"]);
+export const LEDGER_BASES = Object.freeze(["balance", "contract", "received"]);
+export const DEAL_LIST_BASES = Object.freeze(["balance", "contract"]);
+const LEDGER_FIELDS = Object.freeze(["payerRole", "label", "entryOn", "amountWon", "vatWon", "receivedWon", "receivedOn", "memo"]);
+const YEAR_PATTERN = /^\d{4}$/u;
+const MONTH_PATTERN = /^(\d{4})-(0[1-9]|1[0-2])$/u;
+const YEAR_MIN = 2000;
+const YEAR_MAX = 2100;
+
+const yearInRange = (text) => Number(text) >= YEAR_MIN && Number(text) <= YEAR_MAX;
+
+function parseYear(value, { required }) {
+  if (value === null || value === undefined || value === "") {
+    if (required) throw invalid(["year"]);
+    return null;
+  }
+  if (!YEAR_PATTERN.test(value) || !yearInRange(value)) throw invalid(["year"]);
+  return value;
+}
+
+function parseBasis(value, allowed) {
+  if (value === null || value === undefined || value === "") return "balance";
+  if (!allowed.includes(value)) throw invalid(["basis"]);
+  return value;
+}
+
+// label(한 줄 120자)·memo(여러 줄 500자): 기존 정리 함수로 제어 문자·공백을 고른 뒤 주민번호 형태를 가린다(가린 뒤 길이도 다시 봄).
+function readLedgerText(body, key, max, clean) {
+  const raw = readText(body, key, { min: 0, max, required: false });
+  if (raw === undefined) return undefined;
+  return maskField(clean(raw, max), key, max);
+}
+
+function readRequiredAmount(body, key) {
+  const amount = readAmount(body, key);
+  if (amount === null) throw invalid([key]);
+  return amount;
+}
+
+// 장부 칸을 읽어 보낸 칸만 돌려준다(없는 칸은 undefined). 금액은 0 이상 안전한 정수(거래 금액 칸과 같은 검사), 날짜는 달력 날짜.
+function readLedgerFields(body) {
+  const fields = {};
+  let rrnMasked = 0;
+  const payerRole = readEnum(body, "payerRole", PARTY_ROLES, { nullable: true });
+  if (payerRole !== undefined) fields.payerRole = payerRole;
+  for (const [key, max, clean] of [["label", 120, cleanSingleLine], ["memo", 500, cleanMultiLine]]) {
+    const masked = readLedgerText(body, key, max, clean);
+    if (masked !== undefined) {
+      fields[key] = masked.text;
+      rrnMasked += masked.count;
+    }
+  }
+  for (const key of ["amountWon", "vatWon", "receivedWon"]) {
+    const amount = readRequiredAmount(body, key);
+    if (amount !== undefined) fields[key] = amount;
+  }
+  for (const key of ["entryOn", "receivedOn"]) {
+    const date = readDate(body, key);
+    if (date !== undefined) fields[key] = date;
+  }
+  return { fields, rrnMasked };
+}
+
+// 장부 줄의 최종 상태(만들기 값, 또는 고치기의 저장된 줄 + 고칠 값)를 본다. 0005 CHECK에 걸릴 조합을 미리 400으로 돌려
+// CHECK 위반이 500으로 나가지 않게 한다. requireEntryOn: 거래도 옮겨 둔 날짜(snap_*)도 없는 지출·기타 수입에 날짜를 요구할지
+// (만들기는 늘, 고치기는 entryOn을 보냈을 때만. 거래 삭제로 날짜 없이 남은 줄의 다른 칸을 고치는 것은 막지 않는다).
+export function assertLedgerState(state, { requireEntryOn }) {
+  const wrong = [];
+  if (state.payerRole !== null && state.kind !== "fee") wrong.push("payerRole");
+  if (state.kind === "expense" && state.receivedWon > 0) wrong.push("receivedWon");
+  // 입금일: 지출은 받지 않는다(입금일 기준에서도 잔금일 기준 날짜를 씀). 보수·기타 수입은 입금액이 있으면 입금일이 있어야 하고,
+  // 입금액이 0이면 입금일이 비어 있어야 한다(입금하지 않은 줄이 입금일 기준 합계에 들어가지 않게, 2026-11-21 대장 지시).
+  if (state.kind === "expense" ? state.receivedOn !== null : (state.receivedWon > 0) !== (state.receivedOn !== null)) wrong.push("receivedOn");
+  if (state.dealId !== null && state.entryOn !== null) wrong.push("entryOn");
+  else if (requireEntryOn && state.dealId === null && state.kind !== "fee" && state.entryOn === null
+    && state.snapContractOn === null && state.snapBalanceOn === null) wrong.push("entryOn");
+  if (wrong.length > 0) throw invalid(wrong);
+}
+
+export const LEDGER_DEFAULTS = Object.freeze({
+  dealId: null,
+  payerRole: null,
+  label: "",
+  entryOn: null,
+  vatWon: 0,
+  receivedWon: 0,
+  receivedOn: null,
+  memo: "",
+  snapContractOn: null,
+  snapBalanceOn: null,
+});
+
+export function parseLedgerCreate(body) {
+  if (!isPlainObject(body)) throw invalid(["body"]);
+  rejectUnknown(body, ["kind", "dealId", ...LEDGER_FIELDS]);
+  if (!LEDGER_KINDS.includes(body.kind)) throw invalid(["kind"]);
+  if (!("amountWon" in body) || body.amountWon === undefined) throw invalid(["amountWon"]);
+  const dealId = readOptionalId(body, "dealId") ?? null;
+  const { fields, rrnMasked } = readLedgerFields(body);
+  const entry = { ...LEDGER_DEFAULTS, ...fields, kind: body.kind, dealId };
+  assertLedgerState(entry, { requireEntryOn: true });
+  return { entry, rrnMasked };
+}
+
+// 고치기: 거래(dealId)와 종류(kind)는 바꾸지 않는다(D-6, 보내면 400). 최종 상태 검사는 저장된 줄과 합친 뒤 assertLedgerState로 한다.
+export function parseLedgerPatch(body) {
+  if (!isPlainObject(body)) throw invalid(["body"]);
+  rejectUnknown(body, ["version", ...LEDGER_FIELDS]);
+  const version = readVersion(body);
+  const { fields, rrnMasked } = readLedgerFields(body);
+  if (Object.keys(fields).length === 0) throw invalid(["body"]);
+  return { version, changes: fields, rrnMasked };
+}
+
+// 장부 목록: ?year=&basis=&unpaid=1&kind=&dealId=&cursor=&limit=. 커서 꼴은 정렬에 따라 다르다
+// (미입금 보기: 미입금액, 연도: 기준일, 그 밖: 고친 시각).
+export function parseLedgerQuery(params) {
+  const year = parseYear(params.get("year"), { required: false });
+  const basis = parseBasis(params.get("basis"), LEDGER_BASES);
+  const unpaidText = params.get("unpaid");
+  if (unpaidText !== null && unpaidText !== "" && unpaidText !== "1" && unpaidText !== "0") throw invalid(["unpaid"]);
+  const unpaid = unpaidText === "1";
+  const kindText = params.get("kind");
+  if (kindText !== null && kindText !== "" && !LEDGER_KINDS.includes(kindText)) throw invalid(["kind"]);
+  const dealText = params.get("dealId");
+  if (dealText !== null && dealText !== "" && !isUuid(dealText)) throw invalid(["dealId"]);
+  const order = unpaid ? "unpaid" : year ? "basis" : "updated";
+  const cursorText = params.get("cursor");
+  const cursor = order === "updated" ? decodeCursor(cursorText) : decodeKeyCursor(cursorText, order === "unpaid" ? "int" : "date");
+  return {
+    year, basis, unpaid, order,
+    kind: kindText ? kindText : null,
+    dealId: dealText ? dealText : null,
+    cursor: cursor && order === "updated" ? { key: cursor.time, id: cursor.id } : cursor,
+    limit: parseLimit(params.get("limit")),
+  };
+}
+
+export function parseLedgerSummaryQuery(params) {
+  return { year: parseYear(params.get("year"), { required: true }), basis: parseBasis(params.get("basis"), LEDGER_BASES) };
+}
+
+// 거래 목록: ?status=a,b&basis=balance|contract&month=YYYY-MM|year=YYYY&q=&cursor=&limit=. 상태는 쉼표로 여러 값.
+// 기간(month 또는 year)을 주면 고른 기준일로 거르고 기준일·id 내림차순, 주지 않으면 고친 시각·id 내림차순.
+export function parseDealListQuery(params) {
+  const statusText = params.get("status");
+  let statuses = null;
+  if (statusText !== null && statusText !== "") {
+    const values = statusText.split(",");
+    if (values.length > DEAL_STATUSES.length || values.some((value) => !DEAL_STATUSES.includes(value))) throw invalid(["status"]);
+    statuses = [...new Set(values)];
+  }
+  const basis = parseBasis(params.get("basis"), DEAL_LIST_BASES);
+  const monthText = params.get("month");
+  const yearText = params.get("year");
+  const hasMonth = monthText !== null && monthText !== "";
+  const hasYear = yearText !== null && yearText !== "";
+  if (hasMonth && hasYear) throw invalid(["month", "year"]);
+  let period = null;
+  if (hasMonth) {
+    const match = MONTH_PATTERN.exec(monthText);
+    if (!match || !yearInRange(match[1])) throw invalid(["month"]);
+    period = monthText;
+  } else if (hasYear) {
+    period = parseYear(yearText, { required: true });
+  }
+  const query = parseSearchQuery(params.get("q"), { required: false });
+  const cursorText = params.get("cursor");
+  const cursor = period ? decodeKeyCursor(cursorText, "date") : decodeCursor(cursorText);
+  return {
+    statuses, basis, period, query,
+    cursor: cursor && !period ? { key: cursor.time, id: cursor.id } : cursor,
+    limit: parseLimit(params.get("limit")),
+  };
 }
