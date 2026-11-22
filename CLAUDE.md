@@ -11,7 +11,7 @@
 - Cloudflare Workers Static Assets와 관리 API를 같은 Worker로 배포한다.
 - `/api/admin/*`만 Worker 코드가 먼저 처리하고 나머지 공개 요청은 정적 자산으로 제공한다.
 - 관리 API는 Cloudflare Access, 허용 이메일 2개, Email OTP와 JWT 재검증으로 보호한다.
-- 공개 홈페이지에는 DB, 자체 비밀번호, 서버 저장형 상담 게시판을 두지 않는다. 관리자 전용 중개업무 도구(단계 2 손님 자료, 단계 P 공개 실거래 자료)는 D1·R2에 연결돼 있으나 켜기 값을 등록하기 전에는 꺼져 있다. FAQ 상담 작성 화면과 매물 문의 문장 도우미는 입력값을 서버로 보내거나 영구 저장하지 않고, 이용자가 직접 복사해 문자·카카오톡 앱에서 전송한다.
+- 공개 홈페이지에는 DB, 자체 비밀번호, 서버 저장형 상담 게시판을 두지 않는다. 관리자 전용 중개업무 도구(단계 2 손님 자료, 단계 P 공개 실거래 자료)는 D1·R2에 연결돼 있다. 단계 2 업무 도구(손님·매출장부·할 일·휴지통)는 처리방침 개정을 공개한 뒤 2026-11-22 Worker Secret `WORK_TOOLS_ENABLED`를 등록해 켜졌고, 사진은 `WORK_FILES_ENABLED`를 등록하기 전까지 꺼져 있다. 단계 P는 자기 켜기 값을 따른다. FAQ 상담 작성 화면과 매물 문의 문장 도우미는 입력값을 서버로 보내거나 영구 저장하지 않고, 이용자가 직접 복사해 문자·카카오톡 앱에서 전송한다.
 - 운영자는 Access 보호 관리자 화면 또는 승인된 JSON·사진 파일에서 공개 콘텐츠를 수정하고 GitHub에 반영한다.
 - 전화·문자·공식 외부 채널로 상담을 연결한다.
 
@@ -173,7 +173,7 @@ npm run sync:external:dry-run
 - 관리자 복원 → `/api/admin/v1/content-history/:resource`에서 현재 branch 이력·과거 blob 확인 → 현재 전체 허용 JSON과 교차 검증 → `/api/admin/v1/content/restore`가 `force: false` 새 commit 생성 → 일반 배포 상태 추적. Cloudflare 전체 롤백과 혼합하지 않는다.
 - `/api/admin/*` → `worker/index.mjs` → Access JWT·허용 이메일·Origin·CSRF 검증 → `POST /api/admin/v1/content/validate`는 쓰기 없이 같은 branch-tip snapshot과 전체 후보를 교차 검증 → 실제 저장은 요청된 JSON blob을 같은 base tree의 단일 commit으로 저장하고 non-force ref CAS로 갱신. WebP는 별도 허용 경로의 Contents API로 저장
 
-공개 화면의 DB·TR 흐름은 없다. 관리자 중개업무 도구만 D1·R2를 쓰며(단계 P는 공개 실거래 자료만) 켜기 전에는 꺼져 있다(`docs/work-tools/`). 공공데이터포털은 Worker만 부르고 브라우저는 부르지 않는다. 관리 API의 콘텐츠 쓰기는 `ADMIN_WRITE_ENABLED=true`와 CSRF·GitHub Secret이 모두 있을 때만 활성화되며, 기본 로컬·Preview 설정은 fail closed다. 브라우저 JavaScript는 공개 화면의 모바일 메뉴·매물 페이징·필터·정렬·관심 ID·비교·비저장 문의 문장과 관리자 폼·WebP 변환에 사용한다. 고객 관심 상태는 공개 매물 ID만 같은 브라우저에 저장하며, 상담 입력은 `localStorage`·URL·서버 요청에 넣지 않는다.
+공개 화면의 DB·TR 흐름은 없다. 관리자 중개업무 도구만 D1·R2를 쓰며(단계 P는 공개 실거래 자료만), 단계 2는 2026-11-22 켜졌다(사진은 `WORK_FILES_ENABLED` 전 꺼짐, `docs/work-tools/`). 공공데이터포털은 Worker만 부르고 브라우저는 부르지 않는다. 관리 API의 콘텐츠 쓰기는 `ADMIN_WRITE_ENABLED=true`와 CSRF·GitHub Secret이 모두 있을 때만 활성화되며, 기본 로컬·Preview 설정은 fail closed다. 브라우저 JavaScript는 공개 화면의 모바일 메뉴·매물 페이징·필터·정렬·관심 ID·비교·비저장 문의 문장과 관리자 폼·WebP 변환에 사용한다. 고객 관심 상태는 공개 매물 ID만 같은 브라우저에 저장하며, 상담 입력은 `localStorage`·URL·서버 요청에 넣지 않는다.
 
 ## 공개·비공개 데이터 경계
 
