@@ -6,8 +6,9 @@ export const TRASH_KEEP_DAYS = 7; // 서버 TRASH_KEEP_DAYS와 같음
 export const TRASH_PAGE_SIZE = 50; // 서버 기본·최대
 export const TRASH_SCHEMA_VERSION = 7; // 휴지통 구조(migrations/work/0007_trash.sql)
 export const TRASH_PURGE_WORD = "영구 삭제"; // DELETE /work/trash/:batchId 의 confirm 글자
-export const TRASH_KINDS = Object.freeze(["customer", "deal", "note", "event", "ledger", "task"]);
-export const TRASH_KIND_LABELS = Object.freeze({ customer: "손님", deal: "거래", note: "메모", event: "일정", ledger: "장부 줄", task: "할 일" });
+// 사진(file)은 바로 찍기 PR(F-a·F-b)에서 더했다. 서버 묶음 kind 이름은 file, 화면 이름은 "사진".
+export const TRASH_KINDS = Object.freeze(["customer", "deal", "note", "event", "ledger", "task", "file"]);
+export const TRASH_KIND_LABELS = Object.freeze({ customer: "손님", deal: "거래", note: "메모", event: "일정", ledger: "장부 줄", task: "할 일", file: "사진" });
 
 // 지우기 확인 칸 첫 문장(지시서 4.1). 화면 4곳이 같은 글을 쓴다.
 export const TRASH_MOVE_NOTICE = "휴지통으로 옮깁니다. 7일 안에 되살릴 수 있고, 그 뒤 자동으로 영구 삭제됩니다.";
@@ -16,7 +17,7 @@ export const TRASH_BACKUP_NOTICE = "영구 삭제한 뒤에도 백업에는 개�
 // 손님이 자기 자료를 지워 달라고 할 때(손님 카드·휴지통 사용법, 날개-2 안)
 export const TRASH_ERASE_REQUEST = "손님이 자기 자료를 지워 달라고 하면: 손님 카드에서 지운 뒤 휴지통에서 그 묶음을 '영구 삭제'까지 하세요. 휴지통에 두면 7일 동안 남습니다.";
 
-/** @typedef {{ customers?: number, deals?: number, parties?: number, events?: number, notes?: number, tasks?: number, ledger?: number, links?: number }} TrashCountsView */
+/** @typedef {{ customers?: number, deals?: number, parties?: number, events?: number, notes?: number, tasks?: number, ledger?: number, files?: number, links?: number }} TrashCountsView */
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 const KOREA_OFFSET_MS = 9 * 60 * 60 * 1000;
@@ -71,7 +72,7 @@ const kindSubject = (kind) => {
 // 묶음 안 수 → 글. 순서는 되살리는 순서와 같다(손님 → 거래 → 참여자 → 일정 → 메모 → 할 일 → 장부 줄).
 const COUNT_UNITS = Object.freeze([
   ["customers", "손님", "명"], ["deals", "거래", "건"], ["parties", "참여자", "줄"], ["events", "일정", "개"],
-  ["notes", "메모", "개"], ["tasks", "할 일", "개"], ["ledger", "장부 줄", "개"],
+  ["notes", "메모", "개"], ["tasks", "할 일", "개"], ["ledger", "장부 줄", "개"], ["files", "사진", "장"],
 ]);
 const MAIN_COUNT = Object.freeze({ customer: "customers", deal: "deals" });
 const countPart = ([key, name, unit], count) => `${name} ${count.toLocaleString("ko-KR")}${unit}`;
@@ -128,11 +129,11 @@ export function trashEmptyText(kind) {
 
 // ── 되살리기 결과 ──
 const RESTORED_UNITS = Object.freeze([
-  ["customers", "손님", "명"], ["deals", "거래", "건"], ["events", "일정", "개"], ["notes", "메모", "개"], ["tasks", "할 일", "개"], ["ledger", "장부 줄", "개"],
+  ["customers", "손님", "명"], ["deals", "거래", "건"], ["events", "일정", "개"], ["notes", "메모", "개"], ["tasks", "할 일", "개"], ["ledger", "장부 줄", "개"], ["files", "사진", "장"],
 ]);
 // 건너뛴 줄의 대상(응답 skipped[].table)
 const SKIP_SUBJECTS = Object.freeze({
-  customers: ["손님", "명"], deals: ["거래", "건"], parties: ["참여자", "줄"], events: ["일정", "개"], notes: ["메모", "개"], tasks: ["할 일", "개"], ledger: ["장부 줄", "개"],
+  customers: ["손님", "명"], deals: ["거래", "건"], parties: ["참여자", "줄"], events: ["일정", "개"], notes: ["메모", "개"], tasks: ["할 일", "개"], ledger: ["장부 줄", "개"], files: ["사진", "장"],
   noteCustomer: ["메모", "개"], noteDeal: ["메모", "개"], ledgerDeal: ["장부 줄", "개"],
   // 서버가 표 이름 그대로 보내도 같은 말로(2026-11-22 대장 안내와 worker/work-trash.mjs VIEW_KEY가 달라 둘 다 받음)
   deal_parties: ["참여자", "줄"], deal_events: ["일정", "개"], ledger_entries: ["장부 줄", "개"],
@@ -185,6 +186,8 @@ const RESTORED_LINKS = Object.freeze({
   event: ["손님 목록 열기", "/admin/work/customers/"],
   ledger: ["매출장부 열기", "/admin/work/ledger/"],
   task: ["할 일 열기", "/admin/work/tasks/"],
+  // 사진은 손님 카드에 있지만 되살리기 응답에 손님 id가 없어 손님 목록으로(지시서 4.1, 대장 판단)
+  file: ["손님 목록 열기", "/admin/work/customers/"],
 });
 /** @param {string} kind @returns {{ text: string, href: string } | null} */
 export function restoredLink(kind) {

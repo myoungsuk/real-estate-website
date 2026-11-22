@@ -4,10 +4,10 @@ import { readWorkData, writeWorkData } from "./work-customers-client";
 
 export { WorkApiError, getCustomerSession as getTrashSession } from "./work-customers-client";
 
-export type TrashKind = "customer" | "deal" | "note" | "event" | "ledger" | "task";
+export type TrashKind = "customer" | "deal" | "note" | "event" | "ledger" | "task" | "file";
 // 지우는 요청 6곳의 응답에 붙는 값(7일 뒤 영구 삭제)
 export interface TrashRef { batchId: string; purgeAfter: string }
-export interface TrashCounts { customers: number; deals: number; parties: number; events: number; notes: number; tasks: number; ledger: number; links: number }
+export interface TrashCounts { customers: number; deals: number; parties: number; events: number; notes: number; tasks: number; ledger: number; files?: number; links: number }
 export interface TrashItem {
   batchId: string;
   kind: TrashKind;
@@ -21,7 +21,7 @@ export interface TrashItem {
 export interface TrashPage { items: TrashItem[]; nextCursor: string | null }
 export interface TrashSkip { table: string; reason: string; count: number }
 export interface TrashRestored {
-  restored: { customers: number; deals: number; parties: number; events: number; notes: number; tasks: number; ledger: number; links: number; notesUnlinked: number };
+  restored: { customers: number; deals: number; parties: number; events: number; notes: number; tasks: number; ledger: number; files?: number; links: number; notesUnlinked: number };
   skipped: TrashSkip[];
   remaining: number;
 }

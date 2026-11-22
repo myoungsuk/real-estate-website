@@ -275,7 +275,7 @@ test("새 손님: 이름이 비면 칸 아래 오류, 저장은 CSRF 머리말�
 });
 
 for (const width of [360, 1280]) {
-  test(`손님 카드 ${width}px: 기본 정보 → 거래·일정(역할 둘인 거래는 하나로) → 메모 → 파일, 메모 저장은 손님 ID와 함께`, async ({ page }) => {
+  test(`손님 카드 ${width}px: 기본 정보 → 거래·일정(역할 둘인 거래는 하나로) → 메모 → 사진, 메모 저장은 손님 ID와 함께`, async ({ page }) => {
     const assertNoErrors = collectErrors(page);
     const calls = await setup(page, { width });
     await page.goto(`/admin/work/customers/detail/?id=${uuid(1)}`);
@@ -286,14 +286,14 @@ for (const width of [360, 1280]) {
     await expect(page.locator("[data-cu-phone]")).toHaveText("010-0000-0001");
     await expect(page.locator("[data-cu-contact-on]")).toHaveText("11. 19. · 2일 전");
     const titles = await page.locator(".cu-block__title").evaluateAll((nodes) => nodes.map((node) => node.firstChild.textContent.trim()));
-    expect(titles).toEqual(["기본 정보", "거래·일정", "메모", "파일"]);
+    expect(titles).toEqual(["기본 정보", "거래·일정", "메모", "사진"]);
     const deals = page.locator(".cu-deal");
     await expect(deals).toHaveCount(2);
     await expect(page.locator("[data-cu-deals-count]")).toHaveText("2건");
     await expect(deals.first().locator(".cu-deal__meta")).toHaveText("매매 · 매수인·기타 · 계약함");
     await expect(deals.first().locator(".cu-event")).toHaveText(["11. 10.계약✓ 끝남", "11. 24.중도금3일 남음", "12. 20.잔금29일 남음"]);
     await expect(deals.nth(1)).toContainText("아직 일정이 없습니다.");
-    await expect(page.locator("[data-cu-files-text]")).toContainText("파일 저장소가 아직 켜지지 않았습니다");
+    await expect(page.locator("[data-ph-off]")).toContainText("파일 저장소가 아직 켜지지 않았습니다");
     await expect(page.locator(".cu-notes .cu-memo")).toHaveCount(1);
     const bar = page.locator("[data-cu-bar]");
     if (width < 980) {
