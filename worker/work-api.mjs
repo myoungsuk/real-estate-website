@@ -12,6 +12,7 @@ import { routeWorkLedger } from "./work-ledger.mjs";
 import { routeWorkTasks } from "./work-tasks.mjs";
 import { routeWorkTrash } from "./work-trash.mjs";
 import { isWorkFileUpload, isWorkFilesRoute, routeWorkFiles } from "./work-files.mjs";
+import { routeWorkCalendarFeeds } from "./work-calendar-feeds.mjs";
 import { handlePublicToolsApi, isPublicToolsRoute } from "./work-public-tools.mjs";
 
 // 기존 시험·다른 모듈이 쓰던 이름을 그대로 내보낸다(감사 도우미는 work-audit.mjs로 옮김).
@@ -261,9 +262,12 @@ export async function handleWorkApi(request, env, options = {}) {
     const dataContext = {
       db, actor, requestId, now, method, route, url, body, randomUUID: options.randomUUID ?? (() => crypto.randomUUID()), legalRules: options.legalRules,
       request, files, filesEnabled, log: auditLog,
+      // 캘린더 구독 주소(단계 3): 토큰 해시 키와 무작위 바이트(시험만 고정값을 넣음)
+      feedPepper: env?.WORK_FEED_TOKEN_PEPPER, randomBytes: options.randomBytes,
     };
     const handled = (await routeWorkData(dataContext)) ?? (await routeWorkDeals(dataContext)) ?? (await routeWorkEvents(dataContext))
-      ?? (await routeWorkLedger(dataContext)) ?? (await routeWorkTasks(dataContext)) ?? (await routeWorkTrash(dataContext)) ?? (await routeWorkFiles(dataContext));
+      ?? (await routeWorkLedger(dataContext)) ?? (await routeWorkTasks(dataContext)) ?? (await routeWorkTrash(dataContext)) ?? (await routeWorkFiles(dataContext))
+      ?? (await routeWorkCalendarFeeds(dataContext));
     if (handled?.response) return handled.response;
     if (handled?.raw) return workFileResponse(handled.raw, requestId);
     if (handled) return jsonResponse({ ok: true, data: handled.data, requestId }, { status: handled.status ?? 200, headers: { "X-Request-Id": requestId } });

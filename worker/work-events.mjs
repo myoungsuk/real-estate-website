@@ -28,7 +28,7 @@ const EVENT_KIND_TO_RULE = Object.freeze({
   funding_plan_submit: "fundingPlanSeparate",
   lease_report: "leaseReport",
 });
-const EVENT_KIND_LABELS = Object.freeze({
+export const EVENT_KIND_LABELS = Object.freeze({
   contract: "계약일",
   middle_payment: "중도금",
   balance: "잔금",
@@ -309,7 +309,7 @@ async function deleteEvent(ctx, id) {
   return { data: { deleted: true, trash: trash.trash } };
 }
 
-function ruleText(kind) {
+export function ruleText(kind) {
   const ruleKind = EVENT_KIND_TO_RULE[kind];
   return ruleKind ? (legalRules.deadlineRules ?? []).find((rule) => rule.kind === ruleKind)?.legalText ?? "" : "";
 }
