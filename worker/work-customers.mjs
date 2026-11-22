@@ -1,6 +1,8 @@
 // 업무 도구 단계 2 PR-A: 손님·메모·검색 API(설계서 8.5 ~ 8.8·10.2·11.2절). 모든 SQL은 준비된 문장(고정 문자열 + bind)만 쓴다.
-// 파일(R2)은 아직 없어서, 손님 삭제 때 파일 행이 있으면 409 FILES_REQUIRE_STORAGE로 막는다(R2 PR에서 실제 삭제로 바꿈).
-import { WorkApiError } from "./work-security.mjs";
+// 손님 사진(F-a): 손님 삭제 때 그 손님 파일 행을 휴지통으로 옮기고 지운다(R2 객체는 휴지통 동안 그대로, 영구 삭제 때 지움).
+// WORK_FILES 바인딩이 없으면 파일 행이 있는 손님 삭제는 409 FILES_REQUIRE_STORAGE로 막는다(R2를 지울 수 없어 7일 만료가 멈추지 않게).
+// 켜기 값(WORK_FILES_ENABLED)은 보지 않는다. 지우는 일은 바인딩만 본다(7일 만료·영구 삭제와 같음, 손님 삭제 요청을 막지 않게, 대장 2026-11-22).
+import { WorkApiError, hasR2 } from "./work-security.mjs";
 import { auditIfUpdatedStatement, auditStatement, changesOf, loadThenAudit, runBatch, writeBatchWithAudit } from "./work-audit.mjs";
 import { namedStatements, trashBatchFor, trashLinksSql, trashRowsSql } from "./work-trash.mjs";
 import {
@@ -51,6 +53,7 @@ const W = Object.freeze({
   exclusiveDeals: "id IN (" + EXCLUSIVE_DEALS_OF + ")",
   customerParties: "customer_id = ?",
   customer: "id = ?",
+  filesByCustomer: "customer_id = ?",
 });
 
 const SQL = Object.freeze({
@@ -83,13 +86,15 @@ const SQL = Object.freeze({
     "SELECT id, customer_id, deal_id, body, source, file_id, version, created_at, updated_at FROM notes WHERE customer_id = ? ORDER BY created_at DESC, id DESC LIMIT ?",
   customerFiles:
     "SELECT id, kind, mime_type, byte_size, caption, deal_id, created_at FROM files WHERE customer_id = ? ORDER BY created_at DESC, id DESC",
-  // 손님 삭제 미리 확인(친절한 오류용): 손님 파일 + 그 손님 단독 거래의 파일 수. 실제 막기는 아래 batch 첫 문장(guard)이 한다.
-  customerFileCount: "SELECT count(*) AS n FROM files WHERE customer_id = ? OR deal_id IN (" + EXCLUSIVE_DEALS_OF + ")",
-  // 손님 삭제 batch 첫 문장: 손님이 없거나 이름이 바뀌었거나 파일 행이 있으면 json('guard')(잘못된 JSON)로 일부러 오류를 내
+  // 손님 삭제 미리 확인(친절한 오류용): R2 바인딩이 없을 때의 손님 파일 수(? 첫째가 1이면 바인딩 있음이라 0), 그 손님 단독 거래의 파일 수.
+  // 실제 막기는 아래 batch 첫 문장(guard)이 한다. 거래 파일은 이 PR에서 생기지 않지만(F-2), 생기면 거래를 지울 때 ON DELETE SET NULL로
+  // 주인 없는 사진이 되므로 계속 막는다(거래 파일 PR에서 바꿈).
+  customerFileCount: "SELECT count(*) AS n FROM files WHERE (? = 0 AND customer_id = ?) OR deal_id IN (" + EXCLUSIVE_DEALS_OF + ")",
+  // 손님 삭제 batch 첫 문장: 손님이 없거나 이름이 바뀌었거나 막을 파일 행이 있으면 json('guard')(잘못된 JSON)로 일부러 오류를 내
   // batch 전체를 되돌린다. batch는 한 트랜잭션이라 이 판정과 뒤 문장 사이에 다른 쓰기가 끼지 않는다.
   customerDeleteGuard:
     "SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM customers WHERE id = ? AND display_name = ?)"
-    + " OR EXISTS (SELECT 1 FROM files WHERE customer_id = ? OR deal_id IN (" + EXCLUSIVE_DEALS_OF + "))"
+    + " OR EXISTS (SELECT 1 FROM files WHERE (? = 0 AND customer_id = ?) OR deal_id IN (" + EXCLUSIVE_DEALS_OF + "))"
     + " THEN json('guard') ELSE 1 END AS ok",
   // 감사 기록은 지우기 전에 남기며, 남길 메모 수(notes_kept)를 batch 안에서 센다.
   customerDeleteAudit:
@@ -114,6 +119,9 @@ const SQL = Object.freeze({
   exclusiveDealTasksDelete: "DELETE FROM tasks WHERE " + W.inExclusiveDeals,
   exclusiveDealsDelete: "DELETE FROM deals WHERE " + W.exclusiveDeals,
   customerPartiesDelete: "DELETE FROM deal_parties WHERE " + W.customerParties,
+  // 손님 사진: 0001 files.customer_id가 ON DELETE SET NULL이라 이 문장을 빠뜨리거나 손님 행 삭제 뒤에 두면 오류 없이 주인 없는 사진이 남는다(1절 2번, T2-137d).
+  // 그래서 손님 행 삭제보다 앞(단독 거래 삭제보다도 앞)에 둔다.
+  filesDeleteByCustomer: "DELETE FROM files WHERE " + W.filesByCustomer,
   // 휴지통 복사 문장(0007). 각 지우기·끊기 문장 바로 앞에 같은 WHERE로 둔다. 첫 ?는 묶음 id, 그 뒤는 짝 문장의 WHERE 값과 같다.
   trashSharedDealNotes: trashLinksSql("note_customer", W.sharedDealNotes),
   trashExclusiveDealOtherNotes: trashLinksSql("note_deal", W.exclusiveDealOtherNotes),
@@ -128,6 +136,7 @@ const SQL = Object.freeze({
   trashExclusiveDeals: trashRowsSql("deals", W.exclusiveDeals),
   trashCustomerParties: trashRowsSql("deal_parties", W.customerParties),
   trashCustomer: trashRowsSql("customers", W.customer),
+  trashFilesByCustomer: trashRowsSql("files", W.filesByCustomer),
   dealExists: "SELECT id FROM deals WHERE id = ?",
   partyExists: "SELECT 1 AS ok FROM deal_parties WHERE deal_id = ? AND customer_id = ? LIMIT 1",
   noteList:
@@ -328,20 +337,20 @@ export async function count(db, sql, ...values) {
 }
 
 // 손님 삭제 앞 확인. batch 전(친절한 오류)과 batch가 guard로 되돌려진 뒤(그사이 바뀐 상황 판정)에 같은 순서로 본다.
-async function assertCustomerDeletable(db, id, confirmName) {
+async function assertCustomerDeletable(db, id, confirmName, hasStorage) {
   const row = await loadCustomer(db, id);
   if (!row) throw notFound();
   if (confirmName !== row.display_name) {
     throw new WorkApiError("CONFIRMATION_MISMATCH", "확인 이름이 손님 이름과 다릅니다.", 400);
   }
-  if (await count(db, SQL.customerFileCount, id, id, id) > 0) {
+  if (await count(db, SQL.customerFileCount, hasStorage ? 1 : 0, id, id, id) > 0) {
     throw new WorkApiError("FILES_REQUIRE_STORAGE", "연결된 파일이 있어 파일 저장소가 켜진 뒤에 지울 수 있습니다.", 409);
   }
 }
 
 async function deleteCustomer(ctx, id) {
   const confirmName = parseConfirmation(ctx.body, "confirmName");
-  await assertCustomerDeletable(ctx.db, id, confirmName);
+  await assertCustomerDeletable(ctx.db, id, confirmName, hasR2(ctx.files));
   const at = new Date(ctx.now).toISOString();
   // 한 batch(한 트랜잭션). 단독 거래·남길 메모는 각 문장이 batch 안에서 다시 판정하고, 첫 문장(guard)이 조건이 깨졌으면 전체를 되돌린다.
   // 외래 키 동작에 기대지 않고 지울 행을 직접 지운다. 다만 단독 거래의 참여자 줄은 거래를 지울 때 ON DELETE CASCADE로 지워지므로 그 앞에서 옮겨 적는다.
@@ -350,7 +359,7 @@ async function deleteCustomer(ctx, id) {
   const b = trash.batchId;
   const prepare = (sql) => ctx.db.prepare(sql);
   const batch = namedStatements([
-    ["guard", prepare(SQL.customerDeleteGuard).bind(id, confirmName, id, id, id)],
+    ["guard", prepare(SQL.customerDeleteGuard).bind(id, confirmName, hasR2(ctx.files) ? 1 : 0, id, id, id)],
     ["audit", prepare(SQL.customerDeleteAudit).bind(at, ctx.actor.email.toLowerCase(), id, ctx.requestId, id, id, id, id, id)],
     ["trashBatch", trash.statement],
     ["trashSharedDealNotes", prepare(SQL.trashSharedDealNotes).bind(b, id, id)],
@@ -361,6 +370,8 @@ async function deleteCustomer(ctx, id) {
     ["exclusiveDealOnlyNotesDelete", prepare(SQL.exclusiveDealOnlyNotesDelete).bind(id, id)],
     ["trashNotesByCustomer", prepare(SQL.trashNotesByCustomer).bind(b, id)],
     ["notesDeleteByCustomer", prepare(SQL.notesDeleteByCustomer).bind(id)],
+    ["trashFilesByCustomer", prepare(SQL.trashFilesByCustomer).bind(b, id)],
+    ["filesDeleteByCustomer", prepare(SQL.filesDeleteByCustomer).bind(id)],
     ["trashExclusiveDealEvents", prepare(SQL.trashExclusiveDealEvents).bind(b, id, id)],
     ["exclusiveDealEventsDelete", prepare(SQL.exclusiveDealEventsDelete).bind(id, id)],
     ["trashExclusiveDealLedger", prepare(SQL.trashExclusiveDealLedger).bind(b, id, id)],
@@ -380,7 +391,7 @@ async function deleteCustomer(ctx, id) {
     results = await runBatch(ctx.db, batch.statements);
   } catch (error) {
     // guard가 되돌렸으면 그사이 바뀐 상황(손님 없음·이름 바뀜·파일 생김)을 같은 순서로 알려 주고, 아니면 저장소 오류 그대로.
-    await assertCustomerDeletable(ctx.db, id, confirmName);
+    await assertCustomerDeletable(ctx.db, id, confirmName, hasR2(ctx.files));
     throw error;
   }
   // 지운·남긴 개수는 미리 센 값이 아니라 batch 결과로 센다. 남기는 메모 본문에 지운 손님 정보가 있을 수 있어 개수를 알린다(화면 경고용).
@@ -391,7 +402,7 @@ async function deleteCustomer(ctx, id) {
   // deleted.tasks: 지운 단독 거래의 할 일 수. trash: 되살릴 묶음(7일 뒤 영구 삭제).
   return {
     data: {
-      deleted: { customers: 1, deals: n("exclusiveDealsDelete"), notes, files: 0, tasks: n("exclusiveDealTasksDelete") },
+      deleted: { customers: 1, deals: n("exclusiveDealsDelete"), notes, files: n("filesDeleteByCustomer"), tasks: n("exclusiveDealTasksDelete") },
       kept: { notes: kept, ledger: n("exclusiveDealLedgerDetach") },
       trash: trash.trash,
     },

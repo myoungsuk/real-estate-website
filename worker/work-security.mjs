@@ -42,6 +42,17 @@ export function isWorkToolsEnabled(env, db = env?.WORK_DB) {
   return getWorkConfigState(env, db) === "enabled";
 }
 
+// R2 바인딩 모양(put·get·delete). 시험은 같은 모양의 가짜를 넣는다.
+export function hasR2(binding) {
+  return Boolean(binding) && typeof binding.put === "function" && typeof binding.get === "function" && typeof binding.delete === "function";
+}
+
+// 파일(사진) API 켜기: Secret WORK_FILES_ENABLED가 정확히 "true"이고 WORK_FILES 바인딩이 있을 때만(업무 도구 켜기 값은 따로 먼저 본다).
+// 처리방침에 사진 문장을 넣고 공개한 뒤에 등록한다(photo-pr-plan 0절).
+export function isWorkFilesEnabled(env, files = env?.WORK_FILES) {
+  return env?.WORK_FILES_ENABLED === "true" && hasR2(files);
+}
+
 export async function createWorkCsrfToken(email, secret, now = Date.now()) {
   const issuedAt = Math.floor(now / 1000);
   const key = await importCsrfKey(secret);
@@ -64,20 +75,34 @@ export async function verifyWorkCsrfToken(token, email, secret, now = Date.now()
   }
 }
 
-// 쓰기 요청(POST·PATCH·PUT·DELETE): 같은 출처의 허용된 Origin → JSON → 업무 CSRF 순서로 확인한다.
-export async function validateWorkJsonWrite(request, actor, env, now = Date.now()) {
+function assertWorkOrigin(request, env) {
   const url = new URL(request.url);
   const origin = request.headers.get("Origin");
   const allowedOrigins = parseAdminAllowedOrigins(env.ADMIN_ALLOWED_ORIGINS);
   if (origin !== url.origin || !allowedOrigins.has(url.origin)) {
     throw new WorkApiError("ORIGIN_DENIED", "허용되지 않은 요청 출처입니다.", 403);
   }
-  const mediaType = (request.headers.get("Content-Type") ?? "").split(";", 1)[0].trim().toLowerCase();
-  if (mediaType !== "application/json") {
-    throw new WorkApiError("CONTENT_TYPE_REQUIRED", "JSON 요청만 허용합니다.", 415);
-  }
+}
+
+async function assertWorkCsrf(request, actor, env, now) {
   const valid = await verifyWorkCsrfToken(request.headers.get("X-Admin-CSRF"), actor.email, env.ADMIN_CSRF_SECRET, now);
   if (!valid) {
     throw new WorkApiError("CSRF_INVALID", "업무 도구 보안 토큰이 만료되었거나 올바르지 않습니다.", 403);
   }
+}
+
+// 쓰기 요청(POST·PATCH·PUT·DELETE): 같은 출처의 허용된 Origin → JSON → 업무 CSRF 순서로 확인한다.
+export async function validateWorkJsonWrite(request, actor, env, now = Date.now()) {
+  assertWorkOrigin(request, env);
+  const mediaType = (request.headers.get("Content-Type") ?? "").split(";", 1)[0].trim().toLowerCase();
+  if (mediaType !== "application/json") {
+    throw new WorkApiError("CONTENT_TYPE_REQUIRED", "JSON 요청만 허용합니다.", 415);
+  }
+  await assertWorkCsrf(request, actor, env, now);
+}
+
+// 파일 바이트를 그대로 보내는 쓰기(사진 올리기·미리보기 올리기): Origin → 업무 CSRF. 본문 종류는 work-files.mjs가 허용 MIME으로 본다(415 UNSUPPORTED_MEDIA_TYPE).
+export async function validateWorkUploadWrite(request, actor, env, now = Date.now()) {
+  assertWorkOrigin(request, env);
+  await assertWorkCsrf(request, actor, env, now);
 }

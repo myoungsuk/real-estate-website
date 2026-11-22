@@ -4,7 +4,7 @@ import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { runRealpriceCron } from "../worker/work-scheduled.mjs";
 import { TRASH_COLUMNS, trashDaysLeft } from "../worker/work-trash.mjs";
-import { NOW, OWNER, allMigrationSql, createD1, expectedTrash, freshDb, migrationFiles, nextUuid, rows, work, workEnv } from "./work-test-kit.mjs";
+import { NOW, OWNER, allMigrationSql, createD1, createR2, expectedTrash, freshDb, migrationFiles, nextUuid, rows, work, workEnv } from "./work-test-kit.mjs";
 
 const DAY = 24 * 60 * 60 * 1000;
 const iso = (ms) => new Date(ms).toISOString();
@@ -16,7 +16,7 @@ const SHARED = "22222222-2222-4222-8222-000000000002"; // A·B 함께
 const BONLY = "22222222-2222-4222-8222-000000000003"; // B만
 // 일정 3333…·메모 4444…·할 일 5555…·장부 줄 6666…(업무 API 경로가 UUID만 받음). 끝 번호: 일정 1 단독·2 함께, 메모 1 손님 A·2 단독 거래·3 함께 거래·4 A가 쓴 함께 거래·5 B가 단독 거래에 건 것,
 // 할 일 1 단독 거래·2 거래 없음, 장부 줄 1 단독 거래(이름 없음)·2 함께 거래·3 거래 없음.
-const TABLES = ["customers", "deals", "deal_parties", "deal_events", "notes", "tasks", "ledger_entries"];
+const TABLES = ["customers", "deals", "files", "deal_parties", "deal_events", "notes", "tasks", "ledger_entries"];
 const ORDER = { deal_parties: "deal_id, customer_id, role" };
 
 // 손님 A·B, 거래 3개, 참여자 4줄, 일정 2개, 메모 5개, 할 일 2개, 장부 줄 3개.
@@ -116,7 +116,7 @@ test("T2-83·T2-92f 손님 삭제 → 휴지통 목록 1줄(남은 날 7·함께
       purgeAfter: iso(NOW + 7 * DAY),
       daysLeft: 7,
       restorable: true,
-      counts: { customers: 1, deals: 1, parties: 2, events: 1, notes: 2, tasks: 1, ledger: 0, links: 3 },
+      counts: { customers: 1, deals: 1, files: 0, parties: 2, events: 1, notes: 2, tasks: 1, ledger: 0, links: 3 },
     }],
     nextCursor: null,
   });
@@ -137,15 +137,25 @@ test("T2-92b 손님·거래 삭제에서 원래 표마다 사라진 행 수 = �
     return trashed;
   };
   const customerCase = seeded();
+  // 사진(F-a): 손님 A의 사진 2장, B의 사진 1장. files.customer_id는 ON DELETE SET NULL이라 휴지통 문장이 빠지면 행이 남거나 주인 없이 남는다.
+  for (const [id, owner] of [["77777777-7777-4777-8777-000000000001", A], ["77777777-7777-4777-8777-000000000002", A], ["77777777-7777-4777-8777-000000000003", B]]) {
+    customerCase.database.prepare("INSERT INTO files (id, r2_key, kind, mime_type, byte_size, sha256_hex, customer_id, created_at) VALUES (?, ?, 'property_photo', 'image/jpeg', 10, ?, ?, ?)")
+      .run(id, `work/property_photo/2026/11/${id}.jpg`, "a".repeat(64), owner, AT);
+  }
+  const filesEnv = { ...customerCase.env, WORK_FILES_ENABLED: "true", WORK_FILES: createR2() };
   const beforeCustomer = counts(customerCase.database);
-  assert.equal((await deleteCustomerA(customerCase.env)).status, 200);
-  assert.deepEqual(check(customerCase.database, beforeCustomer, "손님 삭제"), { customers: 1, deals: 1, deal_parties: 2, deal_events: 1, notes: 2, tasks: 1, ledger_entries: 0 },
-    "단독 거래의 참여자 줄(연쇄 삭제)과 이 손님의 함께 거래 참여자 줄이 모두 옮겨짐");
+  const customerDeleted = await deleteCustomerA(filesEnv);
+  assert.equal(customerDeleted.status, 200, JSON.stringify(customerDeleted.json));
+  assert.equal(customerDeleted.json.data.deleted.files, 2);
+  assert.deepEqual(check(customerCase.database, beforeCustomer, "손님 삭제"), { customers: 1, deals: 1, files: 2, deal_parties: 2, deal_events: 1, notes: 2, tasks: 1, ledger_entries: 0 },
+    "단독 거래의 참여자 줄(연쇄 삭제)과 이 손님의 함께 거래 참여자 줄, 손님 사진이 모두 옮겨짐");
+  assert.equal(rows(customerCase.database, "SELECT count(*) AS n FROM files WHERE customer_id IS NULL AND deal_id IS NULL")[0].n, 0, "주인 없는 사진 0(T2-137d)");
+  assert.deepEqual(filesEnv.WORK_FILES.calls, [], "손님 삭제는 R2를 부르지 않음");
 
   const dealCase = seeded();
   const beforeDeal = counts(dealCase.database);
   assert.equal((await deleteShared(dealCase.env)).status, 200);
-  assert.deepEqual(check(dealCase.database, beforeDeal, "거래 삭제"), { customers: 0, deals: 1, deal_parties: 2, deal_events: 1, notes: 1, tasks: 0, ledger_entries: 0 });
+  assert.deepEqual(check(dealCase.database, beforeDeal, "거래 삭제"), { customers: 0, deals: 1, files: 0, deal_parties: 2, deal_events: 1, notes: 1, tasks: 0, ledger_entries: 0 });
   assert.deepEqual(rows(dealCase.database, "SELECT table_name, op, row_id FROM trash_rows WHERE op <> 'row' ORDER BY row_id"), [
     { table_name: "notes", op: "note_deal", row_id: "44444444-4444-4444-8444-000000000004" },
     { table_name: "ledger_entries", op: "ledger_deal", row_id: "66666666-6666-4666-8666-000000000002" },
@@ -161,7 +171,7 @@ test("T2-84 손님 삭제 뒤 되살리기: 지우기 전 상태와 칸마다 �
   const restored = await restore(env, deleted.json.data.trash.batchId, { now: NOW + 60_000 });
   assert.equal(restored.status, 200, JSON.stringify(restored.json));
   assert.deepEqual(restored.json.data, {
-    restored: { customers: 1, deals: 1, parties: 2, events: 1, notes: 2, tasks: 1, ledger: 0, links: 3, notesUnlinked: 0 },
+    restored: { customers: 1, deals: 1, files: 0, parties: 2, events: 1, notes: 2, tasks: 1, ledger: 0, links: 3, notesUnlinked: 0 },
     skipped: [],
     remaining: 0,
   });
@@ -182,7 +192,7 @@ test("T2-84 거래 삭제 뒤 되살리기도 지우기 전 상태와 같음", a
   const deleted = await deleteShared(env);
   assert.deepEqual(deleted.json.data, { deleted: { deals: 1, events: 1, notes: 1, files: 0, tasks: 0 }, kept: { notes: 1, ledger: 1 }, trash: expectedTrash(deleted.json.data) });
   const restored = await restore(env, deleted.json.data.trash.batchId);
-  assert.deepEqual(restored.json.data.restored, { customers: 0, deals: 1, parties: 2, events: 1, notes: 1, tasks: 0, ledger: 0, links: 2, notesUnlinked: 0 });
+  assert.deepEqual(restored.json.data.restored, { customers: 0, deals: 1, files: 0, parties: 2, events: 1, notes: 1, tasks: 0, ledger: 0, links: 2, notesUnlinked: 0 });
   assert.deepEqual(withoutLedgerVersion(snapshot(database)), withoutLedgerVersion(before));
   assert.deepEqual(trashCount(database), { batches: 0, rows: 0 });
 });
@@ -210,14 +220,14 @@ test("T2-86 거래(D)를 먼저 지우고 손님(A)을 지운 뒤 D부터 되살
   const customerBatch = (await deleteCustomerA(forward.env, { now: NOW + 1000 })).json.data.trash.batchId;
   const listedBefore = (await list(forward.env)).json.data.items;
   assert.deepEqual(listedBefore.map((item) => [item.batchId, item.kind]), [[customerBatch, "customer"], [dealBatch, "deal"]], "최근 지운 것이 위");
-  assert.deepEqual(listedBefore[1].counts, { customers: 0, deals: 1, parties: 2, events: 1, notes: 1, tasks: 0, ledger: 0, links: 2 });
+  assert.deepEqual(listedBefore[1].counts, { customers: 0, deals: 1, files: 0, parties: 2, events: 1, notes: 1, tasks: 0, ledger: 0, links: 2 });
 
   const first = await restore(forward.env, dealBatch);
   assert.equal(first.status, 200, JSON.stringify(first.json));
   assert.deepEqual(first.json.data.skipped, [{ table: "parties", reason: "customer_missing", count: 1 }, { table: "noteDeal", reason: "note_missing", count: 1 }]);
   assert.deepEqual([first.json.data.restored.parties, first.json.data.restored.links, first.json.data.remaining], [1, 1, 2]);
   const partial = (await list(forward.env)).json.data.items.find((item) => item.batchId === dealBatch);
-  assert.deepEqual(partial.counts, { customers: 0, deals: 0, parties: 1, events: 0, notes: 0, tasks: 0, ledger: 0, links: 1 }, "일부 되살린 뒤 counts는 남은 행만");
+  assert.deepEqual(partial.counts, { customers: 0, deals: 0, files: 0, parties: 1, events: 0, notes: 0, tasks: 0, ledger: 0, links: 1 }, "일부 되살린 뒤 counts는 남은 행만");
   assert.equal(rows(forward.database, "SELECT count(*) AS n FROM trash_rows WHERE row_json LIKE '%_skip%'")[0].n, 0, "건너뜀 표시는 batch 밖에 남지 않음");
 
   assert.deepEqual((await restore(forward.env, customerBatch)).json.data.remaining, 0);
@@ -285,7 +295,7 @@ test("되살린 메모의 연결이 맞지 않으면(참여자가 빠짐) 맞지
   const batchId = (await work(env, "/notes/44444444-4444-4444-8444-000000000004", { method: "DELETE" })).json.data.trash.batchId;
   database.prepare("DELETE FROM deal_parties WHERE deal_id = ? AND customer_id = ?").run(SHARED, A);
   const restored = await restore(env, batchId);
-  assert.deepEqual(restored.json.data.restored, { customers: 0, deals: 0, parties: 0, events: 0, notes: 1, tasks: 0, ledger: 0, links: 0, notesUnlinked: 1 });
+  assert.deepEqual(restored.json.data.restored, { customers: 0, deals: 0, files: 0, parties: 0, events: 0, notes: 1, tasks: 0, ledger: 0, links: 0, notesUnlinked: 1 });
   assert.deepEqual(rows(database, "SELECT customer_id, deal_id, body FROM notes WHERE id = '44444444-4444-4444-8444-000000000004'")[0], { customer_id: A, deal_id: null, body: "가상 A가 쓴 함께 거래 메모" });
   assert.deepEqual(trashCount(database), { batches: 0, rows: 0 });
 });

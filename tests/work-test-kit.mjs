@@ -135,3 +135,46 @@ export async function work(env, path, { method = "GET", body, token, email = OWN
   const response = await handleAdminApi(request, env, { authenticate, work: { now: () => now, auditLog, randomUUID: nextUuid, openaiFetch: openaiFetch ?? noOpenAi } });
   return { response, status: response.status, json: await response.json() };
 }
+
+// 가짜 R2(사진 F-a, 설계서 10.5절 options.files 자리). put·get·head·delete만, 받은 바이트를 메모리에 둔다.
+// - put의 sha256 옵션은 실제 R2처럼 받은 바이트와 대조해 다르면 예외를 던진다(실제 런타임 동작은 T2-28에서 확인).
+// - fail.put·fail.get·fail.delete를 true로 두면 그 동작이 실패한다(실패 주입). calls에 부른 순서를 [동작, 키] 꼴로 남긴다.
+export function createR2() {
+  const objects = new Map();
+  const calls = [];
+  const fail = { put: false, get: false, delete: false };
+  const hex = async (bytes) => Buffer.from(await crypto.subtle.digest("SHA-256", bytes)).toString("hex");
+  return {
+    objects,
+    calls,
+    fail,
+    async put(key, value, options = {}) {
+      calls.push(["put", key]);
+      if (fail.put) throw new Error("가짜 R2 put 실패");
+      const bytes = new Uint8Array(value instanceof ArrayBuffer ? value : value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength));
+      if (options.sha256 && (await hex(bytes)) !== options.sha256) {
+        throw new Error("put: The SHA-256 checksum you specified did not match what we received.");
+      }
+      objects.set(key, { bytes, httpMetadata: options.httpMetadata ?? {}, customMetadata: options.customMetadata ?? {} });
+      return { key, size: bytes.byteLength };
+    },
+    async get(key) {
+      calls.push(["get", key]);
+      if (fail.get) throw new Error("가짜 R2 get 실패");
+      const object = objects.get(key);
+      if (!object) return null;
+      return { key, size: object.bytes.byteLength, httpMetadata: object.httpMetadata, customMetadata: object.customMetadata, body: new Blob([object.bytes]).stream() };
+    },
+    async head(key) {
+      calls.push(["head", key]);
+      const object = objects.get(key);
+      return object ? { key, size: object.bytes.byteLength } : null;
+    },
+    async delete(keys) {
+      const list = Array.isArray(keys) ? keys : [keys];
+      calls.push(["delete", ...list]);
+      if (fail.delete) throw new Error("가짜 R2 delete 실패");
+      for (const key of list) objects.delete(key);
+    },
+  };
+}
