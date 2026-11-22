@@ -38,7 +38,7 @@ const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
     <header class="work-home__header">
       <div>
         <p class="work-home__meta">
-          단계 0 · 저장하지 않는 도구 <span aria-hidden="true">·</span> <span data-work-today>오늘</span>
+          계산·문장 도구는 저장하지 않음 <span aria-hidden="true">·</span> 손님·장부·할 일은 서버에 저장 <span aria-hidden="true">·</span> <span data-work-today>오늘</span>
         </p>
         <h1>업무 도구</h1>
         <p class="work-home__lead">상담과 계약 준비에 쓰는 계산·문구 도구입니다.</p>
@@ -70,7 +70,7 @@ const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
 
     <p class="work-home__notice">
       <AdminIcon name="shield" size={18} />
-      <span>손님 이름·전화번호·주민등록번호는 넣지 마세요. 새로 고치거나 화면을 닫으면 입력값이 모두 사라집니다.</span>
+      <span>계산·문장 도구에는 손님 전화번호·주민등록번호를 넣지 마세요(손님 이름은 영수증 '받는 분'에만). 저장하지 않아 새로 고치거나 화면을 닫으면 입력값이 모두 사라집니다. 손님 이름·전화번호는 '손님' 화면에 남깁니다.</span>
     </p>
 
     <div class="work-home__grid">
@@ -112,14 +112,21 @@ const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
       </section>
 
       <div class="work-home__side">
-        <section class="work-card" aria-labelledby="work-todo-title">
+        {/* 오늘까지(지난 것 포함) 열린 할 일 최대 5개. 읽기만 하고 끝내기는 할 일 화면에서 한다(시안 2026-11-22 13:22:11). */}
+        <section class="work-card" aria-labelledby="work-todo-title" data-tk-home>
           <div class="work-card__head">
             <span class="work-round-icon" data-tone="rose">
               <AdminIcon name="check" size={15} />
             </span>
             <h2 id="work-todo-title">오늘 할 일</h2>
           </div>
-          <p class="work-card__empty">할 일 저장은 단계 2부터 쓸 수 있습니다.</p>
+          <p class="work-card__empty" role="status" data-tk-home-state>할 일을 불러오고 있습니다…</p>
+          <ul class="tk-home" data-tk-home-list hidden></ul>
+          <button class="work-secondary-button tk-home-retry" type="button" data-tk-home-retry hidden>다시 불러오기</button>
+          <a class="work-card__link" href="/admin/work/tasks/" data-tk-home-link hidden>
+            <span data-tk-home-link-text>할 일 화면으로</span>
+            <AdminIcon name="chevron-right" size={16} />
+          </a>
         </section>
 
         <section class="work-card" aria-labelledby="work-deadline-title">
@@ -217,6 +224,66 @@ const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
         });
       });
       render();
+    }
+  </script>
+
+  <script>
+    import { WorkApiError, getTaskSession, listTasks } from "../../../lib/work-tasks-client";
+    import { homeItem } from "../../../lib/work-tasks-dom";
+    import { todayInKorea } from "../../../lib/work/legal-dates.mjs";
+    import { isRetryable } from "../../../lib/work/customers-view.mjs";
+    import { TASK_HOME_SHOWN, TASK_PAGE_SIZE, homeLinkText, homeStateText, taskListQuery } from "../../../lib/work/tasks-view.mjs";
+
+    // '오늘 할 일' 칸: 업무 세션이 켜져 있을 때만 오늘까지 열린 할 일을 부른다(꺼짐·구조 옛날·실패는 칸 안 한 줄).
+    // 이 화면은 탭 미리 그리기(prerender) 목록에 있으므로, 미리 그리는 동안에는 부르지 않고 화면이 실제로 보인 뒤에 부른다.
+    const card = document.querySelector<HTMLElement>("[data-tk-home]");
+    const state = card?.querySelector<HTMLElement>("[data-tk-home-state]");
+    const list = card?.querySelector<HTMLElement>("[data-tk-home-list]");
+    const retry = card?.querySelector<HTMLButtonElement>("[data-tk-home-retry]");
+    const link = card?.querySelector<HTMLAnchorElement>("[data-tk-home-link]");
+    const linkText = card?.querySelector<HTMLElement>("[data-tk-home-link-text]");
+
+    if (card && state && list && retry && link && linkText) {
+      let token = 0;
+      const show = (text: string, { canRetry = false } = {}) => {
+        state.textContent = text;
+        state.hidden = !text;
+        retry.hidden = !canRetry;
+      };
+      async function loadHome() {
+        const mine = ++token;
+        const today = todayInKorea();
+        list!.hidden = true;
+        link!.hidden = true;
+        show("할 일을 불러오고 있습니다…");
+        try {
+          const session = await getTaskSession({ refresh: true });
+          if (mine !== token) return;
+          if (!session.enabled) {
+            show(homeStateText("WORK_DISABLED"));
+            return;
+          }
+          const page = await listTasks(taskListQuery({ until: today, limit: TASK_PAGE_SIZE }));
+          if (mine !== token) return;
+          list!.replaceChildren(...page.items.slice(0, TASK_HOME_SHOWN).map((task) => homeItem(task, today)));
+          list!.hidden = page.items.length === 0;
+          show(page.items.length === 0 ? "오늘까지 할 일이 없습니다." : "");
+          linkText!.textContent = homeLinkText(page.items.length, Boolean(page.nextCursor));
+          link!.hidden = false;
+        } catch (error) {
+          if (mine !== token) return;
+          const code = error instanceof WorkApiError ? error.code : null;
+          show(homeStateText(code), { canRetry: code !== "WORK_DISABLED" && code !== "WORK_SCHEMA_OUTDATED" && isRetryable(code) });
+        }
+      }
+      retry.addEventListener("click", () => void loadHome());
+      const doc = document as Document & { prerendering?: boolean };
+      if (doc.prerendering) document.addEventListener("prerenderingchange", () => void loadHome(), { once: true });
+      else void loadHome();
+      // 뒤로 가기 캐시에서 돌아오면 다시 부른다(그사이 끝낸 할 일이 남아 보이지 않게).
+      window.addEventListener("pageshow", (event) => {
+        if (event.persisted) void loadHome();
+      });
     }
   </script>
 </AdminLayout>

@@ -1,0 +1,721 @@
+---
+import AdminIcon from "../../../components/admin/AdminIcon.astro";
+import AdminPageHelp from "../../../components/admin/AdminPageHelp.astro";
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import { TASK_DEAL_QUERY_MAX, TASK_NAME_HELP, TASK_REPEAT_LABELS, TASK_TITLE_MAX } from "../../../lib/work/tasks-view.mjs";
+
+// 할 일(단계 2, 기획서 WT-2-12, 시안 2026-11-22 13:22:11 "이 시안대로", 메뉴 A안).
+// - 서버 요청은 work-tasks-client.ts 한 곳. 업무 세션이 꺼져 있으면(enabled:false) 할 일 자료를 부르지 않는다.
+// - 서버를 부르므로 탭 미리 그리기 prerender 목록에 넣지 않는다(AdminLayout prerenderPages).
+// - 끝낸 할 일 보기·거래로 거르기는 이 화면 메모리에만 둔다(주소·브라우저 저장소에 넣지 않음). 할 일 제목은 화면에만 보인다.
+// - 반복은 없음·매주·매월. 끝내면 서버가 다음 할 일 하나를 만들고, 화면은 응답 next로 알린다.
+const repeatLabels = TASK_REPEAT_LABELS as Record<string, string>;
+---
+
+<AdminLayout
+  title="할 일 | 행복한부동산 관리자"
+  description="날짜·반복·거래를 붙여 할 일을 적고, 지난 할 일·오늘·이번 주·나중·날짜 없음으로 나눠 보는 관리자 업무 도구입니다."
+>
+  <div class="work-ui work-doc cu-doc cu-doc--wide tk-doc" data-tk-page>
+    <header class="work-doc__header">
+      <span class="work-round-icon work-round-icon--title" data-tone="navy">
+        <AdminIcon name="check" size={22} />
+      </span>
+      <h1>할 일</h1>
+      <span class="admin-stage-badge">서버에 저장 · 관리자만</span>
+    </header>
+    <AdminPageHelp page="/admin/work/tasks/" />
+
+    <p class="rt-boot cu-boot" role="status" data-tk-boot>할 일을 불러오고 있습니다…</p>
+    <section class="admin-panel rt-state cu-state" aria-labelledby="tk-state-title" data-tk-state hidden>
+      <div class="admin-empty-state">
+        <span aria-hidden="true" data-tk-state-symbol>!</span>
+        <div>
+          <h2 id="tk-state-title" data-tk-state-title></h2>
+          <p data-tk-state-body></p>
+          <button class="work-secondary-button cu-state__go" type="button" data-tk-state-retry hidden>다시 불러오기</button>
+          <a class="admin-text-link" href="/admin/work/" data-tk-state-home hidden>업무 도구 처음으로</a>
+        </div>
+      </div>
+    </section>
+
+    <div data-tk-main hidden>
+      <section class="cu-list" aria-labelledby="tk-count">
+        <p class="tk-saved" role="status" aria-live="polite" tabindex="-1" data-tk-saved hidden></p>
+        <div class="lg-tools">
+          <button class="work-primary-button" type="button" aria-expanded="false" aria-controls="tk-form" data-tk-new>
+            <span aria-hidden="true">＋</span><span>할 일 만들기</span>
+          </button>
+          <button class="work-secondary-button" type="button" data-tk-mode>
+            <span aria-hidden="true" data-tk-mode-mark>✓</span><span data-tk-mode-text>끝낸 할 일 보기</span>
+          </button>
+        </div>
+
+        <div data-tk-form-home>
+          <section class="lg-form tk-form" id="tk-form" aria-labelledby="tk-form-title" data-tk-form hidden>
+            <h2 id="tk-form-title" data-tk-form-title>할 일 만들기</h2>
+            <div class="work-row">
+              <label class="work-row__label" for="tk-title">제목 <span class="cu-required">필수</span></label>
+              <div class="work-row__control">
+                <input id="tk-title" type="text" maxlength={TASK_TITLE_MAX} autocomplete="off" aria-describedby="tk-title-error tk-title-help" data-tk-f="title" />
+                <span class="tk-count" data-tk-title-count>0 / {TASK_TITLE_MAX}</span>
+                <small class="cu-error" id="tk-title-error" data-tk-error="title"></small>
+                <small id="tk-title-help">{TASK_NAME_HELP}</small>
+              </div>
+            </div>
+            <div class="work-row">
+              <label class="work-row__label" for="tk-due">날짜 <small class="tk-opt">없어도 됨</small></label>
+              <div class="work-row__control">
+                <input id="tk-due" type="date" autocomplete="off" aria-describedby="tk-due-error tk-due-help" data-tk-f="dueOn" />
+                <small class="cu-error" id="tk-due-error" data-tk-error="dueOn"></small>
+                <small id="tk-due-help" data-tk-due-help>비우면 '날짜 없음'에 들어갑니다.</small>
+              </div>
+            </div>
+            <div class="work-row" role="radiogroup" aria-labelledby="tk-repeat-label" aria-describedby="tk-repeat-help" data-tk-repeat-row>
+              <span class="work-row__label" id="tk-repeat-label">반복</span>
+              <div class="work-row__control">
+                <div class="work-segment" data-tk-repeat-seg>
+                  {Object.keys(repeatLabels).map((repeat) => (
+                    <label class="work-choice">
+                      <input type="radio" name="tk-repeat" value={repeat} checked={repeat === "none"} autocomplete="off" data-tk-repeat-choice />
+                      <span>{repeatLabels[repeat]}</span>
+                    </label>
+                  ))}
+                </div>
+                <small class="cu-error" data-tk-error="repeat"></small>
+                <small id="tk-repeat-help" data-tk-repeat-help></small>
+                <p class="tk-next" role="note" data-tk-next hidden></p>
+              </div>
+            </div>
+            <div class="work-row">
+              <label class="work-row__label" for="tk-deal-q">거래에 붙이기 <small class="tk-opt">고르기</small></label>
+              <div class="work-row__control">
+                <div class="rt-find" role="search" aria-label="거래 찾기">
+                  <input id="tk-deal-q" type="search" maxlength={TASK_DEAL_QUERY_MAX} placeholder="거래 이름·물건 표시" enterkeyhint="search" autocomplete="off" data-tk-deal-q />
+                  <button class="rt-find__go" type="button" data-tk-deal-find>찾기</button>
+                </div>
+                <div class="lg-deal-picks tk-picks" role="radiogroup" aria-label="붙일 거래" data-tk-deal-picks></div>
+                <small class="cu-error" data-tk-error="dealId"></small>
+                <small data-tk-deal-status>붙이면 목록에 거래 이름과 지금 상태가 보입니다.</small>
+              </div>
+            </div>
+            <p class="admin-form-status" role="status" aria-live="polite" data-tk-form-status></p>
+            <div class="cu-actions">
+              <button class="work-primary-button cu-save" type="button" data-tk-save>할 일 저장</button>
+              <button class="work-secondary-button" type="button" data-tk-reload hidden>새 값 보기</button>
+              <button class="work-secondary-button" type="button" data-tk-cancel>그만두기</button>
+            </div>
+            <p class="tk-del-open" data-tk-delete-row hidden>
+              <button class="admin-text-link cu-linkbtn cu-danger" type="button" aria-expanded="false" data-tk-delete>이 할 일 지우기</button>
+            </p>
+            <section class="cu-form cu-panel cu-panel--danger tk-del" aria-labelledby="tk-del-title" data-tk-delete-panel hidden>
+              <h3 id="tk-del-title" class="cu-panel__title">이 할 일을 지울까요?</h3>
+              <p data-tk-delete-text>지우면 되돌릴 수 없습니다.</p>
+              <div class="cu-actions">
+                <button class="work-primary-button cu-save cu-delete-go" type="button" data-tk-delete-go>지우기</button>
+                <button class="work-secondary-button" type="button" data-tk-delete-cancel>그만두기</button>
+              </div>
+            </section>
+          </section>
+        </div>
+
+        <section class="admin-panel rt-state cu-state" aria-labelledby="tk-empty-title" data-tk-empty hidden>
+          <div class="admin-empty-state">
+            <span aria-hidden="true" data-tk-empty-symbol>0</span>
+            <div>
+              <h2 id="tk-empty-title" data-tk-empty-title></h2>
+              <p data-tk-empty-body></p>
+              <button class="work-primary-button cu-state__go" type="button" data-tk-empty-new hidden>이 거래에 할 일 만들기</button>
+            </div>
+          </div>
+        </section>
+        <div class="rt-strip cu-strip">
+          <div class="rt-strip__text"><h2 id="tk-count" data-tk-count>열린 할 일</h2></div>
+          <button class="rt-strip__clear" type="button" data-tk-clear hidden>거르기 풀기</button>
+        </div>
+        <div data-tk-groups></div>
+        <ol class="tk-rows" data-tk-done-list hidden></ol>
+        <div class="cu-more-line">
+          <button class="work-secondary-button cu-more" type="button" data-tk-more hidden>더 보기</button>
+          <p class="admin-form-status" role="status" aria-live="polite" data-tk-list-status></p>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    import {
+      WorkApiError,
+      createTask,
+      deleteTask,
+      findDeals,
+      getTaskSession,
+      listTasks,
+      updateTask,
+      type DealPick,
+      type Task,
+      type TaskRepeat,
+    } from "../../../lib/work-tasks-client";
+    import { element, setStatus } from "../../../lib/work-customers-dom";
+    import { doneRow, taskRow } from "../../../lib/work-tasks-dom";
+    import { todayInKorea } from "../../../lib/work/legal-dates.mjs";
+    import { customerErrorText, isRetryable } from "../../../lib/work/customers-view.mjs";
+    import {
+      TASK_DEAL_QUERY_MAX,
+      TASK_TITLE_MAX,
+      checkTaskInput,
+      dealStatusText,
+      doneText,
+      groupTasks,
+      nextPreviewText,
+      reopenText,
+      repeatHelpText,
+      taskChanges,
+      taskCountText,
+      taskErrorText,
+      taskFieldErrors,
+      taskListQuery,
+    } from "../../../lib/work/tasks-view.mjs";
+
+    const root = document.querySelector<HTMLElement>("[data-tk-page]");
+    if (root) {
+      const pick = <T extends HTMLElement>(selector: string) => {
+        const found = root.querySelector<T>(selector);
+        if (!found) throw new Error(`할 일 화면 칸이 없습니다: ${selector}`);
+        return found;
+      };
+      const boot = pick("[data-tk-boot]");
+      const statePanel = pick("[data-tk-state]");
+      const main = pick("[data-tk-main]");
+      const saved = pick("[data-tk-saved]");
+      const newButton = pick<HTMLButtonElement>("[data-tk-new]");
+      const modeButton = pick<HTMLButtonElement>("[data-tk-mode]");
+      const formHome = pick("[data-tk-form-home]");
+      const form = pick("[data-tk-form]");
+      const formTitle = pick("[data-tk-form-title]");
+      const titleInput = pick<HTMLInputElement>('[data-tk-f="title"]');
+      const titleCount = pick("[data-tk-title-count]");
+      const dueInput = pick<HTMLInputElement>('[data-tk-f="dueOn"]');
+      const dueHelp = pick("[data-tk-due-help]");
+      const repeatRow = pick("[data-tk-repeat-row]");
+      const repeatSeg = pick("[data-tk-repeat-seg]");
+      const repeatChoices = [...root.querySelectorAll<HTMLInputElement>("[data-tk-repeat-choice]")];
+      const repeatHelp = pick("[data-tk-repeat-help]");
+      const nextLine = pick("[data-tk-next]");
+      const dealQuery = pick<HTMLInputElement>("[data-tk-deal-q]");
+      const dealPicks = pick("[data-tk-deal-picks]");
+      const dealStatus = pick("[data-tk-deal-status]");
+      const formStatus = pick("[data-tk-form-status]");
+      const save = pick<HTMLButtonElement>("[data-tk-save]");
+      const reload = pick<HTMLButtonElement>("[data-tk-reload]");
+      const deleteRow = pick("[data-tk-delete-row]");
+      const deleteButton = pick<HTMLButtonElement>("[data-tk-delete]");
+      const deletePanel = pick("[data-tk-delete-panel]");
+      const deleteGo = pick<HTMLButtonElement>("[data-tk-delete-go]");
+      const empty = pick("[data-tk-empty]");
+      const emptyNew = pick<HTMLButtonElement>("[data-tk-empty-new]");
+      const count = pick("[data-tk-count]");
+      const clear = pick<HTMLButtonElement>("[data-tk-clear]");
+      const groupsBox = pick("[data-tk-groups]");
+      const doneList = pick("[data-tk-done-list]");
+      const more = pick<HTMLButtonElement>("[data-tk-more]");
+      const listStatus = pick("[data-tk-list-status]");
+      const errorCode = (error: unknown) => (error instanceof WorkApiError ? error.code : null);
+      const errorText = (code: string | null) => taskErrorText(code, customerErrorText(code));
+
+      let today = todayInKorea();
+      let mode: "open" | "done" = "open";
+      let dealFilter: DealPick | null = null;
+      let items: Task[] = [];
+      let cursor: string | null = null;
+      let freshId: string | null = null;
+      let loadToken = 0;
+      let busy = false;
+      // 만들기·고치기 칸의 상태
+      let editing: Task | null = null;
+      let chosenDeal: DealPick | null = null;
+      let foundDeals: DealPick[] = [];
+      let formSnapshot = "";
+
+      function showState(title: string, body: string, { symbol = "!", retry = false, home = false } = {}) {
+        boot.hidden = true;
+        main.hidden = true;
+        pick("[data-tk-state-symbol]").textContent = symbol;
+        pick("[data-tk-state-title]").textContent = title;
+        pick("[data-tk-state-body]").textContent = body;
+        pick("[data-tk-state-retry]").hidden = !retry;
+        pick("[data-tk-state-home]").hidden = !home;
+        statePanel.hidden = false;
+      }
+      const showDisabled = () => showState(
+        "업무 도구가 켜지지 않았습니다",
+        "할 일은 운영자가 업무 자료 저장을 켜야 쓸 수 있습니다. 중개보수 계산·안내 문자·계약 일정은 지금도 쓸 수 있습니다.",
+        { symbol: "–", home: true },
+      );
+      function showLoadError(error: unknown) {
+        const code = errorCode(error);
+        if (code === "WORK_DISABLED") showDisabled();
+        else if (code === "WORK_SCHEMA_OUTDATED") showState("자료 구조 갱신 전입니다", errorText(code));
+        else showState("할 일을 불러오지 못했습니다", `${errorText(code)} 넣던 글은 지워지지 않았습니다.`, { retry: isRetryable(code) });
+      }
+      function showSaved(text: string, state: "success" | "error" = "success") {
+        saved.textContent = text;
+        saved.dataset.state = state;
+        saved.hidden = !text;
+      }
+
+      // ── 목록 ──
+      // 고치기 칸이 줄 자리에 들어가 있으면 다시 그리기 전에 제자리로 옮겨 둔다(목록과 함께 지워지지 않게).
+      function parkForm() {
+        if (form.parentElement !== formHome) formHome.append(form);
+      }
+      // 고치는 줄이 목록에 있으면 그 줄 자리에 고치기 칸을 넣는다.
+      function placeForm() {
+        if (!editing || form.hidden) return;
+        const row = groupsBox.querySelector<HTMLElement>(`[data-tk-task="${CSS.escape(editing.id)}"]`);
+        if (!row) return;
+        const slot = element("li", "tk-row tk-row--editing");
+        row.before(slot);
+        row.hidden = true;
+        slot.append(form);
+      }
+      function renderStrip() {
+        clear.hidden = !dealFilter;
+        if (dealFilter && mode === "open") {
+          const deal = element("span", "tk-strip-deal");
+          deal.append(element("span", "", dealFilter.title), element("span", `tk-status tk-status--${dealFilter.status}`, dealStatusText(dealFilter.status)));
+          count.replaceChildren("거래 ", deal, `의 할 일 ${items.length}개${cursor ? " · 더 있음" : ""}`);
+        } else {
+          count.textContent = taskCountText(items.length, { more: Boolean(cursor), done: mode === "done" });
+        }
+      }
+      function renderList() {
+        parkForm();
+        const opened = mode === "open";
+        groupsBox.hidden = !opened;
+        doneList.hidden = opened;
+        if (opened) {
+          groupsBox.replaceChildren(...groupTasks(items, today).map((group) => {
+            const section = element("section", `tk-group tk-group--${group.key}`);
+            const heading = element("h2", "tk-group__title", group.title);
+            heading.id = `tk-g-${group.key}`;
+            heading.append(" ", element("span", "tk-group__n", `${group.items.length}개`));
+            section.setAttribute("aria-labelledby", heading.id);
+            const list = element("ol", "tk-rows");
+            list.append(...group.items.map((task) => taskRow(task, today, { fresh: task.id === freshId, dealLink: !dealFilter })));
+            section.append(heading, list);
+            return section;
+          }));
+          doneList.replaceChildren();
+        } else {
+          doneList.replaceChildren(...items.map((task) => doneRow(task)));
+          groupsBox.replaceChildren();
+        }
+        renderStrip();
+        more.hidden = !cursor;
+        newButton.hidden = !opened;
+        pick("[data-tk-mode-text]").textContent = opened ? "끝낸 할 일 보기" : "← 열린 할 일로";
+        pick("[data-tk-mode-mark]").hidden = !opened;
+        empty.hidden = items.length > 0;
+        form.classList.toggle("tk-form--strong", items.length === 0 && opened && !dealFilter);
+        if (items.length === 0) {
+          pick("[data-tk-empty-symbol]").textContent = "0";
+          pick("[data-tk-empty-title]").textContent = !opened ? "끝낸 할 일이 없습니다" : dealFilter ? "이 거래에 붙은 열린 할 일이 없습니다" : "할 일이 없습니다";
+          pick("[data-tk-empty-body]").textContent = !opened
+            ? "할 일을 끝내면 여기에 끝낸 때 최근 순으로 모입니다."
+            : dealFilter
+              ? "끝낸 할 일은 '끝낸 할 일 보기'에 있습니다."
+              : "아래에 첫 할 일을 적어 보세요. 날짜를 넣으면 업무 도구 처음의 '오늘 할 일'에도 보입니다.";
+          emptyNew.hidden = !(opened && dealFilter);
+          // 열린 할 일이 하나도 없으면 만들기 칸을 열어 둔다(눈에 띄게, 포커스는 옮기지 않음).
+          if (opened && !dealFilter && form.hidden) openForm(null, { focus: false });
+        }
+        placeForm();
+      }
+
+      async function loadList({ append = false } = {}) {
+        const page = await listTasks(taskListQuery({ status: mode, dealId: dealFilter?.id ?? null, cursor: append ? cursor : null }));
+        items = append ? [...items, ...page.items] : page.items;
+        cursor = page.nextCursor;
+      }
+      async function refresh({ keepFresh = false } = {}) {
+        const mine = ++loadToken;
+        if (!keepFresh) freshId = null;
+        today = todayInKorea();
+        setStatus(listStatus, "불러오고 있습니다…", "saving");
+        try {
+          await loadList();
+          if (mine !== loadToken) return;
+          setStatus(listStatus, "", "idle");
+          renderList();
+        } catch (error) {
+          if (mine !== loadToken) return;
+          const code = errorCode(error);
+          if (code === "WORK_DISABLED" || code === "WORK_SCHEMA_OUTDATED") showLoadError(error);
+          else setStatus(listStatus, `할 일을 불러오지 못했습니다. ${errorText(code)}`, "error");
+        }
+      }
+      more.addEventListener("click", async () => {
+        if (!cursor) return;
+        more.disabled = true;
+        setStatus(listStatus, "더 불러오고 있습니다…", "saving");
+        try {
+          await loadList({ append: true });
+          setStatus(listStatus, "", "idle");
+          renderList();
+        } catch (error) {
+          setStatus(listStatus, `더 불러오지 못했습니다. ${errorText(errorCode(error))}`, "error");
+        } finally {
+          more.disabled = false;
+        }
+      });
+      modeButton.addEventListener("click", () => {
+        if (busy) return;
+        closeForm();
+        mode = mode === "open" ? "done" : "open";
+        showSaved("");
+        void refresh();
+      });
+      clear.addEventListener("click", () => {
+        dealFilter = null;
+        void refresh();
+      });
+
+      // ── 줄 단추: 끝냄·고치기·거래로 거르기·다시 열기 ──
+      root.addEventListener("click", async (event) => {
+        const target = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-tk-done], [data-tk-edit], [data-tk-deal], [data-tk-reopen]");
+        if (!target || busy) return;
+        if (target.dataset.tkDeal) {
+          const task = items.find((item) => item.deal?.id === target.dataset.tkDeal);
+          if (!task?.deal) return;
+          closeForm();
+          dealFilter = { ...task.deal };
+          showSaved("");
+          void refresh();
+          return;
+        }
+        const id = target.dataset.tkDone ?? target.dataset.tkEdit ?? target.dataset.tkReopen ?? "";
+        const task = items.find((item) => item.id === id);
+        if (!task) return;
+        if (target.dataset.tkEdit) {
+          openForm(task);
+          return;
+        }
+        const done = Boolean(target.dataset.tkDone);
+        busy = true;
+        target.disabled = true;
+        try {
+          const result = await updateTask(task.id, { version: task.version, done });
+          showSaved(done ? doneText(result.task, result.next) : reopenText(result.task, result.next));
+          freshId = done ? (result.next?.id ?? null) : null;
+          if (editing?.id === task.id) closeForm();
+          await refresh({ keepFresh: true });
+          saved.focus();
+        } catch (error) {
+          const code = errorCode(error);
+          showSaved(`${done ? "끝내지" : "다시 열지"} 못했습니다. ${code === "VERSION_CONFLICT" ? "다른 곳에서 먼저 고쳤습니다. 목록을 새로 불러왔으니 다시 해 주세요." : errorText(code)}`, "error");
+          target.disabled = false;
+          if (code === "VERSION_CONFLICT" || code === "NOT_FOUND") await refresh();
+          saved.focus();
+        } finally {
+          busy = false;
+        }
+      });
+
+      // ── 만들기·고치기 ──
+      const checkedRepeat = () => (repeatChoices.find((input) => input.checked)?.value ?? "none") as TaskRepeat;
+      const readValues = () => ({ title: titleInput.value, dueOn: dueInput.value, repeat: checkedRepeat() });
+      const snapshotOf = () => JSON.stringify({ ...readValues(), deal: chosenDeal?.id ?? null });
+      const isDirty = () => !form.hidden && snapshotOf() !== formSnapshot;
+
+      function showErrors(errors: Record<string, string>) {
+        for (const node of root!.querySelectorAll<HTMLElement>("[data-tk-error]")) {
+          const name = node.dataset.tkError ?? "";
+          node.textContent = errors[name] ?? "";
+          const input = root!.querySelector<HTMLElement>(`[data-tk-f="${name}"]`);
+          if (input) {
+            if (errors[name]) input.setAttribute("aria-invalid", "true");
+            else input.removeAttribute("aria-invalid");
+          }
+        }
+      }
+      // 날짜가 없으면 반복을 고를 수 없다. 매월 29 ~ 31일 안내, 끝내면 다음 할 일 미리 보기.
+      function syncForm() {
+        titleCount.textContent = `${titleInput.value.length} / ${TASK_TITLE_MAX}`;
+        const dueOn = dueInput.value;
+        const noDate = !dueOn;
+        for (const input of repeatChoices) {
+          input.disabled = noDate;
+          if (noDate) input.checked = input.value === "none";
+        }
+        repeatSeg.classList.toggle("tk-seg--off", noDate);
+        if (noDate) repeatRow.setAttribute("aria-disabled", "true");
+        else repeatRow.removeAttribute("aria-disabled");
+        dueHelp.hidden = !noDate;
+        const repeat = checkedRepeat();
+        repeatHelp.textContent = repeatHelpText(repeat, dueOn);
+        // 고칠 때 날짜·매월을 그대로 두면 서버는 원래 기준일(예: 31일)을 지킨다.
+        const keepDay = editing && editing.repeat === "monthly" && repeat === "monthly" && dueOn === editing.dueOn ? editing.repeatDay : null;
+        const preview = nextPreviewText({ dueOn, repeat, repeatDay: keepDay, today });
+        nextLine.textContent = preview;
+        nextLine.hidden = !preview;
+      }
+      function renderDealPicks() {
+        const none = element("label", "lg-deal-pick");
+        const noneInput = element("input");
+        noneInput.type = "radio";
+        noneInput.name = "tk-deal";
+        noneInput.value = "";
+        noneInput.autocomplete = "off";
+        noneInput.checked = !chosenDeal;
+        none.append(noneInput, element("span", "", "거래에 붙이지 않음"));
+        const options = foundDeals.map((deal) => {
+          const option = element("label", "lg-deal-pick");
+          const input = element("input");
+          input.type = "radio";
+          input.name = "tk-deal";
+          input.value = deal.id;
+          input.autocomplete = "off";
+          input.checked = chosenDeal?.id === deal.id;
+          const text = element("span");
+          text.append(element("strong", "", deal.title), element("small", "", dealStatusText(deal.status)));
+          option.append(input, text);
+          return option;
+        });
+        dealPicks.replaceChildren(none, ...options);
+      }
+      dealPicks.addEventListener("change", () => {
+        const id = dealPicks.querySelector<HTMLInputElement>('input[name="tk-deal"]:checked')?.value ?? "";
+        chosenDeal = foundDeals.find((deal) => deal.id === id) ?? null;
+      });
+      async function searchDeals() {
+        const q = dealQuery.value.trim().slice(0, TASK_DEAL_QUERY_MAX);
+        dealQuery.value = q;
+        setStatus(dealStatus, "찾고 있습니다…", "saving");
+        try {
+          const query = new URLSearchParams({ limit: "5" });
+          if (q) query.set("q", q);
+          const page = await findDeals(query);
+          foundDeals = page.items.map(({ id, title, status }) => ({ id, title, status }));
+          if (chosenDeal && !foundDeals.some((deal) => deal.id === chosenDeal?.id)) foundDeals = [chosenDeal, ...foundDeals];
+          renderDealPicks();
+          setStatus(dealStatus, page.items.length === 0 ? "찾는 거래가 없습니다. 거래 없이 저장해도 됩니다." : `거래 ${page.items.length}건을 찾았습니다. 붙일 거래를 고르세요.`, page.items.length === 0 ? "error" : "idle");
+        } catch (error) {
+          setStatus(dealStatus, `거래를 찾지 못했습니다. ${errorText(errorCode(error))}`, "error");
+        }
+      }
+      pick("[data-tk-deal-find]").addEventListener("click", () => void searchDeals());
+      dealQuery.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && !event.isComposing) {
+          event.preventDefault();
+          void searchDeals();
+        }
+      });
+
+      function openForm(task: Task | null, { focus = true, deal = null as DealPick | null } = {}) {
+        parkForm();
+        for (const row of groupsBox.querySelectorAll<HTMLElement>(".tk-row--editing")) row.remove();
+        for (const row of groupsBox.querySelectorAll<HTMLElement>("[data-tk-task][hidden]")) row.hidden = false;
+        editing = task;
+        chosenDeal = task?.deal ? { ...task.deal } : deal;
+        foundDeals = chosenDeal ? [chosenDeal] : [];
+        dealQuery.value = "";
+        renderDealPicks();
+        setStatus(dealStatus, "붙이면 목록에 거래 이름과 지금 상태가 보입니다.", "idle");
+        formTitle.textContent = task ? "할 일 고치기" : "할 일 만들기";
+        save.textContent = task ? "고친 것 저장" : "할 일 저장";
+        titleInput.value = task?.title ?? "";
+        dueInput.value = task?.dueOn ?? "";
+        for (const input of repeatChoices) input.checked = input.value === (task?.repeat ?? "none");
+        showErrors({});
+        setStatus(formStatus, "", "idle");
+        reload.hidden = true;
+        deleteRow.hidden = !task;
+        deletePanel.hidden = true;
+        deleteButton.setAttribute("aria-expanded", "false");
+        save.disabled = false;
+        form.hidden = false;
+        newButton.setAttribute("aria-expanded", String(!task));
+        syncForm();
+        formSnapshot = snapshotOf();
+        placeForm();
+        if (focus) {
+          form.scrollIntoView({ block: "start" });
+          titleInput.focus({ preventScroll: true });
+        }
+      }
+      function closeForm() {
+        form.hidden = true;
+        parkForm();
+        for (const row of groupsBox.querySelectorAll<HTMLElement>(".tk-row--editing")) row.remove();
+        for (const row of groupsBox.querySelectorAll<HTMLElement>("[data-tk-task][hidden]")) row.hidden = false;
+        editing = null;
+        chosenDeal = null;
+        newButton.setAttribute("aria-expanded", "false");
+      }
+      newButton.addEventListener("click", () => {
+        if (!form.hidden && !editing) {
+          closeForm();
+          return;
+        }
+        openForm(null);
+      });
+      emptyNew.addEventListener("click", () => openForm(null, { deal: dealFilter }));
+      pick("[data-tk-cancel]").addEventListener("click", () => {
+        const wasEditing = editing?.id;
+        closeForm();
+        const back = wasEditing ? groupsBox.querySelector<HTMLElement>(`[data-tk-edit="${CSS.escape(wasEditing)}"]`) : null;
+        (back ?? newButton).focus();
+      });
+      titleInput.addEventListener("input", syncForm);
+      dueInput.addEventListener("input", syncForm);
+      dueInput.addEventListener("change", syncForm);
+      for (const input of repeatChoices) input.addEventListener("change", syncForm);
+
+      save.addEventListener("click", async () => {
+        if (busy) return;
+        const checked = checkTaskInput(readValues());
+        if (!checked.ok) {
+          showErrors(checked.errors);
+          setStatus(formStatus, "저장하지 않았습니다. 칸 아래 글을 확인해 주세요.", "error");
+          root!.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+          return;
+        }
+        showErrors({});
+        const value = checked.value;
+        let body: Record<string, unknown>;
+        if (editing) {
+          body = taskChanges(editing, value, chosenDeal?.id ?? null);
+          if (Object.keys(body).length === 0) {
+            setStatus(formStatus, "바뀐 것이 없습니다.", "idle");
+            return;
+          }
+        } else {
+          body = { title: value.title };
+          if (value.dueOn) body.dueOn = value.dueOn;
+          if (value.repeat !== "none") body.repeat = value.repeat;
+          if (chosenDeal) body.dealId = chosenDeal.id;
+        }
+        busy = true;
+        save.disabled = true;
+        setStatus(formStatus, "저장하고 있습니다…", "saving");
+        try {
+          const result = editing
+            ? await updateTask(editing.id, { ...body, version: editing.version })
+            : await createTask(body);
+          freshId = result.task.id;
+          closeForm();
+          showSaved("✓ 할 일을 저장했습니다.");
+          await refresh({ keepFresh: true });
+          newButton.focus();
+        } catch (error) {
+          const code = errorCode(error);
+          if (code === "VALIDATION_FAILED" && error instanceof WorkApiError) showErrors(taskFieldErrors(error.details));
+          setStatus(formStatus, `저장하지 못했습니다. ${errorText(code)}`, "error");
+          reload.hidden = !(editing && (code === "VERSION_CONFLICT" || code === "NOT_FOUND"));
+        } finally {
+          busy = false;
+          save.disabled = false;
+        }
+      });
+      // 다른 곳에서 먼저 고쳤을 때: 목록을 새로 읽어 그 할 일의 새 값으로 다시 채운다(넣던 값은 그때까지 칸에 남아 있음).
+      reload.addEventListener("click", async () => {
+        if (busy || !editing) return;
+        const id = editing.id;
+        busy = true;
+        try {
+          await refresh();
+          const fresh = items.find((item) => item.id === id);
+          if (fresh) {
+            openForm(fresh);
+            setStatus(formStatus, "새 값을 불러왔습니다. 다시 고친 뒤 저장해 주세요.", "idle");
+          } else {
+            setStatus(formStatus, "새 값을 지금 목록에서 찾지 못했습니다. 지워졌거나 끝낸 할 일입니다. '그만두기'를 눌러 주세요.", "error");
+          }
+        } finally {
+          busy = false;
+        }
+      });
+      deleteButton.addEventListener("click", () => {
+        pick("[data-tk-delete-text]").textContent = editing && editing.repeat !== "none"
+          ? "지우면 되돌릴 수 없습니다. 반복 할 일이라 다음 할 일도 더 만들어지지 않습니다."
+          : "지우면 되돌릴 수 없습니다.";
+        deletePanel.hidden = false;
+        deleteButton.setAttribute("aria-expanded", "true");
+        deleteGo.focus();
+      });
+      pick("[data-tk-delete-cancel]").addEventListener("click", () => {
+        deletePanel.hidden = true;
+        deleteButton.setAttribute("aria-expanded", "false");
+        deleteButton.focus();
+      });
+      deleteGo.addEventListener("click", async () => {
+        if (busy || !editing) return;
+        busy = true;
+        deleteGo.disabled = true;
+        setStatus(formStatus, "지우고 있습니다…", "saving");
+        try {
+          await deleteTask(editing.id);
+          closeForm();
+          showSaved("✓ 할 일을 지웠습니다.");
+          await refresh();
+          newButton.focus();
+        } catch (error) {
+          setStatus(formStatus, `지우지 못했습니다. ${errorText(errorCode(error))}`, "error");
+        } finally {
+          busy = false;
+          deleteGo.disabled = false;
+        }
+      });
+
+      // 저장하지 않은 만들기·고치기가 있으면 떠나기 전에 묻는다.
+      window.addEventListener("beforeunload", (event) => {
+        if (!isDirty()) return;
+        event.preventDefault();
+      });
+
+      // ── 처음 불러오기: 업무 세션(켜짐) → 열린 할 일 ──
+      async function start() {
+        statePanel.hidden = true;
+        main.hidden = true;
+        boot.hidden = false;
+        try {
+          const session = await getTaskSession({ refresh: true });
+          if (!session.enabled) {
+            showDisabled();
+            return;
+          }
+          await loadList();
+        } catch (error) {
+          showLoadError(error);
+          return;
+        }
+        boot.hidden = true;
+        main.hidden = false;
+        renderList();
+      }
+      pick("[data-tk-state-retry]").addEventListener("click", () => void start());
+
+      // 열 때마다(뒤로 가기 캐시 복원 포함) 넣던 칸·거르기를 비우고 다시 불러온다.
+      const reset = () => {
+        today = todayInKorea();
+        mode = "open";
+        dealFilter = null;
+        items = [];
+        cursor = null;
+        freshId = null;
+        busy = false;
+        closeForm();
+        groupsBox.replaceChildren();
+        doneList.replaceChildren();
+        showSaved("");
+        setStatus(listStatus, "", "idle");
+        void start();
+      };
+      window.addEventListener("pageshow", (event) => {
+        if (event.persisted) reset();
+      });
+      reset();
+    }
+  </script>
+</AdminLayout>

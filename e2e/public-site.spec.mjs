@@ -265,7 +265,10 @@ test("미리 그리기 규칙은 관리자 화면에만 있고 공개 화면에�
   }
 
   const assertNoBrowserErrors = failOnBrowserErrors(page);
+  // 업무 도구 처음의 '오늘 할 일' 칸이 업무 세션을 묻는다(꺼짐으로 답해 할 일 목록은 부르지 않음).
+  await page.route("**/api/admin/v1/work/session", (route) => route.fulfill({ status: 200, json: { ok: true, data: { enabled: false, filesEnabled: false, administrator: null, csrfToken: null, schemaVersion: null }, requestId: "test" } }));
   await page.goto("/admin/work/");
+  await expect(page.locator("[data-tk-home-state]")).toHaveText("업무 도구가 켜지면 할 일을 볼 수 있습니다.");
   const rules = page.locator('script[type="speculationrules"]');
   await expect(rules).toHaveCount(1);
   const parsed = JSON.parse(await rules.textContent());

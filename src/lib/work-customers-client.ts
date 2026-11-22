@@ -120,7 +120,7 @@ export const readCustomer = (id: string) => read<CustomerDetail>(`/customers/${i
 export const createCustomer = (body: CustomerInput) => write<{ customer: Customer }>("/customers", "POST", body);
 export const updateCustomer = (id: string, body: CustomerInput & { version: number }) => write<{ customer: Customer }>(`/customers/${idPath(id)}`, "PATCH", body);
 export const deleteCustomer = (id: string, confirmName: string) =>
-  write<{ deleted: { customers: number; deals: number; notes: number; files: number }; kept: { notes: number; ledger?: number } }>(`/customers/${idPath(id)}`, "DELETE", { confirmName });
+  write<{ deleted: { customers: number; deals: number; notes: number; files: number; tasks?: number }; kept: { notes: number; ledger?: number } }>(`/customers/${idPath(id)}`, "DELETE", { confirmName });
 export const listNotes = (query: URLSearchParams) => read<Page<Note>>("/notes", query);
 export const createNote = (body: { body: string; customerId?: string | null }) => write<{ note: Note }>("/notes", "POST", body);
 export const updateNote = (id: string, body: { version: number; body?: string; customerId?: string | null }) => write<{ note: Note }>(`/notes/${idPath(id)}`, "PATCH", body);
