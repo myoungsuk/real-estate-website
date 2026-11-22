@@ -100,6 +100,9 @@ test("손님 지우기 결과 문장은 함께 지운 것과, 다른 손님과 �
   // 매출장부: 지운 거래의 장부 줄은 남기고 그 수를 알린다. 0개면 말하지 않는다.
   assert.match(deleteResultText({ deleted: { deals: 1, notes: 0 }, kept: { notes: 0, ledger: 2 } }), /장부 줄 2개는 매출장부에 남습니다/u);
   assert.doesNotMatch(deleteResultText({ deleted: { deals: 1, notes: 0 }, kept: { notes: 0, ledger: 0 } }), /장부 줄/u);
+  // 그 거래에 붙은 할 일은 함께 지워지고 개수를 알린다. 0개면 말하지 않는다(2026-11-21 사용자 결정 U-4).
+  assert.equal(deleteResultText({ deleted: { deals: 1, notes: 3, tasks: 2 }, kept: { notes: 0 } }), "손님을 지웠습니다. 함께 지운 것: 이 손님만의 거래 1건, 메모 3개, 할 일 2개.");
+  assert.doesNotMatch(deleteResultText({ deleted: { deals: 1, notes: 0, tasks: 0 }, kept: { notes: 0 } }), /할 일/u);
 });
 
 test("서버 오류 코드마다 쉬운 문장이 있고, 다시 해 볼 수 없는 오류에는 '다시 불러오기'를 보이지 않는다", () => {

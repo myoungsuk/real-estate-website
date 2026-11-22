@@ -123,7 +123,7 @@ async function setup(page, { width = 390, enabled = true, store = makeStore(), p
         store.customers.splice(index, 1);
         const removed = store.notes.filter((item) => item.customerId === current.id).length;
         store.notes = store.notes.filter((item) => item.customerId !== current.id);
-        return route.fulfill(envelope({ deleted: { customers: 1, deals: 1, notes: removed, files: 0 }, kept: { notes: 1 } }));
+        return route.fulfill(envelope({ deleted: { customers: 1, deals: 1, notes: removed, files: 0, tasks: 2 }, kept: { notes: 1 } }));
       }
     }
     if (path === "/notes" && method === "GET") {
@@ -386,6 +386,7 @@ test("손님 지우기: 이름이 한 글자라도 다르면 '지우기'가 눌�
   await go.click();
   await expect(page.getByRole("heading", { name: "손님을 지웠습니다" })).toBeVisible();
   await expect(page.locator("[data-cu-gone-text]")).toContainText("메모 1개는 그 거래 기록이라 남겼습니다");
+  await expect(page.locator("[data-cu-gone-text]")).toContainText("할 일 2개");
   expect(calls.writes.at(-1)).toMatchObject({ method: "DELETE", path: `/customers/${uuid(1)}`, body: { confirmName: "가상 손님 1" }, csrf: "test-csrf" });
   await expect(page.locator("[data-cu-main]")).toBeHidden();
   await expect(page.locator("[data-cu-bar]")).toBeHidden();

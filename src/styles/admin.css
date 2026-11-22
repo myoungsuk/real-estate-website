@@ -1950,3 +1950,69 @@ html:has(.rt-pick-bar:not([hidden])) { scroll-padding-bottom: calc(var(--rt-pick
 .lg-pair .lg-money { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
 @media (max-width: 479px) { .lg-pair .lg-money { grid-template-columns: 1fr !important; } }
 .lg-skel { display: block; height: 1.1em; margin: 4px 0; border-radius: 2px; background: var(--ds-paper-2); }
+/* ── 할 일(단계 2, /admin/work/tasks/, 시안 2026-11-22 13:22:11 "이 시안대로", 메뉴 A안). 지난 할 일·거래 상태는 색만이 아니라 글자로(묶음 제목 "! 지난 할 일", 상태 이름). */
+.tk-saved { margin: 0 0 10px; padding: 10px 14px; border: 1.5px solid var(--ds-navy); border-radius: 2px; background: var(--ds-paper); color: var(--ds-ink); font-weight: 800; }
+.tk-saved[data-state="error"] { border-color: var(--ds-stamp); }
+.tk-group { margin: 14px 0 0; }
+.tk-group__title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin: 0 0 6px; color: var(--ds-navy); font-size: 1.0625rem; font-weight: 800; }
+.tk-group__n { color: var(--ds-ink-soft); font-size: 1rem; font-weight: 700; }
+.tk-group--past .tk-group__title { color: var(--ds-stamp); }
+.tk-group--none .tk-group__title { color: var(--ds-ink-soft); }
+.tk-rows { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.tk-row { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 4px 10px; min-height: 60px; padding: 6px 10px 6px 6px; border: 1px solid var(--ds-edge); border-radius: 2px; background: var(--ds-paper); }
+.tk-group--past .tk-row { border-left: 3px solid var(--ds-stamp); }
+.tk-row--fresh { border: 2px solid var(--ds-navy); }
+.tk-row--done { background: var(--ds-paper-2); }
+.tk-row--editing { display: block; min-height: 0; padding: 0; border: 0; background: none; }
+.tk-group--past .tk-row--editing { border-left: 0; }
+.tk-row--editing .tk-form { margin: 0; }
+.tk-check { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; background: none; cursor: pointer; }
+.tk-check > span { width: 24px; height: 24px; border: 2px solid var(--ds-navy); border-radius: 2px; background: var(--ds-paper); }
+.tk-check:hover > span { background: var(--ds-paper-2); }
+.tk-check:disabled { cursor: progress; }
+.tk-done-mark { display: grid; place-items: center; width: 44px; height: 44px; color: var(--ds-navy); font-size: 1.25rem; font-weight: 800; }
+.tk-row__body { min-width: 0; }
+.tk-row__title { margin: 0; color: var(--ds-ink); font-size: 1rem; font-weight: 800; overflow-wrap: anywhere; }
+.tk-row--done .tk-row__title { color: var(--ds-ink-soft); }
+.tk-row__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 2px 0 0; font-size: 1rem; }
+.tk-date { color: var(--ds-ink); font-variant-numeric: tabular-nums; }
+.tk-date small { color: var(--ds-ink-soft); font-size: 1rem; }
+.tk-date--late { color: var(--ds-stamp); font-weight: 800; }
+.tk-date--soft { color: var(--ds-ink-soft); }
+.tk-repeat { color: var(--ds-navy); font-weight: 700; white-space: nowrap; }
+.tk-new { display: inline-block; padding: 0 6px; border: 1px solid var(--ds-navy); border-radius: 2px; color: var(--ds-navy); font-size: 1rem; font-weight: 800; }
+.tk-edit { min-height: 44px; padding: 0 6px; }
+.tk-reopen { width: auto; padding: 0 14px; }
+.tk-deal { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; min-height: 44px; max-width: 100%; padding: 0; border: 0; background: none; color: var(--ds-ink); font: inherit; text-align: left; cursor: pointer; }
+.tk-deal .tk-deal__name { text-decoration: underline; text-underline-offset: 4px; overflow-wrap: anywhere; }
+.tk-deal--plain { min-height: 0; cursor: default; }
+.tk-deal--plain .tk-deal__name { text-decoration: none; }
+.tk-status { display: inline-flex; align-items: center; min-height: 26px; padding: 0 7px; border: 1px solid var(--ds-field-edge); border-radius: 2px; font-size: 1rem; font-weight: 800; white-space: nowrap; }
+.tk-status--open { border-color: var(--ds-navy); color: var(--ds-navy); }
+.tk-status--contracted { border-color: var(--ds-navy); background: var(--ds-navy); color: var(--ds-paper); }
+.tk-status--completed { border-style: dashed; color: var(--ds-ink-soft); }
+.tk-status--cancelled { border-style: dashed; color: var(--ds-ink-soft); text-decoration: line-through; }
+.tk-strip-deal { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.tk-form--strong { border-width: 3px; box-shadow: 0 0 0 4px var(--ds-paper-2); }
+.tk-opt { color: var(--ds-ink-soft); font-size: 1rem; font-weight: 600; }
+.tk-count { display: block; margin-top: 2px; color: var(--ds-ink-soft); font-size: 1rem; text-align: right; font-variant-numeric: tabular-nums; }
+.tk-seg--off { opacity: 0.55; }
+.tk-seg--off .work-choice { cursor: not-allowed; }
+.tk-next { margin: 6px 0 0; padding: 8px 12px; border: 1px dashed var(--ds-navy); border-radius: 2px; color: var(--ds-ink); font-weight: 700; }
+.tk-del-open { margin: 4px 0 0; }
+.tk-del-open .cu-linkbtn { min-height: 44px; }
+.tk-del { margin: 8px 0 4px; }
+.tk-form .work-row__control small, .tk-form .admin-form-status { font-size: 1rem; }
+@media (min-width: 980px) {
+  .tk-row__body { display: grid; grid-template-columns: minmax(14rem, 1.3fr) minmax(0, 2fr); align-items: center; gap: 12px; }
+  .tk-row__meta { margin: 0; }
+}
+/* 업무 도구 처음 '오늘 할 일' 칸(읽기만) */
+.tk-home { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.tk-home__item { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 4px 0; border-bottom: 1px solid var(--ds-edge); color: var(--ds-ink); text-decoration: none; }
+.tk-home__item:hover .tk-home__title, .tk-home__item:focus-visible .tk-home__title { text-decoration: underline; }
+.tk-home__date { flex: none; min-width: 6.2em; color: var(--ds-ink-soft); font-size: 1rem; font-weight: 800; }
+.tk-home__date.tk-date--late { color: var(--ds-stamp); }
+.tk-home__title { min-width: 0; font-size: 1rem; font-weight: 700; overflow-wrap: anywhere; }
+.tk-home-retry { width: auto; margin-top: 8px; padding: 0 16px; }
+[data-tk-home] [hidden] { display: none !important; }
