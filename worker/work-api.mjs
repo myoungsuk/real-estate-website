@@ -3,7 +3,7 @@
 // 이번 단계의 경로는 GET /work/session 하나다. 손님 자료 경로는 다음 PR에서 withViewAudit·writeBatchWithAudit 위에 올린다.
 import { getAuditActorId, maskEmail } from "./admin-audit.mjs";
 import { errorResponse, jsonResponse } from "./http.mjs";
-import { WorkApiError, createWorkCsrfToken, getWorkConfigState, validateWorkJsonWrite } from "./work-security.mjs";
+import { WorkApiError, createWorkCsrfToken, getWorkConfigState, isWorkFilesEnabled, validateWorkJsonWrite, validateWorkUploadWrite } from "./work-security.mjs";
 import { auditStatement, withViewAudit, writeBatchWithAudit } from "./work-audit.mjs";
 import { routeWorkData } from "./work-customers.mjs";
 import { routeWorkDeals } from "./work-deals.mjs";
@@ -11,6 +11,7 @@ import { routeWorkEvents } from "./work-events.mjs";
 import { routeWorkLedger } from "./work-ledger.mjs";
 import { routeWorkTasks } from "./work-tasks.mjs";
 import { routeWorkTrash } from "./work-trash.mjs";
+import { isWorkFileUpload, isWorkFilesRoute, routeWorkFiles } from "./work-files.mjs";
 import { handlePublicToolsApi, isPublicToolsRoute } from "./work-public-tools.mjs";
 
 // 기존 시험·다른 모듈이 쓰던 이름을 그대로 내보낸다(감사 도우미는 work-audit.mjs로 옮김).
@@ -202,10 +203,22 @@ export async function handleWorkApi(request, env, options = {}) {
     return workError(requestId, new WorkApiError("WORK_SCHEMA_AHEAD", "업무 자료 구조가 프로그램보다 새것입니다.", 503));
   }
 
+  // 파일(사진) API: WORK_FILES_ENABLED와 WORK_FILES 바인딩이 둘 다 있어야 한다. 없으면 503 FILES_DISABLED(R2를 부르지 않음, T2-137).
+  // options.files: 시험이 가짜 R2를 넣는 자리(10.5절).
+  const files = options.files ?? env?.WORK_FILES;
+  const filesEnabled = isWorkFilesEnabled(env, files);
+  if (isWorkFilesRoute(route) && !filesEnabled) {
+    await recordDenied(db, actor, env, request, requestId, now, "FILES_DISABLED", auditLog, { storeInD1: false });
+    return workError(requestId, new WorkApiError("FILES_DISABLED", "파일 저장소가 아직 켜지지 않았습니다.", 503));
+  }
+  // 사진·미리보기 올리기는 본문이 그림 바이트라 JSON 검사·JSON 읽기 대신 Origin·CSRF만 보고, 본문은 work-files.mjs가 읽는다.
+  const fileUpload = isWorkFileUpload(route, method);
+
   let body = null;
   if (WRITE_METHODS.has(method)) {
     try {
-      await validateWorkJsonWrite(request, actor, env, now);
+      if (fileUpload) await validateWorkUploadWrite(request, actor, env, now);
+      else await validateWorkJsonWrite(request, actor, env, now);
     } catch (error) {
       if (error instanceof WorkApiError) {
         if (error.code === "ORIGIN_DENIED" || error.code === "CSRF_INVALID") {
@@ -215,10 +228,12 @@ export async function handleWorkApi(request, env, options = {}) {
       }
       return workError(requestId, new WorkApiError("WORK_CONFIG_MISSING", "업무 도구 설정이 완료되지 않았습니다.", 503));
     }
-    try {
-      body = await readWorkJsonBody(request);
-    } catch (error) {
-      return workError(requestId, error);
+    if (!fileUpload) {
+      try {
+        body = await readWorkJsonBody(request);
+      } catch (error) {
+        return workError(requestId, error);
+      }
     }
   } else if (method !== "GET") {
     return workError(requestId, new WorkApiError("METHOD_NOT_ALLOWED", "허용되지 않은 요청 방식입니다.", 405), { Allow: "GET" });
@@ -230,7 +245,7 @@ export async function handleWorkApi(request, env, options = {}) {
     }
     return workSuccess({
       enabled: true,
-      filesEnabled: false,
+      filesEnabled,
       aiEnabled: false,
       administrator: maskEmail(actor.email),
       csrfToken: await createWorkCsrfToken(actor.email, env.ADMIN_CSRF_SECRET, now),
@@ -242,9 +257,14 @@ export async function handleWorkApi(request, env, options = {}) {
   // 손님·메모·검색(단계 2 PR-A), 거래·참여자(PR-B1), 일정(PR-B2), 매출장부, 할 일, 휴지통. 경로가 맞지 않으면 null을 돌려준다.
   // legalRules: 장부 법정 상한 경고에 쓸 법령 데이터(시험만 가짜를 넣음, 없으면 legal-rules.json).
   try {
-    const dataContext = { db, actor, requestId, now, method, route, url, body, randomUUID: options.randomUUID ?? (() => crypto.randomUUID()), legalRules: options.legalRules };
+    // request·files·filesEnabled·log: 사진 API(올리기 본문·R2)와 손님 삭제·휴지통 영구 삭제의 파일 몫이 쓴다.
+    const dataContext = {
+      db, actor, requestId, now, method, route, url, body, randomUUID: options.randomUUID ?? (() => crypto.randomUUID()), legalRules: options.legalRules,
+      request, files, filesEnabled, log: auditLog,
+    };
     const handled = (await routeWorkData(dataContext)) ?? (await routeWorkDeals(dataContext)) ?? (await routeWorkEvents(dataContext))
-      ?? (await routeWorkLedger(dataContext)) ?? (await routeWorkTasks(dataContext)) ?? (await routeWorkTrash(dataContext));
+      ?? (await routeWorkLedger(dataContext)) ?? (await routeWorkTasks(dataContext)) ?? (await routeWorkTrash(dataContext)) ?? (await routeWorkFiles(dataContext));
+    if (handled?.response) return handled.response;
     if (handled?.raw) return workFileResponse(handled.raw, requestId);
     if (handled) return jsonResponse({ ok: true, data: handled.data, requestId }, { status: handled.status ?? 200, headers: { "X-Request-Id": requestId } });
   } catch (error) {

@@ -822,3 +822,82 @@ export function parseTrashPurge(body) {
     throw new WorkApiError("CONFIRMATION_MISMATCH", "확인 글자가 '영구 삭제'와 다릅니다.", 400);
   }
 }
+
+// 파일(사진, 단계 2 바로 찍기 F-a). 이 PR은 손님 사진만 연다(photo-pr-plan F-1). 나머지 종류는 그 기능 PR에서 연다(0001 CHECK는 그대로).
+export const FILE_KINDS_OPEN = Object.freeze(["property_photo", "other"]);
+export const FILE_KINDS_NOT_READY = Object.freeze(["contract_copy", "registry", "recording", "document"]);
+export const FILE_PHOTO_MIME_TYPES = Object.freeze(["image/jpeg", "image/webp"]);
+// 미리보기는 WebP·JPEG 둘 다 받는다(iPhone Safari canvas는 WebP를 만들지 못해 JPEG로 보냄, 대장 2026-11-22 날개-4 지적).
+export const FILE_THUMB_MIME_TYPES = Object.freeze(["image/webp", "image/jpeg"]);
+export const FILE_PHOTO_MAX_BYTES = 10 * 1024 * 1024; // Q-1(사용자 2026-11-22 15:23:20): 긴 변 4096px로 다시 저장, 한 장 10MB까지
+export const FILE_THUMB_MAX_BYTES = 256 * 1024; // Q-2 미리보기 사본(긴 변 480px)
+export const FILE_CAPTION_MAX = 200;
+const SHA256_HEX_PATTERN = /^[0-9a-f]{64}$/iu;
+const CONTENT_LENGTH_PATTERN = /^\d{1,12}$/u;
+
+export function fileMediaType(headers) {
+  return (headers.get("Content-Type") ?? "").split(";", 1)[0].trim().toLowerCase();
+}
+
+function unsupportedMedia() {
+  return new WorkApiError("UNSUPPORTED_MEDIA_TYPE", "허용하지 않는 파일 형식입니다.", 415);
+}
+
+function tooLarge() {
+  return new WorkApiError("PAYLOAD_TOO_LARGE", "파일이 너무 크거나 크기를 알 수 없습니다.", 413);
+}
+
+// Content-Length: 없으면 본문을 읽지 않고 413(한도를 미리 알 수 없음, 대장 2026-11-22), 한도를 넘어도 413, 0·숫자 아님은 400.
+function readContentLength(headers, max) {
+  const text = headers.get("Content-Length");
+  if (text === null || text.trim() === "") throw tooLarge();
+  if (!CONTENT_LENGTH_PATTERN.test(text.trim())) throw invalid(["Content-Length"]);
+  const length = Number(text.trim());
+  if (length > max) throw tooLarge();
+  if (length < 1) throw invalid(["Content-Length"]);
+  return length;
+}
+
+function readSha256(headers) {
+  const text = (headers.get("X-Work-File-Sha256") ?? "").trim();
+  if (!SHA256_HEX_PATTERN.test(text)) throw invalid(["X-Work-File-Sha256"]);
+  return text.toLowerCase();
+}
+
+// 사진 올리기 헤더(설계서 9.3절). 순서: 본문 종류(415) → 파일 종류(400) → 길이(413·400) → SHA-256 → 주인(customer:{uuid}만).
+// 원래 파일 이름은 받지 않는다(헤더·본문 어디에도 없음).
+export function parseFileUploadHeaders(headers) {
+  const mimeType = fileMediaType(headers);
+  if (!FILE_PHOTO_MIME_TYPES.includes(mimeType)) throw unsupportedMedia();
+  const kind = (headers.get("X-Work-File-Kind") ?? "").trim();
+  if (FILE_KINDS_NOT_READY.includes(kind)) {
+    throw new WorkApiError("FILE_KIND_NOT_READY", "이 종류의 파일은 아직 올릴 수 없습니다.", 400);
+  }
+  if (!FILE_KINDS_OPEN.includes(kind)) throw invalid(["X-Work-File-Kind"]);
+  const length = readContentLength(headers, FILE_PHOTO_MAX_BYTES);
+  const sha256 = readSha256(headers);
+  const owner = (headers.get("X-Work-Owner") ?? "").trim();
+  const customerId = owner.startsWith("customer:") ? owner.slice("customer:".length) : null;
+  if (!isUuid(customerId)) throw invalid(["X-Work-Owner"]);
+  return { mimeType, kind, length, sha256, customerId };
+}
+
+// 미리보기 올리기 헤더(Q-2): WebP·JPEG, 256KB 이하, SHA-256.
+export function parseThumbUploadHeaders(headers) {
+  const mimeType = fileMediaType(headers);
+  if (!FILE_THUMB_MIME_TYPES.includes(mimeType)) throw unsupportedMedia();
+  const length = readContentLength(headers, FILE_THUMB_MAX_BYTES);
+  return { mimeType, length, sha256: readSha256(headers) };
+}
+
+// 설명 고치기: 본문은 { caption } 하나(0 ~ 200자, 한 줄로 정리). 주민번호 꼴이 있으면 가리지 않고 400(사진 설명에는 받지 않음, T2-137h).
+// 주민번호 찾기는 메모와 같은 함수(maskResidentNumbers)를 쓴다.
+export function parseFilePatch(body) {
+  if (!isPlainObject(body)) throw invalid(["body"]);
+  rejectUnknown(body, ["caption"]);
+  if (typeof body.caption !== "string") throw invalid(["caption"]);
+  const caption = cleanSingleLine(body.caption, Number.POSITIVE_INFINITY);
+  if (caption.length > FILE_CAPTION_MAX) throw invalid(["caption"]);
+  if (maskResidentNumbers(caption).count > 0) throw invalid(["caption"]);
+  return { caption };
+}

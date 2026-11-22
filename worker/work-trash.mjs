@@ -4,7 +4,9 @@
 // - 이 파일은 work-customers.mjs 등 경로 파일을 가져오지 않는다. 그 파일들이 모듈을 읽을 때 이 파일의 도우미로 SQL을 만들기 때문이다(순환 import 방지).
 // - 감사 기록에는 묶음 id만 남기고 이름·제목·메모 내용(label·row_json)은 남기지 않는다.
 // - 휴지통 자료도 손님 개인정보다. 7일 뒤 Cron(work-scheduled.mjs runTrashExpire)이 켜기 값과 상관없이 영구 삭제한다.
-import { WorkApiError } from "./work-security.mjs";
+// - 파일(사진, F-a): R2 객체는 휴지통에 있는 동안 그대로 두고, 영구 삭제·7일 만료 때 원본·미리보기 두 키를 R2에서 먼저 지운 뒤 휴지통 행을 지운다(DEC-WT-37).
+//   R2 삭제가 실패하면 휴지통 행을 남긴다(D1에는 없는데 R2에 남은 파일을 만들지 않음). R2에 이미 없는 키는 성공으로 본다(R2 delete 동작).
+import { WorkApiError, hasR2 } from "./work-security.mjs";
 import { auditStatement, changesOf, loadThenAudit, runBatch } from "./work-audit.mjs";
 import { encodeCursor, invalid, isUuid, koreaDate, parseTrashPurge, parseTrashQuery } from "./work-input.mjs";
 
@@ -17,7 +19,7 @@ const iso = (ms) => new Date(ms).toISOString();
 
 // 표별 칸 목록(PRAGMA table_info 순서). 복사(json_object)와 되살리기(json_extract)가 같이 쓴다.
 // 새 마이그레이션이 칸을 보태면 tests/work-trash.test.mjs T2-92c가 깨져 이 목록을 함께 고치게 한다.
-// 파일(files)은 파일 PR 때 넣는다(0007 CHECK에는 미리 있음).
+// 파일(files)은 사진 서버 PR(F-a)에서 넣었다(0007 CHECK에는 미리 있음).
 export const TRASH_COLUMNS = Object.freeze({
   customers: Object.freeze(["id", "display_name", "phone_digits", "needs", "status", "last_contact_on", "retention_until", "version", "created_at", "updated_at"]),
   deals: Object.freeze([
@@ -25,6 +27,10 @@ export const TRASH_COLUMNS = Object.freeze({
     "balance_on", "buyer_is_corporation", "regulated_area", "land_permit_area", "metro_area", "status", "closed_on", "retention_until", "version",
     "created_at", "updated_at", "sale_kind", "regulation", "schedule_target", "land_share", "separate_funding_submission", "lease_reporting_region",
     "lease_renewal_without_change",
+  ]),
+  files: Object.freeze([
+    "id", "r2_key", "kind", "mime_type", "byte_size", "sha256_hex", "customer_id", "deal_id", "rrn_masked", "caption", "extracted_text", "recording_group_id",
+    "recording_index", "retention_until", "created_at",
   ]),
   deal_parties: Object.freeze(["deal_id", "customer_id", "role"]),
   deal_events: Object.freeze(["id", "deal_id", "kind", "due_on", "title", "alarm_offsets", "source", "done_at", "version", "created_at", "updated_at"]),
@@ -35,13 +41,18 @@ export const TRASH_COLUMNS = Object.freeze({
     "snap_balance_on", "memo", "version", "created_at", "updated_at",
   ]),
 });
-// 되살리는 순서(고정, R-1): 손님 → 거래 → 참여자 → 일정 → 메모 → 할 일 → 장부 줄. 그 뒤에 끊은 연결을 되돌린다.
-const ROW_TABLES = Object.freeze(["customers", "deals", "deal_parties", "deal_events", "notes", "tasks", "ledger_entries"]);
+// 되살리는 순서(고정, R-1): 손님 → 거래 → 파일 → 참여자 → 일정 → 메모 → 할 일 → 장부 줄. 그 뒤에 끊은 연결을 되돌린다.
+// 파일은 손님·거래 뒤(외래 키), 메모 앞(메모의 file_id가 되살린 파일을 가리키게, F-6).
+const ROW_TABLES = Object.freeze(["customers", "deals", "files", "deal_parties", "deal_events", "notes", "tasks", "ledger_entries"]);
 // 응답(counts·restored·skipped)의 표 이름.
 const VIEW_KEY = Object.freeze({
-  customers: "customers", deals: "deals", deal_parties: "parties", deal_events: "events", notes: "notes", tasks: "tasks", ledger_entries: "ledger",
+  customers: "customers", deals: "deals", files: "files", deal_parties: "parties", deal_events: "events", notes: "notes", tasks: "tasks", ledger_entries: "ledger",
 });
 const CURRENT_SCHEMA = "(SELECT CAST(value_json AS INTEGER) FROM settings WHERE key = 'schema_version')";
+// 미리보기 사본(Q-2)의 R2 키 = 원본 키 + 이 꼬리(확장자 없음, WebP·JPEG는 httpMetadata.contentType으로 구분. D1 칸 없음). 영구 삭제·만료는 두 키를 함께 지운다.
+export const FILE_THUMB_SUFFIX = ".thumb";
+export const r2KeysOf = (r2Key) => [r2Key, r2Key + FILE_THUMB_SUFFIX];
+const R2_DELETE_MAX_KEYS = 1000; // R2 delete(keys[]) 한 번에 1,000개까지
 
 // ── 지우는 batch에 넣는 문장 ────────────────────────────────────────────────
 
@@ -87,6 +98,10 @@ const BATCH_SOURCES = Object.freeze({
   event: ["deal_events", "substr(title, 1, 80)"],
   ledger: ["ledger_entries", "substr(CASE WHEN label <> '' THEN label ELSE '장부 줄 ' || amount_won || '원' END, 1, 80)"],
   task: ["tasks", "substr(title, 1, 80)"],
+  // 사진 한 장(F-5, 사용자 2026-11-22 15:39:08): 설명이 있으면 설명 앞 40자, 없으면 "사진 · 11월 22일 14:05 올림"(올린 시각 created_at을 한국 시각으로,
+  // 월·일은 앞 0 없이, 시:분은 두 자리). 손님 이름은 넣지 않는다.
+  file: ["files", "coalesce(substr(CASE WHEN caption <> '' THEN substr(caption, 1, 40) ELSE '사진 · ' || CAST(strftime('%m', created_at, '+9 hours') AS INTEGER) || '월 '"
+    + " || CAST(strftime('%d', created_at, '+9 hours') AS INTEGER) || '일 ' || strftime('%H:%M', created_at, '+9 hours') || ' 올림' END, 1, 80), '사진')"],
 });
 const BATCH_INSERT_SQL = Object.freeze(Object.fromEntries(Object.entries(BATCH_SOURCES).map(([kind, [table, label]]) => [kind,
   "INSERT INTO trash_batches (id, kind, target_id, label, schema_version, deleted_at, deleted_by, request_id, purge_after)"
@@ -197,6 +212,8 @@ const SKIP_BEFORE = Object.freeze([
 ]);
 // 뒤(넣은 뒤)에 보는 것: 넣지 못한 행. 앞 줄이 먼저 표시하므로 둘 다 없으면 앞 까닭(거래 없음·메모 없음)이 된다.
 const SKIP_AFTER = Object.freeze([
+  { table: "files", reason: "deal_missing", sql: markSql("files", "row", "NOT " + presentSql("files") + " AND " + T("deal_id") + " IS NOT NULL AND NOT EXISTS (SELECT 1 FROM deals x WHERE x.id = " + T("deal_id") + ")") },
+  { table: "files", reason: "customer_missing", sql: markSql("files", "row", "NOT " + presentSql("files")) },
   { table: "events", reason: "deal_missing", sql: markSql("deal_events", "row", "NOT " + presentSql("deal_events")) },
   { table: "parties", reason: "deal_missing", sql: markSql("deal_parties", "row", "NOT " + presentSql("deal_parties") + " AND NOT EXISTS (SELECT 1 FROM deals x WHERE x.id = " + T("deal_id") + ")") },
   { table: "parties", reason: "customer_missing", sql: markSql("deal_parties", "row", "NOT " + presentSql("deal_parties")) },
@@ -220,6 +237,10 @@ const SQL = Object.freeze({
   // 되살리기: 표 순서대로 넣는다(ROW_TABLES). 표시(_skip)가 없는 행만.
   restoreCustomers: restoreInsertSql("customers"),
   restoreDeals: restoreInsertSql("deals"),
+  // 파일: 주인(손님·거래)이 있을 때만. 주인이 없으면 넣지 않고 customer_missing(·deal_missing)으로 휴지통에 남긴다(F-6, 주인 없는 사진을 만들지 않음).
+  restoreFiles: restoreInsertSql("files", {}, " AND (" + J("customer_id") + " IS NOT NULL OR " + J("deal_id") + " IS NOT NULL)"
+    + " AND (" + J("customer_id") + " IS NULL OR " + existsIn("customers", "customer_id") + ")"
+    + " AND (" + J("deal_id") + " IS NULL OR " + existsIn("deals", "deal_id") + ")"),
   restoreParties: restoreInsertSql("deal_parties", {}, " AND " + existsIn("deals", "deal_id") + " AND " + existsIn("customers", "customer_id")),
   restoreEvents: restoreInsertSql("deal_events", {}, " AND " + existsIn("deals", "deal_id")),
   // 메모 ①: 연결이 그대로 맞는 메모. ②: 나머지는 맞지 않는 칸만 비우고 넣는다(메모를 잃지 않음). ②의 수가 notesUnlinked.
@@ -265,14 +286,20 @@ const SQL = Object.freeze({
   batchDeleteIfEmpty: "DELETE FROM trash_batches WHERE id = ? AND NOT EXISTS (SELECT 1 FROM trash_rows WHERE batch_id = ?)",
   purgeRows: "DELETE FROM trash_rows WHERE batch_id = ?",
   purgeBatch: "DELETE FROM trash_batches WHERE id = ?",
+  // 묶음 안 파일 행의 R2 키(영구 삭제·만료 때 R2를 먼저 지움). 되살려 휴지통에서 빠진 파일은 들어 있지 않다.
+  purgeFileKeys: "SELECT json_extract(row_json, '$.r2_key') AS r2_key FROM trash_rows WHERE batch_id = ? AND table_name = 'files' AND op = 'row' ORDER BY row_id",
+  expireFileKeys:
+    "SELECT batch_id, json_extract(row_json, '$.r2_key') AS r2_key FROM trash_rows WHERE batch_id IN (SELECT value FROM json_each(?)) AND table_name = 'files' AND op = 'row'"
+    + " ORDER BY batch_id, row_id",
   // 7일 뒤 영구 삭제(Cron): 고른 묶음 id 목록(JSON 배열 하나로 bind)을 기한을 다시 보고 지운다(그사이 되살려 없어진 묶음은 감사도 남지 않음).
-  expirePick: "SELECT id FROM trash_batches WHERE purge_after <= ? ORDER BY purge_after, id LIMIT ?",
+  // 이번 실행에서 R2를 지우지 못해 건너뛴 묶음(JSON 배열)은 다시 고르지 않는다(다음 날 다시).
+  expirePick: "SELECT id FROM trash_batches WHERE purge_after <= ? AND id NOT IN (SELECT value FROM json_each(?)) ORDER BY purge_after, id LIMIT ?",
   expireAudit:
     "INSERT INTO audit_events (at, actor_email, action, target_type, target_id, request_id, outcome, reason)"
     + " SELECT ?, ?, 'trash.expire', 'trash', id, ?, 'ok', NULL FROM trash_batches WHERE id IN (SELECT value FROM json_each(?)) AND purge_after <= ?",
   expireRows: "DELETE FROM trash_rows WHERE batch_id IN (SELECT id FROM trash_batches WHERE id IN (SELECT value FROM json_each(?)) AND purge_after <= ?)",
   expireBatches: "DELETE FROM trash_batches WHERE id IN (SELECT value FROM json_each(?)) AND purge_after <= ?",
-  expireLeft: "SELECT 1 AS ok FROM trash_batches WHERE purge_after <= ? LIMIT 1",
+  expireLeft: "SELECT 1 AS ok FROM trash_batches WHERE purge_after <= ? AND id NOT IN (SELECT value FROM json_each(?)) LIMIT 1",
 });
 
 // 남은 날: 한국 날짜 기준(purge_after의 한국 날짜 − 오늘 한국 날짜, 0 아래로 내려가지 않음). 0이면 화면이 "! 곧 영구 삭제 · 7일이 지나 다음 새벽 정리 때 지워집니다".
@@ -291,7 +318,7 @@ function itemView(row, nowMs) {
     daysLeft: trashDaysLeft(row.purge_after, nowMs),
     restorable: row.restorable === 1,
     counts: {
-      customers: row.n_customers, deals: row.n_deals, parties: row.n_parties, events: row.n_events,
+      customers: row.n_customers, deals: row.n_deals, files: row.n_files, parties: row.n_parties, events: row.n_events,
       notes: row.n_notes, tasks: row.n_tasks, ledger: row.n_ledger, links: row.n_links,
     },
   };
@@ -322,7 +349,7 @@ async function restoreBatch(ctx, batchId) {
   const prepare = (sql) => ctx.db.prepare(sql);
   const at = iso(ctx.now);
   const restores = [
-    ["customers", SQL.restoreCustomers], ["deals", SQL.restoreDeals], ["parties", SQL.restoreParties], ["events", SQL.restoreEvents],
+    ["customers", SQL.restoreCustomers], ["deals", SQL.restoreDeals], ["files", SQL.restoreFiles], ["parties", SQL.restoreParties], ["events", SQL.restoreEvents],
     ["notes", SQL.restoreNotes], ["notesUnlinked", SQL.restoreNotesUnlinked], ["tasks", SQL.restoreTasks], ["ledger", SQL.restoreLedger],
   ];
   const entries = [
@@ -357,6 +384,7 @@ async function restoreBatch(ctx, batchId) {
       restored: {
         customers: n("restore:customers"),
         deals: n("restore:deals"),
+        files: n("restore:files"),
         parties: n("restore:parties"),
         events: n("restore:events"),
         notes: n("restore:notes") + n("restore:notesUnlinked"),
@@ -371,9 +399,34 @@ async function restoreBatch(ctx, batchId) {
   };
 }
 
+// R2 키를 1,000개씩 나눠 지운다. 이미 없는 키는 R2가 성공으로 돌려준다. 하나라도 실패하면 예외(부르는 쪽이 휴지통 행을 남김).
+export async function deleteR2Keys(files, keys) {
+  for (let index = 0; index < keys.length; index += R2_DELETE_MAX_KEYS) {
+    await files.delete(keys.slice(index, index + R2_DELETE_MAX_KEYS));
+  }
+}
+
+function filesDisabled() {
+  return new WorkApiError("FILES_DISABLED", "파일 저장소가 아직 켜지지 않았습니다.", 503);
+}
+
+function fileStorageFailed() {
+  return new WorkApiError("FILE_STORAGE_FAILED", "파일 저장소를 처리하지 못했습니다. 잠시 뒤 다시 해 주세요.", 503, true);
+}
+
 async function purgeBatch(ctx, batchId) {
   parseTrashPurge(ctx.body);
   if (!(await ctx.db.prepare(SQL.batchById).bind(batchId).first())) throw notFound();
+  // 사진이 든 묶음: R2(원본·미리보기)를 먼저 지운다. 바인딩이 없거나 R2가 실패하면 휴지통 행을 그대로 두고 503(1절 9번).
+  const keys = ((await ctx.db.prepare(SQL.purgeFileKeys).bind(batchId).all())?.results ?? []).flatMap((row) => r2KeysOf(row.r2_key));
+  if (keys.length > 0) {
+    if (!hasR2(ctx.files)) throw filesDisabled();
+    try {
+      await deleteR2Keys(ctx.files, keys);
+    } catch {
+      throw fileStorageFailed();
+    }
+  }
   try {
     await runBatch(ctx.db, [
       ctx.db.prepare(SQL.purgeGuard).bind(batchId),
@@ -391,24 +444,63 @@ async function purgeBatch(ctx, batchId) {
 // 7일 지난 묶음 영구 삭제(Cron 03:00 차례). 100개씩 고르고 지우기를 지울 것이 없을 때까지, 최대 10번(1,000개) 되풀이한다.
 // 한 번(100개)이 한 batch이고 감사 trash.expire는 묶음마다 1줄(작업자 system:cron, 요청 번호 cron-<무작위>는 그 batch 공통).
 // 지울 것이 없으면 읽기 1번으로 끝나고 randomUUID도 부르지 않는다. 10번 뒤에도 남으면 backlog: true(부르는 쪽이 경고 로그, 다음 날 이어 감).
-// 파일 몫이 생기면 R2 객체를 먼저 지운다(파일 PR, trash-design.md 5절).
-export async function expireTrash(db, nowMs, randomUUID = () => crypto.randomUUID()) {
+// 사진이 든 묶음은 R2(원본·미리보기)를 먼저 지운다(F-a). WORK_FILES 바인딩이 없으면 그 묶음은 건너뛰고(noStorage, 행만 지우면 R2 고아가 생김),
+// R2 삭제가 실패한 묶음도 건너뛴다(r2Failed). 건너뛴 묶음은 이번 실행에서 다시 고르지 않고 다음 날 다시 본다. 사진 없는 묶음은 R2를 부르지 않는다.
+// R2 삭제는 묶음을 이어 붙여 키 1,000개씩 부른다(실행마다 부르는 수를 줄임).
+export async function expireTrash(db, nowMs, randomUUID = () => crypto.randomUUID(), files = null) {
   const nowIso = iso(nowMs);
   let expired = 0;
+  let r2Failed = 0;
+  let noStorage = 0;
+  const skipped = [];
+  const done = (rounds, backlog) => ({ expired, rounds, backlog, r2Failed, noStorage });
   for (let round = 1; round <= TRASH_EXPIRE_MAX_ROUNDS; round += 1) {
-    const picked = ((await db.prepare(SQL.expirePick).bind(nowIso, TRASH_EXPIRE_PER_ROUND).all())?.results ?? []).map((row) => row.id);
-    if (picked.length === 0) return { expired, rounds: round - 1, backlog: false };
-    const ids = JSON.stringify(picked);
-    const results = await db.batch([
-      db.prepare(SQL.expireAudit).bind(nowIso, TRASH_CRON_ACTOR, `cron-${randomUUID()}`, ids, nowIso),
-      db.prepare(SQL.expireRows).bind(ids, nowIso),
-      db.prepare(SQL.expireBatches).bind(ids, nowIso),
-    ]);
-    expired += changesOf(results[2]);
-    if (picked.length < TRASH_EXPIRE_PER_ROUND) return { expired, rounds: round, backlog: false };
+    const picked = ((await db.prepare(SQL.expirePick).bind(nowIso, JSON.stringify(skipped), TRASH_EXPIRE_PER_ROUND).all())?.results ?? []).map((row) => row.id);
+    if (picked.length === 0) return done(round - 1, false);
+    const keysByBatch = new Map();
+    for (const row of (await db.prepare(SQL.expireFileKeys).bind(JSON.stringify(picked)).all())?.results ?? []) {
+      if (!keysByBatch.has(row.batch_id)) keysByBatch.set(row.batch_id, []);
+      keysByBatch.get(row.batch_id).push(...r2KeysOf(row.r2_key));
+    }
+    const ready = picked.filter((id) => !keysByBatch.has(id));
+    if (keysByBatch.size > 0 && !hasR2(files)) {
+      skipped.push(...keysByBatch.keys());
+      noStorage += keysByBatch.size;
+    } else if (keysByBatch.size > 0) {
+      const chunks = [];
+      let current = { ids: [], keys: [] };
+      for (const [id, keys] of keysByBatch) {
+        if (current.ids.length > 0 && current.keys.length + keys.length > R2_DELETE_MAX_KEYS) {
+          chunks.push(current);
+          current = { ids: [], keys: [] };
+        }
+        current.ids.push(id);
+        current.keys.push(...keys);
+      }
+      chunks.push(current);
+      for (const chunk of chunks) {
+        try {
+          await deleteR2Keys(files, chunk.keys);
+          ready.push(...chunk.ids);
+        } catch {
+          skipped.push(...chunk.ids);
+          r2Failed += chunk.ids.length;
+        }
+      }
+    }
+    if (ready.length > 0) {
+      const ids = JSON.stringify(ready);
+      const results = await db.batch([
+        db.prepare(SQL.expireAudit).bind(nowIso, TRASH_CRON_ACTOR, `cron-${randomUUID()}`, ids, nowIso),
+        db.prepare(SQL.expireRows).bind(ids, nowIso),
+        db.prepare(SQL.expireBatches).bind(ids, nowIso),
+      ]);
+      expired += changesOf(results[2]);
+    }
+    if (picked.length < TRASH_EXPIRE_PER_ROUND) return done(round, false);
   }
-  const left = await db.prepare(SQL.expireLeft).bind(nowIso).first();
-  return { expired, rounds: TRASH_EXPIRE_MAX_ROUNDS, backlog: Boolean(left) };
+  const left = await db.prepare(SQL.expireLeft).bind(nowIso, JSON.stringify(skipped)).first();
+  return done(TRASH_EXPIRE_MAX_ROUNDS, Boolean(left));
 }
 
 // 경로가 휴지통(/trash, /trash/:batchId, /trash/:batchId/restore)이면 { status?, data }를, 아니면 null을 돌려준다.
