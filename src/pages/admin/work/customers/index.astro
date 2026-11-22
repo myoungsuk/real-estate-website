@@ -90,6 +90,7 @@ const statusLabels = CUSTOMER_STATUS_LABELS as Record<string, string>;
         <div class="cu-more-line">
           <button class="work-secondary-button cu-more" type="button" data-cu-more hidden>20명 더 보기</button>
           <p class="admin-form-status" role="status" aria-live="polite" data-cu-list-status></p>
+          <button class="work-secondary-button cu-more" type="button" data-cu-list-retry hidden>다시 불러오기</button>
         </div>
       </section>
     </div>
@@ -99,7 +100,7 @@ const statusLabels = CUSTOMER_STATUS_LABELS as Record<string, string>;
     import { WorkApiError, createCustomer, getCustomerSession, listCustomers, type Customer } from "../../../../lib/work-customers-client";
     import { customerCard, fillFields, readFields, setStatus, showFieldErrors } from "../../../../lib/work-customers-dom";
     import { todayInKorea } from "../../../../lib/work/legal-dates.mjs";
-    import { checkCustomerInput, cleanQuery, customerCountText, customerErrorText, customerHref, customerListQuery, isRetryable } from "../../../../lib/work/customers-view.mjs";
+    import { checkCustomerInput, cleanQuery, customerCountText, customerErrorText, customerHref, customerListQuery, customerSaveErrorText, isRetryable } from "../../../../lib/work/customers-view.mjs";
 
     const root = document.querySelector<HTMLElement>("[data-cu-list-page]");
     if (root) {
@@ -125,6 +126,9 @@ const statusLabels = CUSTOMER_STATUS_LABELS as Record<string, string>;
       const empty = pick("[data-cu-empty]");
       const more = pick<HTMLButtonElement>("[data-cu-more]");
       const listStatus = pick("[data-cu-list-status]");
+      const listRetry = pick<HTMLButtonElement>("[data-cu-list-retry]");
+      // 목록 읽기가 실패했을 때 '다시 불러오기'가 같은 요청(처음 목록 또는 더 보기)을 다시 한다.
+      let lastAppend = false;
 
       let items: Customer[] = [];
       let cursor: string | null = null;
@@ -185,6 +189,8 @@ const statusLabels = CUSTOMER_STATUS_LABELS as Record<string, string>;
 
       async function loadList({ append = false } = {}) {
         const mine = ++loadToken;
+        lastAppend = append;
+        listRetry.hidden = true;
         more.disabled = true;
         setStatus(listStatus, append ? "더 불러오고 있습니다…" : "불러오고 있습니다…", "saving");
         try {
@@ -202,6 +208,7 @@ const statusLabels = CUSTOMER_STATUS_LABELS as Record<string, string>;
             return;
           }
           setStatus(listStatus, `목록을 불러오지 못했습니다. ${customerErrorText(code)}`, "error");
+          listRetry.hidden = !isRetryable(code);
         } finally {
           if (mine === loadToken) more.disabled = false;
         }
@@ -234,6 +241,9 @@ const statusLabels = CUSTOMER_STATUS_LABELS as Record<string, string>;
       pick("[data-cu-empty-clear]").addEventListener("click", clearAll);
       more.addEventListener("click", () => {
         if (cursor) void loadList({ append: true });
+      });
+      listRetry.addEventListener("click", () => {
+        void loadList({ append: lastAppend && Boolean(cursor) });
       });
 
       // ── 새 손님 ──
@@ -279,7 +289,7 @@ const statusLabels = CUSTOMER_STATUS_LABELS as Record<string, string>;
           doneLink.focus();
         } catch (error) {
           const code = errorCode(error);
-          setStatus(newStatus, `저장하지 못했습니다. ${customerErrorText(code)}`, "error");
+          setStatus(newStatus, `저장하지 못했습니다. ${customerSaveErrorText(code, error)}`, "error");
         } finally {
           saving = false;
           newSave.disabled = false;

@@ -479,3 +479,36 @@ test("T2-128 업무 도구가 꺼져 있으면 503 WORK_DISABLED(D1 0번), 구�
   assert.equal((await work(env, "/tasks/00000000-0000-4000-8000-000000000001/extra")).status, 404);
   assert.equal((await work(env, "/tasks/not-a-uuid", { method: "DELETE" })).status, 404);
 });
+
+test("끝낼 때 다음 날짜가 9999년을 넘으면(매주 9999-12-30, 매월 9999-12-15) 400(dueOn)이고 끝내지도 다음 줄을 만들지도 않으며 감사도 0줄", async () => {
+  const { database, db } = freshDb();
+  const env = workEnv(db);
+  const weekly = await makeTask(env, { title: "가상 마지막 주", dueOn: "9999-12-30", repeat: "weekly" });
+  const monthly = await makeTask(env, { title: "가상 마지막 달", dueOn: "9999-12-15", repeat: "monthly" });
+  const before = taskRows(database);
+  const updatesBefore = audit(database).filter((row) => row.action === "task.update").length;
+  for (const item of [weekly, monthly]) {
+    const result = await patchTask(env, item.id, { version: 1, done: true }, { now: NOV21 });
+    assert.deepEqual([result.status, result.json.error.code, result.json.error.details], [400, "VALIDATION_FAILED", ["dueOn"]], item.title);
+  }
+  assert.deepEqual(taskRows(database), before, "끝내지 않고 다음 줄도 없음");
+  assert.equal(audit(database).filter((row) => row.action === "task.update").length, updatesBefore, "감사 0줄");
+  // 반복을 '없음'으로 바꾸며 끝내면 다음 줄이 필요 없어 끝낼 수 있다.
+  const plain = await patchTask(env, weekly.id, { version: 1, done: true, repeat: "none" }, { now: NOV21 });
+  assert.deepEqual([plain.status, plain.json.data.task.doneAt, plain.json.data.next], [200, at(NOV21), null]);
+});
+
+test("끝낸 줄의 날짜를 지우면(dueOn: null) 끝낸 시각·반복 '없음'은 그대로이고, 끝낸 목록에 날짜 없이 남는다", async () => {
+  const { database, db } = freshDb();
+  const env = workEnv(db);
+  const task = await makeTask(env, { title: "가상 끝낸 서류", dueOn: "2026-11-20" });
+  const finished = await patchTask(env, task.id, { version: 1, done: true }, { now: NOV21 });
+  assert.equal(finished.status, 200, JSON.stringify(finished.json));
+  const cleared = await patchTask(env, task.id, { version: 2, dueOn: null }, { now: NOV21 + 60_000 });
+  assert.equal(cleared.status, 200, JSON.stringify(cleared.json));
+  assert.deepEqual(cleared.json.data, { task: { id: task.id, title: "가상 끝낸 서류", dueOn: null, repeat: "none", repeatDay: null, doneAt: at(NOV21), version: 3, deal: null }, next: null });
+  assert.deepEqual(taskRows(database).map((row) => [row.due_on, row.done_at, row.repeat_rule]), [[null, at(NOV21), "none"]]);
+  const done = await work(env, "/tasks?status=done");
+  assert.deepEqual(done.json.data.items.map((item) => [item.id, item.dueOn]), [[task.id, null]]);
+  assert.deepEqual(audit(database).filter((row) => row.action === "task.update").map((row) => row.reason), ["done", null], "날짜 지우기는 끝내기가 아님");
+});

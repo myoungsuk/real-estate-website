@@ -27,6 +27,7 @@ async function sendBytes<T>(path: string, method: "POST" | "PUT", body: Blob, he
       headers: { Accept: "application/json", "Content-Type": body.type, "X-Admin-CSRF": session.csrfToken, ...headers },
       credentials: "same-origin",
       cache: "no-store",
+      redirect: "manual",
       body,
     });
     try {

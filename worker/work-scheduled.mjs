@@ -2,6 +2,8 @@
 // 지금은 단계 P 실거래가 받기(`*/10 * * * *`) 하나뿐이다. 단계 2·4 Cron은 그 PR에서 이 파일에 더한다.
 // 같은 Cron의 한국 시각 03:00 차례에는 실거래가 켜기 값을 보기 **전에** 글 초안 보관 정리(P3, DEC-WT-24)를 먼저 한다(지시서 D-5).
 // 조건은 D1이 있고 구조 번호가 4 이상인 것뿐이다(글 초안·실거래가 켜기 값과 상관없이, 꺼 둔 뒤에도 오래된 초안이 지워지게).
+// 같은 차례에 휴지통 7일 영구 삭제(runTrashExpire)와 감사 로그 3년 삭제(runAuditExpire)도 켜기 값과 상관없이 한다.
+// 시각은 Cron이 정한 시각(controller.scheduledTime)을 쓴다. 실행이 몇 초 늦게 시작해도 03:00 차례를 그 시각으로 판정한다.
 // - 맨 바깥에서 모든 예외를 잡아 실행 번호와 고정 코드 RT_INTERNAL만 남긴다. 잡지 못한 예외는 플랫폼이 메시지·스택을
 //   기록해 그 안에 요청 주소(인증키 포함)가 섞일 수 있어서다.
 // - 로그에는 실행 번호, 받은 달 수, 호출 수, 넣기·고치기·지우기 수, rows_written, 결과 코드만 남긴다(22.12절).
@@ -117,14 +119,16 @@ async function runCountCheck({ env, fetcher, monthRows, nowMs }) {
 async function runInner(env, options, state) {
   const db = options.db ?? env?.WORK_DB;
   const log = options.log ?? defaultLog;
-  const nowMs = typeof options.now === "function" ? options.now() : Date.now();
+  // 시작 시각: 시험이 넣은 now → Cron이 정한 시각(scheduledTime) → 지금. 끝 시각(finishedIso)은 아래에서 시계를 다시 읽는다.
+  const nowMs = typeof options.now === "function" ? options.now() : Number.isFinite(options.scheduledTime) ? options.scheduledTime : Date.now();
   const nowIso = iso(nowMs);
   const fetcher = options.fetcher ?? fetch;
   const randomUUID = options.randomUUID ?? (() => crypto.randomUUID());
 
-  // ⓪ 03:00 차례면 글 초안 보관 정리, 휴지통 7일 영구 삭제부터(켜기 값과 상관없이, D-5·T-9). 실패해도 아래로 이어 간다.
+  // ⓪ 03:00 차례면 글 초안 보관 정리, 휴지통 7일 영구 삭제, 감사 로그 3년 삭제부터(켜기 값과 상관없이, D-5·T-9·8.7절). 실패해도 아래로 이어 간다.
   await runBlogCleanup(db, nowMs, log);
   await runTrashExpire(db, nowMs, log, randomUUID, options.files ?? env?.WORK_FILES);
+  await runAuditExpire(db, nowMs, log);
 
   // ① 켜기 값·설정. 꺼져 있으면 D1·외부 요청 없이 끝(로그도 남기지 않음, 10분마다 쌓이지 않게).
   const config = getRealpriceConfigState(env, db);
@@ -316,6 +320,52 @@ export async function runTrashExpire(db, nowMs, log = defaultLog, randomUUID = (
   }
 }
 
+// 감사 로그 3년 자동 삭제(설계서 8.7절 예외 1, DEC-WT-04, 처리방침 7항 "접근 기록 3년"). 기준은 기록일(at)이다.
+// - 03:00 차례 1번, 업무 도구 켜기 값과 상관없이 돈다(꺼 둔 동안 멈추면 처리방침 약속이 깨짐). 조건은 D1이 있고 구조 번호를 읽을 수 있는 것뿐
+//   (audit_events는 0001부터 있음). 기록을 고치거나 지우는 API는 여전히 없고, 이 Cron만 지운다(8.8절).
+// - 3년은 달력 기준(UTC 날짜에서 해만 3 뺌). 2월 29일은 3월 1일이 되어 하루 더 남긴다(덜 지우는 쪽).
+// - 한 번에 500줄씩 최대 4번(하루 2,000줄, 하루 쓰기 추정 200줄의 10배). 그래도 남으면 경고 로그만 남기고 다음 날 이어 간다.
+// - 지울 것이 없으면 로그를 남기지 않는다. 로그에는 지운 줄 수와 남았는지만(이메일·동작·대상 ID 없음). 지운 일을 감사 로그에 다시 적지 않는다.
+export const AUDIT_KEEP_YEARS = 3;
+export const AUDIT_EXPIRE_PER_ROUND = 500;
+export const AUDIT_EXPIRE_MAX_ROUNDS = 4;
+const AUDIT_EXPIRE_SQL = "DELETE FROM audit_events WHERE seq IN (SELECT seq FROM audit_events WHERE at < ?1 ORDER BY at, seq LIMIT ?2)";
+const AUDIT_LEFT_SQL = "SELECT 1 AS n FROM audit_events WHERE at < ?1 LIMIT 1";
+
+// 이 시각보다 앞에 적힌 감사 기록이 3년 지난 것이다.
+export function auditCutoffIso(nowMs) {
+  const cutoff = new Date(nowMs);
+  cutoff.setUTCFullYear(cutoff.getUTCFullYear() - AUDIT_KEEP_YEARS);
+  return cutoff.toISOString();
+}
+
+export async function expireAuditEvents(db, nowMs) {
+  const cutoff = auditCutoffIso(nowMs);
+  let deleted = 0;
+  for (let round = 1; round <= AUDIT_EXPIRE_MAX_ROUNDS; round += 1) {
+    const changes = changesOf(await db.prepare(AUDIT_EXPIRE_SQL).bind(cutoff, AUDIT_EXPIRE_PER_ROUND).run());
+    deleted += changes;
+    if (changes < AUDIT_EXPIRE_PER_ROUND) return { deleted, rounds: round, backlog: false };
+  }
+  const left = await db.prepare(AUDIT_LEFT_SQL).bind(cutoff).first();
+  return { deleted, rounds: AUDIT_EXPIRE_MAX_ROUNDS, backlog: Boolean(left) };
+}
+
+export async function runAuditExpire(db, nowMs, log = defaultLog) {
+  if (!isDailyCheckWindow(nowMs) || !hasD1(db)) return { outcome: "skipped" };
+  try {
+    const schemaVersion = await readSchemaVersion(db);
+    if (schemaVersion === null) return { outcome: "skipped" };
+    const result = await expireAuditEvents(db, nowMs);
+    if (result.backlog) log({ event: "audit_expire", level: "warn", code: "AUDIT_EXPIRE_BACKLOG", deleted: result.deleted, left: true });
+    else if (result.deleted > 0) log({ event: "audit_expire", deleted: result.deleted, left: false });
+    return { outcome: "ok", ...result };
+  } catch {
+    log({ event: "audit_expire", level: "warn", code: "AUDIT_EXPIRE_FAILED" });
+    return { outcome: "failed" };
+  }
+}
+
 // 실거래가 Cron 1번. 예외는 밖으로 내보내지 않는다.
 export async function runRealpriceCron(env, options = {}) {
   const log = options.log ?? defaultLog;
@@ -350,7 +400,7 @@ async function cleanupAfterInternalError(env, options, state) {
 export async function handleScheduled(controller, env, ctx, options = {}) {
   const log = options.log ?? defaultLog;
   try {
-    if (controller?.cron === REALPRICE_CRON) return await runRealpriceCron(env, options);
+    if (controller?.cron === REALPRICE_CRON) return await runRealpriceCron(env, { scheduledTime: controller.scheduledTime, ...options });
     log({ event: "cron_unknown", level: "warn" });
     return { outcome: "unknown_cron" };
   } catch {

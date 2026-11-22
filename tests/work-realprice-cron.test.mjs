@@ -431,7 +431,8 @@ test("Cron 문자열로 나눔: 모르는 Cron은 D1을 부르지 않고, 진입
   const log = [];
   assert.deepEqual(await handleScheduled({ cron: "17 18 * * *" }, cronEnv(db), {}, { log: (entry) => log.push(entry) }), { outcome: "unknown_cron" });
   assert.deepEqual(log, [{ event: "cron_unknown", level: "warn" }]);
-  assert.deepEqual(await worker.scheduled({ cron: REALPRICE_CRON }, { WORK_DB: db }, {}), { outcome: "disabled" });
+  // Cron이 정한 시각(scheduledTime, 14:00)으로 판정하므로 실제 시계가 03:00 ~ 03:09여도 하루 1번 정리가 돌지 않는다(보드 64번 ①).
+  assert.deepEqual(await worker.scheduled({ cron: REALPRICE_CRON, scheduledTime: NOW }, { WORK_DB: db }, {}), { outcome: "disabled" });
   assert.equal(db.stats.statements, 0);
 });
 

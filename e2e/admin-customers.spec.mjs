@@ -533,3 +533,369 @@ test("메모 창고: '고치기'는 글과 version만 보내고, '지우기'는 
   await expect(memos).toHaveCount(1);
   assertNoErrors();
 });
+
+// ── 불러오는 중·오류·이탈 경고(TU-07·TU-08·TU-10) ──
+// setup 뒤에 더한 page.route가 먼저 받는다. 붙잡았다가 놓아 주면(fallback) setup의 가짜 업무 API가 답한다.
+const workPath = (url) => url.pathname.replace(/^.*\/api\/admin\/v1\/work/u, "");
+async function holdRequest(page, method, matches) {
+  let release;
+  const released = new Promise((resolve) => { release = resolve; });
+  await page.route((url) => matches(workPath(url)), async (route) => {
+    if (route.request().method() !== method) return route.fallback();
+    await released;
+    return route.fallback();
+  });
+  return { release: () => release() };
+}
+// 정해 둔 응답을 차례로 한 번씩 돌려준다(다 쓰면 setup으로 넘김). "abort"는 응답 없이 끊음(fetch TypeError).
+async function failRequests(page, method, matches, responses) {
+  const queue = [...responses];
+  const seen = [];
+  await page.route((url) => matches(workPath(url)), (route) => {
+    if (route.request().method() !== method || queue.length === 0) return route.fallback();
+    seen.push(workPath(new URL(route.request().url())));
+    const next = queue.shift();
+    return next === "abort" ? route.abort("failed") : route.fulfill(next);
+  });
+  return seen;
+}
+const badGateway = { status: 502, contentType: "text/html", body: "<html><body>502 Bad gateway</body></html>" };
+const GENERIC = "요청을 처리하지 못했습니다. 잠시 뒤 다시 해 주세요.";
+const STORAGE = "업무 자료 저장소에 연결하지 못했습니다. 잠시 뒤 다시 해 주세요. 넣던 글은 지워지지 않았습니다.";
+const SCHEMA = "업무 자료 구조가 아직 준비되지 않았습니다. 개발 담당에게 알려 주세요.";
+// 떠나려 할 때 브라우저가 묻는지(beforeunload 창). 물으면 '머무르기'를 골라 화면이 그대로 남는다.
+async function asksBeforeLeaving(page) {
+  const dialogs = [];
+  const onDialog = async (dialog) => {
+    dialogs.push(dialog.type());
+    await dialog.dismiss();
+  };
+  page.on("dialog", onDialog);
+  await page.close({ runBeforeUnload: true });
+  await expect.poll(() => dialogs.length > 0 || page.isClosed(), { timeout: 3000 }).toBe(true);
+  page.off("dialog", onDialog);
+  return dialogs.length > 0 && dialogs.every((type) => type === "beforeunload") && !page.isClosed();
+}
+
+test("TU-07 불러오는 중: 손님 목록·손님 카드·메모 창고는 '불러오고 있습니다…'를 보이고, 저장 중에는 단추를 꺼 두 번 눌러도 한 번만 보낸다", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const calls = await setup(page, { width: 360 });
+  const list = await holdRequest(page, "GET", (path) => path === "/customers");
+  await page.goto("/admin/work/customers/");
+  await expect(page.locator("[data-cu-boot]")).toHaveText("손님 목록을 불러오고 있습니다…");
+  await expect(page.locator("[data-cu-boot]")).toHaveAttribute("role", "status");
+  await expect(page.locator(".cu-card")).toHaveCount(0);
+  list.release();
+  await expect(page.locator(".cu-card")).toHaveCount(4);
+  await expect(page.locator("[data-cu-boot]")).toBeHidden();
+
+  const create = await holdRequest(page, "POST", (path) => path === "/customers");
+  await page.getByRole("button", { name: "새 손님" }).click();
+  await page.locator("#cu-new-name").fill("가상 손님 9");
+  const newSave = page.getByRole("button", { name: "손님 저장" });
+  await newSave.click();
+  await expect(page.locator("[data-cu-new-status]")).toHaveText("저장하고 있습니다…");
+  await expect(newSave).toBeDisabled();
+  await newSave.evaluate((button) => button.click());
+  create.release();
+  await expect(page.locator("[data-cu-done-text]")).toHaveText("✓ '가상 손님 9'을(를) 넣었습니다.");
+  expect(calls.writes.filter((item) => item.method === "POST" && item.path === "/customers")).toHaveLength(1);
+
+  const card = await holdRequest(page, "GET", (path) => path === `/customers/${uuid(1)}`);
+  await page.goto(`/admin/work/customers/detail/?id=${uuid(1)}`);
+  await expect(page.locator("[data-cu-boot]")).toHaveText("손님 카드를 불러오고 있습니다…");
+  await expect(page.locator("[data-cu-main]")).toBeHidden();
+  await expect(page.locator("[data-cu-bar]")).toBeHidden();
+  card.release();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("가상 손님 1");
+  await expect(page.locator("[data-cu-boot]")).toBeHidden();
+
+  const memoPost = await holdRequest(page, "POST", (path) => path === "/notes");
+  await page.locator("#cu-memo").fill("가상 통화 메모");
+  const memoSave = page.getByRole("button", { name: "메모 저장" });
+  await memoSave.click();
+  await expect(page.locator("[data-cu-memo-status]")).toHaveText("저장하고 있습니다…");
+  await expect(memoSave).toBeDisabled();
+  await memoSave.evaluate((button) => button.click());
+  memoPost.release();
+  await expect(page.locator("[data-cu-memo-status]")).toHaveText("✓ 메모를 저장했습니다.");
+  await expect(memoSave).toBeEnabled();
+  expect(calls.writes.filter((item) => item.method === "POST" && item.path === "/notes")).toHaveLength(1);
+
+  const inbox = await holdRequest(page, "GET", (path) => path === "/notes");
+  await page.goto("/admin/work/notes/");
+  await expect(page.locator("[data-nt-boot]")).toHaveText("메모를 불러오고 있습니다…");
+  inbox.release();
+  await expect(page.locator("[data-nt-list] > .cu-memo")).toHaveCount(2);
+  await expect(page.locator("[data-nt-boot]")).toBeHidden();
+  assertNoErrors();
+});
+
+test("TU-08 오류: 메모 저장이 503·413·415·429·502로 실패하면 코드별 고정 글을 보이고 쓰던 메모는 그대로, 단추는 다시 눌린다", async ({ page }) => {
+  const calls = await setup(page, { width: 390 });
+  const cases = [
+    [failure(503, "STORAGE_UNAVAILABLE"), STORAGE],
+    [failure(503, "WORK_SCHEMA_OUTDATED"), SCHEMA],
+    [failure(413, "PAYLOAD_TOO_LARGE"), GENERIC],
+    [failure(415, "CONTENT_TYPE_REQUIRED"), GENERIC],
+    [failure(429, "RATE_LIMITED"), GENERIC],
+    [badGateway, GENERIC],
+  ];
+  const seen = await failRequests(page, "POST", (path) => path === "/notes", cases.map(([response]) => response));
+  await page.goto(`/admin/work/customers/detail/?id=${uuid(1)}`);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("가상 손님 1");
+  const memo = page.locator("#cu-memo");
+  const memoSave = page.getByRole("button", { name: "메모 저장" });
+  await memo.fill("가상 통화 메모: 토요일 오후 방문");
+  for (const [index, [, text]] of cases.entries()) {
+    await memoSave.click();
+    await expect(page.locator("[data-cu-memo-status]")).toHaveText(`저장하지 못했습니다. ${text}`);
+    await expect(memo).toHaveValue("가상 통화 메모: 토요일 오후 방문");
+    await expect(memoSave).toBeEnabled();
+    await expect(page.locator("[data-cu-memo-reload]")).toBeHidden();
+    expect(seen).toHaveLength(index + 1);
+  }
+  await expect(page.locator(".cu-notes .cu-memo")).toHaveCount(1);
+  // 실패를 다 쓴 뒤 다시 누르면 저장된다(쓰던 메모가 그대로라 다시 넣지 않아도 됨).
+  await memoSave.click();
+  await expect(page.locator("[data-cu-memo-status]")).toHaveText("✓ 메모를 저장했습니다.");
+  await expect(page.locator(".cu-notes .cu-memo")).toHaveCount(2);
+  expect(calls.writes.filter((item) => item.path === "/notes")).toHaveLength(1);
+  await expectNoPersonalTrace(page);
+});
+
+test("TU-08 오류: 새 손님 저장 실패는 넣던 칸을 지우지 않고, 손님 카드 불러오기 실패(502)·메모 창고 목록 실패(429)는 까닭과 '다시 불러오기'로 다시 읽는다", async ({ page }) => {
+  await setup(page, { width: 360 });
+  await failRequests(page, "POST", (path) => path === "/customers", [failure(503, "STORAGE_UNAVAILABLE")]);
+  await page.goto("/admin/work/customers/");
+  await page.getByRole("button", { name: "새 손님" }).click();
+  await page.locator("#cu-new-name").fill("가상 손님 9");
+  await page.locator("#cu-new-phone").fill("010-0000-0009");
+  await page.locator("#cu-new-needs").fill("천동 59㎡ 전세");
+  await page.getByRole("button", { name: "손님 저장" }).click();
+  await expect(page.locator("[data-cu-new-status]")).toHaveText(`저장하지 못했습니다. ${STORAGE}`);
+  await expect(page.locator("[data-cu-new-panel]")).toBeVisible();
+  expect([await page.locator("#cu-new-name").inputValue(), await page.locator("#cu-new-phone").inputValue(), await page.locator("#cu-new-needs").inputValue()]).toEqual(["가상 손님 9", "010-0000-0009", "천동 59㎡ 전세"]);
+  await expect(page.getByRole("button", { name: "손님 저장" })).toBeEnabled();
+
+  await failRequests(page, "GET", (path) => path === `/customers/${uuid(1)}`, [badGateway]);
+  await page.goto(`/admin/work/customers/detail/?id=${uuid(1)}`);
+  await expect(page.getByRole("heading", { name: "손님 카드를 불러오지 못했습니다" })).toBeVisible();
+  await expect(page.locator("[data-cu-state-body]")).toHaveText(GENERIC);
+  await expect(page.locator("[data-cu-main]")).toBeHidden();
+  await page.getByRole("button", { name: "다시 불러오기" }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("가상 손님 1");
+
+  await failRequests(page, "GET", (path) => path === "/notes", [failure(429, "RATE_LIMITED")]);
+  await page.goto("/admin/work/notes/");
+  // 세션은 읽었고 목록만 실패: 화면 틀은 그대로 두고 목록 아래에 까닭과 '다시 불러오기'를 보인다.
+  await expect(page.locator("[data-nt-list-status]")).toHaveText(`메모를 불러오지 못했습니다. ${GENERIC}`);
+  await expect(page.locator("[data-nt-list] > .cu-memo")).toHaveCount(0);
+  await page.locator("[data-nt-list-retry]").click();
+  await expect(page.locator("[data-nt-list] > .cu-memo")).toHaveCount(2);
+  await expect(page.locator("[data-nt-list-status]")).toHaveText("");
+});
+
+test("TU-10 이탈 경고: 쓰던 새 손님 칸·손님 카드 메모·열린 고치기 칸·메모 창고 빠른 메모가 있으면 떠나기 전에 묻고, 비어 있으면 묻지 않는다", async ({ context }) => {
+  const fresh = async (path, ready) => {
+    const page = await context.newPage();
+    await setup(page, { width: 390 });
+    await page.goto(path);
+    await expect(ready(page)).toBeVisible();
+    return page;
+  };
+  const list = (page) => page.locator(".cu-card").first();
+  const card = (page) => page.getByRole("heading", { level: 1, name: "가상 손님 1" });
+  const inbox = (page) => page.locator("[data-nt-list] > .cu-memo").first();
+  const detailPath = `/admin/work/customers/detail/?id=${uuid(1)}`;
+
+  let page = await fresh("/admin/work/customers/", list);
+  await page.getByRole("button", { name: "새 손님" }).click();
+  expect(await asksBeforeLeaving(page), "빈 새 손님 칸은 묻지 않음").toBe(false);
+  page = await fresh("/admin/work/customers/", list);
+  await page.getByRole("button", { name: "새 손님" }).click();
+  await page.locator("#cu-new-needs").fill("천동 59㎡ 전세");
+  expect(await asksBeforeLeaving(page), "찾는 조건만 써도 물음").toBe(true);
+  await expect(page.locator("#cu-new-needs")).toHaveValue("천동 59㎡ 전세");
+  await page.close();
+
+  page = await fresh(detailPath, card);
+  await page.locator("#cu-memo").click();
+  expect(await asksBeforeLeaving(page), "손님 카드를 보기만 하면 묻지 않음").toBe(false);
+  page = await fresh(detailPath, card);
+  await page.locator("#cu-memo").fill("가상 쓰던 메모");
+  expect(await asksBeforeLeaving(page), "쓰던 메모").toBe(true);
+  await expect(page.locator("#cu-memo")).toHaveValue("가상 쓰던 메모");
+  await page.close();
+  page = await fresh(detailPath, card);
+  await page.getByRole("button", { name: "고치기" }).click();
+  await expect(page.locator("[data-cu-edit-panel]")).toBeVisible();
+  expect(await asksBeforeLeaving(page), "열린 고치기 칸").toBe(true);
+  await page.close();
+
+  page = await fresh("/admin/work/notes/", inbox);
+  await page.locator("#nt-memo").fill("가상 급한 메모");
+  expect(await asksBeforeLeaving(page), "쓰던 빠른 메모").toBe(true);
+  await page.locator("#nt-memo").fill("   ");
+  expect(await asksBeforeLeaving(page), "공백만 남으면 묻지 않음").toBe(false);
+});
+
+// 로그인 만료(Access가 401 로그인 화면을 돌려줌)·보안 확인 만료(새 토큰으로 한 번 더 보내도 403)
+const authExpired = { status: 401, contentType: "text/html", body: "<html><body>Sign in</body></html>" };
+const csrfExpired = [failure(403, "CSRF_INVALID"), failure(403, "CSRF_INVALID")];
+const AUTH_SAVE = "관리자 로그인이 만료되었습니다. 이 화면은 새로고침하지 말고, 새 탭에서 관리자 화면을 열어 다시 로그인한 뒤 이 화면에서 같은 단추를 다시 눌러 주세요. 넣던 글은 지워지지 않았습니다.";
+const CSRF_SAVE = "보안 확인이 만료되었습니다. 화면을 새로고침하지 말고 같은 단추를 다시 눌러 주세요. 그래도 안 되면 새 탭에서 관리자 화면을 열어 다시 로그인한 뒤 다시 눌러 주세요. 넣던 글은 지워지지 않았습니다.";
+
+test("로그인·보안 확인 만료로 손님 카드 메모·고치기가 실패하면 새로고침하라고 하지 않고, 쓰던 글을 남긴 채 같은 단추로 다시 저장한다", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const calls = await setup(page, { width: 390 });
+  const memoFails = await failRequests(page, "POST", (path) => path === "/notes", [authExpired, ...csrfExpired]);
+  await page.goto(`/admin/work/customers/detail/?id=${uuid(1)}`);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("가상 손님 1");
+  const memo = page.locator("#cu-memo");
+  const memoSave = page.getByRole("button", { name: "메모 저장" });
+  await memo.fill("가상 긴 통화 메모: 토요일 오후 방문, 주차 확인");
+  await memoSave.click();
+  await expect(page.locator("[data-cu-memo-status]")).toHaveText(`저장하지 못했습니다. ${AUTH_SAVE}`);
+  await expect(memo).toHaveValue("가상 긴 통화 메모: 토요일 오후 방문, 주차 확인");
+  // 새 탭에서 로그인한 뒤(가짜 API는 이번엔 보안 확인 만료 두 번) 같은 단추
+  await memoSave.click();
+  await expect(page.locator("[data-cu-memo-status]")).toHaveText(`저장하지 못했습니다. ${CSRF_SAVE}`);
+  await expect(memo).toHaveValue("가상 긴 통화 메모: 토요일 오후 방문, 주차 확인");
+  expect(memoFails).toEqual(["/notes", "/notes", "/notes"]);
+  expect(calls.all.filter((line) => line === "GET /session").length, "보안 확인 만료면 세션을 한 번 다시 읽어 새 토큰으로 보냄").toBeGreaterThanOrEqual(2);
+  await memoSave.click();
+  await expect(page.locator("[data-cu-memo-status]")).toHaveText("✓ 메모를 저장했습니다.");
+  await expect(memo).toHaveValue("");
+  await expect(page.locator(".cu-notes .cu-memo")).toHaveCount(2);
+  expect(calls.writes.filter((item) => item.path === "/notes")).toHaveLength(1);
+
+  await failRequests(page, "PATCH", (path) => path === `/customers/${uuid(1)}`, [authExpired]);
+  await page.getByRole("button", { name: "고치기" }).click();
+  const needs = page.locator("#cu-edit-needs");
+  await needs.fill("가상숲1단지 84㎡ 매매, 5억까지");
+  await page.getByRole("button", { name: "고친 내용 저장" }).click();
+  await expect(page.locator("[data-cu-edit-status]")).toHaveText(`저장하지 못했습니다. ${AUTH_SAVE}`);
+  await expect(page.locator("[data-cu-edit-panel]")).toBeVisible();
+  await expect(needs).toHaveValue("가상숲1단지 84㎡ 매매, 5억까지");
+  await page.getByRole("button", { name: "고친 내용 저장" }).click();
+  await expect(page.locator("[data-cu-basic-status]")).toHaveText("✓ 고친 내용을 저장했습니다.");
+  await expect(page.locator("[data-cu-needs]")).toHaveText("가상숲1단지 84㎡ 매매, 5억까지");
+  await expectNoPersonalTrace(page);
+  assertNoErrors();
+});
+
+test("로그인 만료로 새 손님·메모 창고 빠른 메모 저장이 실패해도 새로고침하라고 하지 않고 넣던 칸을 남기며, 같은 단추로 저장한다", async ({ page }) => {
+  const calls = await setup(page, { width: 360 });
+  await failRequests(page, "POST", (path) => path === "/customers", [authExpired]);
+  await page.goto("/admin/work/customers/");
+  await page.getByRole("button", { name: "새 손님" }).click();
+  await page.locator("#cu-new-name").fill("가상 손님 9");
+  await page.locator("#cu-new-needs").fill("천동 59㎡ 전세");
+  await page.getByRole("button", { name: "손님 저장" }).click();
+  await expect(page.locator("[data-cu-new-status]")).toHaveText(`저장하지 못했습니다. ${AUTH_SAVE}`);
+  expect([await page.locator("#cu-new-name").inputValue(), await page.locator("#cu-new-needs").inputValue()]).toEqual(["가상 손님 9", "천동 59㎡ 전세"]);
+  await page.getByRole("button", { name: "손님 저장" }).click();
+  await expect(page.locator("[data-cu-done-text]")).toHaveText("✓ '가상 손님 9'을(를) 넣었습니다.");
+  expect(calls.writes.filter((item) => item.method === "POST" && item.path === "/customers")).toHaveLength(1);
+
+  await failRequests(page, "POST", (path) => path === "/notes", csrfExpired);
+  await page.goto("/admin/work/notes/");
+  await expect(page.locator("[data-nt-list] > .cu-memo")).toHaveCount(2);
+  await page.locator("#nt-memo").fill("가상 급한 메모: 59㎡ 전세 문의");
+  await page.getByRole("button", { name: "메모 저장" }).click();
+  await expect(page.locator("[data-nt-memo-status]")).toHaveText(`저장하지 못했습니다. ${CSRF_SAVE}`);
+  await expect(page.locator("#nt-memo")).toHaveValue("가상 급한 메모: 59㎡ 전세 문의");
+  await page.getByRole("button", { name: "메모 저장" }).click();
+  await expect(page.locator("[data-nt-memo-status]")).toHaveText("✓ 메모를 저장했습니다.");
+  await expect(page.locator("[data-nt-list] > .cu-memo")).toHaveCount(3);
+});
+
+test("손님 목록·메모 창고 목록 읽기가 실패하면 목록 아래 까닭과 '다시 불러오기'를 보이고, 누르면 다시 읽은 뒤 단추를 숨긴다. 다시 해도 안 되는 오류면 단추를 보이지 않는다", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  await setup(page, { width: 360 });
+  await failRequests(page, "GET", (path) => path === "/customers", [badGateway, failure(503, "WORK_SCHEMA_OUTDATED")]);
+  await page.goto("/admin/work/customers/");
+  const listRetry = page.locator("[data-cu-list-retry]");
+  await expect(page.locator("[data-cu-list-status]")).toHaveText(`목록을 불러오지 못했습니다. ${GENERIC}`);
+  await expect(listRetry).toBeVisible();
+  await expect(listRetry).toHaveText("다시 불러오기");
+  const box = await listRetry.boundingBox();
+  expect(box.height).toBeGreaterThanOrEqual(44);
+  expect(await overflowOf(page)).toBeLessThanOrEqual(0);
+  await listRetry.click();
+  await expect(page.locator("[data-cu-list-status]")).toHaveText(`목록을 불러오지 못했습니다. ${SCHEMA}`);
+  await expect(listRetry).toBeHidden();
+  await page.getByRole("button", { name: "찾기", exact: true }).click();
+  await expect(page.locator(".cu-card")).toHaveCount(4);
+  await expect(page.locator("[data-cu-list-status]")).toHaveText("");
+  await expect(listRetry).toBeHidden();
+
+  await failRequests(page, "GET", (path) => path === "/notes", [failure(429, "RATE_LIMITED")]);
+  await page.goto("/admin/work/notes/");
+  const notesRetry = page.locator("[data-nt-list-retry]");
+  await expect(page.locator("[data-nt-list-status]")).toHaveText(`메모를 불러오지 못했습니다. ${GENERIC}`);
+  await expect(notesRetry).toBeVisible();
+  await notesRetry.click();
+  await expect(page.locator("[data-nt-list] > .cu-memo")).toHaveCount(2);
+  await expect(notesRetry).toBeHidden();
+  assertNoErrors();
+});
+
+// Access 로그인 만료(**추정**: 업무 API 요청에 팀 로그인 화면으로 가는 302를 돌려준다고 봄. 운영 만료 응답은 아직 확인 전)
+const ACCESS_LOGIN = "https://leaderscityhappy.cloudflareaccess.com/cdn-cgi/access/login/leaderscityhappy.com?kid=test";
+const accessRedirect = { status: 302, headers: { Location: ACCESS_LOGIN }, body: "" };
+const NETWORK_SAVE = "서버에 닿지 못했습니다. 연결이 끊겼거나 로그인이 만료되었을 수 있습니다. 이 화면은 새로고침하지 말고, 새 탭에서 관리자 화면을 열어 다시 로그인하고 저장됐는지 확인한 뒤, 안 됐으면 이 화면에서 같은 단추를 다시 눌러 주세요. 넣던 글은 지워지지 않았습니다.";
+// 다른 주소로 따라가면 안 된다. 따라가면 시험이 실패하도록 팀 로그인 주소 요청을 센다.
+async function watchAccessLogin(page) {
+  const followed = [];
+  await page.route("https://*.cloudflareaccess.com/**", (route) => {
+    followed.push(route.request().url());
+    return route.abort();
+  });
+  return followed;
+}
+
+test("Access가 로그인 화면으로 보내는 302(다른 주소)를 따라가지 않고 로그인 만료로 알리며, 응답 없이 끊기면 저장됐는지 먼저 보라고 하고, 쓰던 메모는 남는다", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const calls = await setup(page, { width: 390 });
+  const followed = await watchAccessLogin(page);
+  const seen = await failRequests(page, "POST", (path) => path === "/notes", [accessRedirect, "abort"]);
+  await page.goto(`/admin/work/customers/detail/?id=${uuid(1)}`);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("가상 손님 1");
+  const memo = page.locator("#cu-memo");
+  const memoSave = page.getByRole("button", { name: "메모 저장" });
+  await memo.fill("가상 긴 통화 메모: 토요일 오후 방문, 주차 확인");
+  await memoSave.click();
+  await expect(page.locator("[data-cu-memo-status]")).toHaveText(`저장하지 못했습니다. ${AUTH_SAVE}`);
+  await expect(memo).toHaveValue("가상 긴 통화 메모: 토요일 오후 방문, 주차 확인");
+  await memoSave.click();
+  await expect(page.locator("[data-cu-memo-status]")).toHaveText(`저장하지 못했습니다. ${NETWORK_SAVE}`);
+  await expect(memo).toHaveValue("가상 긴 통화 메모: 토요일 오후 방문, 주차 확인");
+  await expect(memoSave).toBeEnabled();
+  await memoSave.click();
+  await expect(page.locator("[data-cu-memo-status]")).toHaveText("✓ 메모를 저장했습니다.");
+  expect(seen).toEqual(["/notes", "/notes"]);
+  expect(calls.writes.filter((item) => item.path === "/notes")).toHaveLength(1);
+  expect(followed, "팀 로그인 주소로 따라가지 않음").toEqual([]);
+  assertNoErrors();
+});
+
+test("처음 불러올 때 업무 세션이 Access 302를 받으면 로그인 만료 화면(새로고침해 다시 로그인)이고 '다시 불러오기'는 없으며, 메모 창고 저장 302도 넣던 메모를 남긴다", async ({ page }) => {
+  await setup(page, { width: 360 });
+  const followed = await watchAccessLogin(page);
+  await failRequests(page, "GET", (path) => path === "/session", [accessRedirect]);
+  await page.goto("/admin/work/customers/");
+  await expect(page.getByRole("heading", { name: "손님 목록을 불러오지 못했습니다" })).toBeVisible();
+  await expect(page.getByText("관리자 로그인이 만료되었습니다. 화면을 새로고침해 다시 로그인해 주세요.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "다시 불러오기" })).toHaveCount(0);
+
+  await failRequests(page, "POST", (path) => path === "/notes", [accessRedirect]);
+  await page.goto("/admin/work/notes/");
+  await expect(page.locator("[data-nt-list] > .cu-memo")).toHaveCount(2);
+  await page.locator("#nt-memo").fill("가상 급한 메모: 59㎡ 전세 문의");
+  await page.getByRole("button", { name: "메모 저장" }).click();
+  await expect(page.locator("[data-nt-memo-status]")).toHaveText(`저장하지 못했습니다. ${AUTH_SAVE}`);
+  await expect(page.locator("#nt-memo")).toHaveValue("가상 급한 메모: 59㎡ 전세 문의");
+  expect(followed).toEqual([]);
+});

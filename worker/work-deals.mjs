@@ -305,7 +305,7 @@ async function assertDealDeletable(db, id, confirmTitle) {
   if (!row) throw notFound();
   if (confirmTitle !== row.title) throw new WorkApiError("CONFIRMATION_MISMATCH", "확인 제목이 거래 제목과 다릅니다.", 400);
   if (await count(db, SQL.dealFileCount, id) > 0) {
-    throw new WorkApiError("FILES_REQUIRE_STORAGE", "연결된 파일이 있어 파일 저장소가 켜진 뒤에 지울 수 있습니다.", 409);
+    throw new WorkApiError("FILES_REQUIRE_STORAGE", "연결된 파일이 있어 파일 저장소가 연결된 뒤에 지울 수 있습니다.", 409);
   }
 }
 
