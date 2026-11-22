@@ -32,7 +32,8 @@
     "binding": "ASSETS",
     "run_worker_first": [
       "/api/admin",
-      "/api/admin/*"
+      "/api/admin/*",
+      "/api/calendar/*"
     ],
     "not_found_handling": "404-page"
   },
