@@ -100,6 +100,8 @@ const SQL = Object.freeze({
   dealPartiesDelete: "DELETE FROM deal_parties WHERE deal_id = ?",
   // 장부 줄은 지우지 않고 거래 연결만 끊는다(DEC-WT-38). 감사 reason 꼴(notes_kept=)은 그대로 두고 응답 kept.ledger로만 알린다.
   dealLedgerDetach: LEDGER_DETACH_SET + " WHERE deal_id = ?",
+  // 그 거래의 할 일은 함께 지운다(2026-11-21 사용자 결정 11:15:11 U-4). 0006은 ON DELETE CASCADE가 없으므로 dealDelete 앞에서 직접 지운다.
+  dealTasksDelete: "DELETE FROM tasks WHERE deal_id = ?",
   dealDelete: "DELETE FROM deals WHERE id = ?",
 });
 
@@ -302,6 +304,7 @@ async function deleteDeal(ctx, id) {
     ctx.db.prepare(SQL.dealEventsDelete).bind(id),
     ctx.db.prepare(SQL.dealPartiesDelete).bind(id),
     ctx.db.prepare(SQL.dealLedgerDetach).bind(at, id),
+    ctx.db.prepare(SQL.dealTasksDelete).bind(id),
     ctx.db.prepare(SQL.dealDelete).bind(id),
   ];
   let results;
@@ -313,7 +316,7 @@ async function deleteDeal(ctx, id) {
   }
   return {
     data: {
-      deleted: { deals: 1, events: changesOf(results[4]), notes: changesOf(results[3]), files: 0 },
+      deleted: { deals: 1, events: changesOf(results[4]), notes: changesOf(results[3]), files: 0, tasks: changesOf(results[7]) },
       kept: { notes: changesOf(results[2]), ledger: changesOf(results[6]) },
     },
   };

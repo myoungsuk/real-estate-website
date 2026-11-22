@@ -45,6 +45,13 @@ test("0004는 원격 D1에 이미 적용됐으니 고치지 말고 0005 새 파�
     "migrations/work/0004_blog_drafts.sql이 바뀌었습니다. 0004는 원격에 적용됐으니 0005로 만드세요(2026-11-20 원격 D1 적용).");
 });
 
+test("0005는 원격 D1에 이미 적용됐으니 고치지 말고 0006 새 파일로 만드세요(0005 지문 고정)", async () => {
+  const sql = await readFile(new URL("../migrations/work/0005_ledger.sql", import.meta.url), "utf8");
+  const digest = createHash("sha256").update(sql.replace(/\r\n/gu, "\n"), "utf8").digest("hex");
+  assert.equal(digest, "e05cda1dcc48b5dce418b797997968e0751787fd607304297c8c435c168e49eb",
+    "migrations/work/0005_ledger.sql이 바뀌었습니다. 0005는 원격에 적용됐으니 0006 뒤 새 번호로 만드세요(2026-11-21 원격 D1 적용).");
+});
+
 test("동시 작업: 손님·메모를 고치는 사이 다른 관리자가 같은 밀리초에 먼저 고쳐도(같은 version·같은 시각) 내 수정은 409이고 감사 행이 남지 않는다", async () => {
   const { database, db } = freshDb();
   const env = workEnv(db);
@@ -337,7 +344,7 @@ test("손님 지우기: 이름을 다시 입력해야 하고, 그 손님 전용 
 
   const deleted = await work(env, `/customers/${target.id}`, { method: "DELETE", body: { confirmName: "가상 손님 E" } });
   assert.equal(deleted.status, 200, JSON.stringify(deleted.json));
-  assert.deepEqual(deleted.json.data.deleted, { customers: 1, deals: 1, notes: 2, files: 0 });
+  assert.deepEqual(deleted.json.data.deleted, { customers: 1, deals: 1, notes: 2, files: 0, tasks: 0 });
   assert.deepEqual(deleted.json.data.kept, { notes: 2, ledger: 0 }, "연결만 끊고 남긴 메모 수(함께인 거래의 이 손님 메모 1 + 단독 거래의 다른 손님 메모 1, 화면 경고용)");
   assert.equal(rows(database, "SELECT count(*) AS n FROM customers WHERE id = ?", target.id)[0].n, 0);
   assert.deepEqual(rows(database, "SELECT id FROM deals ORDER BY id").map((row) => row.id), ["shared"]);

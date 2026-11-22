@@ -9,13 +9,14 @@ import { routeWorkData } from "./work-customers.mjs";
 import { routeWorkDeals } from "./work-deals.mjs";
 import { routeWorkEvents } from "./work-events.mjs";
 import { routeWorkLedger } from "./work-ledger.mjs";
+import { routeWorkTasks } from "./work-tasks.mjs";
 import { handlePublicToolsApi, isPublicToolsRoute } from "./work-public-tools.mjs";
 
 // 기존 시험·다른 모듈이 쓰던 이름을 그대로 내보낸다(감사 도우미는 work-audit.mjs로 옮김).
 export { withViewAudit, writeBatchWithAudit };
 
 export const WORK_API_ROOT = "/api/admin/v1/work";
-export const WORK_SCHEMA_VERSION = 5; // migrations/work 0005(단계 2 매출장부)까지. 단계 2와 단계 P가 같은 번호를 쓴다
+export const WORK_SCHEMA_VERSION = 6; // migrations/work 0006(단계 2 할 일)까지. 단계 2와 단계 P가 같은 번호를 쓴다
 export const MAX_WORK_JSON_BYTES = 256 * 1024;
 const WRITE_METHODS = new Set(["POST", "PATCH", "PUT", "DELETE"]);
 const RAY_ID_PATTERN = /^[A-Za-z0-9-]{1,64}$/u;
@@ -237,12 +238,12 @@ export async function handleWorkApi(request, env, options = {}) {
     }, requestId);
   }
 
-  // 손님·메모·검색(단계 2 PR-A), 거래·참여자(PR-B1), 일정(PR-B2), 매출장부. 경로가 맞지 않으면 null을 돌려준다.
+  // 손님·메모·검색(단계 2 PR-A), 거래·참여자(PR-B1), 일정(PR-B2), 매출장부, 할 일. 경로가 맞지 않으면 null을 돌려준다.
   // legalRules: 장부 법정 상한 경고에 쓸 법령 데이터(시험만 가짜를 넣음, 없으면 legal-rules.json).
   try {
     const dataContext = { db, actor, requestId, now, method, route, url, body, randomUUID: options.randomUUID ?? (() => crypto.randomUUID()), legalRules: options.legalRules };
     const handled = (await routeWorkData(dataContext)) ?? (await routeWorkDeals(dataContext)) ?? (await routeWorkEvents(dataContext))
-      ?? (await routeWorkLedger(dataContext));
+      ?? (await routeWorkLedger(dataContext)) ?? (await routeWorkTasks(dataContext));
     if (handled?.raw) return workFileResponse(handled.raw, requestId);
     if (handled) return jsonResponse({ ok: true, data: handled.data, requestId }, { status: handled.status ?? 200, headers: { "X-Request-Id": requestId } });
   } catch (error) {
