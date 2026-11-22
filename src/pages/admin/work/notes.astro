@@ -83,6 +83,7 @@ import { TRASH_MOVE_NOTICE } from "../../../lib/work/trash-view.mjs";
           <div class="cu-more-line">
             <button class="work-secondary-button cu-more" type="button" data-nt-more hidden>20개 더 보기</button>
             <p class="admin-form-status" role="status" aria-live="polite" data-nt-list-status></p>
+            <button class="work-secondary-button cu-more" type="button" data-nt-list-retry hidden>다시 불러오기</button>
           </div>
         </section>
       </div>
@@ -132,7 +133,7 @@ import { TRASH_MOVE_NOTICE } from "../../../lib/work/trash-view.mjs";
     import { element, noteItem, setStatus, statusBadge } from "../../../lib/work-customers-dom";
     import { showMovedToTrash } from "../../../lib/work-trash-dom";
     import { todayInKorea } from "../../../lib/work/legal-dates.mjs";
-    import { checkNoteBody, cleanQuery, customerErrorText, customerHref, customerListQuery, isRetryable, noteListQuery } from "../../../lib/work/customers-view.mjs";
+    import { checkNoteBody, cleanQuery, customerErrorText, customerHref, customerListQuery, customerSaveErrorText, isRetryable, noteListQuery } from "../../../lib/work/customers-view.mjs";
 
     const MOVE_PICK_MAX = 5;
     const root = document.querySelector<HTMLElement>("[data-nt-page]");
@@ -158,6 +159,9 @@ import { TRASH_MOVE_NOTICE } from "../../../lib/work/trash-view.mjs";
         const empty = pick("[data-nt-empty]");
         const more = pick<HTMLButtonElement>("[data-nt-more]");
         const listStatus = pick("[data-nt-list-status]");
+        const listRetry = pick<HTMLButtonElement>("[data-nt-list-retry]");
+        // 목록 읽기가 실패했을 때 '다시 불러오기'가 같은 요청(처음 목록 또는 더 보기)을 다시 한다.
+        let lastAppend = false;
         // 목록 위 상태 줄: 목록을 다시 읽어 펼친 칸이 사라져도 왜 실패했는지 남긴다(loadList는 이 줄을 건드리지 않음).
         const notice = pick("[data-nt-notice]");
         const clearNotice = () => setStatus(notice, "", "idle");
@@ -312,7 +316,7 @@ import { TRASH_MOVE_NOTICE } from "../../../lib/work/trash-view.mjs";
             } catch (error) {
               const code = errorCode(error);
               if (staleNote(code, "옮기기")) return;
-              setStatus(status, `옮기지 못했습니다. ${customerErrorText(code)}`, "error");
+              setStatus(status, `옮기지 못했습니다. ${customerSaveErrorText(code, error)}`, "error");
               go.disabled = false;
             } finally {
               busy = false;
@@ -354,7 +358,7 @@ import { TRASH_MOVE_NOTICE } from "../../../lib/work/trash-view.mjs";
             } catch (error) {
               const code = errorCode(error);
               if (staleNote(code, "고친 글")) return;
-              setStatus(status, `저장하지 못했습니다. ${customerErrorText(code)}`, "error");
+              setStatus(status, `저장하지 못했습니다. ${customerSaveErrorText(code, error)}`, "error");
               go.disabled = false;
             } finally {
               busy = false;
@@ -384,7 +388,7 @@ import { TRASH_MOVE_NOTICE } from "../../../lib/work/trash-view.mjs";
               });
               query.focus();
             } catch (error) {
-              setStatus(status, `지우지 못했습니다. ${customerErrorText(errorCode(error))}`, "error");
+              setStatus(status, `지우지 못했습니다. ${customerSaveErrorText(errorCode(error), error)}`, "error");
               go.disabled = false;
             } finally {
               busy = false;
@@ -410,6 +414,8 @@ import { TRASH_MOVE_NOTICE } from "../../../lib/work/trash-view.mjs";
 
         async function loadList({ append = false } = {}) {
           const mine = ++loadToken;
+          lastAppend = append;
+          listRetry.hidden = true;
           more.disabled = true;
           setStatus(listStatus, append ? "더 불러오고 있습니다…" : "불러오고 있습니다…", "saving");
           try {
@@ -427,6 +433,7 @@ import { TRASH_MOVE_NOTICE } from "../../../lib/work/trash-view.mjs";
               return;
             }
             setStatus(listStatus, `메모를 불러오지 못했습니다. ${customerErrorText(code)}`, "error");
+            listRetry.hidden = !isRetryable(code);
           } finally {
             if (mine === loadToken) more.disabled = false;
           }
@@ -456,6 +463,9 @@ import { TRASH_MOVE_NOTICE } from "../../../lib/work/trash-view.mjs";
         more.addEventListener("click", () => {
           if (cursor) void loadList({ append: true });
         });
+        listRetry.addEventListener("click", () => {
+          void loadList({ append: lastAppend && Boolean(cursor) });
+        });
 
         // ── 빠른 메모(손님 없이 저장) ──
         memoSave.addEventListener("click", async () => {
@@ -478,7 +488,7 @@ import { TRASH_MOVE_NOTICE } from "../../../lib/work/trash-view.mjs";
             applied = "";
             await loadList();
           } catch (error) {
-            setStatus(memoStatus, `저장하지 못했습니다. ${customerErrorText(errorCode(error))}`, "error");
+            setStatus(memoStatus, `저장하지 못했습니다. ${customerSaveErrorText(errorCode(error), error)}`, "error");
           } finally {
             busy = false;
             memoSave.disabled = false;

@@ -250,6 +250,7 @@ import { TRASH_MOVE_NOTICE } from "../../../../lib/work/trash-view.mjs";
       checkNoteBody,
       customerChanges,
       customerErrorText,
+      customerSaveErrorText,
       customerIdFromSearch,
       dateText,
       deleteResultText,
@@ -581,7 +582,7 @@ import { TRASH_MOVE_NOTICE } from "../../../../lib/work/trash-view.mjs";
               done(`✓ 보수 줄 ${made}개를 저장했습니다.${warned ? " 굵은 경고를 확인하세요(저장은 그대로 됩니다)." : ""}`);
             } catch (error) {
               const code = errorCode(error);
-              const reason = ledgerErrorText(code, customerErrorText(code));
+              const reason = ledgerErrorText(code, customerSaveErrorText(code, error));
               // 한 줄이라도 저장됐으면 목록을 다시 읽어 실제 저장된 줄을 보인다(같은 줄을 두 번 만들지 않게).
               if (made > 0) done(`보수 줄 ${made}개만 저장했습니다. 나머지는 저장하지 못했습니다. ${reason}`);
               else setStatus(status, `저장하지 못했습니다. ${reason}`, "error");
@@ -677,7 +678,7 @@ import { TRASH_MOVE_NOTICE } from "../../../../lib/work/trash-view.mjs";
           editOpen.focus();
         } catch (error) {
           const code = errorCode(error);
-          setStatus(editStatus, `저장하지 못했습니다. ${customerErrorText(code)}`, "error");
+          setStatus(editStatus, `저장하지 못했습니다. ${customerSaveErrorText(code, error)}`, "error");
           editReload.hidden = code !== "VERSION_CONFLICT";
         } finally {
           busy = false;
@@ -735,7 +736,7 @@ import { TRASH_MOVE_NOTICE } from "../../../../lib/work/trash-view.mjs";
           gone.hidden = false;
           gone.querySelector<HTMLAnchorElement>("a")?.focus();
         } catch (error) {
-          setStatus(deleteStatus, `지우지 못했습니다. ${customerErrorText(errorCode(error))}`, "error");
+          setStatus(deleteStatus, `지우지 못했습니다. ${customerSaveErrorText(errorCode(error), error)}`, "error");
           deleteGo.disabled = false;
         } finally {
           busy = false;
@@ -758,7 +759,7 @@ import { TRASH_MOVE_NOTICE } from "../../../../lib/work/trash-view.mjs";
         try {
           await createNote({ body: checked.value, customerId: id });
         } catch (error) {
-          setStatus(memoStatus, `저장하지 못했습니다. ${customerErrorText(errorCode(error))}`, "error");
+          setStatus(memoStatus, `저장하지 못했습니다. ${customerSaveErrorText(errorCode(error), error)}`, "error");
           busy = false;
           memoSave.disabled = false;
           return;

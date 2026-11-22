@@ -74,7 +74,7 @@ let sessionPromise: Promise<CustomerSession> | null = null;
 
 export function getCustomerSession({ refresh = false } = {}) {
   if (refresh || !sessionPromise) {
-    const next = fetch(`${WORK_API_ROOT}/session`, { headers: { Accept: "application/json" }, credentials: "same-origin", cache: "no-store" })
+    const next = fetch(`${WORK_API_ROOT}/session`, { headers: { Accept: "application/json" }, credentials: "same-origin", cache: "no-store", redirect: "manual" })
       .then((response) => readEnvelope<CustomerSession>(response));
     sessionPromise = next;
     void next.catch(() => {
@@ -86,7 +86,7 @@ export function getCustomerSession({ refresh = false } = {}) {
 
 async function read<T>(path: string, query?: URLSearchParams) {
   const search = query && [...query.keys()].length > 0 ? `?${query}` : "";
-  const response = await fetch(`${WORK_API_ROOT}${path}${search}`, { headers: { Accept: "application/json" }, credentials: "same-origin", cache: "no-store" });
+  const response = await fetch(`${WORK_API_ROOT}${path}${search}`, { headers: { Accept: "application/json" }, credentials: "same-origin", cache: "no-store", redirect: "manual" });
   return readEnvelope<T>(response);
 }
 
@@ -99,6 +99,7 @@ async function write<T>(path: string, method: "POST" | "PATCH" | "DELETE", body:
       headers: { Accept: "application/json", "Content-Type": "application/json", "X-Admin-CSRF": session.csrfToken },
       credentials: "same-origin",
       cache: "no-store",
+      redirect: "manual",
       body: JSON.stringify(body),
     });
     try {

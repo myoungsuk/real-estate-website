@@ -418,3 +418,57 @@ test("업무 도구 처음 '오늘 할 일' 칸: 꺼져 있으면 한 줄로 알
   await expect(page.locator("main")).not.toContainText("단계 0 · 저장하지 않는 도구");
   assertNoErrors();
 });
+
+// 떠나려 할 때 브라우저가 묻는지(beforeunload 창). 물으면 '머무르기'를 골라 화면이 그대로 남는다.
+async function asksBeforeLeaving(page) {
+  const dialogs = [];
+  const onDialog = async (dialog) => {
+    dialogs.push(dialog.type());
+    await dialog.dismiss();
+  };
+  page.on("dialog", onDialog);
+  await page.close({ runBeforeUnload: true });
+  await expect.poll(() => dialogs.length > 0 || page.isClosed(), { timeout: 3000 }).toBe(true);
+  page.off("dialog", onDialog);
+  return dialogs.length > 0 && dialogs.every((type) => type === "beforeunload") && !page.isClosed();
+}
+
+test("이탈 경고: 만들기·고치기 칸에 바뀐 값이 있으면 떠나기 전에 묻고, 열기만 했거나 0건이라 열려 있는 빈 칸이면 묻지 않는다", async ({ context }) => {
+  const fresh = async (options = {}) => {
+    const page = await context.newPage();
+    await setup(page, { width: 390, ...options });
+    await page.goto("/admin/work/tasks/");
+    await expect(page.locator("[data-tk-count]")).toBeVisible();
+    return page;
+  };
+  let page = await fresh();
+  await page.getByRole("button", { name: "할 일 만들기" }).click();
+  await expect(page.locator("#tk-title")).toBeFocused();
+  expect(await asksBeforeLeaving(page), "만들기 칸을 열기만 함").toBe(false);
+
+  page = await fresh();
+  await page.getByRole("button", { name: "할 일 만들기" }).click();
+  await page.locator("#tk-title").fill("가상 쓰던 할 일");
+  expect(await asksBeforeLeaving(page), "만들기 칸에 제목을 씀").toBe(true);
+  await expect(page.locator("#tk-title")).toHaveValue("가상 쓰던 할 일");
+  await page.close();
+
+  page = await fresh();
+  await page.getByRole("button", { name: "고치기: 가상 잔금일 안내 문자 보내기" }).click();
+  await expect(page.locator("#tk-title")).toHaveValue("가상 잔금일 안내 문자 보내기");
+  expect(await asksBeforeLeaving(page), "고치기 칸을 열기만 함").toBe(false);
+
+  page = await fresh();
+  await page.getByRole("button", { name: "고치기: 가상 잔금일 안내 문자 보내기" }).click();
+  await page.locator("#tk-due").fill("2026-11-27");
+  expect(await asksBeforeLeaving(page), "고치기 칸의 날짜를 바꿈").toBe(true);
+  await expect(page.locator("#tk-due")).toHaveValue("2026-11-27");
+  await page.close();
+
+  page = await context.newPage();
+  await setup(page, { width: 360, tasks: [] });
+  await page.goto("/admin/work/tasks/");
+  await expect(page.getByRole("heading", { name: "할 일이 없습니다" })).toBeVisible();
+  await expect(page.locator("[data-tk-form]")).toBeVisible();
+  expect(await asksBeforeLeaving(page), "0건이라 열려 있는 빈 만들기 칸").toBe(false);
+});

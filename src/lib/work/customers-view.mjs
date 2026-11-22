@@ -190,6 +190,21 @@ export function customerErrorText(code) {
   return texts[code] ?? "요청을 처리하지 못했습니다. 잠시 뒤 다시 해 주세요.";
 }
 
+// 저장·옮기기·지우기 실패 문장. 로그인·보안 확인이 만료됐을 때 화면을 새로고침하면 쓰던 메모·칸이 사라지므로,
+// 이 화면은 두고 새 탭에서 다시 로그인한 뒤 같은 단추를 누르게 한다(사진 칸 UPLOAD_ERROR_TEXTS와 같은 까닭).
+// 로그인 쿠키는 탭끼리 같이 쓰므로 새 탭에서 로그인하면 이 화면의 다음 요청도 통과한다. 불러오기 실패는 잃을 글이 없어 customerErrorText 그대로.
+// 응답 없이 끊긴 요청(fetch TypeError)은 서버가 저장했는지 알 수 없어, 새 탭에서 저장됐는지 먼저 보게 한다(메모가 두 번 들어가지 않게).
+const SAVE_NETWORK_TEXT = "서버에 닿지 못했습니다. 연결이 끊겼거나 로그인이 만료되었을 수 있습니다. 이 화면은 새로고침하지 말고, 새 탭에서 관리자 화면을 열어 다시 로그인하고 저장됐는지 확인한 뒤, 안 됐으면 이 화면에서 같은 단추를 다시 눌러 주세요. 넣던 글은 지워지지 않았습니다.";
+const SAVE_ERROR_TEXTS = Object.freeze({
+  AUTH_REQUIRED: "관리자 로그인이 만료되었습니다. 이 화면은 새로고침하지 말고, 새 탭에서 관리자 화면을 열어 다시 로그인한 뒤 이 화면에서 같은 단추를 다시 눌러 주세요. 넣던 글은 지워지지 않았습니다.",
+  CSRF_INVALID: "보안 확인이 만료되었습니다. 화면을 새로고침하지 말고 같은 단추를 다시 눌러 주세요. 그래도 안 되면 새 탭에서 관리자 화면을 열어 다시 로그인한 뒤 다시 눌러 주세요. 넣던 글은 지워지지 않았습니다.",
+});
+/** @param {string | null | undefined} code 서버 오류 코드 @param {unknown} [error] 잡은 오류(TypeError면 응답 없이 끊김) */
+export function customerSaveErrorText(code, error) {
+  if (!code && error instanceof TypeError) return SAVE_NETWORK_TEXT;
+  return SAVE_ERROR_TEXTS[code] ?? customerErrorText(code);
+}
+
 // 다시 해 볼 만한 오류인지(다시 불러오기 단추를 보일지)
 export const isRetryable = (code) => !["AUTH_REQUIRED", "WORK_DISABLED", "WORK_CONFIG_MISSING", "WORK_SCHEMA_OUTDATED", "NOT_FOUND"].includes(code ?? "");
 

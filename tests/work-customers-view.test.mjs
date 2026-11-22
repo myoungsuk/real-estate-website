@@ -10,6 +10,7 @@ import {
   customerChanges,
   customerCountText,
   customerErrorText,
+  customerSaveErrorText,
   customerHref,
   customerIdFromSearch,
   customerListQuery,
@@ -122,6 +123,26 @@ test("서버 오류 코드마다 쉬운 문장이 있고, 다시 해 볼 수 없
   assert.equal(isRetryable("STORAGE_UNAVAILABLE"), true);
   assert.equal(isRetryable(null), true);
   for (const code of ["AUTH_REQUIRED", "WORK_DISABLED", "WORK_CONFIG_MISSING", "WORK_SCHEMA_OUTDATED", "NOT_FOUND"]) assert.equal(isRetryable(code), false, code);
+});
+
+test("저장 실패 문장: 로그인·보안 확인 만료는 새로고침하라고 하지 않고 새 탭에서 로그인한 뒤 같은 단추를 누르게 하며, 그 밖은 화면 문장과 같다", () => {
+  for (const code of ["AUTH_REQUIRED", "CSRF_INVALID"]) {
+    const text = customerSaveErrorText(code);
+    assert.match(text, /새로고침하지 말고/u, code);
+    assert.match(text, /새 탭에서 관리자 화면을 열어 다시 로그인/u, code);
+    assert.match(text, /같은 단추를 다시 눌러/u, code);
+    assert.match(text, /넣던 글은 지워지지 않았습니다.$/u, code);
+    assert.doesNotMatch(text, /새로고침해|새로고침한 뒤/u, code);
+  }
+  for (const code of ["STORAGE_UNAVAILABLE", "VERSION_CONFLICT", "VALIDATION_FAILED", null, "모르는 코드"]) assert.equal(customerSaveErrorText(code), customerErrorText(code), String(code));
+  assert.match(customerErrorText("AUTH_REQUIRED"), /새로고침해/u, "불러오기 실패는 잃을 글이 없어 그대로");
+  // 응답 없이 끊김(fetch TypeError): 저장됐는지 알 수 없어 새 탭에서 먼저 확인하게 함. 코드가 있으면 코드 문장이 먼저.
+  const network = customerSaveErrorText(null, new TypeError("Failed to fetch"));
+  assert.match(network, /연결이 끊겼거나 로그인이 만료되었을 수 있습니다/u);
+  assert.match(network, /새로고침하지 말고/u);
+  assert.match(network, /저장됐는지 확인한 뒤/u);
+  assert.equal(customerSaveErrorText(null, new Error("x")), customerErrorText(null), "TypeError가 아니면 그대로");
+  assert.equal(customerSaveErrorText("AUTH_REQUIRED", new TypeError("x")), customerSaveErrorText("AUTH_REQUIRED"));
 });
 
 test("손님 카드 주소는 무작위 UUID만 받고 이름·전화는 주소에 넣지 않는다", () => {
