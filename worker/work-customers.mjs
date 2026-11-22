@@ -2,6 +2,7 @@
 // 파일(R2)은 아직 없어서, 손님 삭제 때 파일 행이 있으면 409 FILES_REQUIRE_STORAGE로 막는다(R2 PR에서 실제 삭제로 바꿈).
 import { WorkApiError } from "./work-security.mjs";
 import { auditIfUpdatedStatement, auditStatement, changesOf, loadThenAudit, runBatch, writeBatchWithAudit } from "./work-audit.mjs";
+import { namedStatements, trashBatchFor, trashLinksSql, trashRowsSql } from "./work-trash.mjs";
 import {
   CUSTOMER_STATUSES,
   addOneYear,
@@ -39,6 +40,18 @@ export const LEDGER_DETACH_SET =
   + " snap_balance_on = (SELECT d.balance_on FROM deals d WHERE d.id = ledger_entries.deal_id),"
   + " label = CASE WHEN label = '' THEN coalesce((SELECT substr(d.title, 1, 120) FROM deals d WHERE d.id = ledger_entries.deal_id), '') ELSE label END,"
   + " deal_id = NULL, version = version + 1, updated_at = ?";
+// 손님 삭제 batch의 WHERE(휴지통, 0007): 지우기·끊기 문장과 그 바로 앞 복사 문장(trash_rows)이 같은 글을 쓰게 한 곳에 둔다(? 순서도 같음).
+const IN_EXCLUSIVE_DEALS = "deal_id IN (" + EXCLUSIVE_DEALS_OF + ")";
+const W = Object.freeze({
+  sharedDealNotes: "customer_id = ? AND deal_id IS NOT NULL AND EXISTS (SELECT 1 FROM deal_parties q WHERE q.deal_id = notes.deal_id AND q.customer_id <> ?)",
+  exclusiveDealOtherNotes: "customer_id IS NOT NULL AND customer_id <> ? AND " + IN_EXCLUSIVE_DEALS,
+  exclusiveDealOnlyNotes: "customer_id IS NULL AND " + IN_EXCLUSIVE_DEALS,
+  notesByCustomer: "customer_id = ?",
+  inExclusiveDeals: IN_EXCLUSIVE_DEALS,
+  exclusiveDeals: "id IN (" + EXCLUSIVE_DEALS_OF + ")",
+  customerParties: "customer_id = ?",
+  customer: "id = ?",
+});
 
 const SQL = Object.freeze({
   customerList:
@@ -58,7 +71,7 @@ const SQL = Object.freeze({
   // 통과하면 같은 트랜잭션이라 UPDATE가 반드시 들어가므로 감사 기록에 "새 version + 같은 시각" 조건을 걸지 않는다
   // (같은 밀리초에 다른 관리자가 같은 version을 만들면 실패한 수정의 감사 행이 남던 겹침을 막음).
   customerVersionGuard: "SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM customers WHERE id = ? AND version = ?) THEN json('guard') ELSE 1 END AS ok",
-  customerDelete: "DELETE FROM customers WHERE id = ?",
+  customerDelete: "DELETE FROM customers WHERE " + W.customer,
   customerDeals:
     "SELECT d.id, d.title, d.deal_type, d.status, d.version, d.updated_at, p.role FROM deal_parties p JOIN deals d ON d.id = p.deal_id WHERE p.customer_id = ? ORDER BY d.updated_at DESC, d.id DESC",
   // 손님 카드에 거래별 일정을 함께 싣는다(사용자 선택 2026-11-21 02:26:01 "손님 상세에 일정 함께 담기"). 그 손님이 참여한 거래의 일정을 한 번에 읽는다.
@@ -87,23 +100,34 @@ const SQL = Object.freeze({
     + " + (SELECT count(*) FROM notes WHERE customer_id IS NOT NULL AND customer_id <> ? AND deal_id IN (" + EXCLUSIVE_DEALS_OF + "))"
     + " AS kept)",
   // 손님 메모 중 다른 손님과 함께인 거래에도 걸린 메모는 지우지 않고 손님 연결만 끊는다(그 거래의 기록이므로, 8.7절).
-  sharedDealNotesDetach:
-    "UPDATE notes SET customer_id = NULL WHERE customer_id = ? AND deal_id IS NOT NULL"
-    + " AND EXISTS (SELECT 1 FROM deal_parties q WHERE q.deal_id = notes.deal_id AND q.customer_id <> ?)",
+  sharedDealNotesDetach: "UPDATE notes SET customer_id = NULL WHERE " + W.sharedDealNotes,
   // 지우는 단독 거래에 걸린 다른 손님(Y)의 메모는 거래 연결만 끊어 Y의 메모로 남기고, 손님 연결 없는 거래 메모는 함께 지운다(8.7절).
-  exclusiveDealOtherNotesDetach:
-    "UPDATE notes SET deal_id = NULL WHERE customer_id IS NOT NULL AND customer_id <> ? AND deal_id IN (" + EXCLUSIVE_DEALS_OF + ")",
-  exclusiveDealOnlyNotesDelete: "DELETE FROM notes WHERE customer_id IS NULL AND deal_id IN (" + EXCLUSIVE_DEALS_OF + ")",
-  notesDeleteByCustomer: "DELETE FROM notes WHERE customer_id = ?",
-  exclusiveDealEventsDelete: "DELETE FROM deal_events WHERE deal_id IN (" + EXCLUSIVE_DEALS_OF + ")",
+  exclusiveDealOtherNotesDetach: "UPDATE notes SET deal_id = NULL WHERE " + W.exclusiveDealOtherNotes,
+  exclusiveDealOnlyNotesDelete: "DELETE FROM notes WHERE " + W.exclusiveDealOnlyNotes,
+  notesDeleteByCustomer: "DELETE FROM notes WHERE " + W.notesByCustomer,
+  exclusiveDealEventsDelete: "DELETE FROM deal_events WHERE " + W.inExclusiveDeals,
   // 지우는 단독 거래의 장부 줄은 지우지 않고 거래 연결만 끊는다(DEC-WT-38). 거래 날짜를 옮겨야 하므로 exclusiveDealsDelete 앞에 둔다.
   // 다른 손님과 함께인 거래는 지우지 않으므로 그 장부 줄은 그대로다.
-  exclusiveDealLedgerDetach: LEDGER_DETACH_SET + " WHERE deal_id IN (" + EXCLUSIVE_DEALS_OF + ")",
+  exclusiveDealLedgerDetach: LEDGER_DETACH_SET + " WHERE " + W.inExclusiveDeals,
   // 지우는 단독 거래의 할 일은 함께 지운다(U-4, 거래 삭제와 같음). ON DELETE CASCADE가 없으므로 exclusiveDealsDelete 앞에 둔다.
   // 다른 손님과 함께인 거래는 지우지 않으므로 그 할 일은 그대로다.
-  exclusiveDealTasksDelete: "DELETE FROM tasks WHERE deal_id IN (" + EXCLUSIVE_DEALS_OF + ")",
-  exclusiveDealsDelete: "DELETE FROM deals WHERE id IN (" + EXCLUSIVE_DEALS_OF + ")",
-  customerPartiesDelete: "DELETE FROM deal_parties WHERE customer_id = ?",
+  exclusiveDealTasksDelete: "DELETE FROM tasks WHERE " + W.inExclusiveDeals,
+  exclusiveDealsDelete: "DELETE FROM deals WHERE " + W.exclusiveDeals,
+  customerPartiesDelete: "DELETE FROM deal_parties WHERE " + W.customerParties,
+  // 휴지통 복사 문장(0007). 각 지우기·끊기 문장 바로 앞에 같은 WHERE로 둔다. 첫 ?는 묶음 id, 그 뒤는 짝 문장의 WHERE 값과 같다.
+  trashSharedDealNotes: trashLinksSql("note_customer", W.sharedDealNotes),
+  trashExclusiveDealOtherNotes: trashLinksSql("note_deal", W.exclusiveDealOtherNotes),
+  trashExclusiveDealOnlyNotes: trashRowsSql("notes", W.exclusiveDealOnlyNotes),
+  trashNotesByCustomer: trashRowsSql("notes", W.notesByCustomer),
+  trashExclusiveDealEvents: trashRowsSql("deal_events", W.inExclusiveDeals),
+  trashExclusiveDealLedger: trashLinksSql("ledger_deal", W.inExclusiveDeals),
+  trashExclusiveDealTasks: trashRowsSql("tasks", W.inExclusiveDeals),
+  // 단독 거래를 지우면 그 거래의 참여자 줄은 0001의 ON DELETE CASCADE로 함께 지워진다(D1도 외래 키를 검사함). 이 손님의 참여자 줄 지우기를
+  // 거래 지우기 앞으로 옮기면 EXCLUSIVE_DEALS_OF가 바뀌므로, 연쇄로 사라질 줄을 거래 지우기 바로 앞에서 따로 옮겨 적는다(T2-92b).
+  trashExclusiveDealParties: trashRowsSql("deal_parties", W.inExclusiveDeals),
+  trashExclusiveDeals: trashRowsSql("deals", W.exclusiveDeals),
+  trashCustomerParties: trashRowsSql("deal_parties", W.customerParties),
+  trashCustomer: trashRowsSql("customers", W.customer),
   dealExists: "SELECT id FROM deals WHERE id = ?",
   partyExists: "SELECT 1 AS ok FROM deal_parties WHERE deal_id = ? AND customer_id = ? LIMIT 1",
   noteList:
@@ -124,6 +148,9 @@ const SQL = Object.freeze({
   noteVersionGuard: "SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM notes WHERE id = ? AND version = ?) OR NOT (" + NOTE_LINK_OK + ") THEN json('guard') ELSE 1 END AS ok",
   customerTouchContactIfNote: "UPDATE customers SET last_contact_on = ?, retention_until = ? WHERE id = ? AND EXISTS (SELECT 1 FROM notes WHERE id = ?)",
   noteDelete: "DELETE FROM notes WHERE id = ?",
+  // 메모 삭제 guard: 미리 확인한 뒤 다른 화면이 먼저 지웠으면 batch 전체를 되돌린다(빈 휴지통 묶음이 생기지 않게, T2-92e).
+  noteExistsGuard: "SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM notes WHERE id = ?) THEN json('guard') ELSE 1 END AS ok",
+  trashNote: trashRowsSql("notes", "id = ?"),
   searchCustomers:
     "SELECT id, display_name, phone_digits, needs, status, last_contact_on, retention_until, version, created_at, updated_at FROM customers"
     + " WHERE instr(lower(display_name), ?) > 0 OR instr(lower(needs), ?) > 0 OR (? <> '' AND instr(coalesce(phone_digits, ''), ?) > 0)"
@@ -317,38 +344,56 @@ async function deleteCustomer(ctx, id) {
   await assertCustomerDeletable(ctx.db, id, confirmName);
   const at = new Date(ctx.now).toISOString();
   // 한 batch(한 트랜잭션). 단독 거래·남길 메모는 각 문장이 batch 안에서 다시 판정하고, 첫 문장(guard)이 조건이 깨졌으면 전체를 되돌린다.
-  // 외래 키 동작에 기대지 않고 지울 행을 직접 지운다(D1 외래 키 기본 검사는 추가 확인 필요).
-  const statements = [
-    ctx.db.prepare(SQL.customerDeleteGuard).bind(id, confirmName, id, id, id),
-    ctx.db.prepare(SQL.customerDeleteAudit).bind(at, ctx.actor.email.toLowerCase(), id, ctx.requestId, id, id, id, id, id),
-    ctx.db.prepare(SQL.sharedDealNotesDetach).bind(id, id),
-    ctx.db.prepare(SQL.exclusiveDealOtherNotesDetach).bind(id, id, id),
-    ctx.db.prepare(SQL.exclusiveDealOnlyNotesDelete).bind(id, id),
-    ctx.db.prepare(SQL.notesDeleteByCustomer).bind(id),
-    ctx.db.prepare(SQL.exclusiveDealEventsDelete).bind(id, id),
-    ctx.db.prepare(SQL.exclusiveDealLedgerDetach).bind(at, id, id),
-    ctx.db.prepare(SQL.exclusiveDealTasksDelete).bind(id, id),
-    ctx.db.prepare(SQL.exclusiveDealsDelete).bind(id, id),
-    ctx.db.prepare(SQL.customerPartiesDelete).bind(id),
-    ctx.db.prepare(SQL.customerDelete).bind(id),
-  ];
+  // 외래 키 동작에 기대지 않고 지울 행을 직접 지운다. 다만 단독 거래의 참여자 줄은 거래를 지울 때 ON DELETE CASCADE로 지워지므로 그 앞에서 옮겨 적는다.
+  // 휴지통(0007): 지운 행·끊은 연결을 각 문장 바로 앞에서 trash_rows로 옮겨 적는다. 결과 수는 자리 번호가 아니라 문장 이름으로 읽는다(R-3).
+  const trash = trashBatchFor(ctx, "customer", id);
+  const b = trash.batchId;
+  const prepare = (sql) => ctx.db.prepare(sql);
+  const batch = namedStatements([
+    ["guard", prepare(SQL.customerDeleteGuard).bind(id, confirmName, id, id, id)],
+    ["audit", prepare(SQL.customerDeleteAudit).bind(at, ctx.actor.email.toLowerCase(), id, ctx.requestId, id, id, id, id, id)],
+    ["trashBatch", trash.statement],
+    ["trashSharedDealNotes", prepare(SQL.trashSharedDealNotes).bind(b, id, id)],
+    ["sharedDealNotesDetach", prepare(SQL.sharedDealNotesDetach).bind(id, id)],
+    ["trashExclusiveDealOtherNotes", prepare(SQL.trashExclusiveDealOtherNotes).bind(b, id, id, id)],
+    ["exclusiveDealOtherNotesDetach", prepare(SQL.exclusiveDealOtherNotesDetach).bind(id, id, id)],
+    ["trashExclusiveDealOnlyNotes", prepare(SQL.trashExclusiveDealOnlyNotes).bind(b, id, id)],
+    ["exclusiveDealOnlyNotesDelete", prepare(SQL.exclusiveDealOnlyNotesDelete).bind(id, id)],
+    ["trashNotesByCustomer", prepare(SQL.trashNotesByCustomer).bind(b, id)],
+    ["notesDeleteByCustomer", prepare(SQL.notesDeleteByCustomer).bind(id)],
+    ["trashExclusiveDealEvents", prepare(SQL.trashExclusiveDealEvents).bind(b, id, id)],
+    ["exclusiveDealEventsDelete", prepare(SQL.exclusiveDealEventsDelete).bind(id, id)],
+    ["trashExclusiveDealLedger", prepare(SQL.trashExclusiveDealLedger).bind(b, id, id)],
+    ["exclusiveDealLedgerDetach", prepare(SQL.exclusiveDealLedgerDetach).bind(at, id, id)],
+    ["trashExclusiveDealTasks", prepare(SQL.trashExclusiveDealTasks).bind(b, id, id)],
+    ["exclusiveDealTasksDelete", prepare(SQL.exclusiveDealTasksDelete).bind(id, id)],
+    ["trashExclusiveDealParties", prepare(SQL.trashExclusiveDealParties).bind(b, id, id)],
+    ["trashExclusiveDeals", prepare(SQL.trashExclusiveDeals).bind(b, id, id)],
+    ["exclusiveDealsDelete", prepare(SQL.exclusiveDealsDelete).bind(id, id)],
+    ["trashCustomerParties", prepare(SQL.trashCustomerParties).bind(b, id)],
+    ["customerPartiesDelete", prepare(SQL.customerPartiesDelete).bind(id)],
+    ["trashCustomer", prepare(SQL.trashCustomer).bind(b, id)],
+    ["customerDelete", prepare(SQL.customerDelete).bind(id)],
+  ]);
   let results;
   try {
-    results = await runBatch(ctx.db, statements);
+    results = await runBatch(ctx.db, batch.statements);
   } catch (error) {
     // guard가 되돌렸으면 그사이 바뀐 상황(손님 없음·이름 바뀜·파일 생김)을 같은 순서로 알려 주고, 아니면 저장소 오류 그대로.
     await assertCustomerDeletable(ctx.db, id, confirmName);
     throw error;
   }
   // 지운·남긴 개수는 미리 센 값이 아니라 batch 결과로 센다. 남기는 메모 본문에 지운 손님 정보가 있을 수 있어 개수를 알린다(화면 경고용).
-  const kept = changesOf(results[2]) + changesOf(results[3]);
-  const notes = changesOf(results[4]) + changesOf(results[5]);
+  const n = (name) => batch.changes(results, name);
+  const kept = n("sharedDealNotesDetach") + n("exclusiveDealOtherNotesDetach");
+  const notes = n("exclusiveDealOnlyNotesDelete") + n("notesDeleteByCustomer");
   // kept.ledger: 지운 단독 거래에서 연결만 끊고 남긴 장부 줄 수(거래 삭제와 같은 꼴, 감사 reason 꼴은 그대로).
-  // deleted.tasks: 지운 단독 거래의 할 일 수(results[8]). 자리 번호는 위 statements 순서와 같아야 한다(할 일 문장을 넣어 거래 수는 results[9]).
+  // deleted.tasks: 지운 단독 거래의 할 일 수. trash: 되살릴 묶음(7일 뒤 영구 삭제).
   return {
     data: {
-      deleted: { customers: 1, deals: changesOf(results[9]), notes, files: 0, tasks: changesOf(results[8]) },
-      kept: { notes: kept, ledger: changesOf(results[7]) },
+      deleted: { customers: 1, deals: n("exclusiveDealsDelete"), notes, files: 0, tasks: n("exclusiveDealTasksDelete") },
+      kept: { notes: kept, ledger: n("exclusiveDealLedgerDetach") },
+      trash: trash.trash,
     },
   };
 }
@@ -455,8 +500,21 @@ async function updateNote(ctx, id) {
 async function deleteNote(ctx, id) {
   if (ctx.body && Object.keys(ctx.body).length > 0) throw invalid(Object.keys(ctx.body).slice(0, 5));
   if (!(await loadNote(ctx.db, id))) throw notFound();
-  await writeBatchWithAudit(ctx.db, [ctx.db.prepare(SQL.noteDelete).bind(id)], auditBase(ctx, "note.delete", { targetType: "note", targetId: id }));
-  return { data: { deleted: true } };
+  // guard · 감사 · 묶음 · 복사 · 지우기(한 batch). 다른 화면이 먼저 지웠으면 guard가 되돌려 404(빈 묶음 없음, T2-92e).
+  const trash = trashBatchFor(ctx, "note", id);
+  try {
+    await runBatch(ctx.db, [
+      ctx.db.prepare(SQL.noteExistsGuard).bind(id),
+      auditStatement(ctx.db, { ...auditBase(ctx, "note.delete", { targetType: "note", targetId: id }), outcome: "ok" }),
+      trash.statement,
+      ctx.db.prepare(SQL.trashNote).bind(trash.batchId, id),
+      ctx.db.prepare(SQL.noteDelete).bind(id),
+    ]);
+  } catch (error) {
+    if (!(await loadNote(ctx.db, id))) throw notFound();
+    throw error;
+  }
+  return { data: { deleted: true, trash: trash.trash } };
 }
 
 async function search(ctx) {

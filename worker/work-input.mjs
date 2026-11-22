@@ -801,3 +801,24 @@ export function parseTaskQuery(params) {
     limit: limitText === null || limitText === "" ? TASK_LIST_LIMIT_DEFAULT : parseLimit(limitText),
   };
 }
+
+// 휴지통(설계서 8.7절, 0007). 목록: ?cursor=&limit=(기본 50, 최대 50). 커서는 (지운 시각, 묶음 id).
+export const TRASH_LIST_LIMIT_DEFAULT = 50;
+export const TRASH_PURGE_CONFIRM = "영구 삭제";
+
+export function parseTrashQuery(params) {
+  const limitText = params.get("limit");
+  return {
+    cursor: decodeCursor(params.get("cursor")),
+    limit: limitText === null || limitText === "" ? TRASH_LIST_LIMIT_DEFAULT : parseLimit(limitText),
+  };
+}
+
+// 즉시 영구 삭제 확인: 본문은 { confirm: "영구 삭제" } 하나. 모르는 칸은 400 VALIDATION_FAILED, 글자가 없거나 다르면 400 CONFIRMATION_MISMATCH.
+export function parseTrashPurge(body) {
+  if (!isPlainObject(body)) throw invalid(["body"]);
+  rejectUnknown(body, ["confirm"]);
+  if (typeof body.confirm !== "string" || body.confirm.trim() !== TRASH_PURGE_CONFIRM) {
+    throw new WorkApiError("CONFIRMATION_MISMATCH", "확인 글자가 '영구 삭제'와 다릅니다.", 400);
+  }
+}

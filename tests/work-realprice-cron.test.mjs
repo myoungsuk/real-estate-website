@@ -105,7 +105,7 @@ test("TK-07·TK-22 구조 번호 2(0003 적용 전 D1)·7(앞선 코드로 되�
   assert.deepEqual(log, [{ event: "realprice_cron", level: "warn", code: "WORK_SCHEMA_OUTDATED" }]);
 
   const ahead = freshDb();
-  ahead.database.exec("UPDATE settings SET value_json = '7' WHERE key = 'schema_version'");
+  ahead.database.exec("UPDATE settings SET value_json = '8' WHERE key = 'schema_version'");
   assert.equal((await cron(cronEnv(ahead.db), { fetcher })).code, "WORK_SCHEMA_AHEAD");
   assert.equal(calls.length, 0);
   assert.equal(ahead.db.stats.batches.length, 0);

@@ -9,6 +9,7 @@ import { invalid, isUuid, koreaDate, parseCalculate, parseEventCreate, parseEven
 import { all, auditBase, maskReason, methodNotAllowed, notFound } from "./work-customers.mjs";
 import { loadDeal } from "./work-deals.mjs";
 import { DEFAULT_ALARM_TRIGGERS, buildDealIcsCalendar, dealIcsFileName } from "./work-calendar.mjs";
+import { trashBatchFor, trashRowsSql } from "./work-trash.mjs";
 
 // 단계 0 일정 종류(카멜 표기) → deal_events.kind(0001 CHECK 값).
 const SCHEDULE_KIND_TO_EVENT = Object.freeze({
@@ -78,6 +79,8 @@ const SQL = Object.freeze({
     + " done_at = CASE WHEN ? = 1 THEN ? ELSE done_at END, source = CASE WHEN source = 'calculated' AND ? = 1 THEN 'manual' ELSE source END,"
     + " version = version + 1, updated_at = ? WHERE id = ? AND version = ?",
   eventDelete: "DELETE FROM deal_events WHERE id = ?",
+  // 휴지통(0007): 사용자가 지운 일정 한 건만 옮겨 적는다. 다시 계산이 지우는 자동 일정(calculatedPrune)은 휴지통을 거치지 않는다(T-2).
+  trashEvent: trashRowsSql("deal_events", "id = ?"),
 });
 
 function eventView(row) {
@@ -289,17 +292,21 @@ async function updateEvent(ctx, id) {
 async function deleteEvent(ctx, id) {
   if (ctx.body && Object.keys(ctx.body).length > 0) throw invalid(Object.keys(ctx.body).slice(0, 5));
   if (!(await loadEvent(ctx.db, id))) throw notFound();
+  // guard · 감사 · 묶음 · 복사 · 지우기(한 batch, 휴지통 0007).
+  const trash = trashBatchFor(ctx, "event", id);
   try {
     await runBatch(ctx.db, [
       ctx.db.prepare(SQL.eventExistsGuard).bind(id),
-      ctx.db.prepare(SQL.eventDelete).bind(id),
       auditStatement(ctx.db, { ...auditBase(ctx, "event.delete", { targetType: "event", targetId: id }), outcome: "ok" }),
+      trash.statement,
+      ctx.db.prepare(SQL.trashEvent).bind(trash.batchId, id),
+      ctx.db.prepare(SQL.eventDelete).bind(id),
     ]);
   } catch (error) {
     if (!(await loadEvent(ctx.db, id))) throw notFound();
     throw error;
   }
-  return { data: { deleted: true } };
+  return { data: { deleted: true, trash: trash.trash } };
 }
 
 function ruleText(kind) {

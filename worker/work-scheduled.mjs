@@ -39,6 +39,7 @@ import { changesOf } from "./work-audit.mjs";
 import { WORK_SCHEMA_VERSION, readSchemaVersion } from "./work-api.mjs";
 import { getRealpriceConfigState } from "./work-public-tools.mjs";
 import { cleanupBlogDrafts } from "./work-blog.mjs";
+import { expireTrash } from "./work-trash.mjs";
 import { hasD1 } from "./work-security.mjs";
 
 export const REALPRICE_CRON = "*/10 * * * *";
@@ -121,8 +122,9 @@ async function runInner(env, options, state) {
   const fetcher = options.fetcher ?? fetch;
   const randomUUID = options.randomUUID ?? (() => crypto.randomUUID());
 
-  // ⓪ 03:00 차례면 글 초안 보관 정리부터(켜기 값과 상관없이, D-5). 실패해도 아래로 이어 간다.
+  // ⓪ 03:00 차례면 글 초안 보관 정리, 휴지통 7일 영구 삭제부터(켜기 값과 상관없이, D-5·T-9). 실패해도 아래로 이어 간다.
   await runBlogCleanup(db, nowMs, log);
+  await runTrashExpire(db, nowMs, log, randomUUID);
 
   // ① 켜기 값·설정. 꺼져 있으면 D1·외부 요청 없이 끝(로그도 남기지 않음, 10분마다 쌓이지 않게).
   const config = getRealpriceConfigState(env, db);
@@ -288,6 +290,24 @@ export async function runBlogCleanup(db, nowMs, log = defaultLog) {
     return { outcome: "ok", ...result };
   } catch {
     log({ event: "blog_cleanup", level: "warn", code: "BLOG_CLEANUP_FAILED" });
+    return { outcome: "failed" };
+  }
+}
+
+// 휴지통 7일 영구 삭제(03:00 차례 1번, 휴지통 0007, T-9). 업무 도구 켜기 값과 상관없이 돈다(꺼 둔 동안 멈추면 처리방침의 "7일 뒤 영구 삭제"가 깨짐).
+// 조건은 D1이 있고 구조 번호가 7 이상인 것뿐이다. 100개씩 최대 10번 지우고, 그래도 남으면 경고 로그만 남기고 다음 날 이어 간다.
+// 지울 것이 없으면 로그를 남기지 않는다. 로그에는 지운 묶음 수·결과 코드만(이름·묶음 id 없음).
+export async function runTrashExpire(db, nowMs, log = defaultLog, randomUUID = () => crypto.randomUUID()) {
+  if (!isDailyCheckWindow(nowMs) || !hasD1(db)) return { outcome: "skipped" };
+  try {
+    const schemaVersion = await readSchemaVersion(db);
+    if (schemaVersion === null || schemaVersion < 7) return { outcome: "skipped" };
+    const result = await expireTrash(db, nowMs, randomUUID);
+    if (result.backlog) log({ event: "trash_expire", level: "warn", code: "TRASH_EXPIRE_BACKLOG", expired: result.expired });
+    else if (result.expired > 0) log({ event: "trash_expire", expired: result.expired });
+    return { outcome: "ok", ...result };
+  } catch {
+    log({ event: "trash_expire", level: "warn", code: "TRASH_EXPIRE_FAILED" });
     return { outcome: "failed" };
   }
 }

@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { TASK_REPEAT_RULES, nextTaskDueOn } from "../src/lib/work/task-repeat.mjs";
 import { koreaDate } from "../worker/work-input.mjs";
-import { allMigrationSql, createD1, freshDb, migrationFiles, nextUuid, rows, work, workEnv, NOW } from "./work-test-kit.mjs";
+import { allMigrationSql, createD1, expectedTrash, freshDb, migrationFiles, nextUuid, rows, work, workEnv, NOW } from "./work-test-kit.mjs";
 
 const at = (time = NOW) => new Date(time).toISOString();
 const audit = (database) => rows(database, "SELECT action, target_type, target_id, outcome, reason FROM audit_events ORDER BY seq");
@@ -37,7 +37,7 @@ async function patchTask(env, id, body, options = {}) {
 }
 
 test("T2-121 0006은 0001 ~ 0005 위에 tasks 하나만 더하고 구조 번호를 6으로 올리며, CHECK 3개(반복인데 날짜 없음·매월인데 기준일 없음·끝낸 줄에 반복)가 막는다", () => {
-  assert.equal(migrationFiles.at(-1), "0006_tasks.sql");
+  assert.equal(migrationFiles[5], "0006_tasks.sql");
   const database = new DatabaseSync(":memory:");
   database.exec("PRAGMA foreign_keys = ON;");
   for (const sql of allMigrationSql.slice(0, 5)) database.exec(sql);
@@ -245,7 +245,7 @@ test("T2-124 PATCH: 버전 409, 날짜 지우기, 거래 떼기·바꾸기, 끝�
   const withBody = await work(env, `/tasks/${task.id}`, { method: "DELETE", body: { confirm: true } });
   assert.deepEqual([withBody.status, withBody.json.error.details], [400, ["confirm"]]);
   const removed = await work(env, `/tasks/${task.id}`, { method: "DELETE" });
-  assert.deepEqual([removed.status, removed.json.data], [200, { deleted: true }]);
+  assert.deepEqual([removed.status, removed.json.data], [200, { deleted: true, trash: expectedTrash(removed.json.data) }]);
   assert.equal((await work(env, `/tasks/${task.id}`, { method: "DELETE" })).status, 404);
 
   const updates = audit(database).filter((row) => row.action === "task.update");
@@ -422,7 +422,7 @@ test("T2-127 거래 삭제는 그 거래 할 일만 지우고 deleted.tasks에 �
   }
   const deleted = await work(env, `/deals/${dealA.id}`, { method: "DELETE", body: { confirmTitle: "가상 지울 거래" } });
   assert.equal(deleted.status, 200, JSON.stringify(deleted.json));
-  assert.deepEqual(deleted.json.data, { deleted: { deals: 1, events: 1, notes: 1, files: 0, tasks: 2 }, kept: { notes: 0, ledger: 3 } });
+  assert.deepEqual(deleted.json.data, { deleted: { deals: 1, events: 1, notes: 1, files: 0, tasks: 2 }, kept: { notes: 0, ledger: 3 }, trash: expectedTrash(deleted.json.data) });
   assert.deepEqual(taskRows(database).map((row) => row.id).sort(), [bTask.id, loose.id].sort(), "다른 거래·거래 없는 할 일은 그대로");
 
   // 손님 X: 단독 거래 E(할 일 3개·장부 2줄) + Y와 함께인 거래 S(할 일 1개).
@@ -437,7 +437,7 @@ test("T2-127 거래 삭제는 그 거래 할 일만 지우고 deleted.tasks에 �
   }
   const removed = await work(env, `/customers/${x.id}`, { method: "DELETE", body: { confirmName: "가상 손님 X" } });
   assert.equal(removed.status, 200, JSON.stringify(removed.json));
-  assert.deepEqual(removed.json.data, { deleted: { customers: 1, deals: 1, notes: 0, files: 0, tasks: 3 }, kept: { notes: 0, ledger: 2 } });
+  assert.deepEqual(removed.json.data, { deleted: { customers: 1, deals: 1, notes: 0, files: 0, tasks: 3 }, kept: { notes: 0, ledger: 2 }, trash: expectedTrash(removed.json.data) });
   assert.deepEqual(taskRows(database).map((row) => row.id).sort(), [bTask.id, loose.id, sharedTask.id].sort());
   assert.deepEqual(rows(database, "SELECT id FROM deals").map((row) => row.id).sort(), [dealB.id, shared.id].sort(), "X 단독 거래만 지워짐");
   assert.equal(rows(database, "SELECT count(*) AS n FROM ledger_entries WHERE deal_id IS NULL")[0].n, 5, "장부 줄은 연결만 끊겨 남음");
