@@ -1,6 +1,7 @@
 // 매출장부 화면(단계 2, 설계서 6.12·10.2절)의 업무 API 호출. 세션·보안 토큰(X-Admin-CSRF)·응답 봉투 해석은 손님 화면과 같은
 // work-customers-client.ts를 쓴다. 장부 물건 표시·메모는 브라우저 저장소·화면 주소·로그에 남기지 않는다.
 import { readWorkData, writeWorkData } from "./work-customers-client";
+import type { TrashRef } from "./work-trash-client";
 
 export { WorkApiError, getCustomerSession as getLedgerSession } from "./work-customers-client";
 
@@ -72,7 +73,7 @@ export const readLedgerSummary = (year: string | number, basis: LedgerBasis) =>
   readWorkData<LedgerSummary>("/ledger/summary", new URLSearchParams({ year: String(year), basis }));
 export const createLedgerEntry = (body: LedgerInput) => writeWorkData<LedgerSaved>("/ledger", "POST", body);
 export const updateLedgerEntry = (id: string, body: LedgerInput & { version: number }) => writeWorkData<LedgerSaved>(`/ledger/${idPath(id)}`, "PATCH", body);
-export const deleteLedgerEntry = (id: string) => writeWorkData<{ deleted: boolean }>(`/ledger/${idPath(id)}`, "DELETE", {});
+export const deleteLedgerEntry = (id: string) => writeWorkData<{ deleted: boolean; trash?: TrashRef }>(`/ledger/${idPath(id)}`, "DELETE", {});
 // CSV 내려받기 전 감사(export.ledger). 200 { recorded: true }를 받은 뒤에만 화면이 CSV를 만든다.
 export const recordLedgerExport = (body: { year: number; basis: LedgerBasis; count: number }) => writeWorkData<{ recorded: boolean }>("/ledger/export", "POST", body);
 export const listDeals = (query: URLSearchParams) => readWorkData<{ items: DealSummary[]; nextCursor: string | null; undatedCount: number }>("/deals", query);

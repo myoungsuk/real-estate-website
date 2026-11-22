@@ -2,6 +2,7 @@
 // 세션은 단계 2 업무 세션(GET /work/session)이고, 쓰기(만들기·고치기·지우기)는 그 세션의 보안 토큰을 X-Admin-CSRF로 보낸다.
 // 토큰이 만료됐으면 세션을 한 번 새로 받아 다시 보낸다. 손님 이름·전화·메모는 브라우저 저장소·화면 주소·로그에 남기지 않는다.
 import { readEnvelope, WorkApiError } from "./work-realprice-client";
+import type { TrashRef } from "./work-trash-client";
 
 export { WorkApiError };
 
@@ -120,8 +121,8 @@ export const readCustomer = (id: string) => read<CustomerDetail>(`/customers/${i
 export const createCustomer = (body: CustomerInput) => write<{ customer: Customer }>("/customers", "POST", body);
 export const updateCustomer = (id: string, body: CustomerInput & { version: number }) => write<{ customer: Customer }>(`/customers/${idPath(id)}`, "PATCH", body);
 export const deleteCustomer = (id: string, confirmName: string) =>
-  write<{ deleted: { customers: number; deals: number; notes: number; files: number; tasks?: number }; kept: { notes: number; ledger?: number } }>(`/customers/${idPath(id)}`, "DELETE", { confirmName });
+  write<{ deleted: { customers: number; deals: number; notes: number; files: number; tasks?: number }; kept: { notes: number; ledger?: number }; trash?: TrashRef }>(`/customers/${idPath(id)}`, "DELETE", { confirmName });
 export const listNotes = (query: URLSearchParams) => read<Page<Note>>("/notes", query);
 export const createNote = (body: { body: string; customerId?: string | null }) => write<{ note: Note }>("/notes", "POST", body);
 export const updateNote = (id: string, body: { version: number; body?: string; customerId?: string | null }) => write<{ note: Note }>(`/notes/${idPath(id)}`, "PATCH", body);
-export const deleteNote = (id: string) => write<{ deleted: boolean }>(`/notes/${idPath(id)}`, "DELETE", {});
+export const deleteNote = (id: string) => write<{ deleted: boolean; trash?: TrashRef }>(`/notes/${idPath(id)}`, "DELETE", {});

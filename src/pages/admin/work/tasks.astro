@@ -3,12 +3,14 @@ import AdminIcon from "../../../components/admin/AdminIcon.astro";
 import AdminPageHelp from "../../../components/admin/AdminPageHelp.astro";
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 import { TASK_DEAL_QUERY_MAX, TASK_NAME_HELP, TASK_REPEAT_LABELS, TASK_TITLE_MAX } from "../../../lib/work/tasks-view.mjs";
+import { TRASH_MOVE_NOTICE } from "../../../lib/work/trash-view.mjs";
 
 // 할 일(단계 2, 기획서 WT-2-12, 시안 2026-11-22 13:22:11 "이 시안대로", 메뉴 A안).
 // - 서버 요청은 work-tasks-client.ts 한 곳. 업무 세션이 꺼져 있으면(enabled:false) 할 일 자료를 부르지 않는다.
 // - 서버를 부르므로 탭 미리 그리기 prerender 목록에 넣지 않는다(AdminLayout prerenderPages).
 // - 끝낸 할 일 보기·거래로 거르기는 이 화면 메모리에만 둔다(주소·브라우저 저장소에 넣지 않음). 할 일 제목은 화면에만 보인다.
 // - 반복은 없음·매주·매월. 끝내면 서버가 다음 할 일 하나를 만들고, 화면은 응답 next로 알린다.
+// - 지운 할 일은 휴지통으로 간다(7일 보관). 지운 뒤 알림에 '되살리기'·'휴지통 보기'(work-trash-dom.ts).
 const repeatLabels = TASK_REPEAT_LABELS as Record<string, string>;
 ---
 
@@ -110,7 +112,7 @@ const repeatLabels = TASK_REPEAT_LABELS as Record<string, string>;
             </p>
             <section class="cu-form cu-panel cu-panel--danger tk-del" aria-labelledby="tk-del-title" data-tk-delete-panel hidden>
               <h3 id="tk-del-title" class="cu-panel__title">이 할 일을 지울까요?</h3>
-              <p data-tk-delete-text>지우면 되돌릴 수 없습니다.</p>
+              <p data-tk-delete-text>{TRASH_MOVE_NOTICE}</p>
               <div class="cu-actions">
                 <button class="work-primary-button cu-save cu-delete-go" type="button" data-tk-delete-go>지우기</button>
                 <button class="work-secondary-button" type="button" data-tk-delete-cancel>그만두기</button>
@@ -158,6 +160,8 @@ const repeatLabels = TASK_REPEAT_LABELS as Record<string, string>;
     } from "../../../lib/work-tasks-client";
     import { element, setStatus } from "../../../lib/work-customers-dom";
     import { doneRow, taskRow } from "../../../lib/work-tasks-dom";
+    import { showMovedToTrash } from "../../../lib/work-trash-dom";
+    import { TRASH_MOVE_NOTICE } from "../../../lib/work/trash-view.mjs";
     import { todayInKorea } from "../../../lib/work/legal-dates.mjs";
     import { customerErrorText, isRetryable } from "../../../lib/work/customers-view.mjs";
     import {
@@ -638,8 +642,8 @@ const repeatLabels = TASK_REPEAT_LABELS as Record<string, string>;
       });
       deleteButton.addEventListener("click", () => {
         pick("[data-tk-delete-text]").textContent = editing && editing.repeat !== "none"
-          ? "지우면 되돌릴 수 없습니다. 반복 할 일이라 다음 할 일도 더 만들어지지 않습니다."
-          : "지우면 되돌릴 수 없습니다.";
+          ? `${TRASH_MOVE_NOTICE} 반복 할 일이라 휴지통에 있는 동안 다음 할 일은 만들어지지 않습니다.`
+          : TRASH_MOVE_NOTICE;
         deletePanel.hidden = false;
         deleteButton.setAttribute("aria-expanded", "true");
         deleteGo.focus();
@@ -655,9 +659,15 @@ const repeatLabels = TASK_REPEAT_LABELS as Record<string, string>;
         deleteGo.disabled = true;
         setStatus(formStatus, "지우고 있습니다…", "saving");
         try {
-          await deleteTask(editing.id);
+          const result = await deleteTask(editing.id);
           closeForm();
-          showSaved("✓ 할 일을 지웠습니다.");
+          showMovedToTrash(saved, "할 일", result.trash, {
+            reload: () => refresh(),
+            begin: () => (busy ? false : (busy = true)),
+            end: () => {
+              busy = false;
+            },
+          });
           await refresh();
           newButton.focus();
         } catch (error) {

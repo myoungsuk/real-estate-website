@@ -3,12 +3,14 @@ import AdminIcon from "../../../components/admin/AdminIcon.astro";
 import AdminPageHelp from "../../../components/admin/AdminPageHelp.astro";
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 import { LEDGER_BASIS_LABELS, LEDGER_BASES, LEDGER_DEAL_QUERY_MAX, LEDGER_KIND_LABELS, LEDGER_LABEL_MAX, LEDGER_MEMO_MAX, LEDGER_NARROW_MONTHS_NOTE, LEDGER_NOTICE, LEDGER_PAYER_LABELS, LEDGER_UNPAID_ALL_YEARS_NOTE } from "../../../lib/work/ledger-view.mjs";
+import { TRASH_MOVE_NOTICE } from "../../../lib/work/trash-view.mjs";
 
 // 매출장부(단계 2, 설계서 6.12절, 시안 2026-11-21 03:09:45 "이 시안대로"). 참고용 집계이며 세무 장부가 아니다.
 // - 서버 요청은 work-ledger-client.ts 한 곳. 업무 세션이 꺼져 있으면(enabled:false) 장부 자료를 부르지 않는다.
 // - 서버를 부르므로 탭 미리 그리기 prerender 목록에 넣지 않는다(AdminLayout prerenderPages).
 // - 연도·기준일·거르기는 이 화면 메모리에만 둔다(주소·브라우저 저장소에 넣지 않음). 물건 표시·메모는 화면에만 보인다.
 // - 부가세 포함·제외는 같은 합계 응답으로 단추만 바꾼다(서버를 다시 부르지 않음).
+// - 지운 장부 줄은 휴지통으로 간다(7일 보관, 그동안 합계에서 빠짐). 지운 뒤 알림에 '되살리기'·'휴지통 보기'(work-trash-dom.ts).
 const kindLabels = LEDGER_KIND_LABELS as Record<string, string>;
 const payerLabels = LEDGER_PAYER_LABELS as Record<string, string>;
 const basisLabels = LEDGER_BASIS_LABELS as Record<string, string>;
@@ -200,7 +202,7 @@ const basisLabels = LEDGER_BASIS_LABELS as Record<string, string>;
             <button class="admin-text-link cu-linkbtn cu-danger" type="button" data-lg-delete hidden>이 장부 줄 지우기</button>
           </div>
           <div class="cu-form cu-panel cu-panel--danger" data-lg-delete-panel hidden>
-            <p><strong>이 장부 줄을 지울까요?</strong> 지우면 되돌릴 수 없습니다.</p>
+            <p><strong>이 장부 줄을 지울까요?</strong> {TRASH_MOVE_NOTICE} 휴지통에 있는 동안 합계에서는 빠집니다.</p>
             <div class="cu-actions">
               <button class="work-primary-button cu-save cu-delete-go" type="button" data-lg-delete-go>지우기</button>
               <button class="work-secondary-button" type="button" data-lg-delete-cancel>그만두기</button>
@@ -266,6 +268,7 @@ const basisLabels = LEDGER_BASIS_LABELS as Record<string, string>;
     } from "../../../lib/work-ledger-client";
     import { element, setStatus } from "../../../lib/work-customers-dom";
     import { entryCard, entryRow } from "../../../lib/work-ledger-dom";
+    import { showMovedToTrash } from "../../../lib/work-trash-dom";
     import legalRules from "../../../data/work/legal-rules.json";
     import { todayInKorea } from "../../../lib/work/legal-dates.mjs";
     import { customerErrorText, isRetryable } from "../../../lib/work/customers-view.mjs";
@@ -891,9 +894,15 @@ const basisLabels = LEDGER_BASIS_LABELS as Record<string, string>;
         deleteGo.disabled = true;
         setStatus(formStatus, "지우고 있습니다…", "saving");
         try {
-          await deleteLedgerEntry(editing.id);
+          const result = await deleteLedgerEntry(editing.id);
           closeForm();
-          setStatus(saved, "✓ 장부 줄을 지웠습니다.", "success");
+          showMovedToTrash(saved, "장부 줄", result.trash, {
+            reload: () => refresh(),
+            begin: () => (busy ? false : (busy = true)),
+            end: () => {
+              busy = false;
+            },
+          });
           await refresh();
           newButton.focus();
         } catch (error) {

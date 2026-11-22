@@ -155,7 +155,7 @@ async function setup(page, { width = 390, enabled = true, store = makeStore(), s
       }
       if (method === "DELETE") {
         store.entries.splice(index, 1);
-        return route.fulfill(envelope({ deleted: true }));
+        return route.fulfill(envelope({ deleted: true, trash: { batchId: uuid(990), purgeAfter: "2026-11-28T03:00:00.000Z" } }));
       }
     }
     const ledgerOf = (dealId) => {
@@ -407,7 +407,7 @@ test("고치기: 바뀐 칸만 version과 함께 보내고, 409면 넣던 값을
   await page.getByRole("button", { name: "이 장부 줄 지우기" }).click();
   await expect(page.getByRole("button", { name: "지우기", exact: true })).toBeFocused();
   await page.getByRole("button", { name: "지우기", exact: true }).click();
-  await expect(page.locator("[data-lg-saved]")).toHaveText("✓ 장부 줄을 지웠습니다.");
+  await expect(page.locator("[data-lg-saved]")).toHaveText("✓ 장부 줄을 휴지통으로 옮겼습니다. 되살리기 · 휴지통 보기");
   expect(calls.writes.at(-1)).toMatchObject({ method: "DELETE", path: `/ledger/${uuid(303)}` });
   await expect(page.locator(".lg-row", { hasText: "가상 전단 인쇄" })).toHaveCount(0);
   assertNoErrors();
