@@ -1,6 +1,6 @@
 // 업무 도구 단계 2 매출장부 API(설계서 6.12·8.2·8.7·8.8·10.2절, DEC-WT-38·39). 모든 SQL은 준비된 문장(고정 문자열 + bind)만 쓴다.
 // 참고용 집계이며 세무 장부가 아니다. 저장한 금액은 다시 계산하지 않고, 법정 상한·부가세 비교는 경고(warnings)로만 돌려준다.
-// 장부 줄 삭제는 지금 다른 자료처럼 즉시 실제 삭제다(휴지통 PR에서 바꿈). 거래·손님 삭제 때의 연결 끊기는 work-deals·work-customers의 batch가 한다.
+// 장부 줄 삭제는 휴지통(0007)으로 옮긴 뒤 실제로 지운다(7일 동안 되살림). 거래·손님 삭제 때의 연결 끊기는 work-deals·work-customers의 batch가 한다.
 import defaultLegalRules from "../src/data/work/legal-rules.json" with { type: "json" };
 import { calculateBrokerageFee, calculateVatWon, selectBrokerageFeeRule } from "../src/lib/work/brokerage-fee.mjs";
 import { WorkApiError } from "./work-security.mjs";
@@ -19,6 +19,7 @@ import {
 } from "./work-input.mjs";
 import { all, auditBase, maskReason, methodNotAllowed, notFound } from "./work-customers.mjs";
 import { loadDeal } from "./work-deals.mjs";
+import { trashBatchFor, trashRowsSql } from "./work-trash.mjs";
 
 const ENTRY_COLUMNS = "id, kind, deal_id, payer_role, label, entry_on, amount_won, vat_won, received_won, received_on,"
   + " snap_contract_on, snap_balance_on, memo, version, created_at, updated_at";
@@ -81,6 +82,8 @@ const SQL = Object.freeze({
     "UPDATE ledger_entries SET payer_role = ?, label = ?, entry_on = ?, amount_won = ?, vat_won = ?, received_won = ?, received_on = ?, memo = ?,"
     + " version = version + 1, updated_at = ? WHERE id = ? AND version = ?",
   entryDelete: "DELETE FROM ledger_entries WHERE id = ?",
+  // 휴지통(0007): 줄 한 건과 붙어 있던 거래의 날짜·제목(deal_snap)을 옮겨 적는다.
+  trashEntry: trashRowsSql("ledger_entries", "id = ?"),
 });
 
 function entryView(row) {
@@ -304,17 +307,21 @@ async function updateEntry(ctx, id) {
 async function deleteEntry(ctx, id) {
   if (ctx.body && Object.keys(ctx.body).length > 0) throw invalid(Object.keys(ctx.body).slice(0, 5));
   if (!(await loadEntry(ctx.db, id))) throw notFound();
+  // guard · 감사 · 묶음 · 복사 · 지우기(한 batch, 휴지통 0007).
+  const trash = trashBatchFor(ctx, "ledger", id);
   try {
     await runBatch(ctx.db, [
       ctx.db.prepare(SQL.entryExistsGuard).bind(id),
-      ctx.db.prepare(SQL.entryDelete).bind(id),
       auditStatement(ctx.db, { ...auditBase(ctx, "ledger.delete", { targetType: "ledger", targetId: id }), outcome: "ok" }),
+      trash.statement,
+      ctx.db.prepare(SQL.trashEntry).bind(trash.batchId, id),
+      ctx.db.prepare(SQL.entryDelete).bind(id),
     ]);
   } catch (error) {
     if (!(await loadEntry(ctx.db, id))) throw notFound();
     throw error;
   }
-  return { data: { deleted: true } };
+  return { data: { deleted: true, trash: trash.trash } };
 }
 
 // CSV 내려받기 감사(2026-11-21 대장 지시): 화면이 CSV를 만들기 전에 부른다. 자료는 돌려주지 않고 감사 export.ledger 한 줄만 남긴다.

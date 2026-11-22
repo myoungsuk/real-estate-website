@@ -1,7 +1,7 @@
 // 업무 도구 단계 2 PR-B1: 거래·참여자 API(설계서 8.2·8.7·8.8·10.2절). 모든 SQL은 준비된 문장(고정 문자열 + bind)만 쓴다.
 // 일정(다시 계산·직접 추가·.ics)은 PR-B2에서 더한다. 파일(R2)은 아직 없어서, 파일 행이 있는 거래는 409 FILES_REQUIRE_STORAGE로 막는다.
 import { WorkApiError } from "./work-security.mjs";
-import { auditStatement, changesOf, loadThenAudit, runBatch } from "./work-audit.mjs";
+import { auditStatement, loadThenAudit, runBatch } from "./work-audit.mjs";
 import {
   CLOSED_DEAL_STATUSES,
   addOneYear,
@@ -18,6 +18,7 @@ import {
   parseDealPatch,
 } from "./work-input.mjs";
 import { LEDGER_DETACH_SET, all, auditBase, count, maskReason, methodNotAllowed, notFound } from "./work-customers.mjs";
+import { namedStatements, trashBatchFor, trashLinksSql, trashRowsSql } from "./work-trash.mjs";
 
 const DEAL_COLUMNS = "id, title, deal_type, sale_kind, property_kind, schedule_target, property_label, price_won, deposit_won, monthly_rent_won,"
   + " contract_on, middle_payment_on, balance_on, buyer_is_corporation, regulated_area, regulation, land_permit_area, metro_area,"
@@ -42,6 +43,14 @@ const DEAL_LIST_BASE =
   + " AND (? IS NULL OR instr(lower(title), ?) > 0 OR instr(lower(property_label), ?) > 0))"
   + " SELECT f.*, coalesce(s.fee_won, 0) AS ledger_fee_won, coalesce(s.vat_won, 0) AS ledger_vat_won, coalesce(s.received_won, 0) AS ledger_received_won,"
   + " coalesce(s.unpaid_won, 0) AS ledger_unpaid_won, coalesce(s.entry_count, 0) AS ledger_entry_count FROM f LEFT JOIN s ON s.deal_id = f.id ";
+
+// 거래 삭제 batch의 WHERE(휴지통, 0007): 지우기·끊기 문장과 그 바로 앞 복사 문장(trash_rows)이 같은 글을 쓰게 한 곳에 둔다(? 순서도 같음).
+const W = Object.freeze({
+  dealCustomerNotes: "deal_id = ? AND customer_id IS NOT NULL",
+  dealOnlyNotes: "deal_id = ? AND customer_id IS NULL",
+  byDeal: "deal_id = ?",
+  deal: "id = ?",
+});
 
 const SQL = Object.freeze({
   // 기간(달 YYYY-MM 또는 해 YYYY)을 주면 고른 기준일이 그 기간인 거래만, 기준일·id 내림차순. 커서는 (기준일, id).
@@ -94,15 +103,23 @@ const SQL = Object.freeze({
     + " SELECT ?, ?, 'deal.delete', 'deal', ?, ?, 'ok', CASE WHEN kept > 0 THEN 'notes_kept=' || kept END"
     + " FROM (SELECT count(*) AS kept FROM notes WHERE deal_id = ? AND customer_id IS NOT NULL)",
   // 손님이 붙은 거래 메모는 거래 연결만 끊어 손님 메모로 남기고, 손님 연결 없는 거래 메모는 함께 지운다(8.7절, 손님 삭제와 같은 규칙).
-  dealCustomerNotesDetach: "UPDATE notes SET deal_id = NULL WHERE deal_id = ? AND customer_id IS NOT NULL",
-  dealOnlyNotesDelete: "DELETE FROM notes WHERE deal_id = ? AND customer_id IS NULL",
-  dealEventsDelete: "DELETE FROM deal_events WHERE deal_id = ?",
-  dealPartiesDelete: "DELETE FROM deal_parties WHERE deal_id = ?",
+  dealCustomerNotesDetach: "UPDATE notes SET deal_id = NULL WHERE " + W.dealCustomerNotes,
+  dealOnlyNotesDelete: "DELETE FROM notes WHERE " + W.dealOnlyNotes,
+  dealEventsDelete: "DELETE FROM deal_events WHERE " + W.byDeal,
+  dealPartiesDelete: "DELETE FROM deal_parties WHERE " + W.byDeal,
   // 장부 줄은 지우지 않고 거래 연결만 끊는다(DEC-WT-38). 감사 reason 꼴(notes_kept=)은 그대로 두고 응답 kept.ledger로만 알린다.
-  dealLedgerDetach: LEDGER_DETACH_SET + " WHERE deal_id = ?",
+  dealLedgerDetach: LEDGER_DETACH_SET + " WHERE " + W.byDeal,
   // 그 거래의 할 일은 함께 지운다(2026-11-21 사용자 결정 11:15:11 U-4). 0006은 ON DELETE CASCADE가 없으므로 dealDelete 앞에서 직접 지운다.
-  dealTasksDelete: "DELETE FROM tasks WHERE deal_id = ?",
-  dealDelete: "DELETE FROM deals WHERE id = ?",
+  dealTasksDelete: "DELETE FROM tasks WHERE " + W.byDeal,
+  dealDelete: "DELETE FROM deals WHERE " + W.deal,
+  // 휴지통 복사 문장(0007). 각 지우기·끊기 문장 바로 앞에 같은 WHERE로 둔다. 첫 ?는 묶음 id.
+  trashDealCustomerNotes: trashLinksSql("note_deal", W.dealCustomerNotes),
+  trashDealOnlyNotes: trashRowsSql("notes", W.dealOnlyNotes),
+  trashDealEvents: trashRowsSql("deal_events", W.byDeal),
+  trashDealParties: trashRowsSql("deal_parties", W.byDeal),
+  trashDealLedger: trashLinksSql("ledger_deal", W.byDeal),
+  trashDealTasks: trashRowsSql("tasks", W.byDeal),
+  trashDeal: trashRowsSql("deals", W.deal),
 });
 
 const bool = (value) => value === 1;
@@ -296,28 +313,42 @@ async function deleteDeal(ctx, id) {
   const confirmTitle = parseConfirmation(ctx.body, "confirmTitle");
   await assertDealDeletable(ctx.db, id, confirmTitle);
   const at = new Date(ctx.now).toISOString();
-  const statements = [
-    ctx.db.prepare(SQL.dealDeleteGuard).bind(id, confirmTitle, id),
-    ctx.db.prepare(SQL.dealDeleteAudit).bind(at, ctx.actor.email.toLowerCase(), id, ctx.requestId, id),
-    ctx.db.prepare(SQL.dealCustomerNotesDetach).bind(id),
-    ctx.db.prepare(SQL.dealOnlyNotesDelete).bind(id),
-    ctx.db.prepare(SQL.dealEventsDelete).bind(id),
-    ctx.db.prepare(SQL.dealPartiesDelete).bind(id),
-    ctx.db.prepare(SQL.dealLedgerDetach).bind(at, id),
-    ctx.db.prepare(SQL.dealTasksDelete).bind(id),
-    ctx.db.prepare(SQL.dealDelete).bind(id),
-  ];
+  // 휴지통(0007): 지운 행·끊은 연결을 각 문장 바로 앞에서 trash_rows로 옮겨 적는다. 결과 수는 문장 이름으로 읽는다(R-3).
+  const trash = trashBatchFor(ctx, "deal", id);
+  const b = trash.batchId;
+  const prepare = (sql) => ctx.db.prepare(sql);
+  const batch = namedStatements([
+    ["guard", prepare(SQL.dealDeleteGuard).bind(id, confirmTitle, id)],
+    ["audit", prepare(SQL.dealDeleteAudit).bind(at, ctx.actor.email.toLowerCase(), id, ctx.requestId, id)],
+    ["trashBatch", trash.statement],
+    ["trashDealCustomerNotes", prepare(SQL.trashDealCustomerNotes).bind(b, id)],
+    ["dealCustomerNotesDetach", prepare(SQL.dealCustomerNotesDetach).bind(id)],
+    ["trashDealOnlyNotes", prepare(SQL.trashDealOnlyNotes).bind(b, id)],
+    ["dealOnlyNotesDelete", prepare(SQL.dealOnlyNotesDelete).bind(id)],
+    ["trashDealEvents", prepare(SQL.trashDealEvents).bind(b, id)],
+    ["dealEventsDelete", prepare(SQL.dealEventsDelete).bind(id)],
+    ["trashDealParties", prepare(SQL.trashDealParties).bind(b, id)],
+    ["dealPartiesDelete", prepare(SQL.dealPartiesDelete).bind(id)],
+    ["trashDealLedger", prepare(SQL.trashDealLedger).bind(b, id)],
+    ["dealLedgerDetach", prepare(SQL.dealLedgerDetach).bind(at, id)],
+    ["trashDealTasks", prepare(SQL.trashDealTasks).bind(b, id)],
+    ["dealTasksDelete", prepare(SQL.dealTasksDelete).bind(id)],
+    ["trashDeal", prepare(SQL.trashDeal).bind(b, id)],
+    ["dealDelete", prepare(SQL.dealDelete).bind(id)],
+  ]);
   let results;
   try {
-    results = await runBatch(ctx.db, statements);
+    results = await runBatch(ctx.db, batch.statements);
   } catch (error) {
     await assertDealDeletable(ctx.db, id, confirmTitle);
     throw error;
   }
+  const n = (name) => batch.changes(results, name);
   return {
     data: {
-      deleted: { deals: 1, events: changesOf(results[4]), notes: changesOf(results[3]), files: 0, tasks: changesOf(results[7]) },
-      kept: { notes: changesOf(results[2]), ledger: changesOf(results[6]) },
+      deleted: { deals: 1, events: n("dealEventsDelete"), notes: n("dealOnlyNotesDelete"), files: 0, tasks: n("dealTasksDelete") },
+      kept: { notes: n("dealCustomerNotesDetach"), ledger: n("dealLedgerDetach") },
+      trash: trash.trash,
     },
   };
 }

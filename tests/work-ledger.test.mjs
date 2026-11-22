@@ -7,7 +7,7 @@ import { DatabaseSync } from "node:sqlite";
 import legalRules from "../src/data/work/legal-rules.json" with { type: "json" };
 import { handleAdminApi } from "../worker/admin-api.mjs";
 import { createWorkCsrfToken } from "../worker/work-security.mjs";
-import { BACKUP, NOW, ORIGIN, OWNER, SECRET, allMigrationSql, authenticate, createD1, freshDb, migrationFiles, nextUuid, rows, signToken, work, workEnv } from "./work-test-kit.mjs";
+import { BACKUP, NOW, ORIGIN, OWNER, SECRET, allMigrationSql, authenticate, createD1, expectedTrash, freshDb, migrationFiles, nextUuid, rows, signToken, work, workEnv } from "./work-test-kit.mjs";
 
 const at = new Date(NOW).toISOString();
 const audit = (database) => rows(database, "SELECT actor_email, action, target_type, target_id, outcome, reason FROM audit_events ORDER BY seq");
@@ -222,7 +222,7 @@ test("T2-97 장부 줄 2개가 있는 거래를 지우면 거래는 지워지고
 
   const deleted = await work(env, `/deals/${deal.id}`, { method: "DELETE", body: { confirmTitle: "가상 지울 거래" }, now: NOW + 1000 });
   assert.equal(deleted.status, 200, JSON.stringify(deleted.json));
-  assert.deepEqual(deleted.json.data, { deleted: { deals: 1, events: 0, notes: 0, files: 0, tasks: 0 }, kept: { notes: 0, ledger: 2 } });
+  assert.deepEqual(deleted.json.data, { deleted: { deals: 1, events: 0, notes: 0, files: 0, tasks: 0 }, kept: { notes: 0, ledger: 2 }, trash: expectedTrash(deleted.json.data, NOW + 1000) });
   assert.equal(rows(database, "SELECT count(*) AS n FROM deals")[0].n, 0);
   assert.deepEqual(ledgerRows(database).map(({ deal_id, label, entry_on, snap_contract_on, snap_balance_on, version }) => ({ deal_id, label, entry_on, snap_contract_on, snap_balance_on, version })), [
     { deal_id: null, label: "가상 지울 거래", entry_on: null, snap_contract_on: "2026-10-01", snap_balance_on: "2026-11-20", version: 2 },
@@ -245,7 +245,7 @@ test("T2-97a 손님 A를 지우면 A 단독 거래의 장부 줄은 연결만 �
   const sharedEntry = await makeEntry(env, { kind: "fee", dealId: shared.id, payerRole: "seller", amountWon: 900_000, vatWon: 90_000 });
   const deleted = await work(env, `/customers/${a.id}`, { method: "DELETE", body: { confirmName: "가상 손님 A" }, now: NOW + 1000 });
   assert.equal(deleted.status, 200, JSON.stringify(deleted.json));
-  assert.deepEqual(deleted.json.data, { deleted: { customers: 1, deals: 1, notes: 0, files: 0, tasks: 0 }, kept: { notes: 0, ledger: 1 } }, "공동 거래 장부 줄은 세지 않음");
+  assert.deepEqual(deleted.json.data, { deleted: { customers: 1, deals: 1, notes: 0, files: 0, tasks: 0 }, kept: { notes: 0, ledger: 1 }, trash: expectedTrash(deleted.json.data, NOW + 1000) }, "공동 거래 장부 줄은 세지 않음");
   assert.deepEqual(audit(database).filter((row) => row.action === "customer.delete").map((row) => row.reason), [null], "감사 reason 꼴 그대로");
   const byId = Object.fromEntries(ledgerRows(database).map((row) => [row.id, row]));
   assert.deepEqual([byId[soloEntry.entry.id].deal_id, byId[soloEntry.entry.id].snap_contract_on, byId[soloEntry.entry.id].snap_balance_on, byId[soloEntry.entry.id].label, byId[soloEntry.entry.id].version],
@@ -507,7 +507,7 @@ test("T2-101 같은 줄을 두 관리자가 같은 version으로 고치면 하�
   // 지우기: 있으면 200, 다시 지우면 404. 본문이 있으면 400.
   assert.deepEqual((await work(env, `/ledger/${entry.id}`, { method: "DELETE", body: { confirm: "x" } })).json.error.details, ["confirm"]);
   const removed = await work(env, `/ledger/${entry.id}`, { method: "DELETE" });
-  assert.deepEqual([removed.status, removed.json.data], [200, { deleted: true }]);
+  assert.deepEqual([removed.status, removed.json.data], [200, { deleted: true, trash: expectedTrash(removed.json.data) }]);
   assert.equal((await work(env, `/ledger/${entry.id}`, { method: "DELETE" })).status, 404);
   assert.equal((await work(env, `/ledger/${entry.id}`, { method: "PATCH", body: { version: 3, memo: "x" } })).status, 404);
 });

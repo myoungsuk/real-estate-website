@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { maskResidentNumbers, decodeCursor, encodeCursor, koreaDate, addOneYear } from "../worker/work-input.mjs";
-import { BACKUP, NOW, OWNER, freshDb, migrationSql, nextUuid, rows, work, workEnv } from "./work-test-kit.mjs";
+import { BACKUP, NOW, OWNER, expectedTrash, freshDb, migrationSql, nextUuid, rows, work, workEnv } from "./work-test-kit.mjs";
 
 const audit = (database) => rows(database, "SELECT actor_email, action, target_type, target_id, outcome, reason FROM audit_events ORDER BY seq");
 
@@ -50,6 +50,13 @@ test("0005는 원격 D1에 이미 적용됐으니 고치지 말고 0006 새 파�
   const digest = createHash("sha256").update(sql.replace(/\r\n/gu, "\n"), "utf8").digest("hex");
   assert.equal(digest, "e05cda1dcc48b5dce418b797997968e0751787fd607304297c8c435c168e49eb",
     "migrations/work/0005_ledger.sql이 바뀌었습니다. 0005는 원격에 적용됐으니 0006 뒤 새 번호로 만드세요(2026-11-21 원격 D1 적용).");
+});
+
+test("0006은 원격 D1에 이미 적용됐으니 고치지 말고 0007 뒤 새 파일로 만드세요(0006 지문 고정)", async () => {
+  const sql = await readFile(new URL("../migrations/work/0006_tasks.sql", import.meta.url), "utf8");
+  const digest = createHash("sha256").update(sql.replace(/\r\n/gu, "\n"), "utf8").digest("hex");
+  assert.equal(digest, "8ee2a701457ff2e8a9fd88949a86cb5ff70c57131f156eea0ea8e905afc7e180",
+    "migrations/work/0006_tasks.sql이 바뀌었습니다. 0006은 원격에 적용됐으니 0007 뒤 새 번호로 만드세요(2026-11-22 원격 D1 적용).");
 });
 
 test("동시 작업: 손님·메모를 고치는 사이 다른 관리자가 같은 밀리초에 먼저 고쳐도(같은 version·같은 시각) 내 수정은 409이고 감사 행이 남지 않는다", async () => {
@@ -302,7 +309,7 @@ test("메모: 만들기·메모 창고·검색·고치기·지우기. 손님 메
   assert.equal((await work(env, `/notes/${inbox.json.data.note.id}`, { method: "PATCH", body: { version: 1, body: "늦음" } })).status, 409);
   const removed = await work(env, `/notes/${linked.json.data.note.id}`, { method: "DELETE" });
   assert.equal(removed.status, 200);
-  assert.deepEqual(removed.json.data, { deleted: true });
+  assert.deepEqual(removed.json.data, { deleted: true, trash: expectedTrash(removed.json.data) });
   assert.equal((await work(env, `/notes/${linked.json.data.note.id}`, { method: "DELETE" })).status, 404);
   assert.equal((await work(env, `/notes/${inbox.json.data.note.id}`)).status, 405);
   const actions = audit(database).map((row) => row.action);
@@ -346,6 +353,8 @@ test("손님 지우기: 이름을 다시 입력해야 하고, 그 손님 전용 
   assert.equal(deleted.status, 200, JSON.stringify(deleted.json));
   assert.deepEqual(deleted.json.data.deleted, { customers: 1, deals: 1, notes: 2, files: 0, tasks: 0 });
   assert.deepEqual(deleted.json.data.kept, { notes: 2, ledger: 0 }, "연결만 끊고 남긴 메모 수(함께인 거래의 이 손님 메모 1 + 단독 거래의 다른 손님 메모 1, 화면 경고용)");
+  assert.deepEqual(deleted.json.data.trash, expectedTrash(deleted.json.data), "휴지통 묶음(0007)");
+  assert.equal(rows(database, "SELECT count(*) AS n FROM trash_batches")[0].n, 1, "휴지통 묶음 1개로 옮겨지고 원래 표에서는 빠짐(T2-58)");
   assert.equal(rows(database, "SELECT count(*) AS n FROM customers WHERE id = ?", target.id)[0].n, 0);
   assert.deepEqual(rows(database, "SELECT id FROM deals ORDER BY id").map((row) => row.id), ["shared"]);
   assert.equal(rows(database, "SELECT count(*) AS n FROM deal_events")[0].n, 0);

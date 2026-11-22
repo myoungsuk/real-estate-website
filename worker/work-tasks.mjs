@@ -1,6 +1,6 @@
 // 업무 도구 단계 2 할 일·반복 할 일 API(설계서 6.13·8.2·8.7·8.8·10.2절 후보, 기획서 WT-2-12, 0006 tasks). 모든 SQL은 준비된 문장(고정 문자열 + bind)만 쓴다.
 // 반복은 끝낼 때 같은 batch에서 다음 줄 하나를 새로 만든다(끝낸 줄은 반복을 '없음'으로, 0006 CHECK가 두 번 만들기를 막음).
-// 할 일 삭제는 지금 다른 자료처럼 즉시 실제 삭제다(휴지통 PR에서 바꿈). 거래·손님 삭제 때 그 거래의 할 일 지우기는 work-deals·work-customers의 batch가 한다.
+// 할 일 삭제는 휴지통(0007)으로 옮긴 뒤 실제로 지운다(7일 동안 되살림). 거래·손님 삭제 때 그 거래의 할 일 지우기는 work-deals·work-customers의 batch가 한다.
 // 감사 기록에는 할 일 제목을 남기지 않는다(손님 이름이 들어갈 수 있음).
 import { nextTaskDueOn } from "../src/lib/work/task-repeat.mjs";
 import { WorkApiError } from "./work-security.mjs";
@@ -8,6 +8,7 @@ import { auditStatement, loadThenAudit, runBatch } from "./work-audit.mjs";
 import { encodeCursor, encodeTaskCursor, invalid, isUuid, koreaDate, parseTaskCreate, parseTaskPatch, parseTaskQuery, taskRepeatDay } from "./work-input.mjs";
 import { all, auditBase, maskReason, methodNotAllowed, notFound } from "./work-customers.mjs";
 import { loadDeal } from "./work-deals.mjs";
+import { trashBatchFor, trashRowsSql } from "./work-trash.mjs";
 
 // 목록 줄의 거래는 { id, title, status }만 싣는다(손님 이름은 싣지 않음).
 const TASK_SELECT =
@@ -43,6 +44,8 @@ const SQL = Object.freeze({
     "UPDATE tasks SET title = ?, deal_id = ?, due_on = ?, repeat_rule = ?, repeat_day = ?, done_at = ?, next_task_id = ?,"
     + " version = version + 1, updated_at = ? WHERE id = ? AND version = ?",
   taskDelete: "DELETE FROM tasks WHERE id = ?",
+  // 휴지통(0007): 할 일 한 건을 옮겨 적는다.
+  trashTask: trashRowsSql("tasks", "id = ?"),
 });
 
 function taskView(row) {
@@ -197,17 +200,21 @@ async function updateTask(ctx, id) {
 async function deleteTask(ctx, id) {
   if (ctx.body && Object.keys(ctx.body).length > 0) throw invalid(Object.keys(ctx.body).slice(0, 5));
   if (!(await loadTask(ctx.db, id))) throw notFound();
+  // guard · 감사 · 묶음 · 복사 · 지우기(한 batch, 휴지통 0007).
+  const trash = trashBatchFor(ctx, "task", id);
   try {
     await runBatch(ctx.db, [
       ctx.db.prepare(SQL.taskExistsGuard).bind(id),
-      ctx.db.prepare(SQL.taskDelete).bind(id),
       auditStatement(ctx.db, { ...auditBase(ctx, "task.delete", { targetType: "task", targetId: id }), outcome: "ok" }),
+      trash.statement,
+      ctx.db.prepare(SQL.trashTask).bind(trash.batchId, id),
+      ctx.db.prepare(SQL.taskDelete).bind(id),
     ]);
   } catch (error) {
     if (!(await loadTask(ctx.db, id))) throw notFound();
     throw error;
   }
-  return { data: { deleted: true } };
+  return { data: { deleted: true, trash: trash.trash } };
 }
 
 // 경로가 할 일(/tasks, /tasks/:id)이면 { status?, data }를, 아니면 null을 돌려준다.

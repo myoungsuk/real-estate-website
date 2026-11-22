@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { buildContractSchedule } from "../src/lib/work/legal-dates.mjs";
-import { NOW, ORIGIN, OWNER, authenticate, freshDb, nextUuid, rows, signToken, work, workEnv } from "./work-test-kit.mjs";
+import { NOW, ORIGIN, OWNER, authenticate, expectedTrash, freshDb, nextUuid, rows, signToken, work, workEnv } from "./work-test-kit.mjs";
 import { handleAdminApi } from "../worker/admin-api.mjs";
 import { ALARM_TRIGGERS, buildDealIcsCalendar, dealIcsFileName, isAllowedAlarmTriggers } from "../worker/work-calendar.mjs";
 
@@ -243,7 +243,7 @@ test("직접 일정·고치기·지우기: 입력 검사, version 충돌·같은
 
   assert.equal((await work(env, `/events/${event.id}`, { method: "DELETE", body: { x: 1 } })).status, 400);
   const removed = await work(env, `/events/${event.id}`, { method: "DELETE", body: {} });
-  assert.deepEqual(removed.json.data, { deleted: true });
+  assert.deepEqual(removed.json.data, { deleted: true, trash: expectedTrash(removed.json.data) });
   assert.deepEqual(audit(database).at(-1), { actor_email: OWNER, action: "event.delete", target_type: "event", target_id: event.id, outcome: "ok", reason: null });
   assert.equal((await work(env, `/events/${event.id}`, { method: "DELETE", body: {} })).status, 404);
 });

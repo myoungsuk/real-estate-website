@@ -103,6 +103,16 @@ export async function signToken({ email = OWNER } = {}) {
 const verifyLocal = async (token, { teamDomain, audience }) => (await jwtVerify(token, publicKey, { issuer: teamDomain, audience, algorithms: ["RS256"] })).payload;
 export const authenticate = (request, env) => authenticateAccess(request, env, verifyLocal);
 
+// 휴지통(0007) 삭제 응답의 trash 기대값: 묶음 id는 무작위라 UUID 꼴만 보고(꼴이 아니면 다른 글자를 돌려 deepEqual이 깨짐),
+// purgeAfter는 now + 7일 고정값이다.
+export function expectedTrash(data, now = NOW) {
+  const batchId = data?.trash?.batchId;
+  return {
+    batchId: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u.test(batchId ?? "") ? batchId : "UUID 꼴이 아님",
+    purgeAfter: new Date(now + 7 * 24 * 60 * 60 * 1000).toISOString(),
+  };
+}
+
 let uuidCounter = 0;
 export function nextUuid() {
   uuidCounter += 1;
