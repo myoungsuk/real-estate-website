@@ -123,7 +123,7 @@ async function setup(page, { width = 390, enabled = true, store = makeStore(), p
         store.customers.splice(index, 1);
         const removed = store.notes.filter((item) => item.customerId === current.id).length;
         store.notes = store.notes.filter((item) => item.customerId !== current.id);
-        return route.fulfill(envelope({ deleted: { customers: 1, deals: 1, notes: removed, files: 0, tasks: 2 }, kept: { notes: 1 } }));
+        return route.fulfill(envelope({ deleted: { customers: 1, deals: 1, notes: removed, files: 0, tasks: 2 }, kept: { notes: 1 }, trash: { batchId: uuid(990), purgeAfter: "2026-11-28T03:00:00.000Z" } }));
       }
     }
     if (path === "/notes" && method === "GET") {
@@ -154,7 +154,7 @@ async function setup(page, { width = 390, enabled = true, store = makeStore(), p
       }
       if (method === "DELETE") {
         store.notes.splice(index, 1);
-        return route.fulfill(envelope({ deleted: true }));
+        return route.fulfill(envelope({ deleted: true, trash: { batchId: uuid(991), purgeAfter: "2026-11-28T03:00:00.000Z" } }));
       }
     }
     return route.fulfill(failure(404, "NOT_FOUND"));
@@ -384,9 +384,14 @@ test("손님 지우기: 이름이 한 글자라도 다르면 '지우기'가 눌�
   await page.locator("#cu-delete-confirm").fill("가상 손님 1");
   await expect(go).toBeEnabled();
   await go.click();
-  await expect(page.getByRole("heading", { name: "손님을 지웠습니다" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "손님을 휴지통으로 옮겼습니다" })).toBeVisible();
   await expect(page.locator("[data-cu-gone-text]")).toContainText("메모 1개는 그 거래 기록이라 남겼습니다");
   await expect(page.locator("[data-cu-gone-text]")).toContainText("할 일 2개");
+  // 휴지통(시안 2026-11-22 14:42:41): 되살릴 수 있는 마지막 날과 '휴지통 보기'(주 단추, 먼저 포커스)
+  await expect(page.locator("[data-cu-gone-text]")).toContainText("11월 28일(토)까지 휴지통에서 되살릴 수 있습니다.");
+  await expect(page.getByRole("link", { name: "휴지통 보기" })).toBeFocused();
+  await expect(page.getByRole("link", { name: "휴지통 보기" })).toHaveAttribute("href", "/admin/work/trash/");
+  await expect(page.getByRole("link", { name: "손님 목록으로" })).toBeVisible();
   expect(calls.writes.at(-1)).toMatchObject({ method: "DELETE", path: `/customers/${uuid(1)}`, body: { confirmName: "가상 손님 1" }, csrf: "test-csrf" });
   await expect(page.locator("[data-cu-main]")).toBeHidden();
   await expect(page.locator("[data-cu-bar]")).toBeHidden();
@@ -510,13 +515,14 @@ test("메모 창고: '고치기'는 글과 version만 보내고, '지우기'는 
 
   const other = memos.filter({ hasText: "모르는 번호" });
   await other.getByRole("button", { name: "지우기" }).click();
-  await expect(other.getByText("이 메모를 지울까요? 지우면 되돌릴 수 없습니다.")).toBeVisible();
+  await expect(other.getByText("이 메모를 지울까요? 휴지통으로 옮깁니다. 7일 안에 되살릴 수 있고, 그 뒤 자동으로 영구 삭제됩니다.")).toBeVisible();
   const writes = calls.writes.length;
   await other.getByRole("button", { name: "그만두기" }).click();
   expect(calls.writes.length).toBe(writes);
   await other.getByRole("button", { name: "지우기" }).click();
   await other.locator("[data-nt-delete-go]").click();
-  await expect(page.locator("[data-nt-list-status]")).toHaveText("✓ 메모를 지웠습니다.");
+  await expect(page.locator("[data-nt-list-status]")).toHaveText("✓ 메모를 휴지통으로 옮겼습니다. 되살리기 · 휴지통 보기");
+  await expect(page.locator("[data-nt-list-status]").getByRole("link", { name: "휴지통 보기" })).toHaveAttribute("href", "/admin/work/trash/");
   expect(calls.writes.at(-1)).toMatchObject({ method: "DELETE", path: `/notes/${uuid(502)}`, body: {} });
   await expect(memos).toHaveCount(1);
 

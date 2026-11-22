@@ -1,6 +1,7 @@
 // 할 일 화면(단계 2, /admin/work/tasks/)과 업무 도구 처음의 '오늘 할 일' 칸의 업무 API 호출. 세션·보안 토큰(X-Admin-CSRF)·응답 봉투 해석은
 // 손님 화면과 같은 work-customers-client.ts를 쓴다. 할 일 제목은 브라우저 저장소·화면 주소·로그에 남기지 않는다.
 import { readWorkData, writeWorkData } from "./work-customers-client";
+import type { TrashRef } from "./work-trash-client";
 
 export { WorkApiError, getCustomerSession as getTaskSession } from "./work-customers-client";
 
@@ -29,6 +30,6 @@ const idPath = (id: string) => encodeURIComponent(id);
 export const listTasks = (query: URLSearchParams) => readWorkData<TaskPage>("/tasks", query);
 export const createTask = (body: TaskInput) => writeWorkData<{ task: Task }>("/tasks", "POST", body);
 export const updateTask = (id: string, body: TaskInput & { version: number }) => writeWorkData<TaskSaved>(`/tasks/${idPath(id)}`, "PATCH", body);
-export const deleteTask = (id: string) => writeWorkData<{ deleted: boolean }>(`/tasks/${idPath(id)}`, "DELETE", {});
+export const deleteTask = (id: string) => writeWorkData<{ deleted: boolean; trash?: TrashRef }>(`/tasks/${idPath(id)}`, "DELETE", {});
 // 거래 찾기(매출장부와 같은 목록 API, 제목·상태만 쓴다)
 export const findDeals = (query: URLSearchParams) => readWorkData<{ items: DealPick[]; nextCursor: string | null }>("/deals", query);

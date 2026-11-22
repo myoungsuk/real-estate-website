@@ -2016,3 +2016,51 @@ html:has(.rt-pick-bar:not([hidden])) { scroll-padding-bottom: calc(var(--rt-pick
 .tk-home__title { min-width: 0; font-size: 1rem; font-weight: 700; overflow-wrap: anywhere; }
 .tk-home-retry { width: auto; margin-top: 8px; padding: 0 16px; }
 [data-tk-home] [hidden] { display: none !important; }
+
+/* ── 휴지통(단계 2, /admin/work/trash/, 시안 2026-11-22 14:42:41 "이 시안대로"). 남은 날·되살릴 수 없음은 색만이 아니라 글자·기호(!)로 ── */
+.tr-keep { margin: 0 0 14px; padding: 10px 14px; border-left: 3px solid var(--ds-navy); background: var(--ds-paper-2); color: var(--ds-ink); font-size: 1rem; }
+/* 목록 위 알림(되살림·영구 삭제 결과). 일부 건너뜀은 굵은 갈색 테두리, 실패는 빨간 테두리(글자로도 알림) */
+.tr-saved { margin: 0 0 12px; padding: 10px 14px; border: 1.5px solid var(--ds-navy); border-radius: 2px; background: var(--ds-paper); font-size: 1rem; overflow-wrap: anywhere; }
+.tr-saved p { margin: 0; }
+.tr-saved p + p, .tr-saved ul + p { margin-top: 6px; }
+.tr-saved--warn { border-color: #8a6424; border-width: 2px; }
+.tr-saved--error { border-color: var(--ds-stamp); border-width: 2px; }
+.tr-skips { margin: 6px 0 0; padding-left: 1.2em; }
+.tr-skips li + li { margin-top: 4px; }
+/* 줄: 휴대폰은 종류 | 이름 → 남은 날 → 단추, 980px 이상은 한 줄 4칸 */
+.tr-rows { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.tr-row { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 6px 10px; padding: 10px 12px; border: 1px solid var(--ds-edge); border-radius: 2px; background: var(--ds-paper); }
+.tr-row--late { border-left: 3px solid var(--ds-stamp); }
+.tr-row--blocked { background: var(--ds-paper-2); }
+.tr-row--panel { display: block; padding: 0; border: 0; background: none; }
+.tr-row--panel .tr-purge { margin: 0; }
+.tr-kind { display: inline-flex; align-items: center; min-height: 28px; padding: 0 8px; border: 1.5px solid var(--ds-navy); border-radius: 2px; color: var(--ds-navy); font-size: 1rem; font-weight: 800; white-space: nowrap; }
+.tr-row__body { min-width: 0; }
+.tr-row__title { margin: 0; color: var(--ds-ink); font-size: 1rem; font-weight: 800; overflow-wrap: anywhere; }
+.tr-row__meta { display: flex; flex-wrap: wrap; gap: 2px 12px; margin: 2px 0 0; color: var(--ds-ink-soft); font-size: 1rem; }
+.tr-row__also, .tr-row__why { margin: 4px 0 0; font-size: 1rem; color: var(--ds-ink); }
+.tr-row__why strong { color: var(--ds-stamp); }
+.tr-left { grid-column: 2; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; margin: 0; font-size: 1rem; }
+.tr-left strong { color: var(--ds-navy); }
+.tr-left small { color: var(--ds-ink-soft); font-size: 1rem; }
+.tr-left--late strong { color: var(--ds-stamp); }
+.tr-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; }
+.tr-actions .tr-restore { width: auto; min-height: 44px; padding: 0 16px; }
+.tr-actions .cu-danger { min-height: 44px; white-space: nowrap; }
+@media (min-width: 980px) {
+  .tr-row { grid-template-columns: 5.5rem minmax(0, 1fr) 13rem auto; align-items: center; }
+  .tr-kind { justify-self: start; }
+  .tr-left { grid-column: auto; display: grid; gap: 0; }
+  .tr-actions { grid-column: auto; justify-content: flex-end; flex-wrap: nowrap; }
+}
+.tr-doc [hidden] { display: none !important; }
+/* 손님 카드: 옮긴 뒤 결과의 '휴지통 보기'(주 단추)·'손님 목록으로' */
+.tr-actions-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 0; }
+.tr-actions-line .admin-text-link { display: inline-flex; align-items: center; min-height: 44px; margin-top: 12px; }
+/* 들어오는 길: 손님 목록 위 고리 두 개(메모 창고·휴지통), 업무 도구 처음 바로가기 한 줄 */
+.work-doc p.cu-links { display: flex; flex-wrap: wrap; gap: 0 24px; }
+.cu-links .admin-text-link, .tr-homelinks .admin-text-link { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; }
+nav.tr-homelinks { display: flex; flex-wrap: wrap; gap: 0 24px; margin: 0 0 14px; font-size: 1rem; }
+.tr-homelinks small { color: var(--ds-ink-soft); font-size: 1rem; font-weight: 400; }
+/* 지운 뒤 알림 줄의 '되살리기'(글자 단추)·'휴지통 보기' */
+.admin-form-status .cu-linkbtn, .tk-saved .cu-linkbtn { min-height: 44px; font-weight: 700; }

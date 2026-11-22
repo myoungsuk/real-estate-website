@@ -67,7 +67,7 @@ test("업무 도구 처음은 prerender 목록에 그대로 두고, '오늘 할 
   assert.doesNotMatch(home, /<input\b/u, "첫 화면 할 일 칸은 읽기만");
 });
 
-test("손님 지우기 확인 칸은 함께 지워지는 할 일을 미리 알린다", async () => {
+test("손님 지우기 확인 칸은 함께 휴지통으로 옮겨지는 할 일을 미리 알린다", async () => {
   const detail = await readSource("src/pages/admin/work/customers/detail.astro");
-  assert.match(detail, /<p>이 손님만 참여한 거래에 붙은 할 일도 함께 지워집니다\.<\/p>/u);
+  assert.match(detail, /이 손님의 메모와, 이 손님만 참여한 거래·일정·할 일이 함께 옮겨집니다\./u);
 });

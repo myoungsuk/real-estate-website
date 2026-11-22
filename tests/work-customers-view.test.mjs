@@ -94,15 +94,21 @@ test("메모 글은 비울 수 없고 20,000자까지다", () => {
   assert.equal(checkNoteBody("가".repeat(20001)).ok, false);
 });
 
-test("손님 지우기 결과 문장은 함께 지운 것과, 다른 손님과 함께인 거래라 남긴 메모를 알린다", () => {
-  assert.equal(deleteResultText({ deleted: { deals: 1, notes: 2 }, kept: { notes: 0 } }), "손님을 지웠습니다. 함께 지운 것: 이 손님만의 거래 1건, 메모 2개.");
+test("손님 지우기 결과 문장은 휴지통으로 함께 옮긴 것과, 다른 손님과 함께인 거래라 남긴 메모를 알린다", () => {
+  assert.equal(deleteResultText({ deleted: { deals: 1, notes: 2 }, kept: { notes: 0 } }), "함께 옮긴 것: 이 손님만의 거래 1건, 메모 2개.");
   assert.match(deleteResultText({ deleted: { deals: 0, notes: 0 }, kept: { notes: 3 } }), /메모 3개는 그 거래 기록이라 남겼습니다/u);
   // 매출장부: 지운 거래의 장부 줄은 남기고 그 수를 알린다. 0개면 말하지 않는다.
   assert.match(deleteResultText({ deleted: { deals: 1, notes: 0 }, kept: { notes: 0, ledger: 2 } }), /장부 줄 2개는 매출장부에 남습니다/u);
   assert.doesNotMatch(deleteResultText({ deleted: { deals: 1, notes: 0 }, kept: { notes: 0, ledger: 0 } }), /장부 줄/u);
   // 그 거래에 붙은 할 일은 함께 지워지고 개수를 알린다. 0개면 말하지 않는다(2026-11-21 사용자 결정 U-4).
-  assert.equal(deleteResultText({ deleted: { deals: 1, notes: 3, tasks: 2 }, kept: { notes: 0 } }), "손님을 지웠습니다. 함께 지운 것: 이 손님만의 거래 1건, 메모 3개, 할 일 2개.");
+  assert.equal(deleteResultText({ deleted: { deals: 1, notes: 3, tasks: 2 }, kept: { notes: 0 } }), "함께 옮긴 것: 이 손님만의 거래 1건, 메모 3개, 할 일 2개.");
   assert.doesNotMatch(deleteResultText({ deleted: { deals: 1, notes: 0, tasks: 0 }, kept: { notes: 0 } }), /할 일/u);
+  // 휴지통(단계 2, 시안 2026-11-22 14:42:41): 응답의 trash.purgeAfter(한국 날짜)까지 되살릴 수 있다고 알린다. 값이 없으면 말하지 않는다.
+  assert.equal(
+    deleteResultText({ deleted: { deals: 1, notes: 3, tasks: 1 }, kept: { notes: 1 }, trash: { batchId: "b", purgeAfter: "2026-11-25T01:12:00.000Z" } }),
+    "함께 옮긴 것: 이 손님만의 거래 1건, 메모 3개, 할 일 1개. 다른 손님과 함께인 거래의 메모 1개는 그 거래 기록이라 남겼습니다. 그 메모 글에 지운 손님 이름·전화가 있으면 직접 고쳐 주세요. 11월 25일(수)까지 휴지통에서 되살릴 수 있습니다.",
+  );
+  assert.match(deleteResultText({ deleted: { deals: 0, notes: 0 }, kept: { notes: 0 }, trash: { batchId: "b", purgeAfter: "2026-11-25T15:30:00.000Z" } }), /11월 26일\(목\)까지/u, "한국 날짜(UTC 15:30 = 다음 날 00:30)");
 });
 
 test("서버 오류 코드마다 쉬운 문장이 있고, 다시 해 볼 수 없는 오류에는 '다시 불러오기'를 보이지 않는다", () => {

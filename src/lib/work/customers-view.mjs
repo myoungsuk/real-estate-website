@@ -1,5 +1,6 @@
 // 손님·메모 화면(단계 2)의 화면 문장·검사 순수 함수. 서버 요청·브라우저 저장·주소 변경을 하지 않는다.
 // 칸 이름과 값은 worker/work-customers.mjs·work-input.mjs와 같다(상태 4가지, 이름 1 ~ 60자, 전화 8 ~ 12자리, 찾는 조건 2,000자, 메모 20,000자, 찾는 말 30자).
+import { trashUntilText } from "./trash-view.mjs";
 
 export const CUSTOMER_NAME_MAX = 60;
 export const CUSTOMER_NEEDS_MAX = 2000;
@@ -156,13 +157,16 @@ export function checkNoteBody(body) {
 // 손님 지우기 결과 문장. 남긴 메모가 있으면 그 메모에 지운 손님 정보가 남아 있을 수 있음을 알린다.
 // 지운 거래에 이은 장부 줄은 지우지 않고 거래 연결만 끊어 남긴다(2026-11-21 사용자 결정 "나").
 // 그 거래에 붙은 할 일은 함께 지운다(2026-11-21 사용자 결정 11:15:11 U-4). 0개면 말하지 않는다.
+// 지운 것은 휴지통으로 가고, 응답의 trash.purgeAfter로 되살릴 수 있는 마지막 날을 알린다(시안 2026-11-22 14:42:41).
 export function deleteResultText(result) {
   const { deals = 0, notes = 0, tasks = 0 } = result?.deleted ?? {};
   const kept = result?.kept?.notes ?? 0;
   const ledger = result?.kept?.ledger ?? 0;
-  const parts = [`손님을 지웠습니다. 함께 지운 것: 이 손님만의 거래 ${deals}건, 메모 ${notes}개${tasks > 0 ? `, 할 일 ${tasks}개` : ""}.`];
+  const parts = [`함께 옮긴 것: 이 손님만의 거래 ${deals}건, 메모 ${notes}개${tasks > 0 ? `, 할 일 ${tasks}개` : ""}.`];
   if (kept > 0) parts.push(`다른 손님과 함께인 거래의 메모 ${kept}개는 그 거래 기록이라 남겼습니다. 그 메모 글에 지운 손님 이름·전화가 있으면 직접 고쳐 주세요.`);
-  if (ledger > 0) parts.push(`장부 줄 ${ledger}개는 매출장부에 남습니다(거래 연결만 끊김). 그 줄의 물건 표시·메모에 손님 이름이 있으면 매출장부에서 고쳐 주세요.`);
+  if (ledger > 0) parts.push(`장부 줄 ${ledger}개는 매출장부에 남습니다(거래 연결만 끊김, 되살리면 그 줄을 고치지 않았을 때 다시 이음). 그 줄의 물건 표시·메모에 손님 이름이 있으면 매출장부에서 고쳐 주세요.`);
+  const until = trashUntilText(result?.trash);
+  if (until) parts.push(until);
   return parts.join(" ");
 }
 

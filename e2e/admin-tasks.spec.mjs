@@ -34,6 +34,7 @@ async function setup(page, { width = 390, enabled = true, tasks = makeTasks(), s
   await page.setViewportSize({ width, height: 900 });
   const calls = { all: [], writes: [] };
   let nextNumber = 900;
+  const trashed = new Map();
   await page.route("**/api/admin/**", (route) => route.fulfill(failure(503, "TEST_OFFLINE")));
   await page.route("**/api/admin/v1/work/**", (route) => {
     const request = route.request();
@@ -109,9 +110,19 @@ async function setup(page, { width = 390, enabled = true, tasks = makeTasks(), s
         return route.fulfill(envelope({ task: publicTask(updated), next: next ? publicTask(next) : null }));
       }
       if (method === "DELETE") {
-        tasks.splice(index, 1);
-        return route.fulfill(envelope({ deleted: true }));
+        const [removed] = tasks.splice(index, 1);
+        trashed.set(uuid(990), removed);
+        return route.fulfill(envelope({ deleted: true, trash: { batchId: uuid(990), purgeAfter: "2026-11-25T03:00:00.000Z" } }));
       }
+    }
+    // 지운 뒤 알림의 '되살리기'(휴지통 묶음 id로 되살림)
+    const restoreMatch = path.match(/^\/trash\/([^/]+)\/restore$/u);
+    if (restoreMatch && method === "POST") {
+      const removed = trashed.get(decodeURIComponent(restoreMatch[1]));
+      if (!removed) return route.fulfill(failure(404, "NOT_FOUND"));
+      trashed.delete(decodeURIComponent(restoreMatch[1]));
+      tasks.push(removed);
+      return route.fulfill(envelope({ restored: { customers: 0, deals: 0, parties: 0, events: 0, notes: 0, tasks: 1, ledger: 0, links: 0, notesUnlinked: 0 }, skipped: [], remaining: 0 }));
     }
     if (path === "/deals" && method === "GET") {
       const q = url.searchParams.get("q") ?? "";
@@ -303,10 +314,18 @@ test("고치기: 그 줄 자리에서 바뀐 칸만 version과 함께 보내고,
   await expect(page.getByRole("button", { name: "지우기", exact: true })).toBeFocused();
   expect(calls.writes.filter((item) => item.method === "DELETE")).toEqual([]);
   await page.getByRole("button", { name: "지우기", exact: true }).click();
-  await expect(page.locator("[data-tk-saved]")).toHaveText("✓ 할 일을 지웠습니다.");
+  await expect(page.locator("[data-tk-saved]")).toHaveText("✓ 할 일을 휴지통으로 옮겼습니다. 되살리기 · 휴지통 보기");
   expect(calls.writes.at(-1)).toEqual({ method: "DELETE", path: `/tasks/${uuid(3)}`, body: {}, csrf: "test-csrf" });
   await expect(row(page, "가상 다른 화면에서 고친 제목")).toHaveCount(0);
   await expect(page.locator("[data-tk-count]")).toHaveText("열린 할 일 4개 보는 중 · 날짜 빠른 순");
+  await expectNoTrace(page);
+  // 알림의 '되살리기': 휴지통 묶음 id로 되살리고 목록을 다시 읽는다(빈 본문, 보안 토큰)
+  await page.locator("[data-tk-saved]").getByRole("button", { name: "되살리기" }).click();
+  await expect(page.locator("[data-tk-saved]")).toHaveText("✓ 할 일을 되살렸습니다.");
+  await expect(page.locator("[data-tk-saved]")).toBeFocused();
+  expect(calls.writes.at(-1)).toEqual({ method: "POST", path: "/trash/" + uuid(990) + "/restore", body: {}, csrf: "test-csrf" });
+  await expect(row(page, "가상 다른 화면에서 고친 제목")).toHaveCount(1);
+  await expect(page.locator("[data-tk-count]")).toHaveText("열린 할 일 5개 보는 중 · 날짜 빠른 순");
   await expectNoTrace(page);
   assertNoErrors();
 });
@@ -317,7 +336,7 @@ test("반복 할 일을 지우려 하면 다음 할 일도 더 만들어지지 �
   await page.getByRole("button", { name: "고치기: 가상 월세 입금 확인" }).click();
   await expect(page.locator("[data-tk-next]")).toHaveText("끝내면 다음 할 일: 12월 31일(목)");
   await page.getByRole("button", { name: "이 할 일 지우기" }).click();
-  await expect(page.locator("[data-tk-delete-text]")).toHaveText("지우면 되돌릴 수 없습니다. 반복 할 일이라 다음 할 일도 더 만들어지지 않습니다.");
+  await expect(page.locator("[data-tk-delete-text]")).toHaveText("휴지통으로 옮깁니다. 7일 안에 되살릴 수 있고, 그 뒤 자동으로 영구 삭제됩니다. 반복 할 일이라 휴지통에 있는 동안 다음 할 일은 만들어지지 않습니다.");
   await page.getByRole("button", { name: "그만두기" }).last().click();
   await expect(page.getByRole("button", { name: "이 할 일 지우기" })).toBeFocused();
 });

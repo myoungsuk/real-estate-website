@@ -1,0 +1,448 @@
+---
+import AdminIcon from "../../../components/admin/AdminIcon.astro";
+import AdminPageHelp from "../../../components/admin/AdminPageHelp.astro";
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import { TRASH_BACKUP_NOTICE, TRASH_KINDS, TRASH_KIND_LABELS, TRASH_PURGE_WORD } from "../../../lib/work/trash-view.mjs";
+
+// 휴지통(단계 2, WT-2-13): 지운 손님·거래·메모·일정·장부 줄·할 일 묶음을 7일 동안 두었다가 되살리거나 영구 삭제한다.
+// 사용자 선택 2026-11-22 14:31:26 "손님 화면 고리 + 처음 화면 바로가기"라 메뉴에는 넣지 않는다(메모 창고와 같음). 시안 2026-11-22 14:42:41 "이 시안대로".
+// - 서버 요청은 work-trash-client.ts 한 곳. 업무 세션이 꺼져 있으면 휴지통을 부르지 않는다.
+// - 서버를 부르므로 탭 미리 그리기 prerender 목록에 넣지 않는다.
+// - 종류 거르기는 서버에 없다. 받은 목록에서 거르고, 0건이어도 더 받을 것이 있으면 '더 보기'를 보인다(2026-11-22 대장 판단).
+// - 묶음 이름(label)에는 손님 이름·메모 첫머리가 들어 있으므로 글자(textContent)로만 그리고 주소·브라우저 저장소에 넣지 않는다.
+const kindLabels = TRASH_KIND_LABELS as Record<string, string>;
+---
+
+<AdminLayout
+  title="휴지통 | 행복한부동산 관리자"
+  description="지운 손님·거래·메모·일정·장부 줄·할 일을 7일 동안 두었다가 되살리거나 영구 삭제하는 관리자 업무 도구입니다."
+>
+  <div class="work-ui work-doc cu-doc cu-doc--wide tr-doc" data-tr-page>
+    <p class="cu-back"><a class="admin-text-link" href="/admin/work/customers/"><span aria-hidden="true">←</span> 손님 목록</a></p>
+    <header class="work-doc__header">
+      <span class="work-round-icon work-round-icon--title" data-tone="navy">
+        <AdminIcon name="trash" size={22} />
+      </span>
+      <h1>휴지통</h1>
+      <span class="admin-stage-badge">7일 보관 · 관리자만</span>
+    </header>
+    <AdminPageHelp page="/admin/work/trash/" />
+    <p class="tr-keep">지운 자료는 여기에 <strong>7일</strong> 있다가, 7일이 지나면 하루 안에 자동으로 영구 삭제됩니다. {TRASH_BACKUP_NOTICE}</p>
+
+    <p class="rt-boot cu-boot" role="status" data-tr-boot>휴지통을 불러오고 있습니다…</p>
+    <section class="admin-panel rt-state cu-state" aria-labelledby="tr-state-title" data-tr-state hidden>
+      <div class="admin-empty-state">
+        <span aria-hidden="true" data-tr-state-symbol>!</span>
+        <div>
+          <h2 id="tr-state-title" data-tr-state-title></h2>
+          <p data-tr-state-body></p>
+          <button class="work-secondary-button cu-state__go" type="button" data-tr-state-retry hidden>다시 불러오기</button>
+          <a class="admin-text-link" href="/admin/work/" data-tr-state-home hidden>업무 도구 처음으로</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="cu-list" aria-labelledby="tr-count" data-tr-main hidden>
+      <div class="tr-saved" role="status" aria-live="polite" tabindex="-1" data-tr-notice hidden></div>
+      <div class="rt-chips tr-chips" role="group" aria-label="종류로 거르기">
+        <button class="rt-chip" type="button" aria-pressed="true" data-tr-filter="">모두</button>
+        {TRASH_KINDS.map((kind) => (
+          <button class="rt-chip" type="button" aria-pressed="false" data-tr-filter={kind}>{kindLabels[kind]}</button>
+        ))}
+      </div>
+      <div class="rt-strip cu-strip">
+        <div class="rt-strip__text"><h2 id="tr-count" data-tr-count>지운 묶음</h2></div>
+        <button class="rt-strip__clear" type="button" data-tr-clear hidden>거르기 풀기</button>
+      </div>
+      <ol class="tr-rows" data-tr-list></ol>
+      <section class="admin-panel rt-state cu-state" aria-labelledby="tr-empty-title" data-tr-empty hidden>
+        <div class="admin-empty-state">
+          <span aria-hidden="true">0</span>
+          <div>
+            <h2 id="tr-empty-title" data-tr-empty-title></h2>
+            <p data-tr-empty-body></p>
+            <button class="work-secondary-button cu-state__go" type="button" data-tr-empty-clear hidden>거르기 풀기</button>
+          </div>
+        </div>
+      </section>
+      <div class="cu-more-line">
+        <button class="work-secondary-button cu-more" type="button" data-tr-more hidden>50개 더 보기</button>
+        <p class="admin-form-status" role="status" aria-live="polite" data-tr-list-status></p>
+      </div>
+    </section>
+
+    <!-- 묶음 한 개 아래에 펼치는 '영구 삭제' 칸(복사해서 씀). 글자를 그대로 넣어야 단추가 켜진다(확인 창 없음). -->
+    <template data-tr-purge-template>
+      <li class="tr-row tr-row--panel">
+        <section class="cu-form cu-panel cu-panel--danger tr-purge" data-tr-purge>
+          <h3 class="cu-panel__title" data-tr-purge-title></h3>
+          <p data-tr-purge-what></p>
+          <p>{TRASH_BACKUP_NOTICE}</p>
+          <div class="work-row">
+            <label class="work-row__label" data-tr-purge-label>확인하려면 <strong>{TRASH_PURGE_WORD}</strong>를 그대로 넣으세요</label>
+            <div class="work-row__control"><input type="text" maxlength="10" autocomplete="off" enterkeyhint="done" data-tr-purge-input /></div>
+          </div>
+          <div class="cu-actions">
+            <button class="work-primary-button cu-save cu-delete-go" type="button" disabled data-tr-purge-go>영구 삭제</button>
+            <button class="work-secondary-button" type="button" data-tr-purge-cancel>그만두기</button>
+          </div>
+          <p class="admin-form-status" role="status" aria-live="polite" data-tr-purge-status></p>
+        </section>
+      </li>
+    </template>
+  </div>
+
+  <script>
+    import { WorkApiError, getTrashSession, listTrash, purgeTrash, restoreTrash, type TrashItem } from "../../../lib/work-trash-client";
+    import { element, setStatus } from "../../../lib/work-customers-dom";
+    import { customerErrorText, isRetryable } from "../../../lib/work/customers-view.mjs";
+    import {
+      TRASH_KIND_LABELS,
+      TRASH_PARTIAL_TEXT,
+      isPurgeWord,
+      isTrashPartial,
+      isTrashStale,
+      purgeAskText,
+      purgeAskTitle,
+      purgeResultText,
+      restoreResultText,
+      restoredLink,
+      trashBlockedText,
+      trashCountsText,
+      trashDeletedText,
+      trashEmptyText,
+      trashErrorText,
+      trashLeftText,
+      trashLinksText,
+      trashListQuery,
+      trashStateText,
+      trashStripText,
+    } from "../../../lib/work/trash-view.mjs";
+
+    const root = document.querySelector<HTMLElement>("[data-tr-page]");
+    if (root) {
+      const list = root.querySelector<HTMLOListElement>("[data-tr-list]");
+      if (list) {
+        const pick = <T extends HTMLElement>(selector: string, from: ParentNode = root) => {
+          const found = from.querySelector<T>(selector);
+          if (!found) throw new Error(`휴지통 화면 칸이 없습니다: ${selector}`);
+          return found;
+        };
+        const boot = pick("[data-tr-boot]");
+        const statePanel = pick("[data-tr-state]");
+        const main = pick("[data-tr-main]");
+        const notice = pick("[data-tr-notice]");
+        const count = pick("[data-tr-count]");
+        const clear = pick<HTMLButtonElement>("[data-tr-clear]");
+        const empty = pick("[data-tr-empty]");
+        const more = pick<HTMLButtonElement>("[data-tr-more]");
+        const listStatus = pick("[data-tr-list-status]");
+        const purgeTemplate = pick<HTMLTemplateElement>("[data-tr-purge-template]");
+        const filters = [...root.querySelectorAll<HTMLButtonElement>("[data-tr-filter]")];
+
+        let items: TrashItem[] = [];
+        let cursor: string | null = null;
+        let kind = "";
+        let loadToken = 0;
+        let busy = false;
+        let panelSeq = 0;
+        // 되살리기를 했는데 남은 묶음 id(되살리기 응답 remaining > 0). 화면 메모리에만 두고, 다시 열면 비운다.
+        const partial = new Set<string>();
+        const errorCode = (error: unknown) => (error instanceof WorkApiError ? error.code : null);
+
+        function showState(title: string, body: string, { symbol = "!", retry = false, home = false } = {}) {
+          boot.hidden = true;
+          main.hidden = true;
+          pick("[data-tr-state-symbol]").textContent = symbol;
+          pick("[data-tr-state-title]").textContent = title;
+          pick("[data-tr-state-body]").textContent = body;
+          pick("[data-tr-state-retry]").hidden = !retry;
+          pick("[data-tr-state-home]").hidden = !home;
+          statePanel.hidden = false;
+        }
+        // 꺼짐·구조 옛날은 휴지통 전용 글, 그 밖에는 손님 화면과 같은 오류 글
+        function showCode(code: string | null) {
+          if (code === "WORK_DISABLED" || code === "WORK_SCHEMA_OUTDATED") {
+            const text = trashStateText(code);
+            showState(text.title, text.body, { symbol: code === "WORK_DISABLED" ? "–" : "!", home: true });
+            return;
+          }
+          showState("휴지통을 불러오지 못했습니다", customerErrorText(code), { retry: isRetryable(code) });
+        }
+
+        // ── 목록 위 알림(되살림·영구 삭제 결과). 목록을 다시 읽어도 남는다 ──
+        function showNotice(lead: string, { lines = [] as { subject: string; text: string }[], state = "success", link = null as { text: string; href: string } | null } = {}) {
+          const children: HTMLElement[] = [element("p", "", lead)];
+          if (lines.length > 0) {
+            const skips = element("ul", "tr-skips");
+            for (const line of lines) {
+              const entry = element("li");
+              entry.append(element("strong", "", line.subject), ` — ${line.text}`);
+              skips.append(entry);
+            }
+            children.push(skips);
+          }
+          if (link) {
+            const go = element("a", "admin-text-link", link.text);
+            go.href = link.href;
+            const line = element("p");
+            line.append(go);
+            children.push(line);
+          }
+          notice.replaceChildren(...children);
+          notice.className = `tr-saved tr-saved--${state}`;
+          notice.dataset.state = state;
+          notice.hidden = false;
+          notice.focus();
+        }
+        const clearNotice = () => {
+          notice.hidden = true;
+          notice.replaceChildren();
+        };
+
+        function closePanels() {
+          for (const open of list!.querySelectorAll<HTMLElement>("[data-tr-panel]")) open.remove();
+          for (const button of list!.querySelectorAll<HTMLButtonElement>("[data-tr-purge-open]")) button.setAttribute("aria-expanded", "false");
+        }
+
+        // ── 묶음 한 줄: 종류 | 이름·지운 때·함께 든 것 | 남은 날 | '되살리기'·'영구 삭제' ──
+        function trashRow(item: TrashItem) {
+          const left = trashLeftText(item);
+          const blocked = !item.restorable;
+          const row = element("li", `tr-row${left.late ? " tr-row--late" : ""}${blocked ? " tr-row--blocked" : ""}`);
+          row.dataset.trBatch = item.batchId;
+          const body = element("div", "tr-row__body");
+          body.append(element("p", "tr-row__title", item.label));
+          const meta = element("p", "tr-row__meta");
+          meta.append(element("span", "", `지운 때 ${trashDeletedText(item.deletedAt)}`));
+          const together = trashCountsText(item);
+          if (together) meta.append(element("span", "", `함께: ${together}`));
+          body.append(meta);
+          const links = trashLinksText(item);
+          if (links && !blocked) body.append(element("p", "tr-row__also", links));
+          if (isTrashPartial(item, partial.has(item.batchId)) && !blocked) {
+            const line = element("p", "tr-row__also");
+            line.append(element("strong", "", "일부만 남음"), ` — ${TRASH_PARTIAL_TEXT}`);
+            body.append(line);
+          }
+          if (blocked) {
+            const line = element("p", "tr-row__why");
+            line.append(element("strong", "", "! 되살릴 수 없음"), ` — ${trashBlockedText(item)}`);
+            body.append(line);
+          }
+          const leftLine = element("p", `tr-left${left.late ? " tr-left--late" : ""}`);
+          leftLine.append(element("strong", "", left.big), element("small", "", left.small));
+          const actions = element("div", "tr-actions");
+          if (!blocked) {
+            const restoreButton = element("button", "work-secondary-button tr-restore", "되살리기");
+            restoreButton.type = "button";
+            restoreButton.setAttribute("aria-label", `되살리기: ${item.label}`);
+            restoreButton.addEventListener("click", () => void restore(item, row, restoreButton));
+            actions.append(restoreButton);
+          }
+          const purgeButton = element("button", "admin-text-link cu-linkbtn cu-danger", "영구 삭제");
+          purgeButton.type = "button";
+          purgeButton.dataset.trPurgeOpen = "";
+          purgeButton.setAttribute("aria-expanded", "false");
+          purgeButton.setAttribute("aria-label", `영구 삭제: ${item.label}`);
+          purgeButton.addEventListener("click", () => openPurge(item, row, purgeButton));
+          actions.append(purgeButton);
+          row.append(element("span", "tr-kind", TRASH_KIND_LABELS[item.kind] ?? "자료"), body, leftLine, actions);
+          return row;
+        }
+
+        async function restore(item: TrashItem, row: HTMLElement, button: HTMLButtonElement) {
+          if (busy) return;
+          busy = true;
+          closePanels();
+          const buttons = [...row.querySelectorAll<HTMLButtonElement>("button")];
+          for (const each of buttons) each.disabled = true;
+          button.textContent = "되살리는 중…";
+          try {
+            const result = await restoreTrash(item.batchId);
+            const text = restoreResultText(item.label, result);
+            if (text.remaining) partial.add(item.batchId);
+            else partial.delete(item.batchId);
+            showNotice(text.lead, { lines: text.lines, state: text.state, link: restoredLink(item.kind) });
+            await loadList();
+          } catch (error) {
+            const code = errorCode(error);
+            showNotice(trashErrorText(code, customerErrorText(code)), { state: "error" });
+            if (isTrashStale(code)) {
+              partial.delete(item.batchId);
+              await loadList();
+            } else {
+              for (const each of buttons) each.disabled = false;
+              button.textContent = "되살리기";
+            }
+          } finally {
+            busy = false;
+          }
+        }
+
+        function openPurge(item: TrashItem, row: HTMLElement, opener: HTMLButtonElement) {
+          if (busy) return;
+          const already = row.nextElementSibling?.hasAttribute("data-tr-panel");
+          closePanels();
+          if (already) {
+            opener.focus();
+            return;
+          }
+          const seq = ++panelSeq;
+          const panel = purgeTemplate.content.firstElementChild!.cloneNode(true) as HTMLElement;
+          panel.dataset.trPanel = "";
+          const section = pick("[data-tr-purge]", panel);
+          const title = pick("[data-tr-purge-title]", panel);
+          const input = pick<HTMLInputElement>("[data-tr-purge-input]", panel);
+          const label = pick<HTMLLabelElement>("[data-tr-purge-label]", panel);
+          const go = pick<HTMLButtonElement>("[data-tr-purge-go]", panel);
+          const status = pick("[data-tr-purge-status]", panel);
+          title.id = `tr-purge-title-${seq}`;
+          section.setAttribute("aria-labelledby", title.id);
+          title.textContent = purgeAskTitle(item.label);
+          pick("[data-tr-purge-what]", panel).textContent = purgeAskText(item);
+          input.id = `tr-purge-${seq}`;
+          label.htmlFor = input.id;
+          row.after(panel);
+          opener.setAttribute("aria-expanded", "true");
+          const close = () => {
+            panel.remove();
+            opener.setAttribute("aria-expanded", "false");
+            opener.focus();
+          };
+          input.addEventListener("input", () => {
+            go.disabled = !isPurgeWord(input.value);
+            if (status.dataset.state === "error") setStatus(status, "", "idle");
+          });
+          async function purge() {
+            if (busy || !isPurgeWord(input.value)) return;
+            busy = true;
+            go.disabled = true;
+            setStatus(status, "영구 삭제하고 있습니다…", "saving");
+            try {
+              await purgeTrash(item.batchId, input.value.trim());
+              partial.delete(item.batchId);
+              showNotice(purgeResultText(item.label));
+              await loadList();
+            } catch (error) {
+              const code = errorCode(error);
+              if (isTrashStale(code)) {
+                showNotice(trashErrorText(code, customerErrorText(code), "purge"), { state: "error" });
+                partial.delete(item.batchId);
+                await loadList();
+                return;
+              }
+              setStatus(status, trashErrorText(code, customerErrorText(code), "purge"), "error");
+              go.disabled = !isPurgeWord(input.value);
+            } finally {
+              busy = false;
+            }
+          }
+          input.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" && !event.isComposing) {
+              event.preventDefault();
+              void purge();
+            }
+          });
+          go.addEventListener("click", () => void purge());
+          pick("[data-tr-purge-cancel]", panel).addEventListener("click", close);
+          input.focus();
+        }
+
+        function renderList() {
+          const shown = kind ? items.filter((item) => item.kind === kind) : items;
+          list!.replaceChildren(...shown.map(trashRow));
+          count.textContent = trashStripText(shown.length, { kind, more: Boolean(cursor) });
+          for (const filter of filters) filter.setAttribute("aria-pressed", String((filter.dataset.trFilter ?? "") === kind));
+          more.hidden = !cursor;
+          clear.hidden = !kind;
+          empty.hidden = shown.length > 0;
+          if (shown.length === 0) {
+            const text = trashEmptyText(kind);
+            pick("[data-tr-empty-title]").textContent = text.title;
+            pick("[data-tr-empty-body]").textContent = text.body;
+            pick("[data-tr-empty-clear]").hidden = !kind;
+          }
+        }
+
+        // first: 화면을 처음 열 때. 그때 실패하면 목록 대신 상태 칸과 '다시 불러오기'를 보인다(되살리기·영구 삭제 뒤 실패는 알림을 남기고 목록 아래 줄에).
+        async function loadList({ append = false, first = false } = {}) {
+          const mine = ++loadToken;
+          more.disabled = true;
+          setStatus(listStatus, append ? "더 불러오고 있습니다…" : "불러오고 있습니다…", "saving");
+          try {
+            const page = await listTrash(trashListQuery({ cursor: append ? cursor : null }));
+            if (mine !== loadToken) return;
+            items = append ? [...items, ...page.items] : page.items;
+            cursor = page.nextCursor;
+            setStatus(listStatus, "", "idle");
+            renderList();
+          } catch (error) {
+            if (mine !== loadToken) return;
+            const code = errorCode(error);
+            if (first || (!append && (code === "WORK_DISABLED" || code === "WORK_SCHEMA_OUTDATED"))) {
+              showCode(code);
+              return;
+            }
+            setStatus(listStatus, `휴지통을 불러오지 못했습니다. ${customerErrorText(code)}`, "error");
+          } finally {
+            if (mine === loadToken) more.disabled = false;
+          }
+        }
+
+        const setKind = (next: string) => {
+          if (busy) return;
+          kind = next;
+          renderList();
+        };
+        for (const filter of filters) filter.addEventListener("click", () => setKind(filter.dataset.trFilter ?? ""));
+        clear.addEventListener("click", () => setKind(""));
+        pick("[data-tr-empty-clear]").addEventListener("click", () => {
+          setKind("");
+          filters[0]?.focus();
+        });
+        more.addEventListener("click", () => {
+          if (cursor && !busy) void loadList({ append: true });
+        });
+
+        // ── 처음 불러오기: 업무 세션(켜짐) → 휴지통 ──
+        async function start() {
+          statePanel.hidden = true;
+          main.hidden = true;
+          boot.hidden = false;
+          try {
+            const session = await getTrashSession({ refresh: true });
+            if (!session.enabled) {
+              showCode("WORK_DISABLED");
+              return;
+            }
+          } catch (error) {
+            showCode(errorCode(error));
+            return;
+          }
+          boot.hidden = true;
+          main.hidden = false;
+          await loadList({ first: true });
+        }
+        pick("[data-tr-state-retry]").addEventListener("click", () => void start());
+
+        // 열 때마다(뒤로 가기 캐시 복원 포함) 알림·거르기·펼친 칸을 비우고 다시 불러온다.
+        const reset = () => {
+          items = [];
+          cursor = null;
+          kind = "";
+          busy = false;
+          partial.clear();
+          list.replaceChildren();
+          clearNotice();
+          setStatus(listStatus, "", "idle");
+          void start();
+        };
+        window.addEventListener("pageshow", (event) => {
+          if (event.persisted) reset();
+        });
+        reset();
+      }
+    }
+  </script>
+</AdminLayout>
