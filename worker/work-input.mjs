@@ -2,6 +2,7 @@
 import { WorkApiError } from "./work-security.mjs";
 import { DEFAULT_ALARM_TRIGGERS, isAllowedAlarmTriggers } from "./work-calendar.mjs";
 import { cleanMultiLine, cleanSingleLine } from "../src/lib/work/work-format.mjs";
+import { TASK_REPEAT_RULES } from "../src/lib/work/task-repeat.mjs";
 
 export const CUSTOMER_STATUSES = Object.freeze(["consulting", "contracting", "completed", "on_hold"]);
 export const LIST_LIMIT_DEFAULT = 20;
@@ -694,5 +695,109 @@ export function parseDealListQuery(params) {
     statuses, basis, period, query,
     cursor: cursor && !period ? { key: cursor.time, id: cursor.id } : cursor,
     limit: parseLimit(params.get("limit")),
+  };
+}
+
+// 할 일(설계서 6.13·10.2절 후보, 단계 2, 0006 tasks). 제목은 한 줄 정리(cleanSingleLine) 뒤 1 ~ 80자이고 주민번호 형태를 가린다.
+// 반복은 없음·매주·매월만(TASK_REPEAT_RULES). 매월 기준일(repeatDay)은 입력으로 받지 않고 날짜의 '일'로 정한다(T-6).
+export const TASK_STATUSES = Object.freeze(["open", "done"]);
+export const TASK_LIST_LIMIT_DEFAULT = 50;
+const TASK_CREATE_FIELDS = Object.freeze(["title", "dueOn", "dealId", "repeat"]);
+
+function readTaskTitle(body, { required }) {
+  if (!("title" in body) || body.title === undefined) {
+    if (required) throw invalid(["title"]);
+    return undefined;
+  }
+  if (typeof body.title !== "string") throw invalid(["title"]);
+  const cleaned = cleanSingleLine(body.title, body.title.length);
+  if (cleaned.length < 1 || cleaned.length > 80) throw invalid(["title"]);
+  return maskField(cleaned, "title", 80);
+}
+
+// 매월 기준일: 날짜(YYYY-MM-DD)의 '일'. 매월이 아니면 null(0006 CHECK: 매월만 기준일을 가짐).
+export function taskRepeatDay(repeat, dueOn) {
+  return repeat === "monthly" && dueOn ? Number(dueOn.slice(8, 10)) : null;
+}
+
+export function parseTaskCreate(body) {
+  if (!isPlainObject(body)) throw invalid(["body"]);
+  rejectUnknown(body, TASK_CREATE_FIELDS);
+  const title = readTaskTitle(body, { required: true });
+  const dueOn = readDate(body, "dueOn") ?? null;
+  const dealId = readOptionalId(body, "dealId") ?? null;
+  const repeat = readEnum(body, "repeat", TASK_REPEAT_RULES) ?? "none";
+  if (repeat !== "none" && dueOn === null) throw invalid(["dueOn"]);
+  return { task: { title: title.text, dueOn, dealId, repeat, repeatDay: taskRepeatDay(repeat, dueOn) }, rrnMasked: title.count };
+}
+
+// 고치기: 보낸 칸만 돌려준다. dueOn·dealId는 null이면 지움·뗌. done은 true(끝냄)·false(다시 열기).
+// 최종 상태(저장된 줄 + 고칠 값)의 앞뒤는 work-tasks.mjs가 본다(반복인데 날짜 없음, 끝낸 채로 남는 줄에 반복).
+export function parseTaskPatch(body) {
+  if (!isPlainObject(body)) throw invalid(["body"]);
+  rejectUnknown(body, ["version", ...TASK_CREATE_FIELDS, "done"]);
+  const version = readVersion(body);
+  const changes = {};
+  let rrnMasked = 0;
+  const title = readTaskTitle(body, { required: false });
+  if (title !== undefined) {
+    changes.title = title.text;
+    rrnMasked = title.count;
+  }
+  const dueOn = readDate(body, "dueOn");
+  if (dueOn !== undefined) changes.dueOn = dueOn;
+  const dealId = readOptionalId(body, "dealId");
+  if (dealId !== undefined) changes.dealId = dealId;
+  const repeat = readEnum(body, "repeat", TASK_REPEAT_RULES);
+  if (repeat !== undefined) changes.repeat = repeat;
+  if ("done" in body && body.done !== undefined) {
+    if (typeof body.done !== "boolean") throw invalid(["done"]);
+    changes.done = body.done;
+  }
+  if (Object.keys(changes).length === 0) throw invalid(["body"]);
+  return { version, changes, rrnMasked };
+}
+
+// 열린 할 일 목록의 커서: { d: 날짜 또는 null, t: 만든 시각, i: UUID }를 base64url JSON으로 묶는다(정렬이 날짜 없음 여부·날짜·만든 시각·id라
+// 값 하나짜리 encodeKeyCursor로는 담을 수 없음). 길이·형식이 틀리면 400. 끝낸 목록은 (끝낸 시각, id)라 encodeCursor를 쓴다.
+export function encodeTaskCursor(dueOn, createdAt, id) {
+  return btoa(JSON.stringify({ d: dueOn, t: createdAt, i: id })).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/u, "");
+}
+
+export function decodeTaskCursor(value) {
+  if (value === null || value === undefined || value === "") return null;
+  if (value.length > MAX_CURSOR_LENGTH || !/^[A-Za-z0-9_-]+$/u.test(value)) throw invalid(["cursor"]);
+  let parsed;
+  try {
+    const padded = value.replaceAll("-", "+").replaceAll("_", "/").padEnd(Math.ceil(value.length / 4) * 4, "=");
+    parsed = JSON.parse(atob(padded));
+  } catch {
+    throw invalid(["cursor"]);
+  }
+  if (!isPlainObject(parsed) || Object.keys(parsed).length !== 3 || !(parsed.d === null || isCalendarDate(parsed.d))
+    || !ISO_TIME_PATTERN.test(parsed.t ?? "") || !isUuid(parsed.i)) throw invalid(["cursor"]);
+  return { dueOn: parsed.d, createdAt: parsed.t, id: parsed.i };
+}
+
+// 할 일 목록: ?status=open|done(기본 open)&until=YYYY-MM-DD(열린 목록만, 그날까지·날짜 없는 줄 빠짐)&dealId=&cursor=&limit=(기본 50, 최대 50).
+export function parseTaskQuery(params) {
+  const statusText = params.get("status");
+  if (statusText !== null && statusText !== "" && !TASK_STATUSES.includes(statusText)) throw invalid(["status"]);
+  const status = statusText ? statusText : "open";
+  const untilText = params.get("until");
+  let until = null;
+  if (untilText !== null && untilText !== "") {
+    if (status !== "open" || !isCalendarDate(untilText)) throw invalid(["until"]);
+    until = untilText;
+  }
+  const dealText = params.get("dealId");
+  if (dealText !== null && dealText !== "" && !isUuid(dealText)) throw invalid(["dealId"]);
+  const limitText = params.get("limit");
+  const cursorText = params.get("cursor");
+  return {
+    status, until,
+    dealId: dealText ? dealText : null,
+    cursor: status === "open" ? decodeTaskCursor(cursorText) : decodeCursor(cursorText),
+    limit: limitText === null || limitText === "" ? TASK_LIST_LIMIT_DEFAULT : parseLimit(limitText),
   };
 }

@@ -99,6 +99,9 @@ const SQL = Object.freeze({
   // 지우는 단독 거래의 장부 줄은 지우지 않고 거래 연결만 끊는다(DEC-WT-38). 거래 날짜를 옮겨야 하므로 exclusiveDealsDelete 앞에 둔다.
   // 다른 손님과 함께인 거래는 지우지 않으므로 그 장부 줄은 그대로다.
   exclusiveDealLedgerDetach: LEDGER_DETACH_SET + " WHERE deal_id IN (" + EXCLUSIVE_DEALS_OF + ")",
+  // 지우는 단독 거래의 할 일은 함께 지운다(U-4, 거래 삭제와 같음). ON DELETE CASCADE가 없으므로 exclusiveDealsDelete 앞에 둔다.
+  // 다른 손님과 함께인 거래는 지우지 않으므로 그 할 일은 그대로다.
+  exclusiveDealTasksDelete: "DELETE FROM tasks WHERE deal_id IN (" + EXCLUSIVE_DEALS_OF + ")",
   exclusiveDealsDelete: "DELETE FROM deals WHERE id IN (" + EXCLUSIVE_DEALS_OF + ")",
   customerPartiesDelete: "DELETE FROM deal_parties WHERE customer_id = ?",
   dealExists: "SELECT id FROM deals WHERE id = ?",
@@ -324,6 +327,7 @@ async function deleteCustomer(ctx, id) {
     ctx.db.prepare(SQL.notesDeleteByCustomer).bind(id),
     ctx.db.prepare(SQL.exclusiveDealEventsDelete).bind(id, id),
     ctx.db.prepare(SQL.exclusiveDealLedgerDetach).bind(at, id, id),
+    ctx.db.prepare(SQL.exclusiveDealTasksDelete).bind(id, id),
     ctx.db.prepare(SQL.exclusiveDealsDelete).bind(id, id),
     ctx.db.prepare(SQL.customerPartiesDelete).bind(id),
     ctx.db.prepare(SQL.customerDelete).bind(id),
@@ -340,7 +344,13 @@ async function deleteCustomer(ctx, id) {
   const kept = changesOf(results[2]) + changesOf(results[3]);
   const notes = changesOf(results[4]) + changesOf(results[5]);
   // kept.ledger: 지운 단독 거래에서 연결만 끊고 남긴 장부 줄 수(거래 삭제와 같은 꼴, 감사 reason 꼴은 그대로).
-  return { data: { deleted: { customers: 1, deals: changesOf(results[8]), notes, files: 0 }, kept: { notes: kept, ledger: changesOf(results[7]) } } };
+  // deleted.tasks: 지운 단독 거래의 할 일 수(results[8]). 자리 번호는 위 statements 순서와 같아야 한다(할 일 문장을 넣어 거래 수는 results[9]).
+  return {
+    data: {
+      deleted: { customers: 1, deals: changesOf(results[9]), notes, files: 0, tasks: changesOf(results[8]) },
+      kept: { notes: kept, ledger: changesOf(results[7]) },
+    },
+  };
 }
 
 async function listNotes(ctx) {

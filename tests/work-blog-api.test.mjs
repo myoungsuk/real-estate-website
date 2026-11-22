@@ -74,18 +74,19 @@ function blogDb(options) {
 }
 
 test("TK-59 0004는 0001 ~ 0003 위에 blog_drafts를 더하고 구조 번호 4·ai_limits_version 0만 넣으며, 한도 행은 넣지 않고 앞 파일은 바뀌지 않음", async () => {
-  // 원격에 적용한 0001 ~ 0004는 고치지 않는다(LF 기준 SHA-256 고정, 0001 ~ 0003은 f7dc990과 같음, 0004는 2026-11-20 원격 적용).
+  // 원격에 적용한 0001 ~ 0005는 고치지 않는다(LF 기준 SHA-256 고정, 0001 ~ 0003은 f7dc990과 같음, 0004는 2026-11-20 원격 적용, 0005는 2026-11-21 원격 적용(매출장부)).
   const fixed = {
     "0001_init.sql": "7ba0f35651a81874a9320214f49154bb6983e67f4701ccf342749204dd3035d2",
     "0002_deal_schedule_inputs.sql": "9adbf0997bb201212c71fc9bf9170c35557f6a1d9e2d05155279000622accd51",
     "0003_public_realprice.sql": "8dcbf692b4a33a4ac252934d6c9098d74b94de9fca7e467cdafb5fcc957ca468",
     "0004_blog_drafts.sql": "94304bd41036bdcc9bc71d3718d364e021f00bfbc997ff05198190d20606bc51", // 2026-11-20 원격 적용
+    "0005_ledger.sql": "e05cda1dcc48b5dce418b797997968e0751787fd607304297c8c435c168e49eb", // 2026-11-21 원격 적용(매출장부)
   };
   for (const [name, hash] of Object.entries(fixed)) {
     const text = (await readFile(new URL(`../migrations/work/${name}`, import.meta.url), "utf8")).replace(/\r\n/gu, "\n");
     assert.equal(createHash("sha256").update(text).digest("hex"), hash, name);
   }
-  assert.deepEqual(migrationFiles, [...Object.keys(fixed), "0005_ledger.sql"]);
+  assert.deepEqual(migrationFiles, [...Object.keys(fixed), "0006_tasks.sql"]);
 
   const database = new DatabaseSync(":memory:");
   database.exec("PRAGMA foreign_keys = ON;");
@@ -147,7 +148,7 @@ test("TK-44 글 초안 켜기 값·OpenAI 설정: 정확히 true가 아니면 50
   // 글 초안만 켬: 세션 blogEnabled true·realpriceEnabled false·업무 CSRF 토큰, 실거래가·단계 2 경로는 꺼진 그대로.
   const session = await work(blogEnv(db), "/public-tools/session");
   assert.equal(session.status, 200);
-  assert.deepEqual([session.json.data.realpriceEnabled, session.json.data.blogEnabled, session.json.data.schemaVersion], [false, true, 5]);
+  assert.deepEqual([session.json.data.realpriceEnabled, session.json.data.blogEnabled, session.json.data.schemaVersion], [false, true, 6]);
   assert.match(session.json.data.csrfToken, /^\d+\.[A-Za-z0-9_-]+$/u);
   assert.equal((await work(blogEnv(db), "/realprice/status")).json.error.code, "REALPRICE_DISABLED");
   assert.equal((await work(blogEnv(db), "/session")).json.data.enabled, false);

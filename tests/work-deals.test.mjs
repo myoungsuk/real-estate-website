@@ -23,7 +23,7 @@ async function makeDeal(env, body) {
 
 test("0002는 0001 위에 거래 일정 입력 칸 7개를 더하고 구조 번호를 2로 올리며, 규제 단계·매매 세부 종류·오피스텔 판정을 칸끼리 묶는다", () => {
   assert.deepEqual(migrationFiles.slice(0, 2), ["0001_init.sql", "0002_deal_schedule_inputs.sql"], "0001은 그대로 두고 0002를 새 파일로");
-  assert.deepEqual(migrationFiles.slice(2), ["0003_public_realprice.sql", "0004_blog_drafts.sql", "0005_ledger.sql"], "그 뒤는 단계 P 0003·P3 0004·매출장부 0005만(새 구조 변경은 새 번호 파일로)");
+  assert.deepEqual(migrationFiles.slice(2), ["0003_public_realprice.sql", "0004_blog_drafts.sql", "0005_ledger.sql", "0006_tasks.sql"], "그 뒤는 단계 P 0003·P3 0004·매출장부 0005·할 일 0006만(새 구조 변경은 새 번호 파일로)");
   const database = new DatabaseSync(":memory:");
   database.exec("PRAGMA foreign_keys = ON;");
   database.exec(migrationSql);
@@ -196,7 +196,7 @@ test("거래 지우기: 제목을 다시 입력해야 하고, 일정·참여자�
 
   const deleted = await work(env, `/deals/${deal.id}`, { method: "DELETE", body: { confirmTitle: "가상 지울 거래" } });
   assert.equal(deleted.status, 200, JSON.stringify(deleted.json));
-  assert.deepEqual(deleted.json.data, { deleted: { deals: 1, events: 1, notes: 1, files: 0 }, kept: { notes: 1, ledger: 0 } });
+  assert.deepEqual(deleted.json.data, { deleted: { deals: 1, events: 1, notes: 1, files: 0, tasks: 0 }, kept: { notes: 1, ledger: 0 } });
   assert.equal(rows(database, "SELECT count(*) AS n FROM deals")[0].n, 0);
   assert.equal(rows(database, "SELECT count(*) AS n FROM deal_parties")[0].n, 0);
   assert.deepEqual(rows(database, "SELECT id, customer_id, deal_id FROM notes"), [{ id: kept.json.data.note.id, customer_id: customer.id, deal_id: null }]);
@@ -231,7 +231,7 @@ test("동시 작업 ①: 손님 X를 지우는 사이 다른 관리자가 X 단�
   db.beforeNextBatch = () => database.prepare("INSERT INTO deal_parties (deal_id, customer_id, role) VALUES (?, ?, 'seller')").run(deal.id, y.id);
   const deleted = await work(env, `/customers/${x.id}`, { method: "DELETE", body: { confirmName: "가상 손님 X" } });
   assert.equal(deleted.status, 200, JSON.stringify(deleted.json));
-  assert.deepEqual(deleted.json.data, { deleted: { customers: 1, deals: 0, notes: 0, files: 0 }, kept: { notes: 1, ledger: 0 } }, "개수는 batch 결과로 셈");
+  assert.deepEqual(deleted.json.data, { deleted: { customers: 1, deals: 0, notes: 0, files: 0, tasks: 0 }, kept: { notes: 1, ledger: 0 } }, "개수는 batch 결과로 셈");
   assert.equal(rows(database, "SELECT count(*) AS n FROM deals")[0].n, 1, "Y가 들어온 거래는 남음");
   assert.deepEqual(rows(database, "SELECT customer_id, role FROM deal_parties"), [{ customer_id: y.id, role: "seller" }]);
   assert.deepEqual(rows(database, "SELECT customer_id, deal_id FROM notes"), [{ customer_id: null, deal_id: deal.id }]);

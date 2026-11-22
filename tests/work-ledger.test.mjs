@@ -49,7 +49,7 @@ async function workWithRules(env, path, { method = "GET", body, now = NOW, rules
 const zeroLine = { feeWon: 0, vatWon: 0, feeWithVatWon: 0, receivedWon: 0, unpaidWon: 0, expenseWon: 0, otherIncomeWon: 0, netWon: 0 };
 
 test("0005는 0001 ~ 0004 위에 ledger_entries 하나만 더하고 구조 번호를 5로 올리며, 날짜 없는 줄은 막지 않고 종류·거래 칸끼리만 묶는다", () => {
-  assert.equal(migrationFiles.at(-1), "0005_ledger.sql");
+  assert.equal(migrationFiles[4], "0005_ledger.sql");
   const database = new DatabaseSync(":memory:");
   database.exec("PRAGMA foreign_keys = ON;");
   for (const sql of allMigrationSql.slice(0, 4)) database.exec(sql);
@@ -222,7 +222,7 @@ test("T2-97 장부 줄 2개가 있는 거래를 지우면 거래는 지워지고
 
   const deleted = await work(env, `/deals/${deal.id}`, { method: "DELETE", body: { confirmTitle: "가상 지울 거래" }, now: NOW + 1000 });
   assert.equal(deleted.status, 200, JSON.stringify(deleted.json));
-  assert.deepEqual(deleted.json.data, { deleted: { deals: 1, events: 0, notes: 0, files: 0 }, kept: { notes: 0, ledger: 2 } });
+  assert.deepEqual(deleted.json.data, { deleted: { deals: 1, events: 0, notes: 0, files: 0, tasks: 0 }, kept: { notes: 0, ledger: 2 } });
   assert.equal(rows(database, "SELECT count(*) AS n FROM deals")[0].n, 0);
   assert.deepEqual(ledgerRows(database).map(({ deal_id, label, entry_on, snap_contract_on, snap_balance_on, version }) => ({ deal_id, label, entry_on, snap_contract_on, snap_balance_on, version })), [
     { deal_id: null, label: "가상 지울 거래", entry_on: null, snap_contract_on: "2026-10-01", snap_balance_on: "2026-11-20", version: 2 },
@@ -245,7 +245,7 @@ test("T2-97a 손님 A를 지우면 A 단독 거래의 장부 줄은 연결만 �
   const sharedEntry = await makeEntry(env, { kind: "fee", dealId: shared.id, payerRole: "seller", amountWon: 900_000, vatWon: 90_000 });
   const deleted = await work(env, `/customers/${a.id}`, { method: "DELETE", body: { confirmName: "가상 손님 A" }, now: NOW + 1000 });
   assert.equal(deleted.status, 200, JSON.stringify(deleted.json));
-  assert.deepEqual(deleted.json.data, { deleted: { customers: 1, deals: 1, notes: 0, files: 0 }, kept: { notes: 0, ledger: 1 } }, "공동 거래 장부 줄은 세지 않음");
+  assert.deepEqual(deleted.json.data, { deleted: { customers: 1, deals: 1, notes: 0, files: 0, tasks: 0 }, kept: { notes: 0, ledger: 1 } }, "공동 거래 장부 줄은 세지 않음");
   assert.deepEqual(audit(database).filter((row) => row.action === "customer.delete").map((row) => row.reason), [null], "감사 reason 꼴 그대로");
   const byId = Object.fromEntries(ledgerRows(database).map((row) => [row.id, row]));
   assert.deepEqual([byId[soloEntry.entry.id].deal_id, byId[soloEntry.entry.id].snap_contract_on, byId[soloEntry.entry.id].snap_balance_on, byId[soloEntry.entry.id].label, byId[soloEntry.entry.id].version],
