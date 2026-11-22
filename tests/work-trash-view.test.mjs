@@ -36,9 +36,23 @@ import {
 const readSource = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 const counts = (values = {}) => ({ customers: 0, deals: 0, parties: 0, events: 0, notes: 0, tasks: 0, ledger: 0, links: 0, ...values });
 
-test("종류 6가지와 화면 이름(지시서 3.6 kind)", () => {
-  assert.deepEqual(TRASH_KINDS, ["customer", "deal", "note", "event", "ledger", "task"]);
-  assert.deepEqual(TRASH_KINDS.map((kind) => TRASH_KIND_LABELS[kind]), ["손님", "거래", "메모", "일정", "장부 줄", "할 일"]);
+test("종류 7가지와 화면 이름(지시서 3.6 kind, 사진 file은 바로 찍기 PR에서 더함)", () => {
+  assert.deepEqual(TRASH_KINDS, ["customer", "deal", "note", "event", "ledger", "task", "file"]);
+  assert.deepEqual(TRASH_KINDS.map((kind) => TRASH_KIND_LABELS[kind]), ["손님", "거래", "메모", "일정", "장부 줄", "할 일", "사진"]);
+});
+
+test("사진 묶음: 함께 수·되살림 글·건너뜀·되살린 뒤 고리(바로 찍기 F-b)", () => {
+  assert.equal(trashCountsText({ kind: "file", counts: { files: 1 } }), "사진 1장");
+  assert.equal(trashCountsText({ kind: "customer", counts: { customers: 1, deals: 1, notes: 3, files: 4 } }), "거래 1건 · 메모 3개 · 사진 4장");
+  assert.equal(trashPurgeWhatText({ counts: { customers: 1, files: 2 } }), "손님 1명, 사진 2장");
+  assert.equal(trashEmptyText("file").title, "지운 사진이 없습니다");
+  assert.equal(trashStripText(2, { kind: "file" }), "사진 묶음 2개 · 지운 때 최근 순");
+  assert.deepEqual(restoredLink("file"), { text: "손님 목록 열기", href: "/admin/work/customers/" }, "응답에 손님 id가 없어 손님 목록으로");
+  const done = restoreResultText("사진 · 11월 22일 14:05 올림", { restored: { files: 1 }, skipped: [], remaining: 0 });
+  assert.match(done.lead, /사진 1장/u);
+  const skipped = restoreResultText("거실 창 쪽 누수 자국", { restored: {}, skipped: [{ table: "files", reason: "customer_missing", count: 1 }], remaining: 1 });
+  assert.equal(skipped.state, "warn");
+  assert.ok(skipped.lines.some((line) => line.subject === "사진 1장" && /함께였던 손님이 지금 없어/u.test(line.text)), JSON.stringify(skipped.lines));
 });
 
 test("지운 때·날짜는 한국 시각으로 쓴다(UTC 15시 이후는 다음 날)", () => {

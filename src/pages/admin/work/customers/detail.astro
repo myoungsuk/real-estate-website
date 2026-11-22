@@ -4,10 +4,11 @@ import AdminPageHelp from "../../../../components/admin/AdminPageHelp.astro";
 import WorkCustomerFields from "../../../../components/admin/WorkCustomerFields.astro";
 import AdminLayout from "../../../../layouts/AdminLayout.astro";
 import { NOTE_BODY_MAX } from "../../../../lib/work/customers-view.mjs";
+import { PHOTO_CAPTION_MAX, PHOTO_GO_LABEL, PHOTO_KIND_LABELS, PHOTO_PAGE_SIZE, PHOTO_PICK_MAX } from "../../../../lib/work/photo-view.mjs";
 import { TRASH_MOVE_NOTICE } from "../../../../lib/work/trash-view.mjs";
 
 // 손님 카드(단계 2, 사용자 선택 2026-11-21 02:26:01 "A 차례대로", "손님 상세에 일정 함께 담기").
-// - 차례: 기본 정보 → 거래·일정 → 메모 → 파일(설계서 7.1). PC(980px 이상)는 왼쪽에 기본 정보를 붙이고 오른쪽에 나머지를 둔다.
+// - 차례: 기본 정보 → 거래·일정 → 메모 → 사진(설계서 7.1, 바로 찍기 시안 2026-11-22 15:39:08 — 휴대폰 하단 막대에 '사진 찍기'). PC(980px 이상)는 왼쪽에 기본 정보를 붙이고 오른쪽에 나머지를 둔다.
 // - 주소의 ?id=는 무작위 UUID만 받는다. 이름·전화는 주소·제목(title)·브라우저 저장소에 넣지 않는다.
 // - 서버를 부르므로 탭 미리 그리기 prerender 목록에 넣지 않는다. 업무 세션이 꺼져 있으면 손님 자료를 부르지 않는다.
 // - 지운 손님은 휴지통으로 간다(7일 보관, 시안 2026-11-22 14:42:41). 이름 넣기 확인은 그대로다.
@@ -75,7 +76,7 @@ import { TRASH_MOVE_NOTICE } from "../../../../lib/work/trash-view.mjs";
 
           <section class="cu-form cu-panel cu-panel--danger" id="cu-delete-panel" aria-labelledby="cu-delete-title" data-cu-delete-panel hidden>
             <h3 id="cu-delete-title" class="cu-panel__title">손님 지우기</h3>
-            <p><strong>{TRASH_MOVE_NOTICE}</strong> 이 손님의 메모와, 이 손님만 참여한 거래·일정·할 일이 함께 옮겨집니다. 다른 손님과 함께인 거래는 남깁니다.</p>
+            <p><strong>{TRASH_MOVE_NOTICE}</strong> 이 손님의 메모·사진과, 이 손님만 참여한 거래·일정·할 일이 함께 옮겨집니다. 다른 손님과 함께인 거래는 남깁니다.</p>
             <p>지운 거래에 이은 장부 줄은 매출장부에 남습니다(거래 연결만 끊김, 되살리면 그 줄을 고치지 않았을 때 다시 이음). 거래 제목이 그 줄의 물건 표시로 남아 있을 수 있으니 손님 이름이 들어 있으면 매출장부에서 고쳐 주세요.</p>
             <div class="work-row">
               <label class="work-row__label" for="cu-delete-confirm">확인하려면 손님 이름 <strong data-cu-delete-name></strong>을(를) 그대로 넣으세요</label>
@@ -116,9 +117,92 @@ import { TRASH_MOVE_NOTICE } from "../../../../lib/work/trash-view.mjs";
           <p class="cu-soft" data-cu-notes-limit hidden>최근 50개까지 보입니다.</p>
         </section>
 
-        <section class="cu-block" aria-labelledby="cu-files-title">
-          <h2 id="cu-files-title" class="cu-block__title">파일</h2>
-          <p class="cu-soft" data-cu-files-text></p>
+        <section class="cu-block ph-block" id="cu-photos" aria-labelledby="cu-files-title" data-ph-root>
+          <h2 id="cu-files-title" class="cu-block__title">사진 <span class="cu-block__n" data-ph-count></span></h2>
+          <p class="cu-soft" data-ph-off hidden></p>
+          <div class="cu-actions ph-take" data-ph-take hidden>
+            <button class="work-primary-button ph-take__btn" type="button" data-ph-camera><AdminIcon name="camera" size={20} /><span>바로 찍기</span></button>
+            <button class="work-secondary-button ph-take__btn" type="button" data-ph-album><AdminIcon name="image" size={20} /><span>사진첩에서 고르기</span></button>
+          </div>
+          <input type="file" accept="image/*" capture="environment" autocomplete="off" tabindex="-1" hidden data-ph-camera-input />
+          <input type="file" accept="image/*" multiple autocomplete="off" tabindex="-1" hidden data-ph-album-input />
+          <p class="admin-form-status ph-status" role="status" aria-live="polite" data-ph-status hidden></p>
+
+          <section class="cu-form cu-panel ph-panel" aria-labelledby="ph-check-title" data-ph-check hidden>
+            <h3 id="ph-check-title" class="cu-panel__title" tabindex="-1"><span data-ph-check-title></span> <span class="cu-block__n" data-ph-check-count></span></h3>
+            <figure class="ph-preview" data-ph-preview hidden>
+              <div class="ph-preview__box" data-ph-preview-canvas></div>
+              <figcaption data-ph-preview-size></figcaption>
+            </figure>
+            <ol class="ph-picks" data-ph-picks hidden></ol>
+            <p class="ph-warn" data-ph-warn><strong>신분증·주민등록증·주민번호가 보이는 서류는 올리지 마세요.</strong> 사진 속 글자는 가려지지 않습니다.</p>
+            <div class="ph-kind" data-ph-kind hidden>
+              <p class="ph-desc__label" id="ph-kind-label">종류</p>
+              <div class="work-segment" role="radiogroup" aria-labelledby="ph-kind-label">
+                <label class="work-choice"><input type="radio" name="ph-kind" value="property_photo" autocomplete="off" checked data-ph-kind-input /><span>{PHOTO_KIND_LABELS.property_photo}</span></label>
+                <label class="work-choice"><input type="radio" name="ph-kind" value="other" autocomplete="off" data-ph-kind-input /><span>{PHOTO_KIND_LABELS.other}</span></label>
+              </div>
+            </div>
+            <div class="ph-desc" data-ph-desc-row>
+              <label class="ph-desc__label" for="ph-desc">설명 <small data-ph-desc-hint>(안 써도 됨)</small></label>
+              <textarea id="ph-desc" rows="2" maxlength={PHOTO_CAPTION_MAX} placeholder="예: 거실 창 쪽 누수 자국" autocomplete="off" data-ph-desc></textarea>
+              <small class="ph-desc__n" aria-hidden="true" data-ph-desc-n></small>
+            </div>
+            <p class="ph-note" data-ph-what>위치(GPS)·찍은 기기 정보는 빼고, 긴 변 4096px 안쪽으로 줄여 올립니다.</p>
+            <p class="ph-note" data-ph-max hidden>한 번에 {PHOTO_PICK_MAX}장까지 고를 수 있습니다.</p>
+            <p data-ph-fail-text hidden></p>
+            <div class="cu-actions ph-go-line">
+              <button class="work-primary-button cu-save ph-go" type="button" data-ph-go>{PHOTO_GO_LABEL}</button>
+              <button class="work-secondary-button" type="button" data-ph-cancel>그만두기</button>
+            </div>
+            <section class="cu-form cu-panel cu-panel--danger ph-del" aria-labelledby="ph-drop-title" data-ph-drop hidden>
+              <h4 id="ph-drop-title" class="cu-panel__title">못 올린 사진을 버릴까요?</h4>
+              <p>버리면 그 사진은 없어집니다(휴대폰 사진첩에 없을 수 있음).</p>
+              <div class="cu-actions">
+                <button class="work-primary-button cu-save cu-delete-go" type="button" data-ph-drop-go>버리기</button>
+                <button class="work-secondary-button" type="button" data-ph-drop-cancel>그만두기</button>
+              </div>
+            </section>
+            <p class="admin-form-status" role="status" aria-live="polite" data-ph-check-status></p>
+          </section>
+
+          <section class="cu-panel ph-view" aria-labelledby="ph-view-title" data-ph-view hidden>
+            <div class="ph-view__head">
+              <h3 id="ph-view-title" class="cu-panel__title" tabindex="-1">사진 크게 보기</h3>
+              <button class="work-secondary-button ph-close" type="button" data-ph-view-close>닫기</button>
+            </div>
+            <div class="ph-big">
+              <p class="cu-soft ph-big__wait" role="status" data-ph-view-wait></p>
+              <img alt="" data-ph-view-img hidden />
+            </div>
+            <p class="ph-meta" data-ph-view-meta></p>
+            <div class="ph-desc">
+              <label class="ph-desc__label" for="ph-view-desc">설명</label>
+              <textarea id="ph-view-desc" rows="2" maxlength={PHOTO_CAPTION_MAX} autocomplete="off" data-ph-view-desc></textarea>
+              <small class="ph-desc__n" aria-hidden="true" data-ph-view-desc-n></small>
+            </div>
+            <div class="cu-actions"><button class="work-secondary-button ph-save" type="button" data-ph-view-save>설명 저장</button></div>
+            <p class="admin-form-status" role="status" aria-live="polite" data-ph-view-status></p>
+            <div class="cu-actions cu-actions--quiet">
+              <button class="admin-text-link cu-linkbtn cu-danger" type="button" aria-expanded="false" aria-controls="ph-del-panel" data-ph-view-delete>사진 지우기</button>
+            </div>
+            <section class="cu-form cu-panel cu-panel--danger ph-del" id="ph-del-panel" aria-labelledby="ph-del-title" data-ph-del hidden>
+              <h4 id="ph-del-title" class="cu-panel__title">이 사진을 지울까요?</h4>
+              <p><strong>{TRASH_MOVE_NOTICE}</strong></p>
+              <div class="cu-actions">
+                <button class="work-primary-button cu-save cu-delete-go" type="button" data-ph-del-go>지우기</button>
+                <button class="work-secondary-button" type="button" data-ph-del-cancel>그만두기</button>
+              </div>
+              <p class="admin-form-status" role="status" aria-live="polite" data-ph-del-status></p>
+            </section>
+          </section>
+
+          <div data-ph-list></div>
+          <p class="cu-soft" data-ph-empty hidden>아직 올린 사진이 없습니다.</p>
+          <div class="cu-more-line" data-ph-more-line hidden>
+            <button class="work-secondary-button cu-more" type="button" data-ph-more>{PHOTO_PAGE_SIZE}장 더 보기</button>
+            <p class="admin-form-status" data-ph-shown></p>
+          </div>
         </section>
       </div>
     </div>
@@ -136,6 +220,7 @@ import { TRASH_MOVE_NOTICE } from "../../../../lib/work/trash-view.mjs";
 
     <div class="cu-bar" data-cu-bar hidden>
       <button class="work-primary-button" type="button" data-cu-bar-memo><AdminIcon name="note" size={20} /><span>메모 추가</span></button>
+      <button class="work-secondary-button cu-bar__camera" type="button" data-cu-bar-camera hidden><AdminIcon name="camera" size={20} /><span>사진 찍기</span></button>
     </div>
   </div>
 
@@ -151,6 +236,7 @@ import { TRASH_MOVE_NOTICE } from "../../../../lib/work/trash-view.mjs";
     } from "../../../../lib/work-customers-client";
     import { element, fillFields, noteItem, readFields, setStatus, showFieldErrors, statusBadge } from "../../../../lib/work-customers-dom";
     import { createLedgerEntry, listLedger, readDeal, type DealSummary, type LedgerEntry } from "../../../../lib/work-ledger-client";
+    import { mountPhotoSection } from "../../../../lib/work-photo-section";
     import { dealLedgerItem } from "../../../../lib/work-ledger-dom";
     import legalRules from "../../../../data/work/legal-rules.json";
     import { todayInKorea } from "../../../../lib/work/legal-dates.mjs";
@@ -529,11 +615,13 @@ import { TRASH_MOVE_NOTICE } from "../../../../lib/work/trash-view.mjs";
         pick("[data-cu-notes-limit]").hidden = detail.notes.length < 50;
       }
 
+      // 사진 칸(바로 찍기). 손님 카드를 다시 읽으면 목록만 다시 그리고, 올리는 중·확인 중인 사진은 그대로 둔다.
+      const photos = mountPhotoSection(pick("[data-ph-root]"), { customerId: () => id, reload: () => load() });
+      const barCamera = pick<HTMLButtonElement>("[data-cu-bar-camera]");
       function renderFiles(filesEnabled: boolean) {
         if (!detail) return;
-        const text = pick("[data-cu-files-text]");
-        if (detail.files.length > 0) text.textContent = `연결된 파일 ${detail.files.length}개가 있습니다. 파일은 파일 저장소가 켜진 뒤에 열어 볼 수 있습니다.`;
-        else text.textContent = filesEnabled ? "아직 올린 파일이 없습니다." : "파일 저장소가 아직 켜지지 않았습니다. 계약서 사진 등은 파일 저장소를 켠 뒤에 올릴 수 있습니다.";
+        photos.render(detail.files, filesEnabled);
+        barCamera.hidden = !filesEnabled;
       }
 
       let filesEnabled = false;
@@ -707,11 +795,13 @@ import { TRASH_MOVE_NOTICE } from "../../../../lib/work/trash-view.mjs";
         memo.scrollIntoView({ block: "center" });
         memo.focus({ preventScroll: true });
       });
+      // 하단 막대 '사진 찍기': 누른 그 자리에서 카메라를 연다(찍은 뒤 사진 칸의 확인 칸으로 감).
+      barCamera.addEventListener("click", () => photos.openCamera());
 
-      // 저장하지 않은 메모·고치기 칸이 있으면 떠나기 전에 묻는다.
+      // 저장하지 않은 메모·고치기 칸, 아직 올리지 못한 사진이 있으면 떠나기 전에 묻는다.
       window.addEventListener("beforeunload", (event) => {
         const editing = !editPanel.hidden;
-        if (!memo.value.trim() && !editing) return;
+        if (!memo.value.trim() && !editing && !photos.hasPending()) return;
         event.preventDefault();
       });
 
@@ -755,6 +845,8 @@ import { TRASH_MOVE_NOTICE } from "../../../../lib/work/trash-view.mjs";
         setStatus(basicStatus, "", "idle");
         openEdit(false);
         openDelete(false);
+        photos.reset();
+        barCamera.hidden = true;
         nameHeading.textContent = "손님 카드";
         headStatus.replaceChildren();
         void start();
