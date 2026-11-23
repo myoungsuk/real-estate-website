@@ -93,7 +93,9 @@ test("업무 도구 네 화면은 관리자 공용 틀의 아래 단계 메뉴(�
     assert.ok(index.includes(`href: "${href}"`), `첫 화면 바로가기 ${href}`);
     assert.match(layout, new RegExp(`\\{ href: "${href.replaceAll("/", "\\/")}", label: "[^"]+"(?:, group: "[^"]+")? \\},`, "u"), `아래 단계 메뉴 ${href}`);
   }
-  assert.match(layout, /"\/admin\/work\/": \[\r?\n\s*\{ href: "\/admin\/work\/", label: "업무 도구 처음" \},/u, "아래 단계 맨 위는 첫 화면");
+  assert.match(layout, /"\/admin\/work\/": \[\r?\n\s*\{ href: "\/admin\/work\/", label: "도구 모음" \},/u, "아래 단계 맨 위는 첫 화면");
+  assert.match(index, /title="도구 모음 \| 행복한부동산 관리자"/u, "첫 화면 탭 제목도 메뉴 이름과 같음(2026-11-23 '업무 도구' → '도구 모음')");
+  assert.match(index, /<h1>도구 모음<\/h1>/u, "첫 화면 제목도 메뉴 이름과 같음");
   for (const page of [index, ...toolPages]) {
     // 11-16 결정(문구·계산 화면은 밑줄 탭만, 위 메뉴 줄 + 왼쪽 목록)은 11-18 C+D·CD1 선택이 대신한다.
     assert.doesNotMatch(page, /slot="aside"|<WorkToolNav|<AdminSubnav/u, "화면 안 메뉴는 공용 틀 하나로 합침");

@@ -83,7 +83,7 @@ const navigationGroups = [
 type NavigationSubItem = { href: string; label: string; group?: string };
 const navigationSubItems: Record<string, NavigationSubItem[]> = {
   "/admin/work/": [
-    { href: "/admin/work/", label: "업무 도구 처음" },
+    { href: "/admin/work/", label: "도구 모음" },
     { href: "/admin/work/tasks/", label: "할 일" },
     { href: "/admin/work/customers/", label: "손님", group: "손님·돈" },
     { href: "/admin/work/ledger/", label: "매출장부", group: "손님·돈" },
@@ -202,6 +202,14 @@ const speculationRules = {
           <button class="admin-bar__step" type="button" tabindex="-1" aria-hidden="true" data-admin-strip-step="-1" hidden>
             <AdminIcon name="chevron-left" size={18} />
           </button>
+
+          {/* 아래 단계 줄(업무 도구·네이버 매물)에서도 대시보드로 바로 돌아가게 줄 맨 앞에 고정한다(사용자 선택 2026-11-23 16:36:32). 미는 줄 밖(왼쪽 미는 단추 뒤)에 두어 줄을 밀어도 가려지지 않는다. 휴대폰은 아래 탭 '홈'이 있어 980px 이상에서만 보인다. */}
+          {currentSection && currentSubGroups && (
+            <a class="admin-bar__home" href="/admin/">
+              <AdminPillIcon name={sectionPills["/admin/"]} />
+              <span>대시보드</span>
+            </a>
+          )}
 
           {currentSection && currentSubGroups ? (
             <nav class="admin-subtabs" aria-label={`${currentSection.label} 메뉴`}>

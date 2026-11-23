@@ -1915,6 +1915,14 @@ html:has(.rt-pick-bar:not([hidden])) { scroll-padding-bottom: calc(var(--rt-pick
 /* 묶음 제목(sr-only, position: absolute)이 가로로 밀리는 줄 밖 문서 폭을 늘리지 않게 묶음 안에 가둔다. */
 .admin-subtabs__group { position: relative; display: flex; align-items: center; }
 .admin-subtabs__group::before { content: ""; align-self: center; width: 1px; height: 22px; margin: 0 6px 0 0; background: var(--ds-edge); }
+/* 아래 단계 줄 앞에 고정한 '대시보드' 알약(980px 이상만, 미는 줄 밖). 모양은 줄 안 알약과 같고, 뒤에 묶음 사이와 같은 얇은 세로 줄. */
+.admin-bar__home { display: none; }
+@media (min-width: 980px) {
+  .admin-bar__home { position: relative; z-index: 0; display: inline-flex; flex: 0 0 auto; align-items: center; gap: 6px; min-height: 48px; margin-right: 7px; padding: 0 14px 0 9px; border-radius: 999px; color: var(--ds-ink); font-weight: 700; white-space: nowrap; }
+  .admin-bar__home::before { content: ""; position: absolute; inset: 4px 0; z-index: -1; border: 1px solid var(--ds-edge); border-radius: 999px; background: var(--ds-paper); }
+  .admin-bar__home:hover::before { background: var(--ds-paper-2); }
+  .admin-bar__home::after { content: ""; position: absolute; top: 50%; right: -8px; width: 1px; height: 22px; transform: translateY(-50%); background: var(--ds-edge); }
+}
 
 /* ── 매출장부(단계 2, /admin/work/ledger/, 시안 2026-11-21 03:09:45 "이 시안대로"). 상태·경고는 색만이 아니라 글자·기호로 ── */
 .lg-notice { display: flex; align-items: center; gap: 8px; margin: -4px 0 12px; color: var(--ds-ink-soft); font-size: 1rem; font-weight: 700; }
@@ -2388,6 +2396,7 @@ nav.tr-homelinks { display: flex; flex-wrap: wrap; gap: 0 24px; margin: 0 0 14px
   .admin-bar { min-height: 56px; }
   .admin-subtabs a,
   .admin-topnav a { min-height: 44px; padding: 0 12px 0 7px; font-size: 0.875rem; }
+  .admin-bar__home { min-height: 44px; padding: 0 12px 0 7px; font-size: 0.875rem; }
   .admin-pill-icon { width: 22px; height: 22px; }
   .admin-bar__menu { min-height: 36px; font-size: 0.875rem; }
   .admin-bar__step { width: 36px; height: 36px; }
