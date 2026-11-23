@@ -372,12 +372,11 @@ test("열린 할 일이 0건이면 0건 안내와 함께 만들기 칸을 열어
 test("메뉴 A안: '할 일'은 업무 도구 처음 바로 뒤에 있고 할 일 화면에서 지금 화면으로 표시된다", async ({ page }) => {
   await setup(page, { width: 1280 });
   await page.goto("/admin/work/tasks/");
-  const links = page.locator(".admin-side a[href^='/admin/work/']");
+  const links = page.locator(".admin-subtabs a[href^='/admin/work/']");
   const hrefs = await links.evaluateAll((nodes) => nodes.map((node) => node.getAttribute("href")));
-  // 큰 메뉴는 "업무 도구" 묶음 머리와 아래 단계 "업무 도구 처음"이 같은 주소라 뒤의 것부터 본다.
   const start = hrefs.lastIndexOf("/admin/work/");
   expect(hrefs.slice(start, start + 3)).toEqual(["/admin/work/", "/admin/work/tasks/", "/admin/work/customers/"]);
-  await expect(page.locator(".admin-side").getByRole("link", { name: "할 일", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(page.locator(".admin-subtabs").getByRole("link", { name: "할 일", exact: true })).toHaveAttribute("aria-current", "page");
 });
 
 for (const [label, options, expected] of [

@@ -156,7 +156,7 @@ test("P1-e 홍보물: 목록 고르기는 메모리만(최대 6건·해제 막�
   assert.doesNotMatch(`${card}\n${promoLib}`, /aptDong|jibun/u, "카드·글에 동 번호·지번 칸을 쓰지 않음(DEC-WT-22)");
   const print = mediaBlocks(css, "print");
   assert.match(print, /@page \{ size: A4 portrait;/u);
-  assert.match(print, /\.admin-body:has\(\.rt-print-sheet\) :is\(\.skip-link, \.admin-side, \.admin-top, \.admin-subtabs, \.admin-tabbar\) \{ display: none !important; \}/u, "메뉴 숨김");
+  assert.match(print, /\.admin-body:has\(\.rt-print-sheet\) :is\(\.skip-link, \.admin-bar, \.admin-top, \.admin-subtabs, \.admin-tabbar\) \{ display: none !important; \}/u, "메뉴 숨김");
   assert.match(print, /\.rt-promo > :not\(\.rt-print-sheet\) \{ display: none !important; \}/u, "단추·설명 숨김");
   assert.match(css, /\.rt-print-sheet \{ display: none; \}/u, "화면에서는 인쇄 칸을 숨김");
 });

@@ -247,3 +247,140 @@ test("명시사항 칸 밀림 0px: 360·390·1280px에서 칸을 고르거나 �
   }
   assertNoErrors();
 });
+
+// 2026-11-23 위 알약 메뉴: 업무 도구 알약 11개는 1280px 한 줄에 다 들어가지 않는다. 마지막 '매물 안내지'가 지금 화면일 때 줄 밖에 남으면 안 된다.
+// 줄 밀기 단추가 나타나고 사라질 때 줄 폭이 바뀌면 방금 옮긴 알약이 다시 잘리므로(실제로 86px 잘렸음) 숨긴 단추도 자리를 지킨다.
+const pillGaps = (page, selector) => page.evaluate((target) => {
+  const strip = document.querySelector(".admin-subtabs");
+  const pill = target === ":focus" ? document.activeElement : strip.querySelector(target);
+  const bounds = strip.getBoundingClientRect();
+  const box = pill.getBoundingClientRect();
+  return { name: pill.textContent.trim(), left: Math.round(box.left - bounds.left), right: Math.round(bounds.right - box.right), scrollLeft: Math.round(strip.scrollLeft), hidden: strip.scrollWidth - strip.clientWidth };
+}, selector);
+
+test("PC 위 알약 줄 1280px: 줄 밖에 있던 지금 화면 알약 '매물 안내지'가 처음부터 줄 안에 있고, Tab으로 간 알약도 줄이 따라온다", async ({ page }) => {
+  await setup(page, 1280);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto(PAGE);
+  const current = await pillGaps(page, '[aria-current="page"]');
+  expect(current.name).toBe("매물 안내지");
+  expect(current.hidden, "알약이 줄보다 많아야 이 시험이 뜻이 있음").toBeGreaterThan(0);
+  expect(current.scrollLeft, "줄을 옮겨 둠").toBeGreaterThan(0);
+  expect(current.left, "왼쪽으로 잘리지 않음").toBeGreaterThanOrEqual(0);
+  expect(current.right, "오른쪽으로 잘리지 않음").toBeGreaterThanOrEqual(0);
+  // 줄 밀기 단추: 끝까지 간 쪽은 숨기되 자리는 그대로(줄 폭이 바뀌지 않음)
+  const next = page.locator('[data-admin-strip-step="1"]');
+  const back = page.locator('[data-admin-strip-step="-1"]');
+  await expect(next).toBeHidden();
+  await expect(back).toBeVisible();
+  expect(Math.round((await next.evaluate((button) => button.getBoundingClientRect().width))), "숨긴 단추도 자리를 지킴").toBe(36);
+  expect((await back.boundingBox()).height).toBeGreaterThanOrEqual(36);
+  await back.click();
+  await expect.poll(async () => (await pillGaps(page, "li:first-child a")).left, "'‹'로 줄을 되돌림").toBeGreaterThanOrEqual(0);
+  // 키보드: 처음 화면(줄이 처음 자리)에서 Tab으로 마지막 알약까지 가면 줄이 따라와 포커스가 보인다
+  await page.goto("/admin/work/");
+  expect((await pillGaps(page, '[aria-current="page"]')).scrollLeft).toBe(0);
+  const last = page.locator(".admin-subtabs a").last();
+  for (let step = 0; step < 40; step += 1) {
+    await page.keyboard.press("Tab");
+    if (await last.evaluate((link) => link === document.activeElement)) break;
+  }
+  await expect(last).toBeFocused();
+  await expect.poll(async () => (await pillGaps(page, ":focus")).right, "Tab으로 간 알약이 줄 안").toBeGreaterThanOrEqual(0);
+  expect((await pillGaps(page, ":focus")).name).toBe("매물 안내지");
+  expect(await overflowOf(page)).toBeLessThanOrEqual(0);
+});
+
+test("PC '전체 메뉴' 창 1280×720: 창이 화면 안에 있고 메뉴 고리는 내리지 않아도 다 보이며, 넘치는 아래쪽은 창 안에서 내려 보고, 닫으면 '전체 메뉴' 단추로 돌아온다", async ({ page }) => {
+  await setup(page, 1280);
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto(PAGE);
+  const open = page.getByRole("button", { name: "전체 메뉴" });
+  await open.click();
+  const sheet = page.getByRole("dialog", { name: "전체 메뉴" });
+  await expect(sheet).toBeVisible();
+  const box = await sheet.boundingBox();
+  expect(box.y, "창 위").toBeGreaterThanOrEqual(0);
+  expect(Math.round(box.y + box.height), "창 아래가 화면 안").toBeLessThanOrEqual(720);
+  expect(Math.round(box.x + box.width), "창 오른쪽이 화면 안").toBeLessThanOrEqual(1280);
+  // 메뉴 고리(구역 9개 + 업무 도구 아래 단계 11개)는 창을 내리지 않아도 모두 보인다
+  const links = sheet.locator(".admin-menu a");
+  expect(await links.count()).toBeGreaterThanOrEqual(20);
+  for (const link of await links.all()) await expect(link, await link.textContent()).toBeInViewport({ ratio: 1 });
+  await expect(sheet.getByRole("link", { name: "매물 안내지" })).toHaveAttribute("aria-current", "page");
+  // 창 아래 글(상호·공개 홈페이지)이 넘치면 문서가 아니라 창 안에서 내린다
+  const foot = sheet.getByRole("link", { name: /공개 홈페이지/u });
+  await foot.scrollIntoViewIfNeeded();
+  await expect(foot).toBeInViewport({ ratio: 1 });
+  expect(await page.evaluate(() => window.scrollY), "문서는 그대로").toBe(0);
+  await page.keyboard.press("Escape");
+  await expect(sheet).toBeHidden();
+  await expect(open, "Esc로 닫으면 연 단추로").toBeFocused();
+  await open.click();
+  await sheet.getByRole("button", { name: "닫기" }).click();
+  await expect(sheet).toBeHidden();
+  await expect(open, "'닫기'로 닫아도 연 단추로").toBeFocused();
+});
+
+// 줄 밀기 단추는 마우스를 쓸 때만 보이고 누르는 곳은 44px이다. 36px은 "1221px 이상 + 마우스"(조밀한 PC)뿐이다(사용자 승인 2026-11-23 11:34:13).
+test("PC 위 알약 줄 1024px(마우스): 줄 밀기 단추는 44px이고 숨긴 쪽도 자리를 지키며, 지금 화면 알약 '매물 안내지'가 처음부터 줄 안에 있다", async ({ page }) => {
+  await setup(page, 1024);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto(PAGE);
+  expect(await page.evaluate(() => matchMedia("(hover: hover) and (pointer: fine)").matches), "이 시험은 마우스 화면").toBe(true);
+  const current = await pillGaps(page, '[aria-current="page"]');
+  expect(current.name).toBe("매물 안내지");
+  expect(current.hidden, "알약이 줄보다 많음").toBeGreaterThan(0);
+  expect(current.left, "왼쪽으로 잘리지 않음").toBeGreaterThanOrEqual(0);
+  expect(current.right, "오른쪽으로 잘리지 않음").toBeGreaterThanOrEqual(0);
+  const next = page.locator('[data-admin-strip-step="1"]');
+  const back = page.locator('[data-admin-strip-step="-1"]');
+  await expect(next).toBeHidden();
+  await expect(back).toBeVisible();
+  const backBox = await back.boundingBox();
+  expect(Math.round(backBox.width), "줄 밀기 단추 폭").toBe(44);
+  expect(Math.round(backBox.height), "줄 밀기 단추 높이").toBe(44);
+  expect(Math.round(await next.evaluate((button) => button.getBoundingClientRect().width)), "숨긴 단추도 자리를 지킴").toBe(44);
+  expect((await page.getByRole("button", { name: "전체 메뉴" }).boundingBox()).height, "'전체 메뉴' 44px").toBeGreaterThanOrEqual(44);
+  // 한 번에 줄 폭의 0.8배씩 민다. 처음 자리에 닿으면 '‹'가 숨는다
+  for (let step = 0; step < 6 && (await pillGaps(page, "li:first-child a")).scrollLeft > 0; step += 1) {
+    const from = (await pillGaps(page, "li:first-child a")).scrollLeft;
+    await back.click();
+    await expect.poll(async () => (await pillGaps(page, "li:first-child a")).scrollLeft, "'‹'를 누르면 줄이 왼쪽으로").toBeLessThan(from);
+  }
+  await expect(back, "처음 자리에서는 '‹'를 숨김").toBeHidden();
+  await expect(next).toBeVisible();
+  expect((await pillGaps(page, "li:first-child a")).left, "'‹'로 줄을 되돌림").toBeGreaterThanOrEqual(0);
+  expect(await overflowOf(page)).toBeLessThanOrEqual(0);
+});
+
+test("손가락으로 쓰는 넓은 화면 1280px: 조밀한 PC 규칙(36px·14px)이 걸리지 않아 누르는 곳 44px·알약 글자 16px 그대로이고, 줄 밀기 단추 없이 줄을 직접 민다", async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, hasTouch: true, isMobile: true });
+  const page = await context.newPage();
+  try {
+    await setup(page, 1280);
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto(PAGE);
+    expect(await page.evaluate(() => innerWidth), "화면 폭").toBe(1280);
+    expect(await page.evaluate(() => matchMedia("(hover: hover) and (pointer: fine)").matches), "이 시험은 손가락 화면").toBe(false);
+    const menu = page.getByRole("button", { name: "전체 메뉴" });
+    expect((await menu.boundingBox()).height, "'전체 메뉴' 44px").toBeGreaterThanOrEqual(44);
+    expect(await menu.evaluate((button) => getComputedStyle(button).fontSize), "'전체 메뉴' 글자 16px").toBe("16px");
+    const pill = page.locator('.admin-subtabs a[aria-current="page"]');
+    expect(await pill.evaluate((link) => getComputedStyle(link).fontSize), "알약 글자 16px").toBe("16px");
+    expect((await pill.boundingBox()).height, "알약을 누르는 곳 48px").toBeGreaterThanOrEqual(48);
+    for (const step of await page.locator("[data-admin-strip-step]").all()) {
+      expect(await step.evaluate((button) => getComputedStyle(button).display), "줄 밀기 단추는 손가락 화면에 없음").toBe("none");
+    }
+    // 단추가 없어도 지금 화면 알약은 처음부터 줄 안에 있고, 줄은 옆으로 밀린다
+    const current = await pillGaps(page, '[aria-current="page"]');
+    expect(current.name).toBe("매물 안내지");
+    expect(current.hidden, "알약이 줄보다 많음").toBeGreaterThan(0);
+    expect(current.left, "왼쪽으로 잘리지 않음").toBeGreaterThanOrEqual(0);
+    expect(current.right, "오른쪽으로 잘리지 않음").toBeGreaterThanOrEqual(0);
+    expect(await page.locator(".admin-subtabs").evaluate((strip) => getComputedStyle(strip.querySelector("ul") ?? strip).overflowX + "/" + getComputedStyle(strip).overflowX), "줄을 옆으로 밀 수 있음").toMatch(/auto|scroll/u);
+    expect(await overflowOf(page)).toBeLessThanOrEqual(0);
+  } finally {
+    await context.close();
+  }
+});

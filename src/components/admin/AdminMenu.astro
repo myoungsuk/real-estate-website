@@ -1,5 +1,5 @@
 ---
-// 관리자 메뉴 목록. PC 왼쪽 고정 목록과 휴대폰 전체 메뉴 창이 같은 목록을 쓴다. 메뉴 자료와 지금 화면 판정은 AdminLayout이 넘긴다.
+// 관리자 메뉴 목록. '전체 메뉴' 창(PC·휴대폰 공통)에 쓴다. 메뉴 자료와 지금 화면 판정은 AdminLayout이 넘긴다.
 import AdminIcon, { type AdminIconName } from "./AdminIcon.astro";
 
 interface MenuSubItem {
@@ -29,7 +29,7 @@ interface MenuGroup {
 
 interface Props {
   label: string;
-  // 한 화면에 메뉴가 두 번(PC 왼쪽 목록·휴대폰 전체 메뉴 창) 들어가므로 묶음 제목 id 앞머리를 다르게 받는다.
+  // 묶음 제목 id 앞머리. 위 알약 줄의 묶음 제목 id(admin-subtabs-group-*)와 겹치지 않게 받는다.
   idPrefix: string;
   groups: MenuGroup[];
 }

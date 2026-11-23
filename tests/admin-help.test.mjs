@@ -264,3 +264,14 @@ test("사용 안내 화면은 관리자 메뉴 '확인' 묶음 끝에 있고, �
   assert.doesNotMatch(box, /localStorage|sessionStorage/u, "브라우저 저장소를 쓰지 않음");
   assert.match(box, /href=\{`\/admin\/help\/#\$\{help\.anchor\}`\}/u, "자세한 안내 위치로 가는 고리");
 });
+
+// 2026-11-23 위 알약 메뉴: 왼쪽 고정 목록과 휴대폰 '작은 탭'이 없어졌다. 사용 안내·상자 문구가 없는 것을 가리키지 않게 한다.
+test("사용 안내는 없어진 '왼쪽 메뉴'·'왼쪽 목록'·'작은 탭'을 말하지 않고, 위 메뉴 줄과 '전체 메뉴'로 안내한다", async () => {
+  const help = await readSource("src/lib/admin-help.mjs");
+  for (const gone of ["왼쪽 메뉴", "왼쪽 목록", "작은 탭"]) assert.equal(help.split(gone).length - 1, 0, gone);
+  assert.ok(help.split("화면 위 메뉴 줄").length - 1 >= 10, "아래 단계는 화면 위 메뉴 줄에서");
+  assert.match(help, /컴퓨터에서는 화면 맨 위에 메뉴 줄이 있습니다\. 줄에 다 들어가지 않은 메뉴는 줄 끝의 화살표 단추\(마우스를 쓸 때\)를 누르거나 줄을 옆으로 밀어 넘겨 보고, 오른쪽 위 '전체 메뉴'를 누르면 모든 메뉴가 담긴 창이 열립니다\./u, "줄에 숨는 메뉴가 있으므로 '모든 메뉴가 보인다'고 하지 않음");
+  const layout = await readSource("src/layouts/AdminLayout.astro");
+  assert.match(layout, /data-admin-strip-step="1"/u, "줄 끝의 화살표 단추");
+  assert.match(layout, /<div class="admin-sheet__foot">[\s\S]*?<a class="admin-public-link" href="\/">\s*공개 홈페이지/u, "'전체 메뉴' 창 아래의 '공개 홈페이지'");
+});

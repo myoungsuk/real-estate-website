@@ -155,7 +155,7 @@ test("홍보 종이 인쇄: 인쇄소용은 96×56mm 2쪽(앞·뒤), A4 10장 �
   await page.getByRole("button", { name: "인쇄소용 PDF(앞·뒤)" }).click();
   expect(await page.evaluate(() => window.__printed)).toEqual(["card"]);
   await page.emulateMedia({ media: "print" });
-  for (const selector of [".admin-side", ".admin-top", ".admin-tabbar", ".work-doc__header", ".paper-done", ".paper-card"]) await expect(page.locator(selector).first(), selector).toBeHidden();
+  for (const selector of [".admin-bar", ".admin-top", ".admin-tabbar", ".work-doc__header", ".paper-done", ".paper-card"]) await expect(page.locator(selector).first(), selector).toBeHidden();
   await expect(page.locator(".paper-print--card .bc")).toHaveCount(2);
   const cardPdf = pdfPages(await page.pdf({ preferCSSPageSize: true, printBackground: true }));
   expect(cardPdf, "96×56mm 두 쪽").toEqual({ count: 2, sizes: ["96x56", "96x56"] });

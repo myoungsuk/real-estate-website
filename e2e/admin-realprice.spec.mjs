@@ -310,7 +310,8 @@ test("실거래가 D안 PC: 1280px은 같은 순서에 찾기칸·단추가 한 
     return { sameRow: Math.abs(find.top - chips.top) < 4, chipsOneLine: chips.height < 50 };
   });
   expect(line, "찾기칸 옆에 단추 6개가 한 줄").toEqual({ sameRow: true, chipsOneLine: true });
-  expect((await tapSizes(page)).filter((size) => size.width < 44 || size.height < 44), "44px보다 작은 단추").toEqual([]);
+  // 마우스를 쓰는 1221px 이상 PC는 누르는 곳 36px(사용자 승인 2026-11-23 11:34:13). 휴대폰 44px은 390px 시험이 본다.
+  expect((await tapSizes(page)).filter((size) => size.width < 36 || size.height < 36), "36px보다 작은 단추").toEqual([]);
   await expect(page.locator("#rt-mode-label")).toBeVisible();
   await expect(page.locator("[data-rt-criterion]")).toBeVisible();
   await expect(page.locator("#rt-list-title")).toHaveText("새 거래 30건 보는 중", { useInnerText: true });
@@ -992,7 +993,7 @@ test("P1-e TK-40 인쇄: 메뉴·단추·설명은 숨기고 카드 그림만 A4
   await expect(page.locator("[data-promo-download]")).toHaveCount(2);
   await expect(page.getByRole("button", { name: "종이로 뽑기(A4)" })).toBeEnabled();
   await page.emulateMedia({ media: "print" });
-  for (const selector of [".admin-side", ".admin-top", ".admin-tabbar", "[data-promo-main]", ".work-doc__header", ".admin-page-help"]) await expect(page.locator(selector).first(), selector).toBeHidden();
+  for (const selector of [".admin-bar", ".admin-top", ".admin-tabbar", "[data-promo-main]", ".work-doc__header", ".admin-page-help"]) await expect(page.locator(selector).first(), selector).toBeHidden();
   await expect(page.locator(".rt-print-sheet img")).toHaveCount(2);
   for (const image of await page.locator(".rt-print-sheet img").all()) await expect(image).toBeVisible();
   const pdf = (await page.pdf({ format: "A4", preferCSSPageSize: true })).toString("latin1");

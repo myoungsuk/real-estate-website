@@ -69,13 +69,15 @@ const lineCount = (locator) => locator.evaluate((node) => {
   tops.sort((a, b) => a - b);
   return tops.filter((top, index) => index === 0 || top - tops[index - 1] > 4).length;
 });
+// 누르는 곳: 휴대폰·태블릿은 44px, 마우스를 쓰는 1221px 이상 PC는 36px(사용자 승인 2026-11-23 11:34:13).
+const tapMin = (page) => (page.viewportSize().width >= 1221 ? 36 : 44);
 async function expectControls(panel, label) {
   const controls = panel.locator("button:visible, a.work-secondary-button:visible");
   expect(await controls.count(), `${label}: 보이는 단추`).toBeGreaterThan(0);
   for (const control of await controls.all()) {
     const box = await control.boundingBox();
     const text = (await control.textContent()).trim();
-    expect(box.height, `${label} '${text}' 높이`).toBeGreaterThanOrEqual(44);
+    expect(box.height, `${label} '${text}' 높이`).toBeGreaterThanOrEqual(tapMin(panel.page()));
     expect(box.width, `${label} '${text}' 너비`).toBeGreaterThanOrEqual(44);
     expect(await lineCount(control), `${label} '${text}' 한 줄`).toBe(1);
   }
@@ -311,7 +313,7 @@ test("해시 키가 없으면(503 WORK_CONFIG_MISSING) 구독 주소를 만들�
 });
 
 for (const width of [360, 390, 430, 768, 1280]) {
-  test(`구독 칸 ${width}px: 세 상태 모두 단추 44px 이상·한 줄이고 가로로 넘치지 않는다`, async ({ page }) => {
+  test(`구독 칸 ${width}px: 세 상태 모두 단추 44px(마우스 PC는 36px) 이상·한 줄이고 가로로 넘치지 않는다`, async ({ page }) => {
     const assertNoErrors = collectErrors(page);
     await setup(page, { width, feeds: [feedRow(1, "2026-11-22T01:00:00.000Z")] });
     await page.goto(PAGE);
