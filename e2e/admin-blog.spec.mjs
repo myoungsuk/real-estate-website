@@ -469,3 +469,147 @@ test("글 초안 360px 새 꼴(2026-11-23): 소제목 칸·현장에서 확인�
   expect(await overflowOf(page)).toBeLessThanOrEqual(0);
   assertNoErrors();
 });
+
+// 카드 그림(2026-11-23 사용자 선택 "B 큰 숫자 인포그래픽"·"3장 한 벌"): 단지 숫자는 빌드 때 실은 공개 단지 자료(complexes.json)에서만.
+const realComplexes = JSON.parse(readFileSync(new URL("../src/data/complexes.json", import.meta.url), "utf8"));
+const sinheung = listBlogSources({ rules, listings: [], naverListings: { items: [] }, complexes: realComplexes }).find((source) => source.id === "sinheung-sk-view");
+const cardResult = {
+  title: "신흥 SK뷰 단지 살펴보기",
+  paragraphs: ["신흥 SK뷰는 12개동 1,588세대 단지입니다.", "AI 글에 999세대라고 잘못 써도 카드에는 공개 자료 숫자만 들어갑니다."],
+  headings: ["단지 개요", ""],
+  checklist: ["주차 동선 확인"],
+  hashtags: ["신흥동"],
+  snsShort: "신흥 SK뷰 1,588세대",
+  factsUsed: ["규모"],
+};
+const naturalSizes = (page) => page.locator("[data-bl-cardset-list] img").evaluateAll((images) => images.map((image) => `${image.naturalWidth}x${image.naturalHeight}`));
+
+test("글 초안 카드 그림 1280px: 단지 소개 초안은 공개 단지 자료로 카드 3장(표지·단지 정보·확인할 점)을 그리고, 저장은 보조 단추이며 서버 요청이 늘지 않는다", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const done = draftOf(sinheung, { result: cardResult });
+  const calls = await setup(page, { width: 1280, drafts: [done] });
+  await page.goto("/admin/work/blog/");
+  await page.locator("[data-bl-drafts-summary]").click();
+  await page.getByRole("button", { name: "신흥 SK뷰 단지 살펴보기 열기" }).click();
+  await expect(page.locator("[data-bl-result]")).toBeVisible();
+  const before = calls.requests.length;
+
+  const panel = page.locator("[data-bl-cardset]");
+  await expect(panel).toBeVisible();
+  await expect(panel.locator("h3")).toContainText("카드 그림");
+  const images = panel.locator("[data-bl-cardset-list] img");
+  await expect(images).toHaveCount(3);
+  for (const image of await images.all()) await expect(image).toHaveAttribute("src", /^data:image\/png;base64,/u);
+  await expect(images.nth(0)).toHaveAttribute("alt", "카드 그림 1/3장: 표지");
+  await expect(images.nth(2)).toHaveAttribute("alt", "카드 그림 3/3장: 확인할 점");
+  await expect.poll(() => naturalSizes(page)).toEqual(["1080x1350", "1080x1350", "1080x1350"]);
+  await expect(panel.locator("figcaption span")).toHaveText(["표지", "단지 정보", "확인할 점"]);
+  const links = panel.locator("[data-bl-cardset-link]");
+  await expect(links).toHaveText(["1장 저장", "2장 저장", "3장 저장"]);
+  expect(await links.evaluateAll((list) => list.map((link) => link.getAttribute("download")))).toEqual(["2026-11-20-신흥SK뷰-1.png", "2026-11-20-신흥SK뷰-2.png", "2026-11-20-신흥SK뷰-3.png"]);
+
+  const save = panel.locator("[data-bl-cardset-save]");
+  await expect(save).toHaveText("카드 3장 저장");
+  await expect(save, "'카드 3장 저장'은 보조 단추").toHaveClass(/work-secondary-button/u);
+  await expect(panel.locator(".work-primary-button"), "주 단추는 '블로그 글 복사' 하나").toHaveCount(0);
+  await expect(page.locator(".bl-result__side .work-primary-button")).toHaveText(["블로그 글 복사"]);
+
+  const saved = [];
+  page.on("download", (download) => saved.push(download.suggestedFilename()));
+  await save.click();
+  await expect.poll(() => saved.length).toBe(3);
+  expect(saved.sort()).toEqual(["2026-11-20-신흥SK뷰-1.png", "2026-11-20-신흥SK뷰-2.png", "2026-11-20-신흥SK뷰-3.png"]);
+  await expect(panel.locator("[data-bl-cardset-status]")).toContainText("✓ 카드 3장을 내려받았습니다.");
+
+  // 글을 고쳐도 카드는 공개 자료 그대로라 다시 그리지 않는다.
+  const first = await images.nth(1).getAttribute("src");
+  await page.locator("#bl-p1").fill("신흥 SK뷰 소개를 고쳤습니다.");
+  await expect(page.locator("[data-bl-check]")).toBeVisible();
+  await page.waitForTimeout(400);
+  expect(await images.nth(1).getAttribute("src"), "글을 고쳐도 같은 그림").toBe(first);
+  expect(calls.requests.length, "카드를 그리는 동안 업무 API 요청이 늘지 않음").toBe(before);
+  const stored = await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage }, url: location.href }));
+  expect(stored.includes("data:image"), "그림은 브라우저 저장소·주소에 없음").toBe(false);
+  assertNoErrors();
+});
+
+test("글 초안 카드 그림 360px: 매물 초안은 명시사항이 다 찰 때만 사진 없는 표지 1장을 그리고, 소재지를 지우거나 호수를 넣으면 지운다(가로 넘침 없음)", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const result = { title: "가상숲1단지 매매", paragraphs: ["전용 84.97㎡, 10층 남향입니다."], hashtags: ["천동"], snsShort: "가상숲1단지", factsUsed: [] };
+  const calls = await setup(page, { width: 360, drafts: [draftOf(listing, { result })] });
+  await page.goto("/admin/work/blog/");
+  await page.locator("[data-bl-drafts-summary]").click();
+  await page.getByRole("button", { name: "가상숲1단지 매매 열기" }).click();
+  await expect(page.locator("[data-bl-result]")).toBeVisible();
+
+  const panel = page.locator("[data-bl-cardset]");
+  await expect(panel).toBeVisible();
+  await expect(panel.locator("[data-bl-cardset-status]")).toHaveText("명시사항 빈 칸을 모두 채우면 표지를 만듭니다.");
+  await expect(panel.locator("img")).toHaveCount(0);
+  await expect(panel.locator("[data-bl-cardset-save]")).toBeHidden();
+
+  await page.locator("#bl-reloc").fill(LOCATION);
+  await expect(panel.locator("img")).toHaveCount(1);
+  await expect(panel.locator("img")).toHaveAttribute("alt", "카드 그림: 매물 표지");
+  await expect.poll(() => naturalSizes(page)).toEqual(["1080x1350"]);
+  await expect(panel.locator("[data-bl-cardset-save]")).toHaveText("표지 저장");
+  await expect(panel.locator("[data-bl-cardset-link]")).toBeHidden();
+  await expect(panel.locator("[data-bl-cardset-link]")).toHaveAttribute("download", "2026-11-20-매물표지.png");
+  expect(await overflowOf(page), "표지가 보인 360px").toBeLessThanOrEqual(0);
+
+  await page.locator("#bl-reloc").fill(`${LOCATION} 101호`);
+  await expect(panel.locator("[data-bl-cardset-status]")).toHaveText("소재지를 고치면 표지를 만듭니다.");
+  await expect(panel.locator("img"), "호수처럼 보이면 표지를 지움").toHaveCount(0);
+  await page.locator("#bl-reloc").fill("");
+  await expect(panel.locator("[data-bl-cardset-status]")).toHaveText("명시사항 빈 칸을 모두 채우면 표지를 만듭니다.");
+  await expect(panel.locator("img")).toHaveCount(0);
+  expect(calls.requests.some((line) => line.includes("가상동")), "소재지는 어떤 요청에도 없음").toBe(false);
+  assertNoErrors();
+});
+
+test("글 초안 카드 그림: 지금 공개 단지 자료에 없는 단지는 카드를 만들지 않고 까닭을 보인다", async ({ page }) => {
+  const done = draftOf(complex, { result: { ...cardResult, title: "가상숲 단지 살펴보기" } });
+  await setup(page, { width: 390, drafts: [done] });
+  await page.goto("/admin/work/blog/");
+  await page.locator("[data-bl-drafts-summary]").click();
+  await page.getByRole("button", { name: "가상숲 단지 살펴보기 열기" }).click();
+  await expect(page.locator("[data-bl-cardset-status]")).toHaveText("이 단지는 지금 공개 단지 자료에 없어 카드를 만들 수 없습니다.");
+  await expect(page.locator("[data-bl-cardset] img")).toHaveCount(0);
+});
+
+// 날개-2 2026-11-23 깨 보기 보탬(C13): 초안을 만든 뒤 자료가 막혀(sourcePublic false) 서버가 currentSource만 주는 경우.
+test("글 초안 카드 그림: 지금 막힌 자료의 초안(sourcePublic false, currentSource 있음)은 카드 칸을 열지 않고 그림을 만들지 않는다", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const done = draftOf(sinheung, { result: cardResult, sourcePublic: false });
+  await setup(page, { width: 390, drafts: [done] });
+  await page.goto("/admin/work/blog/");
+  await page.locator("[data-bl-drafts-summary]").click();
+  await page.getByRole("button", { name: "신흥 SK뷰 단지 살펴보기 열기" }).click();
+  await expect(page.locator("[data-bl-result]")).toBeVisible();
+  await expect(page.locator("[data-bl-source-gone]"), "까닭은 결과 위 안내 한 줄").toBeVisible();
+  await page.waitForTimeout(400);
+  await expect(page.locator("[data-bl-cardset]")).toBeHidden();
+  await expect(page.locator("[data-bl-cardset] img")).toHaveCount(0);
+  assertNoErrors();
+});
+
+// 날개-2 2026-11-23 깨 보기 보탬(C14·C17): 소재지 100자(입력 상한)로 표지 글이 카드에 넘치는 경우.
+test("글 초안 카드 그림 360px: 매물 소재지가 100자로 표지에 다 들어가지 않으면 그림을 내보내지 않고 까닭을 보인다", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const result = { title: "가상숲1단지 매매", paragraphs: ["전용 84.97㎡, 10층 남향입니다."], hashtags: ["천동"], snsShort: "가상숲1단지", factsUsed: [] };
+  await setup(page, { width: 360, drafts: [draftOf(listing, { result })] });
+  await page.goto("/admin/work/blog/");
+  await page.locator("[data-bl-drafts-summary]").click();
+  await page.getByRole("button", { name: "가상숲1단지 매매 열기" }).click();
+  const panel = page.locator("[data-bl-cardset]");
+  await page.locator("#bl-reloc").fill(LOCATION);
+  await expect(panel.locator("img"), "짧은 소재지는 표지를 그림").toHaveCount(1);
+  const long = `${LOCATION} ${"가상로 가상길 ".repeat(20)}`.slice(0, 100);
+  expect(long.length).toBe(100);
+  await page.locator("#bl-reloc").fill(long);
+  await expect(panel.locator("[data-bl-cardset-status]")).toHaveText("내용이 길어 카드에 다 들어가지 않아 만들지 않았습니다.");
+  await expect(panel.locator("img")).toHaveCount(0);
+  await expect(panel.locator("[data-bl-cardset-save]")).toBeHidden();
+  expect(await overflowOf(page)).toBeLessThanOrEqual(0);
+  assertNoErrors();
+});

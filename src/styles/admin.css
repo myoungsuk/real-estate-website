@@ -1761,6 +1761,17 @@ html:has(.rt-pick-bar:not([hidden])) { scroll-padding-bottom: calc(var(--rt-pick
 .bl-disc h3 { margin: 0 0 6px; color: var(--ds-navy); font-size: 1rem; }
 .bl-disc h3 small { color: var(--ds-ink-soft); font-weight: 700; }
 .bl-disc p { margin: 0 0 6px; }
+/* 카드 그림(2026-11-23 B안): 작은 그림 3장을 한 줄에, 1장(매물 표지)이면 절반 폭. 저장은 보조 단추. */
+.bl-cardset__status:empty { display: none; }
+.bl-cardset__list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 8px 0 10px; padding: 0; list-style: none; }
+.bl-cardset__list:empty { display: none; }
+.bl-cardset__list:has(> li:only-child) { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.bl-cardset__list figure { display: grid; gap: 4px; margin: 0; }
+.bl-cardset__list img { display: block; width: 100%; height: auto; border: 1px solid var(--ds-edge); border-radius: var(--ad-radius); background: var(--ds-paper); }
+.bl-cardset__list figcaption { display: grid; justify-items: center; color: var(--ds-ink-soft); font-size: 1rem; text-align: center; }
+.bl-cardset__link { min-height: 44px; display: inline-flex; align-items: center; padding: 0 4px; color: var(--ds-navy); }
+.bl-cardset__link[hidden] { display: none; }
+.bl-cardset .work-secondary-button { width: 100%; margin-bottom: 8px; }
 .bl-gap { padding: 0 4px; color: var(--ds-paper); background: var(--ds-stamp); font-weight: 800; }
 .bl-actions { display: grid; gap: 8px; }
 .bl-actions .work-primary-button:disabled, .bl-actions .work-secondary-button:disabled { color: var(--ds-ink-soft); border-color: var(--ds-edge); background: var(--ds-paper-2); cursor: not-allowed; }
