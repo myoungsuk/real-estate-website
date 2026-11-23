@@ -133,7 +133,8 @@ export function kpiItems(data) {
     {
       key: "realprice", href: DASHBOARD_LINKS.realprice, label: "새 실거래 7일",
       ...(realprice.ok
-        ? { value: String(realprice.newCount), unit: "건", sub: `관심 단지 ${realprice.watchNewCount} · 신고가 ${realprice.newHighCount ?? "판정 준비 중"}`, warn: false }
+        // 신고가 수는 '새 실거래 7일' 칸 아래지만 최근 30일 기준이라 '30일'을 붙인다(판정 준비 중 글은 그대로).
+        ? { value: String(realprice.newCount), unit: "건", sub: `관심 단지 ${realprice.watchNewCount} · ${realprice.newHighCount === null ? "신고가 판정 준비 중" : `30일 신고가 ${realprice.newHighCount}`}`, warn: false }
         : { value: "—", unit: "", sub: failText(realprice), warn: false }),
     },
   ];
@@ -146,6 +147,13 @@ export function sectionCount(key, section) {
   if (key === "events") return `${shortDate(section.until)}까지 ${upcomingCount(section)}건${section.overdue > 0 ? ` · 지난 일정 ${section.overdue}건` : ""}`;
   if (key === "money") return `${monthLabel(section.month)} · 잔금일 기준`;
   return `새 거래 ${section.newCount}건 · 7일`;
+}
+
+/** 실거래 칸 목록 제목: 신고가가 보이는 줄보다 많을 때만 '(n건 중 m건)'을 붙인다 @param {any} section */
+export function highListTitle(section) {
+  const shown = Array.isArray(section.items) ? section.items.length : 0;
+  const total = section.newHighCount;
+  return Number.isInteger(total) && shown > 0 && total > shown ? `최근 30일 신고가(${total}건 중 ${shown}건)` : "최근 30일 신고가";
 }
 
 /** 칸이 비었을 때 글 @param {"tasks" | "events" | "money" | "realprice"} key @param {any} section */
