@@ -98,6 +98,11 @@ async function setup(page, { width = 390, enabled = true, store = makeStore(), s
     if (schemaOutdated && path.startsWith("/ledger")) return route.fulfill(failure(503, "WORK_SCHEMA_OUTDATED"));
 
     if (path === "/ledger/summary") {
+      if (control.holdSummary) await control.holdSummary;
+      if (control.failSummary > 0) {
+        control.failSummary -= 1;
+        return route.fulfill(failure(503, control.failSummaryCode ?? "STORAGE_UNAVAILABLE"));
+      }
       if (failSummaryOnce) {
         failSummaryOnce = false;
         return route.fulfill(failure(503, "STORAGE_UNAVAILABLE"));
@@ -1175,6 +1180,243 @@ test("PC 표 키보드: 방향키는 고칠 수 있는 칸만 서고, 숫자를 
   assertNoErrors();
 });
 
+test("넓은 PC 표 위 한 줄: 1221px 이상 + 마우스에서만 연도·기준일·거르기·되돌리기·CSV·만들기를 한 줄로 모으고, 좁히면 원래 자리로 돌려놓으며, Tab 차례는 보이는 차례와 같다", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const control = {};
+  await setup(page, { width: 1221, control });
+  await page.goto("/admin/work/ledger/");
+  await expect(page.locator(".lg-table")).toBeVisible();
+  const bar = page.locator("[data-lg-bar]");
+  const parts = ['.lg-filters', '[data-lg-chips]', '.lg-history', '[data-lg-csv]', '[data-lg-new]', '[data-lg-notice]', '[data-lg-csv-note]'];
+  const homes = ['[data-lg-main]', '.cu-list', '.lg-tools', '.lg-tools', '.lg-tools', '[data-lg-page]', '.cu-list'];
+  const inBar = ['.lg-bar__left', '.lg-bar__left', '.lg-bar__right', '.lg-bar__right', '.lg-bar__right', '.lg-line', '.lg-line'];
+  const placed = (want) => page.evaluate(([list, parents]) => list.map((selector, i) => document.querySelector(selector).parentElement.matches(parents[i])), [parts, want]);
+  // 원래 자리의 차례(만들기 → CSV → 되돌리기, 참고용 글은 '불러오는 중' 글 바로 앞)까지 그대로인지
+  const homeOrder = () => page.evaluate(() => [
+    [...document.querySelector(".lg-tools").children].map((node) => node.matches("[data-lg-new]") ? "new" : node.matches("[data-lg-csv]") ? "csv" : node.matches(".lg-history") ? "history" : "?").join(","),
+    document.querySelector("[data-lg-notice]").nextElementSibling.matches("[data-lg-boot]"),
+    document.querySelector(".lg-filters").nextElementSibling.matches("[data-lg-line]"),
+    document.querySelector("[data-lg-csv-note]").previousElementSibling.matches("[data-lg-grid-live]"),
+  ].join("|"));
+  const homeExpected = "new,csv,history|true|true|true";
+  const allTrue = parts.map(() => true);
+  // 클래스가 아니라 결과를 잰다. 글꼴에 따라 한 줄 칸이 두 줄이 될 수 있어(리눅스 CI) 고정 y 대신 사이 거리로 본다:
+  // 안내 줄 아래 끝 → 한 줄 칸 위 끝 10px, 한 줄 칸 아래 끝 → 표 머리 41px(줄 수 제목 31px 포함)로 잼, +2px까지. 안내 줄 높이, 빈 단추 칸 숨김
+  const layout = () => page.evaluate(() => {
+    const box = (selector) => document.querySelector(selector).getBoundingClientRect();
+    return {
+      lineToBar: box("[data-lg-bar]").top - box("[data-lg-line]").bottom,
+      barToHead: box(".lg-table thead").top - box("[data-lg-bar]").bottom,
+      line: box("[data-lg-line]").height,
+      tools: getComputedStyle(document.querySelector(".lg-tools")).display,
+      ...lineShape(),
+    };
+    function lineShape() {
+      const lineNode = document.querySelector("[data-lg-line]");
+      const shown = [...lineNode.children].filter((child) => child.getBoundingClientRect().height > 0);
+      const centers = shown.map((child) => { const r = child.getBoundingClientRect(); return (r.top + r.bottom) / 2; }).sort((a, b) => a - b);
+      const rows = centers.filter((center, i) => i === 0 || center - centers[i - 1] > 4).length;
+      const tallest = Math.max(...shown.map((child) => child.getBoundingClientRect().height));
+      const rowGap = parseFloat(getComputedStyle(lineNode).rowGap) || 0;
+      return { lineRows: rows, lineTallest: tallest, lineRowGap: rowGap };
+    }
+  });
+  // 안내 줄(참고용 · 기준일 없는 줄 알림 · CSV 알림)은 maxRows줄까지. 높이는 가장 높은 알림 × 줄 수 + 줄 사이 + 2px까지(B10처럼 상자·세로 쌓기면 넘음)
+  const expectTight = async (label, maxRows = 1) => {
+    const now = await layout();
+    expect(now.lineRows, `${label}: 안내는 ${maxRows}줄까지`).toBeLessThanOrEqual(maxRows);
+    expect(now.line, `${label}: 안내 줄 높이`).toBeLessThanOrEqual(now.lineTallest * maxRows + now.lineRowGap * (maxRows - 1) + 2);
+    expect(now.lineToBar, `${label}: 안내 줄 바로 아래 한 줄 칸`).toBeLessThanOrEqual(12);
+    expect(now.barToHead, `${label}: 한 줄 칸 바로 아래 표(빈 칸이 끼지 않음)`).toBeLessThanOrEqual(43);
+    expect(now.tools, `${label}: 빈 단추 칸은 자리도 차지하지 않음`).toBe("none");
+  };
+  // CI(리눅스 글꼴)에서 여유를 숫자로 알려고, 모양 검사 전에 한 줄 칸·안내 줄의 필요한 폭과 줄 폭을 남긴다
+  const logWidths = async (label) => {
+    const now = await page.evaluate(() => {
+      const rect = (node) => node.getBoundingClientRect();
+      const round = (value) => Math.round(value * 10) / 10;
+      const barNode = document.querySelector("[data-lg-bar]");
+      const lineNode = document.querySelector("[data-lg-line]");
+      const barGap = parseFloat(getComputedStyle(barNode).columnGap) || 0;
+      const lineGap = parseFloat(getComputedStyle(lineNode).columnGap) || 0;
+      const notes = [...lineNode.children].filter((child) => rect(child).height > 0);
+      return {
+        barNeed: round(rect(document.querySelector(".lg-bar__left")).width + barGap + rect(document.querySelector(".lg-bar__right")).width),
+        barAvail: round(rect(barNode).width),
+        lineNeed: round(notes.reduce((sum, child) => sum + rect(child).width, 0) + lineGap * Math.max(0, notes.length - 1)),
+        lineAvail: round(rect(lineNode).width),
+        notes: notes.length,
+        font: getComputedStyle(document.querySelector("[data-lg-new]")).fontFamily,
+      };
+    });
+    const spare = (avail, need) => Math.round((avail - need) * 10) / 10;
+    console.log(`[lg-bar] ${label} need=${now.barNeed} avail=${now.barAvail} spare=${spare(now.barAvail, now.barNeed)} font=${now.font}`);
+    console.log(`[lg-line] ${label} need=${now.lineNeed} avail=${now.lineAvail} spare=${spare(now.lineAvail, now.lineNeed)} notes=${now.notes}`);
+  };
+  // 한 줄 칸 모양: 한 줄이거나, 오른쪽 묶음(되돌리기 ~ 장부 줄 만들기)이 통째로 둘째 줄 오른쪽 끝. 묶음 안은 꺾이지 않는다
+  const barShape = () => page.evaluate(() => {
+    const rect = (node) => node.getBoundingClientRect();
+    const rows = (group) => new Set([...group.querySelectorAll("button")].filter((button) => rect(button).width > 0).map((button) => Math.round((rect(button).top + rect(button).bottom) / 2))).size;
+    const bar = rect(document.querySelector("[data-lg-bar]"));
+    const leftGroup = document.querySelector(".lg-bar__left");
+    const rightGroup = document.querySelector(".lg-bar__right");
+    const left = rect(leftGroup);
+    const right = rect(rightGroup);
+    const oneLine = right.top < left.bottom && right.left > left.right;
+    const wrapped = right.top >= left.bottom && Math.abs(right.right - bar.right) <= 1;
+    const gap = parseFloat(getComputedStyle(document.querySelector("[data-lg-bar]")).columnGap);
+    return {
+      shape: oneLine ? "한 줄" : wrapped ? "오른쪽 묶음 둘째 줄" : "어긋남",
+      leftRows: rows(leftGroup),
+      rightRows: rows(rightGroup),
+      need: Math.round((left.width + gap + right.width) * 10) / 10,
+      avail: Math.round(bar.width * 10) / 10,
+      font: getComputedStyle(document.querySelector("[data-lg-new]")).fontFamily,
+    };
+  });
+  const expectShape = async (label, allowed) => {
+    const now = await barShape();
+    expect(allowed, `${label}: ${now.shape}`).toContain(now.shape);
+    expect([now.leftRows, now.rightRows], `${label}: 묶음 안은 꺾이지 않음`).toEqual([1, 1]);
+    expect(await overflowOf(page), `${label}: 가로 넘침 없음`).toBeLessThanOrEqual(0);
+    return now.shape;
+  };
+  // Tab 차례 = 보이는 차례(위 줄 → 아래 줄, 같은 줄은 왼쪽 → 오른쪽). 못 누르는 되돌리기·다시 하기는 건너뜀
+  const tabNames = ["앞 해", "다음 해", "잔금일", "계약일", "입금일", "전체", "보수", "지출", "기타 수입", "미입금만", "CSV 내려받기", "장부 줄 만들기"];
+  const expectTabOrder = async (label) => {
+    await page.locator("[data-lg-undated-show]").focus();
+    const order = [];
+    for (let i = 0; i < tabNames.length; i += 1) {
+      await page.keyboard.press("Tab");
+      order.push(await page.evaluate(() => {
+        const node = document.activeElement;
+        const box = node.getBoundingClientRect();
+        return { name: node.getAttribute("aria-label") || node.textContent.replace("＋", "").trim(), x: box.left, y: (box.top + box.bottom) / 2 };
+      }));
+    }
+    expect(order.map((item) => item.name), label).toEqual(tabNames);
+    for (let i = 1; i < order.length; i += 1) {
+      const [before, now] = [order[i - 1], order[i]];
+      const after = now.y > before.y + 4 || (Math.abs(now.y - before.y) <= 4 && now.x > before.x);
+      expect(after, `${label}: ${now.name}는 ${before.name}의 뒤(아래 줄이거나 같은 줄 오른쪽)`).toBe(true);
+    }
+  };
+  const barHidden = () => bar.evaluate((node) => node.hidden);
+
+  // 모양 검사 전에 1280px·1221px 폭을 먼저 남긴다(앞 검사가 떨어져도 두 숫자를 다 얻게)
+  await expect(bar).toBeVisible();
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect.poll(() => page.evaluate(() => document.documentElement.clientWidth)).toBe(1280);
+  await logWidths("1280px");
+  await page.setViewportSize({ width: 1221, height: 900 });
+  await expect.poll(() => page.evaluate(() => document.documentElement.clientWidth)).toBe(1221);
+  await logWidths("1221px");
+  // 1221px(가장 좁은 넓은 PC): 한 줄, 또는 글꼴이 넓으면 오른쪽 묶음이 통째로 둘째 줄. 가로 넘침 없음
+  expect(await placed(inBar)).toEqual(allTrue);
+  await expectShape("1221px", ["한 줄", "오른쪽 묶음 둘째 줄"]);
+  await expect(page.locator(".lg-tools")).toBeHidden();
+  await expectTight("1221px", 2);
+  await expect(page.locator(".lg-line .lg-notice")).toHaveText("참고용 집계입니다. 세무 장부가 아닙니다.");
+  expect(await page.locator(".lg-line").evaluate((node) => [...node.children].map((child) => child.dataset.lgNotice !== undefined ? "참고용" : child.dataset.lgUndated !== undefined ? "기준일 없음" : child.dataset.lgCsvNote !== undefined ? "CSV" : "?").join(",")), "참고용 글 → 기준일 없는 줄 알림 → CSV 알림").toBe("참고용,기준일 없음,CSV");
+  // 누르는 곳은 36px까지(연도 화살표·기준일·거르기·되돌리기·CSV), 주 단추(만들기)는 44px, 연도·만들기 글자는 그대로
+  expect((await page.getByRole("button", { name: "앞 해" }).boundingBox()).width).toBeGreaterThanOrEqual(36);
+  expect((await page.getByRole("button", { name: "앞 해" }).boundingBox()).height).toBeGreaterThanOrEqual(36);
+  expect((await page.locator("[data-lg-new]").boundingBox()).height).toBeGreaterThanOrEqual(44);
+  expect((await page.locator("[data-lg-csv]").boundingBox()).height).toBeGreaterThanOrEqual(36);
+  expect(await page.locator("[data-lg-year]").evaluate((node) => getComputedStyle(node).fontSize), "연도 글자").toBe("20px");
+  expect(await page.locator("[data-lg-new]").evaluate((node) => parseFloat(getComputedStyle(node).fontSize))).toBeGreaterThanOrEqual(16);
+  await expect(page.getByRole("group", { name: "기준일" }), "'기준일' 이름은 읽기 프로그램이 그대로 읽음").toBeVisible();
+  await expect(page.locator("#lg-basis-label")).toHaveText("기준일");
+  expect((await page.locator("#lg-basis-label").boundingBox()).width, "화면에는 보이지 않음(폭 줄이기)").toBeLessThanOrEqual(1);
+  expect(await page.locator("[data-lg-undo] svg, [data-lg-redo] svg").evaluateAll((nodes) => nodes.map((node) => node.getAttribute("aria-hidden"))), "그림은 읽지 않음").toEqual(["true", "true"]);
+  // 1px만 좁혀도(1220px) 한 줄 칸은 hidden 속성으로 숨고(크기 0이라 toBeHidden으로는 못 봄) 묶음은 원래 자리로
+  await page.setViewportSize({ width: 1220, height: 900 });
+  await expect.poll(barHidden, "1220px: 한 줄 칸 hidden").toBe(true);
+  expect(await placed(homes)).toEqual(allTrue);
+  await page.setViewportSize({ width: 1221, height: 900 });
+  await expect.poll(barHidden, "1221px: 다시 보임").toBe(false);
+  expect(await placed(inBar)).toEqual(allTrue);
+
+  await expectTabOrder("1221px");
+  // 글꼴이 넓어 꺾이는 경우를 어느 글꼴에서나 보이도록 왼쪽 묶음을 시험으로만 넓혀 본다: 오른쪽 묶음만 통째로 내려가고, 거리·Tab 차례는 그대로
+  const wider = await page.addStyleTag({ content: ".lg-bar__left { padding-right: 300px; }" });
+  expect(await expectShape("왼쪽이 넓을 때", ["오른쪽 묶음 둘째 줄"])).toBe("오른쪽 묶음 둘째 줄");
+  await expectTight("둘째 줄로 꺾였을 때", 2);
+  await expectTabOrder("둘째 줄로 꺾였을 때");
+  await wider.evaluate((node) => node.remove());
+
+  // 칸을 하나 고치면 되돌리기가 켜진다: 36×36 그림 단추, 이름은 무엇을 되돌리는지
+  await typeCell(page, 3, "label", "가상 현수막");
+  await expect(gridState(page, 3)).toHaveText("저장함");
+  const undo = page.locator("[data-lg-undo]");
+  await expect(undo).toBeEnabled();
+  await expect(undo).toHaveAccessibleName("되돌리기: 가상 전단 인쇄 물건 표시·내용");
+  await expect(page.locator("[data-lg-redo]")).toBeDisabled();
+  const undoBox = await undo.boundingBox();
+  expect([Math.round(undoBox.width), Math.round(undoBox.height)], "그림 단추 36×36").toEqual([36, 36]);
+  await expect(undo.locator(".lg-history__icon")).toBeVisible();
+  // 마우스를 올리면 보이는 이름(title)도 읽기 프로그램 이름(aria-label)과 같다
+  expect(await page.locator("[data-lg-undo], [data-lg-redo]").evaluateAll((nodes) => nodes.map((node) => [node.title, node.getAttribute("aria-label")]))).toEqual([["되돌리기: 가상 전단 인쇄 물건 표시·내용", "되돌리기: 가상 전단 인쇄 물건 표시·내용"], ["다시 하기", "다시 하기"]]);
+  await undo.focus();
+  expect(await undo.evaluate((node) => getComputedStyle(node).outlineStyle), "포커스 테두리").not.toBe("none");
+
+  // 좁히면(1000px) 원래 자리·차례로, 다시 넓히면 한 줄로. 포커스는 같은 단추에 남는다
+  const expense = page.locator('[data-lg-kind="expense"]');
+  await expense.focus();
+  await page.setViewportSize({ width: 1000, height: 900 });
+  await expect.poll(barHidden).toBe(true);
+  expect(await placed(homes)).toEqual(allTrue);
+  expect(await homeOrder()).toBe(homeExpected);
+  await expect(expense, "옮긴 뒤에도 같은 단추에 포커스").toBeFocused();
+  await expect(page.locator(".lg-tools [data-lg-new]")).toBeVisible();
+  expect(await overflowOf(page)).toBeLessThanOrEqual(0);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect(bar).toBeVisible();
+  expect(await placed(inBar)).toEqual(allTrue);
+  await expectShape("1280px", ["한 줄"]);
+  await expectTight("1280px");
+  await expect(expense).toBeFocused();
+  await page.setViewportSize({ width: 1000, height: 900 });
+  await expect(bar).toBeHidden();
+  expect(await placed(homes)).toEqual(allTrue);
+  expect(await homeOrder()).toBe(homeExpected);
+  // 옮겨도 단추는 그대로 일한다(거르기)
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expense.click();
+  await expect(expense).toHaveAttribute("aria-pressed", "true");
+
+  // 목록이 다시 숨으면 참고용 글은 원래 자리로 돌아와 보인다
+  const notice = page.locator("[data-lg-notice]");
+  const noticeHome = () => notice.evaluate((node) => node.parentElement.matches("[data-lg-page]") && node.nextElementSibling.matches("[data-lg-boot]"));
+  // ① 뒤로 가기로 돌아와(bfcache) 처음부터 다시 불러오는 중
+  let releaseSummary = () => {};
+  control.holdSummary = new Promise((resolve) => {
+    releaseSummary = resolve;
+  });
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })));
+  await expect(page.locator("[data-lg-boot]")).toBeVisible();
+  await expect(notice, "불러오는 중에도 '세무 장부가 아닙니다'가 보임").toBeVisible();
+  expect(await noticeHome()).toBe(true);
+  expect(await placed(homes)).toEqual(allTrue);
+  await expect(bar).toBeHidden();
+  control.holdSummary = null;
+  releaseSummary();
+  await expect(page.locator(".lg-table")).toBeVisible();
+  await expect(page.locator(".lg-line .lg-notice"), "다 불러오면 다시 한 줄로").toBeVisible();
+  expect(await placed(inBar)).toEqual(allTrue);
+  // ② 연도를 바꿔 다시 읽다가 목록 칸을 닫는 오류(자료 구조 갱신 전)
+  control.failSummary = 1;
+  control.failSummaryCode = "WORK_SCHEMA_OUTDATED";
+  await page.getByRole("button", { name: "앞 해" }).click();
+  await expect(page.getByRole("heading", { name: "자료 구조 갱신 전입니다" })).toBeVisible();
+  await expect(page.locator("[data-lg-main]")).toBeHidden();
+  await expect(notice, "오류 화면에서도 보임").toBeVisible();
+  expect(await noticeHome()).toBe(true);
+  expect(await placed(homes)).toEqual(allTrue);
+  await expect(bar).toBeHidden();
+  assertNoErrors();
+});
+
 test("손가락으로 쓰는 넓은 화면 1280px 매출장부: 표로 보이되 칸·'고치기'를 누르는 곳은 44px, 글자는 16px 그대로다", async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, hasTouch: true, isMobile: true });
   const page = await context.newPage();
@@ -1184,6 +1426,10 @@ test("손가락으로 쓰는 넓은 화면 1280px 매출장부: 표로 보이되
     expect(await page.evaluate(() => matchMedia("(hover: hover) and (pointer: fine)").matches), "이 시험은 손가락 화면").toBe(false);
     await expect(page.locator(".lg-table")).toBeVisible();
     await expect(page.locator(".lg-sum")).toBeHidden();
+    await expect(page.locator("[data-lg-bar]"), "손가락 화면은 표 위 한 줄로 모으지 않음").toBeHidden();
+    await expect(page.locator(".lg-tools [data-lg-new]"), "단추는 원래 자리").toBeVisible();
+    await expect(page.locator("[data-lg-undo]"), "되돌리기는 글자 단추 그대로").toHaveText("되돌리기");
+    await expect(page.locator("[data-lg-undo] .lg-history__icon")).toBeHidden();
     const cell = gridCell(page, 2, "receivedOn");
     expect((await cell.boundingBox()).height, "칸을 누르는 곳").toBeGreaterThanOrEqual(44);
     expect(await gridCell(page, 2, "amountWon").evaluate((button) => getComputedStyle(button).fontSize), "칸 글자").toBe("16px");
