@@ -6,8 +6,9 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
 import { DatabaseSync } from "node:sqlite";
-import { BLOG_STYLES } from "../src/lib/work/blog-checks.mjs";
-import { buildOpenAiRequest, estimateInputTokens } from "../worker/work-blog.mjs";
+import { BLOG_STYLES, EMPHASIS_MAX, checkBlogDraft } from "../src/lib/work/blog-checks.mjs";
+import { findBlogSource } from "../src/lib/work/blog-sources.mjs";
+import { blogSources, buildOpenAiRequest, emphasisNumbersOf, estimateInputTokens } from "../worker/work-blog.mjs";
 import { runRealpriceCron } from "../worker/work-scheduled.mjs";
 import {
   FAKE_MAX_OUTPUT,
@@ -237,7 +238,7 @@ test("TK-46·TK-50·TK-61 단지 소개 글: 최대 예상 비용을 미리 더�
   assert.equal(call.authIsFakeKey, true);
   assert.equal(call.hasSignal, true, "시간 제한 신호를 붙임");
   assert.deepEqual([call.body.model, call.body.reasoning, call.body.max_output_tokens, call.body.background, call.body.store], [FAKE_MODEL, { effort: "xhigh" }, FAKE_MAX_OUTPUT, true, false]);
-  assert.deepEqual([call.body.text.format.type, call.body.text.format.strict, call.body.text.format.schema.required], ["json_schema", true, ["title", "paragraphs", "hashtags", "snsShort", "factsUsed"]]);
+  assert.deepEqual([call.body.text.format.type, call.body.text.format.strict, call.body.text.format.schema.required], ["json_schema", true, ["title", "sections", "checklist", "hashtags", "snsShort", "factsUsed"]]);
   const payload = JSON.parse(call.body.input[0].content[0].text);
   assert.equal(payload.kind, "complex");
   assert.equal(payload.style.instruction, BLOG_STYLES.find((style) => style.id === "live").instruction);
@@ -246,7 +247,7 @@ test("TK-46·TK-50·TK-61 단지 소개 글: 최대 예상 비용을 미리 더�
   assert.doesNotMatch(JSON.stringify(call.body), new RegExp(`${OFFICE_PHONE}|30110-2023-00028`, "u"), "사무소 연락처·등록번호는 보내지 않음(코드가 붙임)");
 
   const reserved = reservedFor(call);
-  assert.ok(reserved > 200_000 && reserved < 210_000, `1편 최대 예상 약 0.2달러: ${reserved}`);
+  assert.ok(reserved > 200_000 && reserved < 220_000, `1편 최대 예상 약 0.2달러(단지 자료 7개 항목을 함께 보내 입력이 늘어남): ${reserved}`);
   assert.deepEqual(usageRows(database), [{ day: "2026-11-17", create_requests: 1, estimated_cost_micro_usd: reserved, input_tokens: 0, output_tokens: 0 }]);
   assert.deepEqual(auditRows(database).map((row) => row.action), ["settings.update", "blog.create"]);
   const [row] = draftRows(database);
@@ -343,7 +344,7 @@ test("TK-48·TK-49 만들기 전에 막기: 명시사항 빈 칸은 400 DISCLOSU
     [{ source: LISTING, style: "plain", inputs: listingInputs({ rooms: 21 }) }, "rooms"],
     [{ source: LISTING, style: "plain", inputs: listingInputs({ approvalDate: "2016-02-30" }) }, "approvalDate"],
     [{ source: LISTING, style: "plain", inputs: listingInputs({ unit: "101" }) }, "unit"],
-    [{ source: LISTING, style: "plain", inputs: listingInputs(), emphasis: "가".repeat(201) }, "emphasis"],
+    [{ source: LISTING, style: "plain", inputs: listingInputs(), emphasis: "가".repeat(501) }, "emphasis"], // 대표 현장 메모 500자 초과
     [{ source: { type: "naver_listing", id: "2656951321" }, style: "plain" }, "source"], // 분양권
     [{ source: { type: "customer", id: "x" }, style: "plain" }, "source"],
     [{ source: COMPLEX, style: "urgent" }, "style"], // 단지 소개 글에 급매
@@ -639,4 +640,85 @@ test("OpenAI 응답 읽기 보강(TR-11 #87): 사용량이 없으면 usageKnown 
   };
   await openaiRequest("/responses/resp_x", {}, { OPENAI_API_KEY: "sk-test-fake-key\n" }, fetcher);
   assert.equal(sent, "Bearer sk-test-fake-key");
+});
+
+test("2026-11-23 글 초안 개선: 단지 글은 단지 자료 7개 항목을 함께 보내고 길이·구성 지시를 붙이며, 새 꼴 결과는 소제목·확인할 점과 함께 저장하고 그 칸도 검사함", async (t) => {
+  installNetworkTrap(t);
+  const { database, env } = blogDb();
+  await setLimits(env);
+  const sectioned = {
+    title: "리더스시티 5블록 단지 소개",
+    sections: [
+      { heading: "단지 개요", paragraphs: ["16개동 2,135세대 단지입니다.", "분양 1,423세대와 10년 공공임대 712세대가 함께 있습니다."] },
+      { heading: "면적 구성", paragraphs: ["전용 51.89㎡는 126세대입니다."] },
+      { heading: "교육", paragraphs: ["천동중학교는 2027년 3월 개교 예정입니다."] },
+      { heading: "3억 원대 시세", paragraphs: ["가격은 현장에서 확인합니다."] },
+    ],
+    checklist: ["- 동·층·방향을 낮과 저녁에 확인", "실제 배정학교는 교육청 자료로 확인"],
+    hashtags: ["대전동구"],
+    snsShort: "리더스시티 5블록 단지 소개 글입니다.",
+    factsUsed: ["16개동 · 2,135세대"],
+  };
+  const openai = scriptedOpenAi([
+    { kind: "create", respond: created("resp_fake_long") },
+    { kind: "retrieve", respond: completed("resp_fake_long", sectioned) },
+  ]);
+  const made = await work(env, "/blog/drafts", { method: "POST", body: { source: COMPLEX, style: "plain" }, openaiFetch: openai.fetcher });
+  assert.equal(made.status, 201, JSON.stringify(made.json));
+  const [call] = openai.calls;
+  const payload = JSON.parse(call.body.input[0].content[0].text);
+  const expected = findBlogSource(blogSources(), "complex", "leaders-city-5").facts.details;
+  assert.deepEqual(payload.complex.details, expected, "보내는 단지 자료 = 숫자 검사가 보는 자료");
+  assert.deepEqual(Object.keys(payload.complex.details), ["highlights", "unitGroups", "supplySummary", "livingSections", "amenityGroups", "checkpoints", "faqs"]);
+  assert.doesNotMatch(call.body.input[0].content[0].text, /"seo"|"sources"|"image"|"aliases"|relatedContentIds|\.webp/u, "출처·검색 설정·사진·별칭·관련 콘텐츠는 보내지 않음");
+  for (const phrase of ["소제목(heading) 4 ~ 6개", "1,200 ~ 2,000자", "억지로 늘리지 않는다", "현장에서 확인할 점", "현장 메모"]) assert.ok(call.body.instructions.includes(phrase), phrase);
+  assert.deepEqual(call.body.text.format.schema.properties.sections.items.required, ["heading", "paragraphs"]);
+
+  const done = await work(env, `/blog/drafts/${made.json.data.draft.id}`, { openaiFetch: openai.fetcher, now: NOW + 10_000 });
+  const finished = done.json.data.draft;
+  assert.equal(finished.status, "completed");
+  assert.deepEqual(finished.result.headings, ["단지 개요", "", "면적 구성", "교육", "3억 원대 시세"]);
+  assert.equal(finished.result.paragraphs.length, 5);
+  assert.deepEqual(finished.result.checklist, ["동·층·방향을 낮과 저녁에 확인", "실제 배정학교는 교육청 자료로 확인"]);
+  assert.deepEqual(finished.checks.blocks.map((item) => [item.kind, item.where]), [["complex_number", "h5"]], "자료에 있는 면적·날짜는 통과, 소제목의 금액은 막음");
+  const [row] = draftRows(database);
+  assert.ok(row.result_json.length < 60000);
+
+  // 같은 화면이 다시 계산해도 서버 검사와 같음(화면은 currentSource로 같은 함수를 부름).
+  assert.deepEqual(checkBlogDraft(finished.result, { source: finished.currentSource, inputs: finished.inputs, emphasis: finished.emphasisNumbers }), finished.checks);
+});
+
+test("2026-11-23 옛 꼴 초안(소제목 없음)은 D1에 있던 그대로 열리고 검사도 그대로", async (t) => {
+  installNetworkTrap(t);
+  const { database, env } = blogDb();
+  await setLimits(env);
+  const openai = scriptedOpenAi([
+    { kind: "create", respond: created("resp_fake_old") },
+    { kind: "retrieve", respond: completed("resp_fake_old", sampleResult()) },
+  ]);
+  const made = await work(env, "/blog/drafts", { method: "POST", body: { source: COMPLEX, style: "plain" }, openaiFetch: openai.fetcher });
+  const done = await work(env, `/blog/drafts/${made.json.data.draft.id}`, { openaiFetch: openai.fetcher, now: NOW + 10_000 });
+  const result = done.json.data.draft.result;
+  assert.deepEqual(Object.keys(result), ["title", "paragraphs", "hashtags", "snsShort", "factsUsed"]);
+  assert.equal(result.headings, undefined);
+  const reopened = await work(env, `/blog/drafts/${made.json.data.draft.id}`, { openaiFetch: openai.fetcher, now: NOW + 20_000 });
+  assert.deepEqual(reopened.json.data.draft.result, result);
+  assert.equal(openai.calls.length, 2, "완료된 초안을 다시 열어도 OpenAI를 다시 부르지 않음");
+  assert.equal(draftRows(database).length, 1);
+});
+
+test("2026-11-23 대표 현장 메모: 500자까지 받고 숫자 표기만 남기는 규칙은 그대로(글은 저장하지 않음)", async (t) => {
+  installNetworkTrap(t);
+  const { database, env } = blogDb();
+  await setLimits(env);
+  const openai = scriptedOpenAi([{ kind: "create", respond: created("resp_fake_memo") }]);
+  const memo = `2024년 욕실 수리, 남향 거실, 앞 동 없이 트인 전망 ${"가".repeat(500 - 31)}`.slice(0, 500);
+  assert.equal(memo.length, 500);
+  const made = await work(env, "/blog/drafts", { method: "POST", body: { source: LISTING, style: "plain", inputs: listingInputs(), emphasis: memo }, openaiFetch: openai.fetcher });
+  assert.equal(made.status, 201, JSON.stringify(made.json));
+  assert.equal(JSON.parse(openai.calls[0].body.input[0].content[0].text).emphasis, memo);
+  const [row] = draftRows(database);
+  assert.doesNotMatch(row.disclosure_json, /욕실|트인 전망/u, "메모 글은 저장하지 않음");
+  assert.equal(JSON.parse(row.disclosure_json).emphasisNumbers, "", "날짜·금액·면적·층 표기가 없으면 빈 글자('2024년'만은 날짜 표기가 아님)");
+  assert.equal(emphasisNumbersOf(`${"2억 6,000만 원 ".repeat(60)}`).length, EMPHASIS_MAX, "숫자 표기 모음도 500자까지");
 });

@@ -386,3 +386,86 @@ test("글 초안 360px 명시사항 칸 밀림 0px: 칸을 고르거나 채워�
   await expectOneLineChoices(page, "390px");
   assertNoErrors();
 });
+
+// 2026-11-23 사용자 결정(①단지 자료 다 넣기 ②길이·구성 지시 ③현장 메모 칸 늘리기): 소제목이 있는 새 꼴 초안과 이름이 바뀐 메모 칸.
+const [complexWithDetails] = listBlogSources({
+  rules,
+  listings: [],
+  naverListings: { items: [] },
+  complexes: [{
+    status: "published", slug: "zz-forest", name: "가상숲 단지", areaName: "천동", summary: "가상 단지 요약",
+    facts: [{ label: "세대수", value: "1,200세대" }],
+    unitGroups: [{ category: "분양", areaLabel: "59㎡", households: 400 }],
+    livingSections: [{ category: "nature", title: "가상 공원", description: "가상 공원이 단지 옆에 있습니다." }],
+    checkpoints: [{ title: "동·층·방향", description: "낮과 저녁에 확인합니다." }],
+  }],
+});
+
+test("글 초안 360px 새 꼴(2026-11-23): 소제목 칸·현장에서 확인할 점 칸이 보이고, 단지 자료 숫자는 통과·소제목의 가격은 막으며, 복사 글에 '■ 소제목'과 확인할 점 목록이 붙는다. 메모 칸은 매물 '대표 현장 메모'·단지 '강조점' 500자", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const result = {
+    title: "가상숲 단지 소개",
+    paragraphs: ["가상숲 단지는 1,200세대입니다.", "전용 59㎡가 400세대입니다.", "가상 공원이 단지 옆에 있습니다."],
+    headings: ["단지 개요", "", "4억 원대 생활"],
+    checklist: ["동·층·방향을 낮과 저녁에 확인", "관리비 고지서 확인"],
+    hashtags: ["천동"],
+    snsShort: "가상숲 단지 1,200세대",
+    factsUsed: ["세대수"],
+  };
+  const queued = draftOf(complexWithDetails, { status: "queued", needsLocation: false, createdAt: NOW.toISOString(), updatedAt: NOW.toISOString() });
+  await setup(page, {
+    width: 360,
+    create: () => queued,
+    draftReads: { "zz-draft-1": () => ({ ...queued, status: "completed", result }) },
+  });
+  await page.goto("/admin/work/blog/");
+  await page.getByRole("button", { name: "가상숲1단지 고르기" }).click();
+  await expect(page.locator("[data-bl-emphasis-label]")).toHaveText("대표 현장 메모(선택)");
+  await expect(page.locator("#bl-emphasis")).toHaveAttribute("maxlength", "500");
+  await expect(page.locator("#bl-emphasis")).toHaveAttribute("placeholder", "예: 2024년 욕실 수리, 남향 거실, 앞 동 없이 트인 전망");
+  await page.locator("[data-bl-change='1']").click();
+  await page.locator("input[name='bl-kind'][value='complex']").check();
+  await page.getByRole("button", { name: "가상숲 단지 고르기" }).click();
+  await expect(page.locator("[data-bl-emphasis-label]")).toHaveText("강조점(선택)");
+  await page.getByRole("button", { name: "다음: 글 성격" }).click();
+  await page.locator("#bl-emphasis").fill("가".repeat(500));
+  await expect(page.locator("[data-bl-emphasis-count]")).toContainText("500 / 500자");
+  await page.locator("#bl-emphasis").fill("");
+  await page.getByRole("button", { name: "글 초안 만들기" }).click();
+  await expect(page.locator("[data-bl-wait]"), "만들기 요청이 끝나 확인 시계가 걸린 뒤에 시계를 돌림").toBeVisible();
+  await page.clock.runFor(5_000);
+  await expect(page.locator("[data-bl-result]")).toBeVisible();
+
+  await expect(page.locator("#bl-h1")).toHaveValue("단지 개요");
+  await expect(page.locator("#bl-h2"), "소제목이 없는 문단에는 칸이 없음").toHaveCount(0);
+  await expect(page.locator("#bl-h3")).toHaveValue("4억 원대 생활");
+  await expect(page.locator("label[for='bl-h3']")).toHaveText("소제목(문단 3)");
+  await expect(page.locator("[data-bl-checklist-row]")).toBeVisible();
+  await expect(page.locator("#bl-checklist")).toHaveValue("동·층·방향을 낮과 저녁에 확인\n관리비 고지서 확인");
+  await expect(page.locator("[data-bl-check]")).toContainText("복사 전에 고칠 곳 1곳");
+  await expect(page.locator("[data-bl-check]")).toContainText("단지 소개 글에 매물 가격·층 숫자: 문단 3 소제목 '4억 원'");
+  await expect(page.locator("[data-bl-where='h3']")).toHaveClass(/bl-para--block/u);
+  await expect(page.locator("[data-bl-where='p2']"), "단지 자료의 59㎡는 입력에 있는 숫자").not.toHaveClass(/bl-para--block|bl-para--warn/u);
+  await expect(page.locator("[data-bl-where='p3']"), "단지 자료에 있는 '공원'은 경고하지 않음").not.toHaveClass(/bl-para--warn/u);
+  await page.locator("[data-bl-check] button.bl-jump").first().click();
+  await expect(page.locator("#bl-h3")).toBeFocused();
+
+  await page.locator("#bl-h3").fill("생활 환경");
+  await page.locator("#bl-checklist").fill("- 동·층·방향을 낮과 저녁에 확인\n\n관리비 고지서 확인\n마트 동선 확인");
+  await expect(page.locator("[data-bl-check]")).toContainText("확인할 곳 1곳(복사는 됨)");
+  await expect(page.locator("[data-bl-check]")).toContainText("입력에 없는 생활 편의: 현장에서 확인할 점 '마트'");
+  await expect(page.locator("[data-bl-bar-text]")).toHaveText("✓ 복사할 수 있음");
+  await page.locator("[data-bl-copy='blog']").click();
+  const [blogText] = await copied(page);
+  expect(blogText.startsWith([
+    "가상숲 단지 소개",
+    "■ 단지 개요\n가상숲 단지는 1,200세대입니다.",
+    "전용 59㎡가 400세대입니다.",
+    "■ 생활 환경\n가상 공원이 단지 옆에 있습니다.",
+    "■ 현장에서 확인할 점\n- 동·층·방향을 낮과 저녁에 확인\n- 관리비 고지서 확인\n- 마트 동선 확인",
+    "#천동",
+    "──────────\n[중개사무소] ",
+  ].join("\n\n"))).toBe(true);
+  expect(await overflowOf(page)).toBeLessThanOrEqual(0);
+  assertNoErrors();
+});

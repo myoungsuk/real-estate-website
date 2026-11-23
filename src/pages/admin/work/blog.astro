@@ -113,10 +113,10 @@ import AdminLayout from "../../../layouts/AdminLayout.astro";
               </div>
             </div>
             <div class="work-row">
-              <label class="work-row__label" for="bl-emphasis">강조점(선택)</label>
+              <label class="work-row__label" for="bl-emphasis" data-bl-emphasis-label>대표 현장 메모(선택)</label>
               <div class="work-row__control">
-                <textarea id="bl-emphasis" rows="3" maxlength="200" placeholder="예: 2024년 욕실 수리, 남향 거실" autocomplete="off" data-bl-emphasis></textarea>
-                <small data-bl-emphasis-count>0 / 200자 · 저장하지 않고 이번에만 씁니다(숫자 표기만 검사용으로 남김).</small>
+                <textarea id="bl-emphasis" rows="4" maxlength="500" placeholder="예: 2024년 욕실 수리, 남향 거실, 앞 동 없이 트인 전망" autocomplete="off" data-bl-emphasis></textarea>
+                <small data-bl-emphasis-count>0 / 500자 · 저장하지 않고 이번에만 씁니다(숫자 표기만 검사용으로 남김).</small>
               </div>
             </div>
             <p class="admin-inline-notice bl-alert" role="alert" tabindex="-1" data-bl-make-alert hidden><span aria-hidden="true">!</span><span></span></p>
@@ -151,6 +151,14 @@ import AdminLayout from "../../../layouts/AdminLayout.astro";
               </div>
             </div>
             <div data-bl-paragraphs></div>
+            <div class="work-row bl-para" data-bl-where="check" data-bl-checklist-row hidden>
+              <label class="work-row__label" for="bl-checklist">현장에서 확인할 점</label>
+              <div class="work-row__control">
+                <textarea id="bl-checklist" rows="5" autocomplete="off" data-bl-checklist></textarea>
+                <small>한 줄에 하나씩 씁니다. 복사할 때 글 끝에 목록으로 붙습니다.</small>
+                <small class="bl-para__issue" data-bl-issue hidden></small>
+              </div>
+            </div>
             <div class="work-row bl-para" data-bl-where="tags">
               <label class="work-row__label" for="bl-tags">해시태그</label>
               <div class="work-row__control">
@@ -311,6 +319,7 @@ import AdminLayout from "../../../layouts/AdminLayout.astro";
         const styleNote = pick("[data-bl-style-note]");
         const emphasisInput = pick<HTMLTextAreaElement>("[data-bl-emphasis]");
         const emphasisCount = pick("[data-bl-emphasis-count]");
+        const emphasisLabel = pick("[data-bl-emphasis-label]");
         const makeAlert = pick("[data-bl-make-alert]");
         const makeButton = pick<HTMLButtonElement>("[data-bl-make]");
         const makeNote = pick("[data-bl-make-note]");
@@ -326,6 +335,8 @@ import AdminLayout from "../../../layouts/AdminLayout.astro";
         const paragraphsBox = pick("[data-bl-paragraphs]");
         const tagsInput = pick<HTMLInputElement>("[data-bl-tags]");
         const snsInput = pick<HTMLTextAreaElement>("[data-bl-sns]");
+        const checklistRow = pick("[data-bl-checklist-row]");
+        const checklistInput = pick<HTMLTextAreaElement>("[data-bl-checklist]");
         const snsCount = pick("[data-bl-sns-count]");
         const relocRow = pick("[data-bl-reloc-row]");
         const relocInput = pick<HTMLInputElement>("[data-bl-reloc]");
@@ -606,7 +617,11 @@ import AdminLayout from "../../../layouts/AdminLayout.astro";
           },
         });
         const rows = fields.rows;
+        // 매물 글은 중개사가 본 현장 메모라 '대표 현장 메모', 단지 소개 글은 '강조점'(2026-11-23 사용자 결정 "현장 메모 칸 늘리기").
+        const emphasisName = () => (picked?.type === "complex" ? "강조점" : "대표 현장 메모");
         function buildFields() {
+          emphasisLabel.textContent = `${emphasisName()}(선택)`;
+          emphasisInput.placeholder = picked?.type === "complex" ? "예: 신축 대단지, 공원 가까운 동" : "예: 2024년 욕실 수리, 남향 거실, 앞 동 없이 트인 전망";
           releaseHeight(countLine);
           fields.build(picked, { location: locationValue });
         }
@@ -705,7 +720,7 @@ import AdminLayout from "../../../layouts/AdminLayout.astro";
           const style = selectedStyle();
           const emphasis = validateEmphasis(emphasisInput.value, { officePhone });
           if (!style || emphasis.error || emphasis.personal) {
-            setNotice(makeAlert, !style ? "글 성격을 고릅니다." : emphasis.error ? `강조점은 ${EMPHASIS_MAX}자 이하로 넣습니다.` : apiErrorText("PERSONAL_DATA_PATTERN"));
+            setNotice(makeAlert, !style ? "글 성격을 고릅니다." : emphasis.error ? `${picked?.type === "complex" ? "강조점은" : "대표 현장 메모는"} ${EMPHASIS_MAX}자 이하로 넣습니다.` : apiErrorText("PERSONAL_DATA_PATTERN"));
             makeAlert.focus();
             return;
           }
@@ -886,7 +901,31 @@ import AdminLayout from "../../../layouts/AdminLayout.astro";
           titleInput.value = result.title;
           tagsInput.value = result.hashtags.join(" ");
           snsInput.value = result.snsShort;
-          paragraphsBox.replaceChildren(...result.paragraphs.map((text, index) => {
+          // 소제목이 있는 새 꼴이면 그 문단 앞에 소제목 칸을 둔다(옛 꼴 초안은 headings가 없어 이전과 같음).
+          const headings = result.headings ?? [];
+          paragraphsBox.replaceChildren(...result.paragraphs.flatMap((text, index) => {
+            const heading = headings[index] ?? "";
+            const head: HTMLElement[] = [];
+            if (heading) {
+              const row = el("div", "work-row bl-para bl-para--heading");
+              row.dataset.blWhere = `h${index + 1}`;
+              const headId = `bl-h${index + 1}`;
+              const headLabel = el("label", "work-row__label", `소제목(문단 ${index + 1})`);
+              headLabel.htmlFor = headId;
+              const headControl = el("div", "work-row__control");
+              const input = el("input");
+              input.id = headId;
+              input.type = "text";
+              input.autocomplete = "off";
+              input.value = heading;
+              input.dataset.blHeading = String(index);
+              const headIssue = el("small", "bl-para__issue");
+              headIssue.dataset.blIssue = "";
+              headIssue.hidden = true;
+              headControl.append(input, headIssue);
+              row.append(headLabel, headControl);
+              head.push(row);
+            }
             const wrap = el("div", "work-row bl-para");
             wrap.dataset.blWhere = `p${index + 1}`;
             const id = `bl-p${index + 1}`;
@@ -903,8 +942,10 @@ import AdminLayout from "../../../layouts/AdminLayout.astro";
             issue.hidden = true;
             control.append(area, issue);
             wrap.append(label, control);
-            return wrap;
+            return [...head, wrap];
           }));
+          checklistInput.value = (result.checklist ?? []).join("\n");
+          checklistRow.hidden = !result.checklist;
           const closed = next.closed === "confirmed" ? " · 다 씀" : next.closed === "cancelled" ? " · 버림" : next.closed === "auto" ? " · 30일 지나 닫힘" : "";
           resultMeta.textContent = `${kstShort(next.createdAt)} 만듦${closed} · 고치면 바로 다시 검사합니다. 고친 글은 저장되지 않습니다.`;
           relocRow.hidden = !next.needsLocation;
@@ -920,6 +961,13 @@ import AdminLayout from "../../../layouts/AdminLayout.astro";
         }
 
         const paragraphTexts = () => [...paragraphsBox.querySelectorAll<HTMLTextAreaElement>("textarea")].map((area) => area.value);
+        // 소제목은 문단 번호 자리에 두고(없는 문단은 ""), 확인할 점은 한 줄에 하나.
+        const headingTexts = () => {
+          const list: string[] = paragraphTexts().map(() => "");
+          for (const input of paragraphsBox.querySelectorAll<HTMLInputElement>("[data-bl-heading]")) list[Number(input.dataset.blHeading)] = input.value;
+          return list;
+        };
+        const checklistTexts = () => (checklistRow.hidden ? [] : checklistInput.value.split("\n").map((line) => line.trim().replace(/^[-•·]\s*/u, "")).filter(Boolean));
         function currentDisclosure() {
           if (!draft?.currentSource || !draft.sourcePublic) return null;
           const inputs = { ...draft.inputs, ...(draft.needsLocation ? { location: relocInput.value } : {}) };
@@ -938,7 +986,7 @@ import AdminLayout from "../../../layouts/AdminLayout.astro";
           const title = titleInput.value;
           const paragraphs = paragraphTexts();
           const view = checkView(current.currentSource
-            ? checkBlogDraft({ title, paragraphs, snsShort: snsInput.value, hashtags: normalizeHashtags(tagsInput.value) }, { source: current.currentSource, inputs: current.inputs, emphasis: current.emphasisNumbers })
+            ? checkBlogDraft({ title, paragraphs, headings: headingTexts(), checklist: checklistTexts(), snsShort: snsInput.value, hashtags: normalizeHashtags(tagsInput.value) }, { source: current.currentSource, inputs: current.inputs, emphasis: current.emphasisNumbers })
             : { blocks: [], warnings: [] });
           const blocks = view.blocks as CheckLine[];
           const warnings = view.warnings as CheckLine[];
@@ -1016,7 +1064,7 @@ import AdminLayout from "../../../layouts/AdminLayout.astro";
         function copyText(which: "blog" | "sns", disclosureText: string) {
           const hashtags = normalizeHashtags(tagsInput.value);
           return which === "blog"
-            ? blogCopyText({ title: titleInput.value, paragraphs: paragraphTexts(), hashtags, disclosureText })
+            ? blogCopyText({ title: titleInput.value, paragraphs: paragraphTexts(), headings: headingTexts(), checklist: checklistTexts(), hashtags, disclosureText })
             : snsCopyText({ snsShort: snsInput.value, hashtags, disclosureText });
         }
 

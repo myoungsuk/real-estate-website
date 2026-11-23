@@ -75,6 +75,9 @@ export function whereLabel(where) {
   if (where === "title") return "제목";
   if (where === "sns") return "SNS 짧은 글";
   if (where === "tags") return "해시태그";
+  if (where === "check") return CHECKLIST_HEADING;
+  const heading = String(where).match(/^h(\d+)$/u);
+  if (heading) return `문단 ${heading[1]} 소제목`;
   const match = String(where).match(/^p(\d+)$/u);
   return match ? `문단 ${match[1]}` : String(where);
 }
@@ -104,10 +107,23 @@ export function normalizeHashtags(text) {
 }
 
 const DISCLOSURE_RULE = "──────────";
+export const CHECKLIST_HEADING = "현장에서 확인할 점";
+const HEADING_MARK = "■";
 
-// 블로그 글: 제목 → 문단 → 해시태그 → 명시사항(코드가 붙임).
-export function blogCopyText({ title, paragraphs, hashtags, disclosureText }) {
-  const body = [String(title ?? "").trim(), ...paragraphs.map((text) => String(text ?? "").trim()).filter(Boolean)];
+// 블로그 글: 제목 → 문단(소제목이 있으면 그 문단 앞에 "■ 소제목" 한 줄) → 현장에서 확인할 점 → 해시태그 → 명시사항(코드가 붙임).
+// headings·checklist는 새 꼴 초안에만 있다. 옛 꼴 초안은 이전과 같은 글이 나온다.
+/** @param {{ title: string, paragraphs: string[], headings?: string[], checklist?: string[], hashtags: string[], disclosureText: string }} args */
+export function blogCopyText({ title, paragraphs, headings = [], checklist = [], hashtags, disclosureText }) {
+  const body = [String(title ?? "").trim()];
+  paragraphs.forEach((raw, index) => {
+    const text = String(raw ?? "").trim();
+    const heading = String(headings[index] ?? "").trim();
+    if (heading && text) body.push(`${HEADING_MARK} ${heading}\n${text}`);
+    else if (heading) body.push(`${HEADING_MARK} ${heading}`);
+    else if (text) body.push(text);
+  });
+  const checks = checklist.map((item) => String(item ?? "").trim()).filter(Boolean);
+  if (checks.length > 0) body.push(`${HEADING_MARK} ${CHECKLIST_HEADING}\n${checks.map((item) => `- ${item}`).join("\n")}`);
   const tags = hashtags.join(" ");
   return [...body, ...(tags ? [tags] : []), `${DISCLOSURE_RULE}\n${disclosureText}`].join("\n\n");
 }

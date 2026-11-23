@@ -7,6 +7,7 @@ import {
   BLOG_RESULT_KEEP_MINUTES,
   BLOG_RETENTION_DAYS,
   apiErrorText,
+  CHECKLIST_HEADING,
   blogCopyText,
   checkView,
   decimalFrom,
@@ -156,4 +157,30 @@ test("글 초안 화면: 오류 문구는 한도 초과를 하루·월로 나누
   for (const code of ["PERSONAL_DATA_PATTERN", "VALIDATION_FAILED", "VERSION_CONFLICT"]) {
     assert.doesNotMatch(apiErrorText(code, ["ZZTEST-7F3A"]), /ZZTEST-7F3A/u, "details 값을 문구에 그대로 넣지 않음");
   }
+});
+
+test("글 초안 화면(2026-11-23): 블로그 복사 글에 소제목은 '■ 소제목' 줄로 그 문단 앞에, 현장에서 확인할 점은 해시태그 앞에 목록으로 붙고 옛 꼴은 그대로", () => {
+  const disclosureText = "중개사무소 ZZTEST-7F3A";
+  const blog = blogCopyText({
+    title: "제목",
+    paragraphs: ["첫 문단", "둘째 문단", " ", "넷째 문단"],
+    headings: ["단지 개요", "", "빈 문단 소제목", " 생활 "],
+    checklist: [" 등기 확인 ", "", "관리비 고지서"],
+    hashtags: ["#천동"],
+    disclosureText,
+  });
+  assert.equal(blog, [
+    "제목",
+    "■ 단지 개요\n첫 문단",
+    "둘째 문단",
+    "■ 빈 문단 소제목",
+    "■ 생활\n넷째 문단",
+    "■ 현장에서 확인할 점\n- 등기 확인\n- 관리비 고지서",
+    "#천동",
+    "──────────\n중개사무소 ZZTEST-7F3A",
+  ].join("\n\n"));
+  assert.equal(blogCopyText({ title: "제목", paragraphs: ["문단"], headings: [], checklist: [], hashtags: [], disclosureText }), "제목\n\n문단\n\n──────────\n중개사무소 ZZTEST-7F3A", "소제목·확인할 점이 없으면 옛 글과 같음");
+  assert.equal(CHECKLIST_HEADING, "현장에서 확인할 점");
+  assert.equal(whereLabel("h3"), "문단 3 소제목");
+  assert.equal(whereLabel("check"), "현장에서 확인할 점");
 });
