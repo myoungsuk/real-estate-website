@@ -121,6 +121,8 @@ test("구독 칸: 주소가 없으면 '구독 주소 만들기', 만들면 그 �
   await expect(panel.getByRole("heading", { name: "휴대폰 캘린더 구독" })).toBeVisible();
   await expect(panel.getByRole("button", { name: "구독 주소 만들기" })).toBeVisible();
   await expect(panel).toContainText("취소한 거래의 일정은 빠집니다");
+  const alarmHelp = panel.locator("[data-cf-alarm]");
+  await expect(alarmHelp, "주소가 없으면 알림 안내도 없음").toBeHidden();
   // 위 계산기는 그대로(서버와 상관없이 처음 안내가 나옴)
   await expect(page.locator("[data-schedule-message]")).toHaveText("실제 거래가격을 넣으면 자금조달계획서 대상까지 판정합니다.");
   const box = await panel.boundingBox();
@@ -132,6 +134,13 @@ test("구독 칸: 주소가 없으면 '구독 주소 만들기', 만들면 그 �
   expect(calls.writes).toEqual([{ method: "POST", path: "/calendar-feeds", csrf: "test-csrf", body: {} }]);
   await expect(panel.getByLabel("구독 주소", { exact: true })).toHaveValue(SUBSCRIBE);
   await expect(panel).toContainText("이 주소는 지금 한 번만 보입니다.");
+  // 알림 안내는 접힌 채 보이고, 펼치면 Google 캘린더 두 단계가 번호 목록으로 나온다
+  await expect(alarmHelp).toBeVisible();
+  await expect(alarmHelp.locator("ol")).toBeHidden();
+  await alarmHelp.getByText("알림이 오지 않을 때", { exact: true }).click();
+  await expect(alarmHelp.locator("ol li")).toHaveCount(2);
+  await expect(alarmHelp.locator("ol li").first()).toContainText("'종일 일정 알림'");
+  await expect(alarmHelp.locator("ol li").last()).toContainText("'동기화'");
   await expect(panel.getByRole("link", { name: "iPhone 캘린더에 넣기" })).toHaveAttribute("href", `webcal://127.0.0.1:4321/api/calendar/${TOKEN}.ics`);
   const google = new URL(await panel.getByRole("link", { name: "Google 캘린더에 넣기" }).getAttribute("href"));
   expect(google.origin + google.pathname).toBe("https://calendar.google.com/calendar/r");
@@ -146,6 +155,7 @@ test("구독 칸: 주소가 없으면 '구독 주소 만들기', 만들면 그 �
   await expect(panel.locator("[data-cf-existing]")).toBeVisible();
   await expect(panel.locator("[data-cf-made]")).toHaveText("11월 23일(월)");
   await expect(panel.locator("[data-cf-used]")).toHaveText("아직 받아 가지 않음");
+  await expect(alarmHelp, "이미 넣은 휴대폰도 볼 수 있게 주소가 있을 때도 보임").toBeVisible();
   expect(await panel.locator("[data-cf-url]").inputValue()).toBe("");
   expect(await page.content()).not.toContain(TOKEN);
   expect(await tokenLeaks(page)).toEqual([]);
