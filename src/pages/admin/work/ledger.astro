@@ -34,7 +34,7 @@ const gridNumeric = ["amountWon", "vatWon", "totalWon", "receivedWon", "unpaidWo
       <span class="admin-stage-badge">서버에 저장 · 관리자만</span>
     </header>
     <AdminPageHelp page="/admin/work/ledger/" />
-    <p class="lg-notice">{LEDGER_NOTICE}</p>
+    <p class="lg-notice" data-lg-notice>{LEDGER_NOTICE}</p>
 
     <p class="rt-boot cu-boot" role="status" data-lg-boot>매출장부를 불러오고 있습니다…</p>
     <section class="admin-panel rt-state cu-state" aria-labelledby="lg-state-title" data-lg-state hidden>
@@ -63,10 +63,17 @@ const gridNumeric = ["amountWon", "vatWon", "totalWon", "receivedWon", "unpaidWo
           ))}
         </div>
       </div>
-      <p class="lg-undated" role="status" data-lg-undated hidden>
-        <strong data-lg-undated-text></strong>
-        <button class="admin-text-link cu-linkbtn" type="button" data-lg-undated-show>그 줄만 보기</button>
-      </p>
+      <div class="lg-line" data-lg-line>
+        <p class="lg-undated" role="status" data-lg-undated hidden>
+          <strong data-lg-undated-text></strong>
+          <button class="admin-text-link cu-linkbtn" type="button" data-lg-undated-show>그 줄만 보기</button>
+        </p>
+      </div>
+      <!-- 넓은 PC(1221px 이상 + 마우스)에서만 스크립트가 연도·기준일·거르기와 만들기·CSV·되돌리기를 이 한 줄로 옮겨 온다. 상태 글(role=status)은 옮기지 않는다. -->
+      <div class="lg-bar" data-lg-bar hidden>
+        <div class="lg-bar__left" data-lg-bar-left></div>
+        <div class="lg-bar__right" data-lg-bar-right></div>
+      </div>
 
       <section class="lg-sum" aria-labelledby="lg-sum-title" data-lg-sum>
         <div class="lg-sum__head">
@@ -99,8 +106,8 @@ const gridNumeric = ["amountWon", "vatWon", "totalWon", "receivedWon", "unpaidWo
           </button>
           <button class="work-secondary-button" type="button" data-lg-csv>CSV 내려받기</button>
           <span class="lg-history" role="group" aria-label="표에서 고친 칸">
-            <button class="work-secondary-button" type="button" data-lg-undo disabled>되돌리기</button>
-            <button class="work-secondary-button" type="button" data-lg-redo disabled>다시 하기</button>
+            <button class="work-secondary-button" type="button" data-lg-undo disabled><svg class="lg-history__icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg><span class="lg-history__text">되돌리기</span></button>
+            <button class="work-secondary-button" type="button" data-lg-redo disabled><svg class="lg-history__icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="m15 14 5-5-5-5M20 9H9.5a5.5 5.5 0 0 0 0 11H13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg><span class="lg-history__text">다시 하기</span></button>
           </span>
         </div>
         <p class="admin-form-status lg-gridstatus" role="status" aria-live="polite" data-lg-grid-status></p>
@@ -390,6 +397,44 @@ const gridNumeric = ["amountWon", "vatWon", "totalWon", "receivedWon", "unpaidWo
       const emptyNew = pick<HTMLButtonElement>("[data-lg-empty-new]");
       const more = pick<HTMLButtonElement>("[data-lg-more]");
       const listStatus = pick("[data-lg-list-status]");
+
+      // ── 넓은 PC의 표 위 한 줄(1221px 이상 + 마우스, 목록이 보일 때만) ──
+      // 묶음을 옮기고, 그 밖의 폭·손가락 화면·목록이 숨었을 때는 처음 자리(주석 표시 바로 뒤)로 되돌린다.
+      // 옮길 때 포커스가 묶음 안에 있었으면 같은 요소로 돌려준다(요소를 옮기면 브라우저가 포커스를 놓으므로).
+      const barQuery = window.matchMedia("(min-width: 1221px) and (hover: hover) and (pointer: fine)");
+      const bar = pick("[data-lg-bar]");
+      const barLeft = pick("[data-lg-bar-left]");
+      const barRight = pick("[data-lg-bar-right]");
+      const line = pick("[data-lg-line]");
+      const barParts = ([
+        [pick(".lg-filters"), barLeft, "append"],
+        [chips, barLeft, "append"],
+        [pick(".lg-history"), barRight, "append"],
+        [csvButton, barRight, "append"],
+        [newButton, barRight, "append"],
+        [pick("[data-lg-notice]"), line, "prepend"],
+        [csvNote, line, "append"],
+      ] as const).map(([part, to, how]) => {
+        const home = document.createComment("");
+        part.before(home);
+        return { part, to, how, home };
+      });
+      let barOn = false;
+      function placeBar() {
+        const on = barQuery.matches && !main.hidden;
+        if (on === barOn) return;
+        barOn = on;
+        const active = document.activeElement instanceof HTMLElement && barParts.some(({ part }) => part.contains(document.activeElement)) ? document.activeElement : null;
+        for (const { part, to, how, home } of barParts) {
+          if (!on) home.after(part);
+          else if (how === "prepend") to.prepend(part);
+          else to.append(part);
+        }
+        bar.hidden = !on;
+        root!.classList.toggle("lg-barred", on);
+        if (active && document.activeElement !== active) active.focus({ preventScroll: true });
+      }
+      barQuery.addEventListener("change", placeBar);
       const field = <T extends HTMLInputElement | HTMLTextAreaElement>(name: string) => pick<T>(`[data-lg-f="${name}"]`);
       const errorCode = (error: unknown) => (error instanceof WorkApiError ? error.code : null);
       const errorText = (code: string | null) => ledgerErrorText(code, customerErrorText(code));
@@ -418,6 +463,7 @@ const gridNumeric = ["amountWon", "vatWon", "totalWon", "receivedWon", "unpaidWo
       function showState(title: string, body: string, { symbol = "!", retry = false, fee = false } = {}) {
         boot.hidden = true;
         main.hidden = true;
+        placeBar();
         pick("[data-lg-state-symbol]").textContent = symbol;
         pick("[data-lg-state-title]").textContent = title;
         pick("[data-lg-state-body]").textContent = body;
@@ -543,8 +589,9 @@ const gridNumeric = ["amountWon", "vatWon", "totalWon", "receivedWon", "unpaidWo
           redoButton.disabled = !canRedo;
           undoButton.setAttribute("aria-label", undoName);
           redoButton.setAttribute("aria-label", redoName);
-          undoButton.title = canUndo ? undoName : "";
-          redoButton.title = canRedo ? redoName : "";
+          // 넓은 PC에서는 그림 단추라 마우스를 올리면 같은 이름이 보이게 한다(못 누를 때도 이름은 보임)
+          undoButton.title = undoName;
+          redoButton.title = redoName;
         },
         announce(text, visible = false) {
           if (visible) setStatus(gridStatus, text, text ? "error" : "idle");
@@ -1074,6 +1121,7 @@ const gridNumeric = ["amountWon", "vatWon", "totalWon", "receivedWon", "unpaidWo
       async function start() {
         statePanel.hidden = true;
         main.hidden = true;
+        placeBar();
         boot.hidden = false;
         try {
           const session = await getLedgerSession({ refresh: true });
@@ -1088,6 +1136,7 @@ const gridNumeric = ["amountWon", "vatWon", "totalWon", "receivedWon", "unpaidWo
         }
         boot.hidden = true;
         main.hidden = false;
+        placeBar();
         renderSummary();
         renderList();
       }

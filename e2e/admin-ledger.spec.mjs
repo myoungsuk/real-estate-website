@@ -98,6 +98,11 @@ async function setup(page, { width = 390, enabled = true, store = makeStore(), s
     if (schemaOutdated && path.startsWith("/ledger")) return route.fulfill(failure(503, "WORK_SCHEMA_OUTDATED"));
 
     if (path === "/ledger/summary") {
+      if (control.holdSummary) await control.holdSummary;
+      if (control.failSummary > 0) {
+        control.failSummary -= 1;
+        return route.fulfill(failure(503, control.failSummaryCode ?? "STORAGE_UNAVAILABLE"));
+      }
       if (failSummaryOnce) {
         failSummaryOnce = false;
         return route.fulfill(failure(503, "STORAGE_UNAVAILABLE"));
@@ -1175,6 +1180,156 @@ test("PC 표 키보드: 방향키는 고칠 수 있는 칸만 서고, 숫자를 
   assertNoErrors();
 });
 
+test("넓은 PC 표 위 한 줄: 1221px 이상 + 마우스에서만 연도·기준일·거르기·되돌리기·CSV·만들기를 한 줄로 모으고, 좁히면 원래 자리로 돌려놓으며, Tab 차례는 보이는 차례와 같다", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const control = {};
+  await setup(page, { width: 1221, control });
+  await page.goto("/admin/work/ledger/");
+  await expect(page.locator(".lg-table")).toBeVisible();
+  const bar = page.locator("[data-lg-bar]");
+  const parts = ['.lg-filters', '[data-lg-chips]', '.lg-history', '[data-lg-csv]', '[data-lg-new]', '[data-lg-notice]', '[data-lg-csv-note]'];
+  const homes = ['[data-lg-main]', '.cu-list', '.lg-tools', '.lg-tools', '.lg-tools', '[data-lg-page]', '.cu-list'];
+  const inBar = ['.lg-bar__left', '.lg-bar__left', '.lg-bar__right', '.lg-bar__right', '.lg-bar__right', '.lg-line', '.lg-line'];
+  const placed = (want) => page.evaluate(([list, parents]) => list.map((selector, i) => document.querySelector(selector).parentElement.matches(parents[i])), [parts, want]);
+  // 원래 자리의 차례(만들기 → CSV → 되돌리기, 참고용 글은 '불러오는 중' 글 바로 앞)까지 그대로인지
+  const homeOrder = () => page.evaluate(() => [
+    [...document.querySelector(".lg-tools").children].map((node) => node.matches("[data-lg-new]") ? "new" : node.matches("[data-lg-csv]") ? "csv" : node.matches(".lg-history") ? "history" : "?").join(","),
+    document.querySelector("[data-lg-notice]").nextElementSibling.matches("[data-lg-boot]"),
+    document.querySelector(".lg-filters").nextElementSibling.matches("[data-lg-line]"),
+    document.querySelector("[data-lg-csv-note]").previousElementSibling.matches("[data-lg-grid-live]"),
+  ].join("|"));
+  const homeExpected = "new,csv,history|true|true|true";
+  const allTrue = parts.map(() => true);
+  // 클래스가 아니라 결과를 잰다: 표 머리 윗변(1221·1280px 모두 374px로 잼, +2px까지), 안내 줄 높이, 빈 단추 칸 숨김
+  const layout = () => page.evaluate(() => ({
+    head: document.querySelector(".lg-table thead").getBoundingClientRect().top + scrollY,
+    line: document.querySelector("[data-lg-line]").getBoundingClientRect().height,
+    tools: getComputedStyle(document.querySelector(".lg-tools")).display,
+  }));
+  const expectTight = async (label) => {
+    const now = await layout();
+    expect(now.head, `${label}: 표 머리가 위로 올라옴`).toBeLessThanOrEqual(376);
+    expect(now.line, `${label}: 안내는 얇은 한 줄`).toBeLessThanOrEqual(44);
+    expect(now.tools, `${label}: 빈 단추 칸은 자리도 차지하지 않음`).toBe("none");
+  };
+  const barHidden = () => bar.evaluate((node) => node.hidden);
+
+  // 1221px(가장 좁은 넓은 PC): 한 줄, 가로 넘침 없음
+  await expect(bar).toBeVisible();
+  expect(await placed(inBar)).toEqual(allTrue);
+  const left = await page.locator(".lg-bar__left").boundingBox();
+  const right = await page.locator(".lg-bar__right").boundingBox();
+  expect(right.y, "오른쪽 묶음이 같은 줄").toBeLessThan(left.y + left.height);
+  expect(right.x).toBeGreaterThan(left.x + left.width);
+  expect(await overflowOf(page)).toBeLessThanOrEqual(0);
+  await expect(page.locator(".lg-tools")).toBeHidden();
+  await expectTight("1221px");
+  await expect(page.locator(".lg-line .lg-notice")).toHaveText("참고용 집계입니다. 세무 장부가 아닙니다.");
+  expect(await page.locator(".lg-line").evaluate((node) => [...node.children].map((child) => child.dataset.lgNotice !== undefined ? "참고용" : child.dataset.lgUndated !== undefined ? "기준일 없음" : child.dataset.lgCsvNote !== undefined ? "CSV" : "?").join(",")), "참고용 글 → 기준일 없는 줄 알림 → CSV 알림").toBe("참고용,기준일 없음,CSV");
+  // 누르는 곳은 36px까지(연도 화살표·기준일·거르기·되돌리기·CSV), 주 단추(만들기)는 44px, 연도·만들기 글자는 그대로
+  expect((await page.getByRole("button", { name: "앞 해" }).boundingBox()).width).toBeGreaterThanOrEqual(36);
+  expect((await page.getByRole("button", { name: "앞 해" }).boundingBox()).height).toBeGreaterThanOrEqual(36);
+  expect((await page.locator("[data-lg-new]").boundingBox()).height).toBeGreaterThanOrEqual(44);
+  expect((await page.locator("[data-lg-csv]").boundingBox()).height).toBeGreaterThanOrEqual(36);
+  expect(await page.locator("[data-lg-year]").evaluate((node) => getComputedStyle(node).fontSize), "연도 글자").toBe("20px");
+  expect(await page.locator("[data-lg-new]").evaluate((node) => parseFloat(getComputedStyle(node).fontSize))).toBeGreaterThanOrEqual(16);
+  await expect(page.getByRole("group", { name: "기준일" }), "'기준일' 이름은 읽기 프로그램이 그대로 읽음").toBeVisible();
+  await expect(page.locator("#lg-basis-label")).toHaveText("기준일");
+  expect((await page.locator("#lg-basis-label").boundingBox()).width, "화면에는 보이지 않음(폭 줄이기)").toBeLessThanOrEqual(1);
+  expect(await page.locator("[data-lg-undo] svg, [data-lg-redo] svg").evaluateAll((nodes) => nodes.map((node) => node.getAttribute("aria-hidden"))), "그림은 읽지 않음").toEqual(["true", "true"]);
+  // 1px만 좁혀도(1220px) 한 줄 칸은 hidden 속성으로 숨고(크기 0이라 toBeHidden으로는 못 봄) 묶음은 원래 자리로
+  await page.setViewportSize({ width: 1220, height: 900 });
+  await expect.poll(barHidden, "1220px: 한 줄 칸 hidden").toBe(true);
+  expect(await placed(homes)).toEqual(allTrue);
+  await page.setViewportSize({ width: 1221, height: 900 });
+  await expect.poll(barHidden, "1221px: 다시 보임").toBe(false);
+  expect(await placed(inBar)).toEqual(allTrue);
+
+  // Tab 차례 = 보이는 차례(왼쪽 → 오른쪽). 못 누르는 되돌리기·다시 하기는 건너뜀
+  await page.locator("[data-lg-undated-show]").focus();
+  const order = [];
+  for (let i = 0; i < 12; i += 1) {
+    await page.keyboard.press("Tab");
+    order.push(await page.evaluate(() => {
+      const node = document.activeElement;
+      const box = node.getBoundingClientRect();
+      return { name: node.getAttribute("aria-label") || node.textContent.replace("＋", "").trim(), x: box.left, y: box.top };
+    }));
+  }
+  expect(order.map((item) => item.name)).toEqual(["앞 해", "다음 해", "잔금일", "계약일", "입금일", "전체", "보수", "지출", "기타 수입", "미입금만", "CSV 내려받기", "장부 줄 만들기"]);
+  for (let i = 1; i < order.length; i += 1) expect(order[i].x, `${order[i].name}는 ${order[i - 1].name}의 오른쪽`).toBeGreaterThan(order[i - 1].x);
+
+  // 칸을 하나 고치면 되돌리기가 켜진다: 36×36 그림 단추, 이름은 무엇을 되돌리는지
+  await typeCell(page, 3, "label", "가상 현수막");
+  await expect(gridState(page, 3)).toHaveText("저장함");
+  const undo = page.locator("[data-lg-undo]");
+  await expect(undo).toBeEnabled();
+  await expect(undo).toHaveAccessibleName("되돌리기: 가상 전단 인쇄 물건 표시·내용");
+  await expect(page.locator("[data-lg-redo]")).toBeDisabled();
+  const undoBox = await undo.boundingBox();
+  expect([Math.round(undoBox.width), Math.round(undoBox.height)], "그림 단추 36×36").toEqual([36, 36]);
+  await expect(undo.locator(".lg-history__icon")).toBeVisible();
+  // 마우스를 올리면 보이는 이름(title)도 읽기 프로그램 이름(aria-label)과 같다
+  expect(await page.locator("[data-lg-undo], [data-lg-redo]").evaluateAll((nodes) => nodes.map((node) => [node.title, node.getAttribute("aria-label")]))).toEqual([["되돌리기: 가상 전단 인쇄 물건 표시·내용", "되돌리기: 가상 전단 인쇄 물건 표시·내용"], ["다시 하기", "다시 하기"]]);
+  await undo.focus();
+  expect(await undo.evaluate((node) => getComputedStyle(node).outlineStyle), "포커스 테두리").not.toBe("none");
+
+  // 좁히면(1000px) 원래 자리·차례로, 다시 넓히면 한 줄로. 포커스는 같은 단추에 남는다
+  const expense = page.locator('[data-lg-kind="expense"]');
+  await expense.focus();
+  await page.setViewportSize({ width: 1000, height: 900 });
+  await expect.poll(barHidden).toBe(true);
+  expect(await placed(homes)).toEqual(allTrue);
+  expect(await homeOrder()).toBe(homeExpected);
+  await expect(expense, "옮긴 뒤에도 같은 단추에 포커스").toBeFocused();
+  await expect(page.locator(".lg-tools [data-lg-new]")).toBeVisible();
+  expect(await overflowOf(page)).toBeLessThanOrEqual(0);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect(bar).toBeVisible();
+  expect(await placed(inBar)).toEqual(allTrue);
+  await expectTight("1280px");
+  await expect(expense).toBeFocused();
+  await page.setViewportSize({ width: 1000, height: 900 });
+  await expect(bar).toBeHidden();
+  expect(await placed(homes)).toEqual(allTrue);
+  expect(await homeOrder()).toBe(homeExpected);
+  // 옮겨도 단추는 그대로 일한다(거르기)
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expense.click();
+  await expect(expense).toHaveAttribute("aria-pressed", "true");
+
+  // 목록이 다시 숨으면 참고용 글은 원래 자리로 돌아와 보인다
+  const notice = page.locator("[data-lg-notice]");
+  const noticeHome = () => notice.evaluate((node) => node.parentElement.matches("[data-lg-page]") && node.nextElementSibling.matches("[data-lg-boot]"));
+  // ① 뒤로 가기로 돌아와(bfcache) 처음부터 다시 불러오는 중
+  let releaseSummary = () => {};
+  control.holdSummary = new Promise((resolve) => {
+    releaseSummary = resolve;
+  });
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })));
+  await expect(page.locator("[data-lg-boot]")).toBeVisible();
+  await expect(notice, "불러오는 중에도 '세무 장부가 아닙니다'가 보임").toBeVisible();
+  expect(await noticeHome()).toBe(true);
+  expect(await placed(homes)).toEqual(allTrue);
+  await expect(bar).toBeHidden();
+  control.holdSummary = null;
+  releaseSummary();
+  await expect(page.locator(".lg-table")).toBeVisible();
+  await expect(page.locator(".lg-line .lg-notice"), "다 불러오면 다시 한 줄로").toBeVisible();
+  expect(await placed(inBar)).toEqual(allTrue);
+  // ② 연도를 바꿔 다시 읽다가 목록 칸을 닫는 오류(자료 구조 갱신 전)
+  control.failSummary = 1;
+  control.failSummaryCode = "WORK_SCHEMA_OUTDATED";
+  await page.getByRole("button", { name: "앞 해" }).click();
+  await expect(page.getByRole("heading", { name: "자료 구조 갱신 전입니다" })).toBeVisible();
+  await expect(page.locator("[data-lg-main]")).toBeHidden();
+  await expect(notice, "오류 화면에서도 보임").toBeVisible();
+  expect(await noticeHome()).toBe(true);
+  expect(await placed(homes)).toEqual(allTrue);
+  await expect(bar).toBeHidden();
+  assertNoErrors();
+});
+
 test("손가락으로 쓰는 넓은 화면 1280px 매출장부: 표로 보이되 칸·'고치기'를 누르는 곳은 44px, 글자는 16px 그대로다", async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, hasTouch: true, isMobile: true });
   const page = await context.newPage();
@@ -1184,6 +1339,10 @@ test("손가락으로 쓰는 넓은 화면 1280px 매출장부: 표로 보이되
     expect(await page.evaluate(() => matchMedia("(hover: hover) and (pointer: fine)").matches), "이 시험은 손가락 화면").toBe(false);
     await expect(page.locator(".lg-table")).toBeVisible();
     await expect(page.locator(".lg-sum")).toBeHidden();
+    await expect(page.locator("[data-lg-bar]"), "손가락 화면은 표 위 한 줄로 모으지 않음").toBeHidden();
+    await expect(page.locator(".lg-tools [data-lg-new]"), "단추는 원래 자리").toBeVisible();
+    await expect(page.locator("[data-lg-undo]"), "되돌리기는 글자 단추 그대로").toHaveText("되돌리기");
+    await expect(page.locator("[data-lg-undo] .lg-history__icon")).toBeHidden();
     const cell = gridCell(page, 2, "receivedOn");
     expect((await cell.boundingBox()).height, "칸을 누르는 곳").toBeGreaterThanOrEqual(44);
     expect(await gridCell(page, 2, "amountWon").evaluate((button) => getComputedStyle(button).fontSize), "칸 글자").toBe("16px");

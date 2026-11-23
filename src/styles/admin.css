@@ -2493,3 +2493,37 @@ nav.tr-homelinks { display: flex; flex-wrap: wrap; gap: 0 24px; margin: 0 0 14px
   .lg-autotag,
   .lg-rowstate { font-size: 0.8125rem; }
 }
+
+/* 매출장부 표 위 한 줄(D-2a2). 스크립트가 넓은 PC(1221px 이상 + 마우스)에서만 묶음을 .lg-bar로 옮기고 화면에 .lg-barred를 붙인다.
+   스크립트가 없거나 그 밖의 화면이면 .lg-bar는 숨어 있고 묶음은 원래 자리 그대로다. 글자 크기는 지금 그대로, 주 단추(장부 줄 만들기)는 44px, 나머지 누르는 곳은 36px. */
+.lg-history__icon { display: none; }
+.lg-bar:not([hidden]) { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 10px; }
+.lg-bar__left,
+.lg-bar__right { display: flex; align-items: center; gap: 10px; }
+.lg-bar__right { gap: 8px; margin-left: auto; }
+.lg-bar .lg-filters { display: flex; align-items: center; gap: 10px; margin: 0; }
+.lg-bar .lg-year { gap: 2px; }
+.lg-bar .lg-year__now { min-width: 0; padding: 0 4px; }
+/* 기준일 단추와 거르기 단추는 모양이 같아 묶음 사이에 세로 줄을 둔다('기준일' 이름은 읽기 프로그램에만) */
+.lg-bar .lg-seg,
+.lg-bar__left > .cu-chips { padding-left: 10px; border-left: 1px solid var(--ds-edge); }
+.lg-bar .lg-year .rt-chip { min-width: 36px; min-height: 36px; padding: 0; }
+.lg-bar .lg-seg__label { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.lg-bar .lg-seg,
+.lg-bar .cu-chips { flex-wrap: nowrap; margin: 0; }
+.lg-bar .rt-chip { white-space: nowrap; }
+.lg-bar .work-primary-button,
+.lg-bar .work-secondary-button { flex: 0 0 auto; width: auto; padding: 0 16px; white-space: nowrap; }
+.lg-bar .work-primary-button { min-height: 44px; }
+.lg-bar .lg-history { display: inline-flex; gap: 8px; margin: 0; }
+.lg-bar .lg-history .work-secondary-button { min-width: 36px; min-height: 36px; padding: 0; }
+.lg-bar .lg-history__icon { display: block; }
+.lg-bar .lg-history__text { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.lg-bar .lg-history .work-secondary-button:disabled { color: var(--ds-ink-soft); border-color: var(--ds-edge); background: var(--ds-paper); cursor: not-allowed; }
+/* 참고용 글·기준일 없는 줄 알림·CSV 알림을 얇은 한 줄로(상자 없이 글자·기호로) */
+.lg-barred .lg-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 20px; margin: -4px 0 10px; }
+.lg-barred .lg-line .lg-notice,
+.lg-barred .lg-line .lg-csv-note { margin: 0; }
+.lg-barred .lg-line .lg-undated { margin: 0; padding: 0; border: 0; background: none; }
+.lg-barred .lg-tools { display: none; }
+.lg-barred .cu-strip { padding: 4px 0; }
