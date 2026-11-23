@@ -257,6 +257,15 @@ import { MESSAGE_DEAL_TYPES, MESSAGE_TEMPLATES, MESSAGE_VARIANTS } from "../../.
         // Chromium은 읽기 전용 textarea로 포커스가 옮겨 갈 때(Tab·focus()) 화면을 스크롤하지 않아, 휴대폰에서 미리보기 위쪽이 화면 위로 잘린 채 남는다.
         // scroll-margin(위)과 scroll-padding(아래 탭·결과 막대 높이)을 지키는 scrollIntoView로 칸을 보이는 곳까지 옮긴다(PR #55와 같은 방법).
         preview.addEventListener("focus", () => preview.scrollIntoView({ block: "nearest" }));
+        // 특약 메모 칸도 Chromium은 32px 넘게 보이면 Tab으로 와도 스크롤하지 않아 아래가 화면 밖에 남는다(날개-2 TU-23, 1024px).
+        // 키보드로 왔을 때만 옮긴다. 마우스·손가락으로 누를 때 옮기면 누르는 사이 칸이 움직여 글자가 잘못 골라질 수 있다.
+        const memo = field("specialMemo");
+        let lastInputKeyboard = false;
+        document.addEventListener("keydown", () => { lastInputKeyboard = true; }, true);
+        document.addEventListener("pointerdown", () => { lastInputKeyboard = false; }, true);
+        memo?.addEventListener("focus", () => {
+          if (lastInputKeyboard) memo.scrollIntoView({ block: "nearest" });
+        });
         copyButton.addEventListener("click", async () => {
           try {
             await navigator.clipboard.writeText(preview.value);

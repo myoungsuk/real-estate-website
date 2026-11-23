@@ -224,6 +224,8 @@ test("업무 도구 결과 막대는 979px 이하에서 아래 탭 바로 위에
   assert.ok(messageOutput.indexOf("data-message-count") < messageOutput.indexOf("data-message-copy"), "복사 단추는 미리보기 글자 수 바로 뒤");
   assert.match(styles, /^\.work-output \.work-doc__action \.work-secondary-button \{ flex-basis: 320px; \}/mu, "좁은 결과 칸(넓은 화면 포함)에서 문자 앱 단추 두 개는 세로로 쌓여 한 줄씩(사용자 결정 2026-11-18)");
   assert.match(messages, /preview\.addEventListener\("focus", \(\) => preview\.scrollIntoView\(\{ block: "nearest" \}\)\);/u, "Tab으로 간 미리보기가 화면 위로 잘리지 않게(날개-2 TU-23)");
+  assert.match(messages, /memo\?\.addEventListener\("focus", \(\) => \{[^}]*if \(lastInputKeyboard\) memo\.scrollIntoView\(\{ block: "nearest" \}\);/u, "Tab으로 간 특약 메모 칸도 화면 아래로 잘리지 않게, 마우스·손가락으로 누를 때는 움직이지 않게(날개-2 TU-23)");
+  assert.match(messages, /document\.addEventListener\("pointerdown", \(\) => \{ lastInputKeyboard = false; \}, true\);/u, "마지막 입력이 마우스·손가락이면 옮기지 않음");
 });
 
 test("관리자 화면의 색 이름(--ds-*)은 공개 화면(global.css)과 이름이 같고, 값은 관리자 화면만의 새 겉모양 값이다(사용자 승인 2026-11-23 11:34:13)", async () => {
