@@ -217,6 +217,60 @@ const ruleIds = [...legalRules.deadlineRules.map((rule) => rule.id), legalRules.
       </div>
     </div>
 
+    <!-- 휴대폰 캘린더 구독(단계 3 C-b, 사용자 결정 2026-11-23 08:55:04 "가안: 맨 아래 칸 하나 (Recommended)"). 위 계산기와 따로 서버를 부른다.
+         구독 주소는 만들 때 한 번만 받아 이 칸의 입력칸에만 두고, 떠날 때 지운다(브라우저 저장소·화면 주소·로그에 넣지 않음). -->
+    <section class="admin-panel cf-panel" aria-labelledby="cf-title" data-cf-panel>
+      <h2 id="cf-title" tabindex="-1">휴대폰 캘린더 구독</h2>
+      <p>거래 일정(계약일·중도금·잔금·신고 기한)과 날짜 있는 할 일을 휴대폰 캘린더가 알아서 받아 갑니다. 사무소 주소 1개를 두 분이 같이 씁니다.</p>
+      <p class="cu-soft" role="status" data-cf-boot>구독 상태를 확인하고 있습니다…</p>
+      <div data-cf-state hidden>
+        <p data-cf-state-text></p>
+        <button class="work-secondary-button cf-retry" type="button" data-cf-retry hidden>다시 불러오기</button>
+      </div>
+
+      <div data-cf-empty hidden>
+        <p class="cu-soft">일정 이름에 거래 제목이 들어갑니다(예: '잔금 · 가상숲 5블록 매매'). 손님 전화번호·메모는 들어가지 않고, 취소한 거래의 일정은 빠집니다.</p>
+        <button class="work-primary-button cf-make" type="button" data-cf-create>구독 주소 만들기</button>
+      </div>
+
+      <div data-cf-created hidden>
+        <p class="cf-warn"><strong>이 주소는 지금 한 번만 보입니다.</strong> 두 분 휴대폰에 다 넣은 뒤 이 화면을 닫으세요. 주소를 아는 사람은 누구나 일정을 볼 수 있으니 카톡·문자로 남에게 보내지 마세요.</p>
+        <div class="cf-box">
+          <label for="cf-url">구독 주소</label>
+          <input id="cf-url" class="cf-url" type="text" readonly autocomplete="off" spellcheck="false" data-cf-url />
+          <div class="cf-row"><button class="work-primary-button" type="button" data-cf-copy>주소 복사</button></div>
+          <div class="cf-row">
+            <a class="work-secondary-button" href="#cf-title" data-cf-ios>iPhone 캘린더에 넣기</a>
+            <a class="work-secondary-button" href="#cf-title" target="_blank" rel="noopener noreferrer" data-cf-google>Google 캘린더에 넣기</a>
+          </div>
+        </div>
+        <p class="cu-soft">Android는 휴대폰의 Google 캘린더 앱에서 주소로 더하지 못할 수 있어, 'Google 캘린더에 넣기'는 브라우저로 Google 캘린더 사이트를 엽니다.</p>
+        <p class="cu-soft">알림은 일정 전날 오후 6시로 넣어 보냅니다. 캘린더 앱에 따라 구독한 캘린더의 알림이 꺼져 있을 수 있으니, 알림이 오지 않으면 그 캘린더의 알림 설정을 켜 주세요.</p>
+      </div>
+
+      <div data-cf-existing hidden>
+        <dl class="cf-meta">
+          <dt>구독 주소</dt><dd>있음 (주소는 만들 때만 보입니다)</dd>
+          <dt>만든 날</dt><dd data-cf-made></dd>
+          <dt>마지막으로 받아 감</dt><dd data-cf-used></dd>
+        </dl>
+        <p class="cf-warn">새 주소를 만들면 지금 주소는 바로 끊겨, 두 분 휴대폰 모두 새 주소를 다시 넣어야 합니다.</p>
+        <div class="cf-row">
+          <button class="work-secondary-button" type="button" aria-expanded="false" aria-controls="cf-confirm" data-cf-ask="replace">새 주소 만들기</button>
+          <button class="work-secondary-button cu-danger" type="button" aria-expanded="false" aria-controls="cf-confirm" data-cf-ask="revoke">구독 주소 취소</button>
+        </div>
+        <section class="cu-form cu-panel cu-panel--danger cf-confirm" id="cf-confirm" aria-labelledby="cf-confirm-title" data-cf-confirm hidden>
+          <h3 id="cf-confirm-title" class="cu-panel__title" data-cf-confirm-title></h3>
+          <p data-cf-confirm-body></p>
+          <div class="cu-actions">
+            <button class="work-primary-button cu-save cu-delete-go" type="button" data-cf-confirm-go></button>
+            <button class="work-secondary-button" type="button" data-cf-confirm-cancel>그만두기</button>
+          </div>
+        </section>
+      </div>
+      <p class="admin-form-status" role="status" aria-live="polite" data-cf-status></p>
+    </section>
+
     <WorkLegalBasis ruleIds={ruleIds} />
   </div>
 
@@ -543,6 +597,208 @@ const ruleIds = [...legalRules.deadlineRules.map((rule) => rule.id), legalRules.
         });
         reset();
       }
+    }
+  </script>
+
+  <script>
+    // 휴대폰 캘린더 구독 칸(단계 3 C-b). 서버 요청은 work-calendar-feeds-client.ts 한 곳. 세 상태: 주소 없음 / 막 만듦 / 주소 있음.
+    // - 이 화면은 탭 미리 그리기(prerender) 목록에 있으므로, 미리 그리는 동안에는 부르지 않고 화면이 실제로 보인 뒤 부른다(AdminLayout 설명).
+    // - 구독 주소는 '막 만듦' 상태의 입력칸에만 둔다. 떠날 때(pagehide) 지우고, 뒤로 가기 캐시로 돌아오면 다시 불러온다(주소는 다시 보이지 않음).
+    import { WorkApiError, createCalendarFeed, getFeedSession, listCalendarFeeds, revokeCalendarFeed, type CalendarFeed } from "../../../lib/work-calendar-feeds-client";
+    import { setStatus } from "../../../lib/work-customers-dom";
+    import { currentFeed, feedCreatedText, feedErrorText, feedUsedText, googleCalendarUrl, webcalUrl } from "../../../lib/work/calendar-feed-view.mjs";
+
+    const panel = document.querySelector<HTMLElement>("[data-cf-panel]");
+    if (panel) {
+      const pick = <T extends HTMLElement>(selector: string) => {
+        const found = panel.querySelector<T>(selector);
+        if (!found) throw new Error(`구독 칸이 없습니다: ${selector}`);
+        return found;
+      };
+      const boot = pick("[data-cf-boot]");
+      const statePart = pick("[data-cf-state]");
+      const stateText = pick("[data-cf-state-text]");
+      const retry = pick<HTMLButtonElement>("[data-cf-retry]");
+      const emptyPart = pick("[data-cf-empty]");
+      const createdPart = pick("[data-cf-created]");
+      const existingPart = pick("[data-cf-existing]");
+      const createButton = pick<HTMLButtonElement>("[data-cf-create]");
+      const urlInput = pick<HTMLInputElement>("[data-cf-url]");
+      const copyButton = pick<HTMLButtonElement>("[data-cf-copy]");
+      const iosLink = pick<HTMLAnchorElement>("[data-cf-ios]");
+      const googleLink = pick<HTMLAnchorElement>("[data-cf-google]");
+      const made = pick("[data-cf-made]");
+      const used = pick("[data-cf-used]");
+      const askButtons = [...panel.querySelectorAll<HTMLButtonElement>("[data-cf-ask]")];
+      const confirm = pick("[data-cf-confirm]");
+      const confirmTitle = pick("[data-cf-confirm-title]");
+      const confirmBody = pick("[data-cf-confirm-body]");
+      const confirmGo = pick<HTMLButtonElement>("[data-cf-confirm-go]");
+      const confirmCancel = pick<HTMLButtonElement>("[data-cf-confirm-cancel]");
+      const status = pick("[data-cf-status]");
+      const heading = pick("#cf-title");
+
+      let feed: CalendarFeed | null = null;
+      let asking: "replace" | "revoke" | null = null;
+      let busy = false;
+      let loadSequence = 0;
+      const codeOf = (error: unknown) => (error instanceof WorkApiError ? error.code : null);
+
+      const clearUrl = () => {
+        urlInput.value = "";
+        iosLink.href = "#cf-title";
+        googleLink.href = "#cf-title";
+      };
+      const show = (part: "boot" | "state" | "empty" | "created" | "existing") => {
+        boot.hidden = part !== "boot";
+        statePart.hidden = part !== "state";
+        emptyPart.hidden = part !== "empty";
+        createdPart.hidden = part !== "created";
+        existingPart.hidden = part !== "existing";
+        if (part !== "created") clearUrl();
+      };
+      const openConfirm = (kind: "replace" | "revoke" | null) => {
+        asking = kind;
+        confirm.hidden = kind === null;
+        for (const button of askButtons) button.setAttribute("aria-expanded", String(button.dataset.cfAsk === kind));
+        if (kind === "replace") {
+          confirmTitle.textContent = "지금 주소를 끊고 새 주소를 만들까요?";
+          confirmBody.textContent = "두 분 휴대폰 캘린더 모두 지금 구독을 지우고 새 주소를 다시 넣어야 합니다.";
+          confirmGo.textContent = "새 주소 만들기";
+        } else if (kind === "revoke") {
+          confirmTitle.textContent = "구독 주소를 취소할까요?";
+          confirmBody.textContent = "취소하면 휴대폰 캘린더에 새 일정이 더 들어가지 않습니다. 이미 받은 일정은 휴대폰에서 구독을 지워야 없어집니다.";
+          confirmGo.textContent = "구독 주소 취소";
+        }
+      };
+      const showState = (text: string, canRetry: boolean) => {
+        show("state");
+        stateText.textContent = text;
+        retry.hidden = !canRetry;
+      };
+      const showFeed = (next: CalendarFeed | null) => {
+        feed = next;
+        openConfirm(null);
+        if (!next) {
+          show("empty");
+          return;
+        }
+        made.textContent = feedCreatedText(next.createdAt);
+        used.textContent = feedUsedText(next.lastUsedAt);
+        show("existing");
+      };
+
+      async function load() {
+        const sequence = ++loadSequence;
+        show("boot");
+        try {
+          const session = await getFeedSession({ refresh: true });
+          if (sequence !== loadSequence) return;
+          if (!session.enabled) {
+            showState("업무 도구가 켜지면 구독 주소를 만들 수 있습니다.", false);
+            return;
+          }
+          const { feeds } = await listCalendarFeeds();
+          if (sequence !== loadSequence) return;
+          showFeed(currentFeed(feeds));
+        } catch (error) {
+          if (sequence !== loadSequence) return;
+          showState(`구독 상태를 불러오지 못했습니다. ${feedErrorText(codeOf(error))}`, true);
+        }
+      }
+
+      async function make() {
+        if (busy) return;
+        busy = true;
+        createButton.disabled = true;
+        confirmGo.disabled = true;
+        setStatus(status, "구독 주소를 만들고 있습니다…", "saving");
+        try {
+          const result = await createCalendarFeed();
+          feed = result.feed;
+          openConfirm(null);
+          show("created");
+          urlInput.value = result.subscribeUrl;
+          iosLink.href = webcalUrl(result.subscribeUrl);
+          googleLink.href = googleCalendarUrl(result.subscribeUrl);
+          setStatus(status, "✓ 구독 주소를 만들었습니다. 아래 단추로 휴대폰 캘린더에 넣으세요.", "success");
+          urlInput.focus();
+          urlInput.select();
+        } catch (error) {
+          setStatus(status, `만들지 못했습니다. ${feedErrorText(codeOf(error))}`, "error");
+        } finally {
+          busy = false;
+          createButton.disabled = false;
+          confirmGo.disabled = false;
+        }
+      }
+
+      async function revoke() {
+        if (busy || !feed) return;
+        busy = true;
+        confirmGo.disabled = true;
+        setStatus(status, "구독 주소를 취소하고 있습니다…", "saving");
+        try {
+          await revokeCalendarFeed(feed.id);
+          showFeed(null);
+          setStatus(status, "✓ 구독 주소를 취소했습니다. 휴대폰 캘린더에서도 이 구독을 지워 주세요.", "success");
+          heading.focus();
+        } catch (error) {
+          const code = codeOf(error);
+          setStatus(status, `취소하지 못했습니다. ${feedErrorText(code)}`, "error");
+          if (code === "NOT_FOUND") void load();
+        } finally {
+          busy = false;
+          confirmGo.disabled = false;
+        }
+      }
+
+      createButton.addEventListener("click", () => void make());
+      retry.addEventListener("click", () => void load());
+      for (const button of askButtons) {
+        button.addEventListener("click", () => {
+          const kind = button.dataset.cfAsk === "revoke" ? "revoke" : "replace";
+          openConfirm(asking === kind ? null : kind);
+          setStatus(status, "", "idle");
+          if (asking) confirmGo.focus();
+        });
+      }
+      confirmCancel.addEventListener("click", () => {
+        const back = askButtons.find((button) => button.dataset.cfAsk === asking);
+        openConfirm(null);
+        back?.focus();
+      });
+      confirmGo.addEventListener("click", () => void (asking === "revoke" ? revoke() : make()));
+      copyButton.addEventListener("click", async () => {
+        if (!urlInput.value) return;
+        try {
+          await navigator.clipboard.writeText(urlInput.value);
+          setStatus(status, "✓ 주소를 복사했습니다. 휴대폰 캘린더의 '구독 추가'에 붙여 넣으세요.", "success");
+        } catch {
+          urlInput.focus();
+          urlInput.select();
+          setStatus(status, "복사하지 못했습니다. 주소 칸을 길게 눌러 직접 복사해 주세요.", "error");
+        }
+      });
+      for (const link of [iosLink, googleLink]) {
+        link.addEventListener("click", (event) => {
+          if (!urlInput.value) event.preventDefault();
+        });
+      }
+
+      window.addEventListener("pagehide", () => {
+        loadSequence += 1;
+        clearUrl();
+      });
+      window.addEventListener("pageshow", (event) => {
+        if (event.persisted) {
+          setStatus(status, "", "idle");
+          void load();
+        }
+      });
+      const doc = document as Document & { prerendering?: boolean };
+      if (doc.prerendering) document.addEventListener("prerenderingchange", () => void load(), { once: true });
+      else void load();
     }
   </script>
 </AdminLayout>

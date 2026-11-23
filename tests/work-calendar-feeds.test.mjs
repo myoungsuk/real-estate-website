@@ -272,7 +272,7 @@ test("T3-05·T3-05a 구독 내용은 끝나지 않은 일정(날짜와 상관없
   assert.equal(next.includes("잔금 · 가상숲 5블록 매매"), false);
 });
 
-test("T3-06 구독 응답 헤더는 Worker가 붙인다: text/calendar; charset=utf-8, no-store, X-Robots-Tag noindex, Referrer-Policy no-referrer. GET이 아니면 405(D1을 읽지 않음)", async () => {
+test("T3-06 구독 응답 헤더는 Worker가 붙인다: text/calendar; charset=utf-8, no-store, X-Robots-Tag noindex, Referrer-Policy no-referrer. GET·HEAD가 아니면 405(D1을 읽지 않음)", async () => {
   const { env } = setup();
   const created = await createFeed(env);
   const result = await fetchFeed(env, feedPath(created.token));
@@ -285,11 +285,42 @@ test("T3-06 구독 응답 헤더는 Worker가 붙인다: text/calendar; charset=
     "x-robots-tag": "noindex, nofollow, noarchive",
   });
   assert.equal("content-disposition" in result.headers, false, "구독은 내려받기 파일이 아님");
-  for (const method of ["POST", "PUT", "DELETE", "HEAD"]) {
+  for (const method of ["POST", "PUT", "DELETE", "PATCH"]) {
     const other = await fetchFeed({ ...env, WORK_DB: null }, feedPath(created.token), { method });
     assert.equal(other.status, 405, method);
-    assert.equal(other.headers.allow, "GET");
+    assert.equal(other.headers.allow, "GET, HEAD");
   }
+});
+
+test("HEAD는 GET과 같은 상태·헤더를 본문 없이 돌려주고 last_used_at을 쓰지 않는다(없는 주소는 같은 404)", async () => {
+  const { database, env, writes } = setup();
+  const created = await createFeed(env);
+  const head = await fetchFeed(env, feedPath(created.token), { method: "HEAD" });
+  const get = await fetchFeed(env, feedPath(created.token), { now: NOW + HOUR });
+  assert.equal(head.status, 200);
+  assert.equal(head.text, "");
+  assert.deepEqual(head.headers, get.headers);
+  assert.equal(writes.length, 1, "UPDATE는 GET 한 번뿐");
+  assert.equal(rows(database, "SELECT last_used_at FROM calendar_feeds")[0].last_used_at, at(NOW + HOUR));
+  const missing = await fetchFeed(env, feedPath("A".repeat(43)), { method: "HEAD" });
+  const missingGet = await fetchFeed(env, feedPath("A".repeat(43)));
+  assert.equal(missing.status, 404);
+  assert.equal(missing.text, "");
+  assert.deepEqual(missing.headers, missingGet.headers);
+});
+
+test("취소한 거래(status cancelled)의 일정은 끝나지 않았어도 구독에 넣지 않고, 거래를 다시 열면 돌아온다. 그 거래에 걸린 날짜 있는 할 일은 그대로 넣는다", async () => {
+  const { database, env } = setup();
+  seedSchedule(database);
+  const created = await createFeed(env);
+  const summaries = async (now) => vevents((await fetchFeed(env, feedPath(created.token), { now })).text).map((item) => item.summary);
+  assert.ok((await summaries(NOW)).includes("잔금 · 가상숲 5블록 매매"));
+  database.prepare("UPDATE deals SET status = 'cancelled' WHERE id = 'deal-1'").run();
+  const cancelled = await summaries(NOW + HOUR);
+  assert.equal(cancelled.some((summary) => summary.endsWith("· 가상숲 5블록 매매")), false, "취소한 거래의 일정은 없음");
+  assert.ok(cancelled.includes("가상 등기 서류 챙기기"), "할 일은 할 일 화면에서 따로 끝내므로 그대로");
+  database.prepare("UPDATE deals SET status = 'contracted' WHERE id = 'deal-1'").run();
+  assert.ok((await summaries(NOW + 2 * HOUR)).includes("잔금 · 가상숲 5블록 매매"));
 });
 
 test("T3-07 last_used_at은 한국 날짜가 바뀐 뒤 처음 받을 때만 쓴다: 같은 날 몇 분마다 받아도 쓰기 0번(UPDATE 문장도 보내지 않음), 15:00 UTC(한국 자정)를 넘으면 1번", async () => {
