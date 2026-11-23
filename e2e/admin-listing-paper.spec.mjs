@@ -38,6 +38,10 @@ async function expectOneLineChoices(page, label) {
   return names;
 }
 // 매매 아파트(층 숫자가 있는 것) 4건, 월세 아파트 1건, 분양권 1건을 공개 목록에서 고른다.
+// 이 화면은 빌드 때 공개 naver-listings.json으로 그려져 가상 매물을 넣을 수 없고, 매물은 매일 부동산뱅크 동기화로 바뀐다.
+// 그래서 번호를 박지 않고 조건으로 고르며, 모자라면 그 시험(또는 그 대목)만 까닭을 남기고 건너뛴다.
+// 잠금 규칙(분양권 잠금·매매와 월세 섞지 않음·3건 상한)은 tests/work-listing-paper.test.mjs가 가상 매물로 늘 본다.
+const SHORT_OF = (what, count) => `공개 매물에 ${what}이(가) ${count}건 모자라 건너뜀(매물 동기화로 바뀜, 잠금 규칙은 tests/work-listing-paper.test.mjs가 봄)`;
 const saleApartments = naver.items.filter((item) => item.tradeType === "sale" && item.propertyType === "아파트" && /^\d+\/\d+층$/u.test(item.floorLabel ?? ""));
 const rentApartment = naver.items.find((item) => item.tradeType !== "sale" && item.propertyType === "아파트");
 const presale = naver.items.find((item) => item.propertyType === "아파트분양권");
@@ -93,7 +97,9 @@ async function fillApartment(page, id, { location = "대전광역시 동구 가�
 }
 
 test("매물 안내지 390px: 분양권 잠금, 빈 칸이면 안 만듦, 다 채우면 PNG 1080×1350·listing-YYYYMMDD.png, 칸을 바꾸면 그림을 버림, 서버 요청·저장·CSP 위반 0", async ({ page }) => {
-  expect(saleApartments.length, "시험할 매매 아파트 4건").toBeGreaterThanOrEqual(4);
+  test.skip(saleApartments.length < 1, SHORT_OF("층 숫자가 있는 매매 아파트", 1));
+  if (!presale) test.info().annotations.push({ type: "부분 건너뜀", description: SHORT_OF("분양권", 1) });
+  if (!rentApartment) test.info().annotations.push({ type: "부분 건너뜀", description: SHORT_OF("월세·전세 아파트", 1) });
   const assertNoErrors = collectErrors(page);
   const { apiCalls, violations } = await setup(page, 390);
   await page.goto(PAGE);
@@ -170,6 +176,7 @@ test("매물 안내지 390px: 분양권 잠금, 빈 칸이면 안 만듦, 다 �
 });
 
 test("매물 비교표 1280px: 3건까지 담고 4건째는 잠금, 빼기, listing-compare-YYYYMMDD.png, A4 인쇄 칸, 360px 가로 넘침 없음", async ({ page }) => {
+  test.skip(saleApartments.length < 4, SHORT_OF("층 숫자가 있는 매매 아파트", 4 - saleApartments.length));
   const assertNoErrors = collectErrors(page);
   const { apiCalls, violations } = await setup(page, 1280);
   await page.goto(PAGE);
@@ -220,6 +227,7 @@ test("매물 비교표 1280px: 3건까지 담고 4건째는 잠금, 빼기, list
 // 칸을 고르거나 채울 때 그 아래 칸이 움직이지 않는다(보드 후보, 2026-11-21 측정: 고치기 전 26 ~ 28px 올라감).
 // ① '위반건축물·미등기 여부'를 고르면 위 '빈 칸·고칠 칸' 줄이 줄어듦 ② 빈 칸 표시가 켜진 뒤 소재지를 채우면 그 칸 안내 글이 사라짐.
 test("명시사항 칸 밀림 0px: 360·390·1280px에서 칸을 고르거나 채워도 아래 칸 위치가 그대로, 선택 단추 글자는 늘 한 줄", async ({ page }) => {
+  test.skip(saleApartments.length < 1, SHORT_OF("층 숫자가 있는 매매 아파트", 1));
   const assertNoErrors = collectErrors(page);
   await setup(page, 360);
   const first = saleApartments[0];

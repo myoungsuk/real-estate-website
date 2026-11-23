@@ -4,7 +4,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import complexes from "../src/data/complexes.json" with { type: "json" };
 import listings from "../src/data/listings.json" with { type: "json" };
-import naverListings from "../src/data/naver-listings.json" with { type: "json" };
 import office from "../src/data/office.json" with { type: "json" };
 import rules from "../src/data/work/ad-disclosure-rules.json" with { type: "json" };
 import { buildDisclosure, formatArea, formatManagementFee, formatWon, officeLine } from "../src/lib/work/ad-disclosure.mjs";
@@ -32,11 +31,24 @@ import {
   readPriceFacts,
 } from "../src/lib/work/blog-sources.mjs";
 
-const sources = listBlogSources({ naverListings, listings, complexes, rules });
+// 네이버 매물은 매일 부동산뱅크 동기화로 바뀌므로(내려간 매물 번호를 박으면 동기화의 npm test가 멈춤) 공개 매물과 같은 꼴의 가상 매물만 쓴다.
+const NAVER_FIXTURE = {
+  checkedAt: "2026-11-24",
+  items: [
+    { id: "9900000101", title: "가상단지 202동", propertyType: "아파트", tradeType: "sale", priceLabel: "2억 6,000", areaLabel: "111B㎡ · 전용 84.77B㎡", floorLabel: "2/22층", direction: "남향", summary: "선호동 남향으로 저층이지만 해 잘드는 집입니다", registeredAt: "2026-08-25", source: "네이버페이 부동산", url: "https://fin.land.naver.com/articles/9900000101" },
+    { id: "9900000102", title: "가상동 일반상가", propertyType: "상가점포", tradeType: "sale", priceLabel: "3억", areaLabel: "계약 45㎡ · 전용 36㎡", floorLabel: "1/1층", direction: null, summary: "냉난방기설치 신축아파트단지내상가 저렴한가격", registeredAt: "2026-08-17", source: "네이버페이 부동산", url: "https://fin.land.naver.com/articles/9900000102" },
+    { id: "9900000103", title: "가상면 답", propertyType: "토지", tradeType: "sale", priceLabel: "2억", areaLabel: "대지 4027㎡", floorLabel: null, direction: null, summary: "주말 농장으로 사용중, 3필지 같이 매매", registeredAt: "2026-07-27", source: "네이버페이 부동산", url: "https://fin.land.naver.com/articles/9900000103" },
+    { id: "9900000104", title: "가상분양1단지", propertyType: "아파트분양권", tradeType: "sale", priceLabel: "4억 4,630", areaLabel: "85㎡ · 전용 59㎡", floorLabel: "8/29층", direction: "남서향", summary: "", registeredAt: "2026-10-22", source: "네이버페이 부동산", url: "https://fin.land.naver.com/articles/9900000104" },
+    { id: "9900000105", title: "가상단지 203동", propertyType: "아파트", tradeType: "monthly-rent", priceLabel: "10,000/140", areaLabel: "113㎡ · 전용 84㎡", floorLabel: "중/33층", direction: "남동향", summary: "", registeredAt: "2026-11-01", source: "네이버페이 부동산", url: "https://fin.land.naver.com/articles/9900000105" },
+  ],
+};
+const sources = listBlogSources({ naverListings: NAVER_FIXTURE, listings, complexes, rules });
 const source = (type, id) => findBlogSource(sources, type, id);
-const APT = source("naver_listing", "2645736151"); // 휴먼시아2단지 202동 매매 2억 6,000 · 전용 84.77㎡ · 2/22층 · 남향
-const SHOP = source("naver_listing", "2644061278"); // 상가점포 매매 3억 · 전용 36㎡ · 1/1층
-const LAND = source("naver_listing", "2640120697"); // 토지 매매 2억 · 대지 4027㎡
+const APT = source("naver_listing", "9900000101"); // 가상단지 202동 매매 2억 6,000 · 전용 84.77㎡ · 2/22층 · 남향
+const SHOP = source("naver_listing", "9900000102"); // 상가점포 매매 3억 · 전용 36㎡ · 1/1층
+const LAND = source("naver_listing", "9900000103"); // 토지 매매 2억 · 대지 4027㎡
+const PRESALE = source("naver_listing", "9900000104"); // 아파트분양권(고를 수 없음)
+const RENT = source("naver_listing", "9900000105"); // 아파트 월세 보증금 1억 · 월 140만 원 · 중/33층
 const COMPLEX = source("complex", "leaders-city-5");
 const LOCATION = "대전 동구 ZZTEST-7F3A동 999-9";
 const fullAptInputs = (extra = {}) => validateBlogInputs({
@@ -65,6 +77,11 @@ test("공개 자료 읽기: 만 원 단위 가격·전용/대지 면적·층 표
   assert.match(classifyPropertyType("아파트분양권", rules).blockedReason, /분양권/u);
   assert.match(classifyPropertyType("오피스텔", rules).blockedReason, /아직 정하지 않아/u);
   assert.deepEqual([APT.category, APT.facts.priceWon, APT.facts.exclusiveM2, APT.facts.floor, APT.facts.totalFloors, APT.facts.direction], ["multi-family", 260_000_000, 84.77, 2, 22, "남향"]);
+  // 매물 목록을 거쳐도 분양권은 까닭과 함께 잠기고(글 초안 API·매물 안내지가 같은 함수를 씀), 월세는 보증금·월세로 읽는다.
+  assert.deepEqual([PRESALE.category, PRESALE.facts.propertyType], [null, "아파트분양권"]);
+  assert.match(PRESALE.blockedReason, /분양권/u);
+  assert.deepEqual([RENT.category, RENT.blockedReason, RENT.facts.depositWon, RENT.facts.monthlyRentWon, RENT.facts.floorBand, RENT.facts.totalFloors], ["multi-family", null, 100_000_000, 1_400_000, "중", 33]);
+  assert.deepEqual(sources.filter((item) => item.type === "naver_listing").map((item) => item.id), NAVER_FIXTURE.items.map((item) => item.id), "넣은 가상 매물만, 넣은 순서대로");
   assert.deepEqual(sources.filter((item) => item.type === "complex").map((item) => item.id), ["leaders-city-4", "leaders-city-5", "sinheung-sk-view"], "published 단지만");
   assert.ok(sources.every((item) => item.type !== "listing" || listings.find((entry) => entry.id === item.id)?.status === "published"));
 });
@@ -329,7 +346,7 @@ test("결과 새 꼴: sections·checklist를 받아 문단을 펴고 headings를
 test("새 꼴 검사: 소제목(h문단 번호)과 현장에서 확인할 점(check)의 숫자·낱말도 대조, 옛 꼴은 그 칸이 없어도 됨", () => {
   const inputs = fullAptInputs();
   const result = checkBlogDraft({
-    title: "휴먼시아2단지",
+    title: "가상단지",
     paragraphs: ["매매 2억 6,000만 원입니다.", "남향입니다."],
     headings: ["", "3억 원대 급매"],
     checklist: ["등기 확인", "마트까지 도보 5분"],

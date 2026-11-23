@@ -8,7 +8,8 @@ import { readFile, readdir } from "node:fs/promises";
 import { DatabaseSync } from "node:sqlite";
 import { BLOG_STYLES, EMPHASIS_MAX, checkBlogDraft } from "../src/lib/work/blog-checks.mjs";
 import { findBlogSource } from "../src/lib/work/blog-sources.mjs";
-import { blogSources, buildOpenAiRequest, emphasisNumbersOf, estimateInputTokens } from "../worker/work-blog.mjs";
+import { formatKoreanWon } from "../src/lib/work/work-format.mjs";
+import { blogSources, buildBlogPromptPayload, buildOpenAiRequest, emphasisNumbersOf, estimateInputTokens } from "../worker/work-blog.mjs";
 import { runRealpriceCron } from "../worker/work-scheduled.mjs";
 import {
   FAKE_MAX_OUTPUT,
@@ -31,7 +32,23 @@ import { NOW, ORIGIN, SECRET, allMigrationSql, createD1, freshDb, migrationFiles
 
 const LOCATION = "대전 동구 ZZTEST-7F3A동 999-9";
 const OFFICE_PHONE = "010-2790-8675";
-const LISTING = { type: "naver_listing", id: "2645736151" }; // 휴먼시아2단지 202동, 아파트 매매 2억 6,000, 전용 84.77㎡, 2/22층, 남향(공개 매물)
+// 네이버 매물은 매일 부동산뱅크 동기화로 바뀐다. 이 API는 번들 공개 자료(work-blog.mjs 모듈 상수)만 읽어 가상 매물을 넣을 수 없으므로,
+// 번호를 박지 않고 지금 공개 자료에서 조건(아파트 매매·고를 수 있음·가격·전용면적·숫자 층·총 층수·방향)으로 고르고 기대값도 그 매물에서 만든다.
+// 제목 끝에 동 번호가 있는 매물을 먼저 고른다(OpenAI 요청에서 동 번호를 빼는지 보려고). 아파트 매매는 사무소의 주된 매물이라
+// 못 찾으면 건너뛰지 않고 이 파일 전체를 실패로 멈춘다. 순수 함수 시험(work-blog-checks)은 가상 매물로 같은 읽기·잠금을 지킨다.
+const DONG_SUFFIX = /\s*(\d{1,4})\s*동$/u; // 서버 work-blog.mjs stripDong과 같은 꼴
+const LISTING_SOURCE = (() => {
+  const fit = blogSources().filter((item) => item.type === "naver_listing" && !item.blockedReason && item.facts.propertyType === "아파트" && item.facts.tradeType === "sale"
+    && item.facts.priceWon && item.facts.exclusiveM2 && Number.isInteger(item.facts.floor) && item.facts.totalFloors && item.facts.direction);
+  const picked = fit.find((item) => DONG_SUFFIX.test(item.title)) ?? fit[0];
+  if (!picked) throw new Error("공개 매물에 시험할 아파트 매매(가격·전용면적·숫자 층·총 층수·방향이 있는 것)가 없습니다. 고르는 조건을 다시 보세요.");
+  return picked;
+})();
+const LISTING = { type: "naver_listing", id: LISTING_SOURCE.id };
+const LISTING_NAME = LISTING_SOURCE.title.replace(DONG_SUFFIX, "").trim(); // OpenAI에 보내는 단지 이름(동 번호 뺌)
+const LISTING_DONG = DONG_SUFFIX.exec(LISTING_SOURCE.title)?.[1] ?? null; // 제목 끝 동 번호(없으면 null)
+const LISTING_PRICE = formatKoreanWon(LISTING_SOURCE.facts.priceWon); // 예: "2억 6,000만 원"
+const { exclusiveM2: LISTING_M2, floor: LISTING_FLOOR, totalFloors: LISTING_TOTAL, direction: LISTING_DIRECTION } = LISTING_SOURCE.facts;
 const COMPLEX = { type: "complex", id: "leaders-city-5" };
 // 분양권 매물은 매일 부동산뱅크 동기화로 바뀌므로 번호를 박지 않고 지금 공개 자료에서 고른다(없으면 그 줄만 건너뜀).
 const PRESALE_ID = blogSources().find((item) => item.type === "naver_listing" && item.facts.propertyType === "아파트분양권")?.id;
@@ -50,10 +67,10 @@ const listingInputs = (extra = {}) => ({
   ...extra,
 });
 const listingResult = (overrides = {}) => sampleResult({
-  title: "휴먼시아2단지 남향 매매",
-  paragraphs: ["매매 2억 6,000만 원, 전용 84.77㎡, 2층 남향입니다.", "관리비는 월 15만 원입니다."],
-  snsShort: "휴먼시아2단지 매매 2억 6,000만 원",
-  factsUsed: ["매매 2억 6,000만 원", "전용 84.77㎡"],
+  title: `${LISTING_NAME} ${LISTING_DIRECTION} 매매`,
+  paragraphs: [`매매 ${LISTING_PRICE}, 전용 ${LISTING_M2}㎡, ${LISTING_FLOOR}층 ${LISTING_DIRECTION}입니다.`, "관리비는 월 15만 원입니다."],
+  snsShort: `${LISTING_NAME} 매매 ${LISTING_PRICE}`,
+  factsUsed: [`매매 ${LISTING_PRICE}`, `전용 ${LISTING_M2}㎡`],
   ...overrides,
 });
 // 지금 설정의 최대 예상 비용(입력 추정 + 출력 상한 × 단가). 화면·문서의 "1편 약 0.21달러"와 같은 크기.
@@ -171,8 +188,12 @@ test("TK-60 GET /blog/sources는 번들 공개 자료만 주고, 분양권은 �
   assert.deepEqual(all.json.data.styles.map((style) => style.id), BLOG_STYLES.map((style) => style.id));
   const complexOnly = await work(env, "/blog/sources?type=complex");
   assert.ok(complexOnly.json.data.items.every((item) => item.type === "complex"));
-  const query = await work(env, `/blog/sources?q=${encodeURIComponent("휴먼 시아")}`);
-  assert.ok(query.json.data.items.length > 0 && query.json.data.items.every((item) => item.title.includes("휴먼시아")));
+  // 찾기 말은 단지 이름 가운데에 띄어쓰기를 넣은 것(예: "휴먼 시아2단지"). 서버 matchesBlogSourceQuery처럼 NFKC·소문자·띄어쓰기 무시로 대조한다.
+  const fold = (text) => String(text).normalize("NFKC").replace(/\s/gu, "").toLowerCase();
+  const compactName = LISTING_NAME.replace(/\s/gu, "");
+  const query = await work(env, `/blog/sources?q=${encodeURIComponent(`${compactName.slice(0, 2)} ${compactName.slice(2)}`)}`);
+  assert.ok(query.json.data.items.some((item) => item.id === LISTING.id), "고른 매물이 찾아짐");
+  assert.ok(query.json.data.items.every((item) => fold(item.title).includes(fold(compactName))));
   for (const bad of ["?type=customer", `?q=${"가".repeat(31)}`]) {
     const result = await work(env, `/blog/sources${bad}`);
     assert.deepEqual([result.status, result.json.error.code], [400, "VALIDATION_FAILED"], bad);
@@ -289,15 +310,17 @@ test("TK-49·TK-67 운영자 결정 ②: 소재지는 명시사항이 다 찼는
     { kind: "retrieve", respond: completed("resp_fake_2", listingResult()) },
   ]);
   const logs = [];
-  const made = await work(env, "/blog/drafts", { method: "POST", body: { source: LISTING, style: "urgent", inputs: listingInputs(), emphasis: "급매 2억 6,000만 원" }, openaiFetch: openai.fetcher, auditLog: (entry) => logs.push(entry) });
+  const made = await work(env, "/blog/drafts", { method: "POST", body: { source: LISTING, style: "urgent", inputs: listingInputs(), emphasis: `급매 ${LISTING_PRICE}` }, openaiFetch: openai.fetcher, auditLog: (entry) => logs.push(entry) });
   assert.equal(made.status, 201, JSON.stringify(made.json));
   const body = JSON.stringify(openai.calls[0].body);
   assert.doesNotMatch(body, /ZZTEST|999-9/u, "소재지 0");
-  assert.doesNotMatch(body, /202동/u, "동 번호 0");
+  if (LISTING_DONG) assert.doesNotMatch(body, new RegExp(`(?<!\\d)${LISTING_DONG}\\s*동`, "u"), "동 번호 0");
+  // 고른 공개 매물에 동 번호가 없어도 빼는 규칙은 가상 제목으로 늘 본다.
+  assert.equal(buildBlogPromptPayload({ source: { ...LISTING_SOURCE, title: "가상단지 101동" }, inputs: listingInputs(), emphasis: "", style: "plain" }).listing.title, "가상단지");
   assert.doesNotMatch(body, /electricity|heating|"general"|(?<!\d)50000(?!\d)/u, "관리비 비목 0");
   const payload = JSON.parse(openai.calls[0].body.input[0].content[0].text);
   assert.deepEqual([payload.listing.title, payload.listing.priceWon, payload.listing.exclusiveM2, payload.listing.floor, payload.listing.totalFloors, payload.listing.managementFee],
-    ["휴먼시아2단지", 260_000_000, 84.77, 2, 22, { type: "fixed", monthlyWon: 150000 }]);
+    [LISTING_NAME, LISTING_SOURCE.facts.priceWon, LISTING_M2, LISTING_FLOOR, LISTING_TOTAL, { type: "fixed", monthlyWon: 150000 }]);
 
   const done = await work(env, `/blog/drafts/${made.json.data.draft.id}`, { openaiFetch: openai.fetcher, now: NOW + 5_000 });
   const draft = done.json.data.draft;
@@ -305,7 +328,7 @@ test("TK-49·TK-67 운영자 결정 ②: 소재지는 명시사항이 다 찼는
   assert.equal(draft.needsLocation, true, "다시 열면 소재지를 다시 넣어야 함");
   assert.equal(draft.inputs.location, undefined);
   assert.deepEqual(draft.inputs.managementFee.items, FULL_FEE_ITEMS, "비목 금액은 명시사항용으로 D1에만 둠");
-  assert.equal(draft.emphasisNumbers, "2억 6,000만 원");
+  assert.equal(draft.emphasisNumbers, LISTING_PRICE);
   assert.deepEqual(draft.checks.blocks, []);
   // requestId(감사 기록의 request_id)는 무작위 UUID라 999-9 같은 글자가 우연히 들어갈 수 있어 빼고 본다.
   assert.doesNotMatch(dumpAll(database).replace(/"request_id":"[^"]*"/gu, ""), /ZZTEST|999-9/u, "D1 어디에도 소재지 0");
