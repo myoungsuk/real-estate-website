@@ -231,6 +231,8 @@ function groupView(rows, dealId) {
       pairMode: rows[0].pair_mode,
       createdAt: rows[0].created_at,
       confirmedAt: rows.find((row) => row.confirmed_at)?.confirmed_at ?? null,
+      // 읽은 사본 ID(보낸 순서 = 근거 evidence.page의 쪽 번호). 결과 고르기 화면이 근거 쪽의 사진을 짝짓는 데 쓴다(화면 PR).
+      fileIds: parseJson(rows[0].input_file_ids) ?? [],
     },
     jobs: rows.map((row) => {
       const stored = withResult && row.status === "completed" ? parseJson(row.result_json) : null;
