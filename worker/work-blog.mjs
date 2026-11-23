@@ -13,6 +13,7 @@ import disclosureRules from "../src/data/work/ad-disclosure-rules.json" with { t
 import { buildDisclosure } from "../src/lib/work/ad-disclosure.mjs";
 import {
   BLOG_STYLES,
+  EMPHASIS_MAX,
   allowedStyles,
   checkBlogDraft,
   extractAllMoney,
@@ -83,7 +84,8 @@ export function buildBlogPromptPayload({ source, inputs, emphasis, style }) {
   const styleInfo = BLOG_STYLES.find((entry) => entry.id === style);
   const base = { style: { label: styleInfo.label, instruction: styleInfo.instruction }, emphasis: emphasis || null };
   if (source.type === "complex") {
-    return { ...base, kind: "complex", complex: { name: source.title, areaName: source.facts.areaName, summary: source.facts.summary, facts: source.facts.items } };
+    // details: 단지 자료 7개 항목(blog-sources.mjs readComplexDetails, 이미 상한 안으로 줄인 값). 숫자 검사도 같은 값을 본다.
+    return { ...base, kind: "complex", complex: { name: source.title, areaName: source.facts.areaName, summary: source.facts.summary, facts: source.facts.items, details: source.facts.details ?? {} } };
   }
   const facts = source.facts;
   const floorBand = inputs.floorMode === "band";
@@ -121,20 +123,32 @@ export const BLOG_INSTRUCTIONS = [
   "너는 대전 동구 공인중개사무소의 블로그 글 초안을 쓰는 도우미다. 사람이 읽고 고친 뒤 올린다.",
   "입력 JSON에 있는 사실만 쓴다. 입력에 없는 학교·학군·역·버스·마트·병원·공원·거리·도보 시간·시세 전망·수익률·후기·인물을 지어내지 않는다.",
   "금액은 '2억 6,000만 원'처럼, 면적은 ㎡로만 쓴다. '평'·'평형' 표기를 쓰지 않는다. 숫자는 입력 값과 똑같이 쓴다.",
-  "kind가 complex이면 단지 소개 글이다. 특정 매물의 가격·층을 쓰지 않는다.",
+  "kind가 complex이면 단지 소개 글이다. 특정 매물의 가격·층을 쓰지 않는다. complex.facts·complex.details(특징·면적별 세대·공급·생활환경·시설·확인할 점·자주 묻는 질문)를 근거로 쓰고, 자료에 붙은 조건(현재 운영 여부·배정학교·이동시간은 확인 필요 같은 말)을 빼지 않는다.",
   "보장·확실·무조건·반드시 오른다 같은 단정, 손님 후기처럼 보이는 문장, '직선거리' 표현을 쓰지 않는다.",
   "사무소 이름·전화번호·주소·등록번호와 명시사항 목록은 쓰지 않는다(따로 붙는다). 동·호수·지번도 쓰지 않는다.",
-  "style.instruction의 글 성격을 따르고, emphasis가 있으면 그 내용을 살린다(emphasis에 없는 사실은 더하지 않는다).",
-  "결과: title(60자 이하), paragraphs(1 ~ 12개, 각 600자 이하), hashtags(10개 이하, 각 30자 이하), snsShort(SNS용 200자 이하), factsUsed(글에 쓴 입력 사실을 짧게, 30개 이하).",
+  "style.instruction의 글 성격을 따르고, emphasis가 있으면 그 내용을 살린다(매물 글의 emphasis는 중개사가 직접 본 현장 메모다. emphasis에 없는 사실은 더하지 않는다).",
+  "구성: 소제목(heading) 4 ~ 6개로 나누고 소제목마다 문단 1 ~ 3개를 둔다. 본문 문단 글자 수 합계는 1,200 ~ 2,000자를 목표로 한다.",
+  "입력 사실이 모자라면 억지로 늘리지 않는다. 같은 말을 되풀이하거나 입력에 없는 내용으로 채우지 말고, 소제목 수와 글을 줄여 짧게 끝낸다.",
+  "checklist는 글 끝에 붙는 '현장에서 확인할 점' 목록이다. 입력(details.checkpoints·faqs·화면 입력)에 근거한 확인 권유를 3 ~ 6개, 각 한 문장으로 쓴다. 사실을 단정하지 않는다.",
+  "결과: title(60자 이하), sections(1 ~ 8개, heading 40자 이하, paragraphs 1 ~ 4개·각 600자 이하), checklist(10개 이하, 각 120자 이하, 앞에 '-' 없이), hashtags(10개 이하, 각 30자 이하), snsShort(SNS용 200자 이하), factsUsed(글에 쓴 입력 사실을 짧게, 30개 이하).",
 ].join("\n");
 
 export const BLOG_RESULT_SCHEMA = Object.freeze({
   type: "object",
   additionalProperties: false,
-  required: ["title", "paragraphs", "hashtags", "snsShort", "factsUsed"],
+  required: ["title", "sections", "checklist", "hashtags", "snsShort", "factsUsed"],
   properties: {
     title: { type: "string" },
-    paragraphs: { type: "array", items: { type: "string" } },
+    sections: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["heading", "paragraphs"],
+        properties: { heading: { type: "string" }, paragraphs: { type: "array", items: { type: "string" } } },
+      },
+    },
+    checklist: { type: "array", items: { type: "string" } },
     hashtags: { type: "array", items: { type: "string" } },
     snsShort: { type: "string" },
     factsUsed: { type: "array", items: { type: "string" } },
@@ -164,7 +178,7 @@ export function emphasisNumbersOf(emphasis) {
   if (!emphasis) return "";
   const dates = extractDates(emphasis);
   return [...extractAllMoney(emphasis), ...extractAreas(emphasis), ...extractFloors(emphasis), ...dates.full, ...dates.months]
-    .map((item) => item.text).join(" ").slice(0, 200);
+    .map((item) => item.text).join(" ").slice(0, EMPHASIS_MAX);
 }
 
 // ── 초안 행 ──

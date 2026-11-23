@@ -9,6 +9,7 @@ import office from "../src/data/office.json" with { type: "json" };
 import rules from "../src/data/work/ad-disclosure-rules.json" with { type: "json" };
 import { buildDisclosure, formatArea, formatManagementFee, formatWon, officeLine } from "../src/lib/work/ad-disclosure.mjs";
 import {
+  BLOG_RESULT_LIMITS,
   BLOG_STYLES,
   allowedStyles,
   checkBlogDraft,
@@ -18,7 +19,18 @@ import {
   validateBlogResult,
   validateEmphasis,
 } from "../src/lib/work/blog-checks.mjs";
-import { classifyPropertyType, findBlogSource, listBlogSources, readAreaFacts, readFloorFacts, readPriceFacts } from "../src/lib/work/blog-sources.mjs";
+import {
+  COMPLEX_DETAIL_KEYS,
+  COMPLEX_DETAILS_MAX_CHARS,
+  classifyPropertyType,
+  complexDetailTexts,
+  findBlogSource,
+  listBlogSources,
+  readAreaFacts,
+  readComplexDetails,
+  readFloorFacts,
+  readPriceFacts,
+} from "../src/lib/work/blog-sources.mjs";
 
 const sources = listBlogSources({ naverListings, listings, complexes, rules });
 const source = (type, id) => findBlogSource(sources, type, id);
@@ -122,7 +134,8 @@ test("TK-47 개인정보 형식: 주민등록번호·사무소 번호가 아닌 
   assert.deepEqual(findPersonalPatterns("1호선 역", { officePhone, checkUnit: true }), [], "호선은 호수가 아님");
   assert.deepEqual(validateBlogInputs({ location: "대전 동구 ZZTEST 1203호" }, { officePhone }).personal, ["location"]);
   assert.equal(validateEmphasis("연락 010-9999-0000", { officePhone }).personal, true);
-  assert.equal(validateEmphasis("가".repeat(201)).error, true);
+  assert.equal(validateEmphasis("가".repeat(500)).error, false, "대표 현장 메모는 500자까지(2026-11-23)");
+  assert.equal(validateEmphasis("가".repeat(501)).error, true);
   assert.deepEqual(validateBlogInputs({ unit: "101" }).errors, ["unit"], "호수 칸은 받지 않음");
 });
 
@@ -219,4 +232,111 @@ test("빌드 전 검사 validateAdDisclosureRules: 지금 규칙은 통과하고
     change(value);
     assert.ok(validateAdDisclosureRules(value).length > 0, change.toString().slice(0, 80));
   }
+});
+
+// ── 2026-11-23 글 초안 개선: 단지 자료 다 넣기 · 길이·구성(소제목·현장에서 확인할 점) · 대표 현장 메모 500자 ──
+
+test("단지 자료: 단지 글 자료에 7개 항목을 글자 칸만 담고, 출처·검색 설정·사진·별칭·관련 콘텐츠와 분류 글자는 넣지 않음", () => {
+  for (const item of complexes.filter((entry) => entry.status === "published")) {
+    const found = source("complex", item.slug);
+    assert.deepEqual(Object.keys(found.facts.details), COMPLEX_DETAIL_KEYS.filter((key) => (item[key] ?? []).length > 0), item.slug);
+    const text = JSON.stringify(found.facts.details);
+    assert.ok(text.length <= COMPLEX_DETAILS_MAX_CHARS, `${item.slug} ${text.length}자`);
+    for (const word of ["seo", "sources", "image", "aliases", "relatedContentIds", "historical-plan", "\"official\"", "transport", "daily-life", "verification", ".webp", "http"]) {
+      assert.ok(!text.includes(word), `${item.slug}: ${word}`);
+    }
+    // 지금 공개 자료는 상한 안이라 줄이지 않는다(줄 수가 원본과 같음).
+    for (const key of COMPLEX_DETAIL_KEYS) assert.equal(found.facts.details[key]?.length ?? 0, (item[key] ?? []).length, `${item.slug}.${key}`);
+  }
+  const amenity = COMPLEX.facts.details.amenityGroups[0];
+  assert.equal(amenity.basis, "입주 전 소개 자료(현재 운영 여부 확인 필요)", "분류 글자는 사람이 읽는 이름으로");
+  assert.equal(COMPLEX.facts.details.livingSections[0].category, "교통");
+  assert.equal(COMPLEX.facts.details.unitGroups[0].households, "208세대");
+  assert.equal(APT.facts.details, undefined, "매물 글에는 단지 자료를 붙이지 않음(이번 범위 밖)");
+});
+
+test("단지 자료 상한: 넘으면 뒤 항목(faqs → checkpoints → …)의 끝 줄부터 빼고 앞 항목은 남김, 빈 칸·빈 줄은 버림", () => {
+  const long = "가".repeat(300);
+  const item = {
+    highlights: [{ title: "특징", description: "신축" }, { title: "", description: "  " }],
+    unitGroups: [{ category: "분양", areaLabel: "59㎡", households: 10 }, { category: "분양", areaLabel: "84㎡", households: -1 }],
+    checkpoints: Array.from({ length: 4 }, (_, index) => ({ title: `확인 ${index + 1}`, description: long })),
+    faqs: Array.from({ length: 6 }, (_, index) => ({ question: `질문 ${index + 1}`, answer: long })),
+  };
+  const full = readComplexDetails(item, 100_000);
+  assert.deepEqual(full.highlights, [{ title: "특징", description: "신축" }], "빈 줄은 버림");
+  assert.deepEqual(full.unitGroups[1], { category: "분양", areaLabel: "84㎡" }, "세대 수가 이상하면 그 칸만 뺌");
+  const trimmed = readComplexDetails(item, 1_200);
+  assert.ok(JSON.stringify(trimmed).length <= 1_200);
+  assert.equal(trimmed.faqs, undefined, "맨 뒤 faqs부터 다 빠짐");
+  assert.ok(trimmed.checkpoints.length > 0 && trimmed.checkpoints.length < 4, "그다음 checkpoints의 끝 줄");
+  assert.deepEqual(trimmed.checkpoints.map((row) => row.title), ["확인 1", "확인 2", "확인 3"].slice(0, trimmed.checkpoints.length), "앞 줄이 남음");
+  assert.deepEqual([trimmed.highlights.length, trimmed.unitGroups.length], [1, 2], "앞 항목은 그대로");
+  assert.deepEqual(readComplexDetails(item, 10), {}, "아주 작으면 다 빠짐");
+  assert.deepEqual(complexDetailTexts({ unitGroups: [{ areaLabel: "59㎡", households: "10세대" }] }), ["59㎡", "10세대"]);
+});
+
+test("단지 자료 숫자·낱말 검사: 함께 보낸 자료의 면적·날짜·시설 낱말은 입력에 있는 것으로 치고, 자료를 빼면 다시 막힘·경고, 금액은 여전히 막음", () => {
+  const draft = (text) => ({ title: "리더스시티 5블록", paragraphs: [text], hashtags: [], snsShort: "짧은 글" });
+  const text = "전용 51.89㎡ 126세대가 있고 천동중학교는 2027년 3월 개교 예정입니다. 실내골프장도 소개돼 있습니다.";
+  assert.deepEqual(checkBlogDraft(draft(text), { source: COMPLEX }), { blocks: [], warnings: [] });
+  const bare = { ...COMPLEX, facts: { ...COMPLEX.facts, details: undefined } };
+  const without = checkBlogDraft(draft(text), { source: bare });
+  assert.deepEqual(without.blocks.map((item) => item.kind).sort(), ["area", "date"], "자료가 없으면 51.89㎡·2027년 3월은 입력에 없는 숫자");
+  assert.deepEqual(without.warnings.map((item) => item.kind), ["amenity"]);
+  assert.deepEqual(checkBlogDraft(draft("59㎡가 3억 원입니다"), { source: COMPLEX }).blocks.map((item) => item.kind), ["complex_number"], "단지 글의 금액은 자료와 상관없이 막음");
+});
+
+test("결과 새 꼴: sections·checklist를 받아 문단을 펴고 headings를 같은 길이로, 옛 꼴은 그대로(headings·checklist 없음)", () => {
+  const value = {
+    title: "제목",
+    sections: [{ heading: " 단지 개요 ", paragraphs: [" 첫 문단 ", "둘째 문단"] }, { heading: "생활", paragraphs: ["셋째 문단"] }],
+    checklist: ["- 등기 확인", "• 관리비 고지서", "채광"],
+    hashtags: ["천동"],
+    snsShort: "짧은 글",
+    factsUsed: [],
+  };
+  assert.deepEqual(validateBlogResult(value).result, {
+    title: "제목",
+    paragraphs: ["첫 문단", "둘째 문단", "셋째 문단"],
+    headings: ["단지 개요", "", "생활"],
+    checklist: ["등기 확인", "관리비 고지서", "채광"],
+    hashtags: ["#천동"],
+    snsShort: "짧은 글",
+    factsUsed: [],
+  });
+  assert.deepEqual(validateBlogResult({ ...value, checklist: [] }).result.checklist, [], "확인할 점이 없어도 됨");
+  const L = BLOG_RESULT_LIMITS;
+  const section = (extra = {}) => ({ heading: "소제목", paragraphs: ["문단"], ...extra });
+  assert.equal(validateBlogResult({ ...value, sections: Array.from({ length: L.sections }, () => section({ paragraphs: Array.from({ length: L.sectionParagraphs }, () => "가".repeat(600)), heading: "나".repeat(40) })), checklist: Array.from({ length: L.checklist }, () => "다".repeat(120)) }).ok, true, "경계값(8 × 4 × 600 · 소제목 40 · 확인 10 × 120)은 통과");
+  for (const bad of [
+    { ...value, sections: [] },
+    { ...value, sections: Array.from({ length: L.sections + 1 }, () => section()) },
+    { ...value, sections: [section({ heading: "가".repeat(41) })] },
+    { ...value, sections: [section({ heading: " " })] },
+    { ...value, sections: [section({ paragraphs: [] })] },
+    { ...value, sections: [section({ paragraphs: Array.from({ length: L.sectionParagraphs + 1 }, () => "문단") })] },
+    { ...value, sections: [section({ paragraphs: ["가".repeat(601)] })] },
+    { ...value, sections: [{ ...section(), extra: 1 }] },
+    { ...value, checklist: Array.from({ length: L.checklist + 1 }, () => "확인") },
+    { ...value, checklist: ["가".repeat(121)] },
+    { ...value, paragraphs: ["옛 칸과 섞임"] },
+  ]) assert.equal(validateBlogResult(bad).ok, false, JSON.stringify(bad).slice(0, 80));
+  const old = validateBlogResult({ title: "제목", paragraphs: ["문단"], hashtags: [], snsShort: "짧은 글", factsUsed: [] }).result;
+  assert.deepEqual(Object.keys(old), ["title", "paragraphs", "hashtags", "snsShort", "factsUsed"], "옛 꼴 초안은 이전과 같은 모양");
+});
+
+test("새 꼴 검사: 소제목(h문단 번호)과 현장에서 확인할 점(check)의 숫자·낱말도 대조, 옛 꼴은 그 칸이 없어도 됨", () => {
+  const inputs = fullAptInputs();
+  const result = checkBlogDraft({
+    title: "휴먼시아2단지",
+    paragraphs: ["매매 2억 6,000만 원입니다.", "남향입니다."],
+    headings: ["", "3억 원대 급매"],
+    checklist: ["등기 확인", "마트까지 도보 5분"],
+    hashtags: [],
+    snsShort: "짧은 글",
+  }, { source: APT, inputs });
+  assert.deepEqual(result.blocks.map((item) => [item.kind, item.where]), [["money", "h2"]]);
+  assert.deepEqual(result.warnings.map((item) => [item.kind, item.where]), [["amenity", "check"]]);
+  assert.deepEqual(checkBlogDraft({ title: "제목", paragraphs: ["매매 2억 6,000만 원입니다."], hashtags: [], snsShort: "짧은 글" }, { source: APT, inputs }).blocks, []);
 });

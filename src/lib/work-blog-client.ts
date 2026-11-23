@@ -23,6 +23,7 @@ export interface BlogSourceFacts {
   registeredAt?: string | null;
   areaName?: string | null;
   items?: { label: string; value: string }[];
+  details?: Record<string, unknown[]>;
 }
 
 export interface BlogSource {
@@ -45,7 +46,8 @@ export interface BlogLimits {
   usage: { day: string; todayCreates: number; monthCostMicroUsd: number };
 }
 
-export interface BlogResult { title: string; paragraphs: string[]; hashtags: string[]; snsShort: string; factsUsed: string[] }
+// headings·checklist는 소제목이 있는 새 꼴 초안에만 있다(2026-11-23). headings는 paragraphs와 같은 길이이고 소제목이 없는 문단은 "".
+export interface BlogResult { title: string; paragraphs: string[]; headings?: string[]; checklist?: string[]; hashtags: string[]; snsShort: string; factsUsed: string[] }
 export interface BlogCheckItem { kind: string; text: string; where: string }
 
 export interface BlogDraft {

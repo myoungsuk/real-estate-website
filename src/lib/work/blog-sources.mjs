@@ -126,6 +126,71 @@ function homepageSource(item, rules) {
   };
 }
 
+// 단지 소개 글에 함께 보내는 단지 자료(2026-11-23 사용자 결정 "단지 자료 다 넣기"). 출처·검색 설정·사진·별칭·관련 콘텐츠는 보내지 않는다.
+// 글자 칸만 골라 담고, 분류 글자(transport·historical-plan 등)는 사람이 읽는 이름으로 바꾼다.
+// 다 합친 JSON이 COMPLEX_DETAILS_MAX_CHARS를 넘으면 뒤 항목(faqs → checkpoints → … → highlights)의 끝 줄부터 뺀다.
+// AI에 보내는 것과 숫자·낱말 검사(blog-checks.mjs)가 보는 것이 같은 값이 되도록 자료를 만들 때 한 번만 줄인다.
+export const COMPLEX_DETAIL_KEYS = Object.freeze(["highlights", "unitGroups", "supplySummary", "livingSections", "amenityGroups", "checkpoints", "faqs"]);
+export const COMPLEX_DETAILS_MAX_CHARS = 6000;
+const LIVING_LABELS = Object.freeze({ transport: "교통", education: "교육", "daily-life": "생활", nature: "자연" });
+const VERIFICATION_LABELS = Object.freeze({ official: "공식 자료", "historical-plan": "입주 전 소개 자료(현재 운영 여부 확인 필요)" });
+
+const textOf = (value) => (typeof value === "string" && value.trim() ? value.trim() : null);
+const listOf = (value) => (Array.isArray(value) ? value : []);
+// 빈 칸은 빼고, 글자 칸이 하나도 없는 줄은 버린다.
+const compact = (entry) => {
+  const out = Object.fromEntries(Object.entries(entry).filter(([, value]) => value !== null && value !== undefined && !(Array.isArray(value) && value.length === 0)));
+  return Object.keys(out).length > 0 ? out : null;
+};
+const DETAIL_READERS = {
+  highlights: (row) => compact({ title: textOf(row?.title), description: textOf(row?.description) }),
+  unitGroups: (row) => compact({
+    category: textOf(row?.category),
+    areaLabel: textOf(row?.areaLabel),
+    households: Number.isSafeInteger(row?.households) && row.households >= 0 ? `${row.households}세대` : null,
+    note: textOf(row?.note),
+  }),
+  supplySummary: (row) => compact({ label: textOf(row?.label), value: textOf(row?.value), description: textOf(row?.description) }),
+  livingSections: (row) => compact({ category: LIVING_LABELS[row?.category] ?? null, title: textOf(row?.title), description: textOf(row?.description) }),
+  amenityGroups: (row) => compact({
+    title: textOf(row?.title),
+    items: listOf(row?.items).map(textOf).filter(Boolean),
+    basis: VERIFICATION_LABELS[row?.verification] ?? null,
+    note: textOf(row?.note),
+  }),
+  checkpoints: (row) => compact({ title: textOf(row?.title), description: textOf(row?.description) }),
+  faqs: (row) => compact({ question: textOf(row?.question), answer: textOf(row?.answer) }),
+};
+
+export function readComplexDetails(item, maxChars = COMPLEX_DETAILS_MAX_CHARS) {
+  const details = {};
+  for (const key of COMPLEX_DETAIL_KEYS) {
+    const rows = listOf(item?.[key]).map(DETAIL_READERS[key]).filter(Boolean);
+    if (rows.length > 0) details[key] = rows;
+  }
+  // 상한을 넘으면 뒤 항목의 끝 줄부터 하나씩 뺀다. 항목이 비면 키도 지운다.
+  const order = [...COMPLEX_DETAIL_KEYS].reverse();
+  while (JSON.stringify(details).length > maxChars) {
+    const key = order.find((name) => details[name]?.length > 0);
+    if (!key) break;
+    details[key].pop();
+    if (details[key].length === 0) delete details[key];
+  }
+  return details;
+}
+
+// 단지 자료에 들어 있는 글자 전부(숫자·낱말 검사의 '입력에 있는 글'). 보낸 자료와 같은 값만 본다.
+export function complexDetailTexts(details) {
+  const texts = [];
+  const walk = (value) => {
+    if (typeof value === "string") texts.push(value);
+    else if (Array.isArray(value)) value.forEach(walk);
+    else if (value && typeof value === "object") Object.values(value).forEach(walk);
+  };
+  walk(details ?? {});
+  return texts;
+}
+
 function complexSource(item) {
   return {
     type: "complex",
@@ -139,6 +204,7 @@ function complexSource(item) {
       items: (Array.isArray(item.facts) ? item.facts : [])
         .filter((fact) => typeof fact?.label === "string" && typeof fact?.value === "string")
         .map((fact) => ({ label: fact.label, value: fact.value })),
+      details: readComplexDetails(item),
     },
   };
 }

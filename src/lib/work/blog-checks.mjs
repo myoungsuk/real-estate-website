@@ -5,6 +5,7 @@
 // - 글 검사: 입력과 다른 금액·면적·층·날짜는 복사를 막고, 평 표기·입력에 없는 생활 편의·직선거리·후기·가상 인물·과장 표현은 경고한다.
 //   검사는 글자를 고치지 않는다. 사람이 고친 글로 다시 부른다.
 import { FEE_ITEM_KEYS } from "./ad-disclosure.mjs";
+import { complexDetailTexts } from "./blog-sources.mjs";
 
 export const BLOG_STYLES = Object.freeze([
   { id: "plain", label: "담백하게", note: "사실만 차분하게 씁니다.", instruction: "과장 없이 사실을 차분하게 정리한다." },
@@ -27,8 +28,11 @@ export function allowedStyles(source) {
   return STYLES_BY_TRADE[source?.type === "complex" ? "complex" : source?.facts?.tradeType] ?? ["plain"];
 }
 
-export const BLOG_RESULT_LIMITS = Object.freeze({ title: 60, paragraphs: 12, paragraph: 600, hashtags: 10, hashtag: 30, snsShort: 200, factsUsed: 30, fact: 200 });
-export const EMPHASIS_MAX = 200;
+// sections·heading·sectionParagraphs·checklist·checkItem은 소제목이 있는 새 꼴(2026-11-23 "길이·구성 지시")에만 쓴다.
+// AI 지시는 소제목 4 ~ 6개·문단 1 ~ 3개지만, 조금 벗어난 결과로 비용만 쓰고 실패하지 않게 검사는 넉넉히 둔다.
+export const BLOG_RESULT_LIMITS = Object.freeze({ title: 60, paragraphs: 12, paragraph: 600, hashtags: 10, hashtag: 30, snsShort: 200, factsUsed: 30, fact: 200,
+  sections: 8, heading: 40, sectionParagraphs: 4, checklist: 10, checkItem: 120 });
+export const EMPHASIS_MAX = 500;
 export const LOCATION_MAX = 100;
 const DIRECTIONS = new Set(["동향", "서향", "남향", "북향", "남동향", "남서향", "북동향", "북서향"]);
 const MOVE_IN_PARTS = new Set(["초순", "중순", "하순"]);
@@ -176,26 +180,48 @@ export function validateEmphasis(raw, { officePhone = "" } = {}) {
 }
 
 // ── AI 결과 모양 ──
+// 두 꼴을 받는다.
+// - 옛 꼴(키 5개): title·paragraphs·hashtags·snsShort·factsUsed. 2026-11-23 전에 만든 초안과 같은 모양으로 돌려준다.
+// - 새 꼴(키 6개): title·sections[{ heading, paragraphs[] }]·checklist[]·hashtags·snsShort·factsUsed.
+//   저장·화면은 문단을 한 줄로 펴서 paragraphs에 두고, headings(paragraphs와 같은 길이, 소제목이 시작되는 문단에만 글자, 나머지는 "")와 checklist를 함께 둔다.
+//   그래서 숫자 검사·복사·화면의 문단 칸은 옛 꼴과 같은 paragraphs를 그대로 쓴다.
 // 정해진 모양이면 { ok: true, result }(앞뒤 공백 정리), 아니면 { ok: false }. 원문은 돌려주지 않는다.
 export function validateBlogResult(value) {
   const L = BLOG_RESULT_LIMITS;
   if (!isPlainObject(value)) return { ok: false };
   const keys = Object.keys(value).sort().join(",");
-  if (keys !== "factsUsed,hashtags,paragraphs,snsShort,title") return { ok: false };
+  const sectioned = keys === "checklist,factsUsed,hashtags,sections,snsShort,title";
+  if (!sectioned && keys !== "factsUsed,hashtags,paragraphs,snsShort,title") return { ok: false };
   const text = (item, max) => typeof item === "string" && item.trim().length > 0 && item.trim().length <= max;
   if (!text(value.title, L.title) || !text(value.snsShort, L.snsShort)) return { ok: false };
-  if (!Array.isArray(value.paragraphs) || value.paragraphs.length === 0 || value.paragraphs.length > L.paragraphs || !value.paragraphs.every((item) => text(item, L.paragraph))) return { ok: false };
   if (!Array.isArray(value.hashtags) || value.hashtags.length > L.hashtags || !value.hashtags.every((item) => text(item, L.hashtag))) return { ok: false };
   if (!Array.isArray(value.factsUsed) || value.factsUsed.length > L.factsUsed || !value.factsUsed.every((item) => text(item, L.fact))) return { ok: false };
+  const common = {
+    hashtags: value.hashtags.map((item) => item.trim().replace(/^#*/u, "#")),
+    snsShort: value.snsShort.trim(),
+    factsUsed: value.factsUsed.map((item) => item.trim()),
+  };
+  if (!sectioned) {
+    if (!Array.isArray(value.paragraphs) || value.paragraphs.length === 0 || value.paragraphs.length > L.paragraphs || !value.paragraphs.every((item) => text(item, L.paragraph))) return { ok: false };
+    return { ok: true, result: { title: value.title.trim(), paragraphs: value.paragraphs.map((item) => item.trim()), ...common } };
+  }
+  const sections = value.sections;
+  if (!Array.isArray(sections) || sections.length === 0 || sections.length > L.sections) return { ok: false };
+  const paragraphs = [];
+  const headings = [];
+  for (const section of sections) {
+    if (!isPlainObject(section) || Object.keys(section).sort().join(",") !== "heading,paragraphs" || !text(section.heading, L.heading)) return { ok: false };
+    const list = section.paragraphs;
+    if (!Array.isArray(list) || list.length === 0 || list.length > L.sectionParagraphs || !list.every((item) => text(item, L.paragraph))) return { ok: false };
+    list.forEach((item, index) => {
+      paragraphs.push(item.trim());
+      headings.push(index === 0 ? section.heading.trim() : "");
+    });
+  }
+  if (!Array.isArray(value.checklist) || value.checklist.length > L.checklist || !value.checklist.every((item) => text(item, L.checkItem))) return { ok: false };
   return {
     ok: true,
-    result: {
-      title: value.title.trim(),
-      paragraphs: value.paragraphs.map((item) => item.trim()),
-      hashtags: value.hashtags.map((item) => item.trim().replace(/^#*/u, "#")),
-      snsShort: value.snsShort.trim(),
-      factsUsed: value.factsUsed.map((item) => item.trim()),
-    },
+    result: { title: value.title.trim(), paragraphs, headings, checklist: value.checklist.map((item) => item.trim().replace(/^[-•·]\s*/u, "")).filter(Boolean), ...common },
   };
 }
 
@@ -265,6 +291,8 @@ export function allowedNumbers({ source, inputs = {}, emphasis = "" }) {
   if (source.type === "complex") {
     for (const fact of source.facts.items) addText(`${fact.label} ${fact.value}`);
     addText(source.facts.summary);
+    // 함께 보낸 단지 자료(highlights·unitGroups 등)의 숫자도 입력에 있는 숫자로 친다. 칸마다 따로 읽어 칸을 넘는 숫자가 생기지 않게 한다.
+    for (const text of complexDetailTexts(source.facts.details)) addText(text);
     return { money, areas, floors, dates, months, complex: true };
   }
   const facts = source.facts;
@@ -306,11 +334,15 @@ const sameArea = (a, b) => Math.abs(a - b) < 0.005;
 // 항목 모양: { kind, text, where }. where는 "title"·"p1"…·"sns". 숫자 다름(block)은 복사를 막는다.
 export function checkBlogDraft(draft, { source, inputs = {}, emphasis = "" }) {
   const allowed = allowedNumbers({ source, inputs, emphasis });
-  const inputText = [emphasis, source.title, source.facts.summary, ...(source.type === "complex" ? source.facts.items.map((fact) => `${fact.label} ${fact.value}`) : [])].join(" ");
+  const inputText = [emphasis, source.title, source.facts.summary,
+    ...(source.type === "complex" ? [...source.facts.items.map((fact) => `${fact.label} ${fact.value}`), ...complexDetailTexts(source.facts.details)] : [])].join(" ");
   const blocks = [];
   const warnings = [];
   // 해시태그도 복사하는 글에 들어가므로 같은 숫자 대조를 한다.
-  const parts = [["title", draft.title], ...draft.paragraphs.map((text, index) => [`p${index + 1}`, text]), ["sns", draft.snsShort], ["tags", (draft.hashtags ?? []).join(" ")]];
+  // 소제목(h1…, 그 문단 번호)과 '현장에서 확인할 점'(check)도 복사하는 글에 들어가므로 같이 본다. 옛 꼴 초안에는 둘 다 없다.
+  const headingParts = (draft.headings ?? []).map((text, index) => [`h${index + 1}`, text]).filter(([, text]) => typeof text === "string" && text.trim());
+  const parts = [["title", draft.title], ...headingParts, ...draft.paragraphs.map((text, index) => [`p${index + 1}`, text]),
+    ...(draft.checklist ?? []).map((text) => ["check", text]), ["sns", draft.snsShort], ["tags", (draft.hashtags ?? []).join(" ")]];
   for (const [where, raw] of parts) {
     const text = normalizeNumberText(raw);
     for (const item of extractAllMoney(text)) {
