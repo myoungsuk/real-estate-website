@@ -29,6 +29,7 @@
 4. **업무 도구 활성화는 GitHub 설정과 분리한다.** 별도 변수 `WORK_TOOLS_ENABLED`와 바인딩 존재 여부로 판단하고, 설정이 없으면 fail closed(503)한다.
 5. **AI는 Worker가 OpenAI API를 SDK 없이 직접 `fetch`로 호출한다**(운영자 승인 원문 "1. 지금 Worker(JavaScript) + 직접 fetch (추천)"). 기존 `githubRequest(path, init, env, fetcher = fetch)`와 같은 모양으로 만들어 시험에서 바꿔 끼운다. 브라우저 직접 호출과 95번 서버(comibot) 경유 호출은 하지 않는다. 브라우저 쪽 라이브러리(얼굴 인식 등)는 이 결정의 대상이 아니며 따로 정한다.
 6. **AI 모델은 작업별 설정값으로 두고, 기본은 `gpt-6.1-sol`, 계약서 두 번 읽기만 `gpt-6.1-sol` + `gpt-6-astra` 교차, 추론은 모두 최고(`max`)로 한다.** 모델 이름과 추론 수준은 코드에 박지 않고 설정값으로 둔다. 키는 comibot과 분리한 새 OpenAI 프로젝트의 키를 Cloudflare Secret에만 둔다. `store:false`, 생성 요청 재시도 0회, 메타데이터만 로그, 예산 상한을 지킨다.
+   - 2026-11-23 변경: 공용 추론 수준을 xhigh로 낮춤(사용자 질문 도구 답 18:19:39 '공용 값을 바로 xhigh로'). 계약서 AI를 켤 때 다시 정함.
    - 근거(2026-11-16 OpenAI 공식 모델·가격 문서): `gpt-6.1-sol`은 "Near-Astra performance for complex work at a lower cost", 입력 100만 토큰당 2달러·출력 10달러, 추론 low ~ max, 이미지 입력·구조화 출력 지원. `gpt-6-astra`는 "Our most capable model", 입력 10달러·출력 50달러. 출처: https://developers.openai.com/api/docs/models/gpt-6.1-sol , https://developers.openai.com/api/docs/models/gpt-6-astra , https://developers.openai.com/api/docs/pricing
    - 결정 경위: 09:43:23 운영자 원문 "…api 호출비용 상관없이 제일 성능이 좋게 나오도록 하는 모델이랑 추론 기능 썼으면 좋겠어"로 처음에는 최상위 모델(`gpt-6-astra`) 단일 안이었다. 10:54:38 "전부 6.1 Sol"은 9초 뒤 번복되어 적용하지 않았고, 10:54:47 "아니대 18번 추천대로하자"가 결정이다(보드 0절 18번 추천안). 추론 수준은 처음 결정 그대로 최고다.
    - 단계 4 착수 때 가상 계약서로 "Sol 두 번"과 "Sol + Astra 교차"의 정확도·시간·비용을 비교해 확정한다. 결과가 비슷하면 설정값만 바꿔 Sol 두 번으로 할 수 있다.

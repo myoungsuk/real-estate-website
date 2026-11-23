@@ -2,7 +2,7 @@
 // 참고용 집계이며 세무 장부가 아니다. 금액은 원 단위 정수, 날짜는 "YYYY-MM-DD" 글자다.
 // 칸마다 그 칸만 저장한다(서버 PATCH는 보낸 칸만 고침). 입금액·입금일은 서버가 함께 검사하므로 늘 둘을 같이 보낸다.
 import { calculateVatWon } from "./brokerage-fee.mjs";
-import { LEDGER_BASIS_LABELS, LEDGER_KIND_LABELS, LEDGER_LABEL_MAX, LEDGER_PAYER_LABELS, isDate, ledgerDateText, numberText, parseWon, wonText } from "./ledger-view.mjs";
+import { LEDGER_BASIS_LABELS, LEDGER_KIND_LABELS, LEDGER_LABEL_MAX, LEDGER_PAYER_LABELS, checkLedgerInput, isDate, ledgerDateText, numberText, parseWon, wonText } from "./ledger-view.mjs";
 
 // 되돌리기·다시 하기는 이 화면에서 고친 칸을 최근 것부터 이만큼만 기억한다(화면을 떠나면 없어짐).
 export const LEDGER_UNDO_LIMIT = 20;
@@ -282,4 +282,79 @@ export function ledgerGroupPlan(entries, summary, { filtered = false } = {}) {
     if (line) groups.set(entry.id, ledgerGroupLine(line, `${Number(month.slice(5, 7))}월`));
   }
   return { total: ledgerGroupLine(summary.total, `${summary.year ?? ""}년 합계`), groups };
+}
+
+// ── 빈 줄에서 새 줄 적기(D-2b, 11:34:13 시안 '새 줄 적는 중') ──
+// 합계 줄 바로 아래 빈 줄을 누르면 그 자리에서 거래 없는 장부 줄을 적는다. Enter로 POST 한 번, Esc로 버린다.
+// 칸 안에서 거래를 찾는 기능은 없다(대장 결정 2026-11-23, 시안과 다른 점) — 거래에 잇는 보수 줄은 '장부 줄 만들기'·손님 카드에서 만든다.
+export const LEDGER_NEW_KINDS = Object.freeze(["expense", "fee", "other_income"]);
+export const LEDGER_NEW_START = "새 장부 줄";
+// 새 줄에서 입력칸을 두는 칸(왼쪽부터). 낸 쪽은 보수일 때만, 부가세는 지출이 아닐 때만 입력칸이다.
+export const LEDGER_NEW_COLUMNS = Object.freeze(["basisOn", "kind", "label", "payerRole", "amountWon", "vatWon"]);
+
+/** 새 줄 아래 안내 한 줄. 입금일 기준에서 수입 줄은 입금일이 없으면 목록에 보이지 않아 그 말을 붙인다. @param {string} kind @param {string} [basis] */
+export function newRowNote(kind, basis = "balance") {
+  const name = LEDGER_KIND_LABELS[kind] ?? "장부";
+  const received = basis === "received" && kind !== "expense" ? " 첫 칸은 장부 줄 날짜이고, 입금일 기준에서는 입금하지 않은 수입 줄이 목록에 보이지 않습니다." : "";
+  return `새 ${name} 줄입니다. Enter로 저장하고 Esc로 지웁니다.${received} 거래에 잇는 보수 줄은 '장부 줄 만들기'나 손님 카드의 거래 칸에서 만듭니다.`;
+}
+
+/** 새 줄에서 그 칸에 입력칸을 두는지 @param {string} kind @param {string} column */
+export function newRowHasInput(kind, column) {
+  if (column === "payerRole") return kind === "fee";
+  if (column === "vatWon") return kind !== "expense";
+  return LEDGER_NEW_COLUMNS.includes(column);
+}
+
+/** 보수 줄의 부가세 칸을 직접 고치기 전까지 공급가액의 10%로 채운다(입력 화면의 '10%로 채우기'와 같은 값). 그 밖은 null(건드리지 않음). @param {string} kind @param {string} amountText */
+export function newRowVatText(kind, amountText) {
+  if (kind !== "fee") return null;
+  const amount = parseWon(amountText);
+  return amount === null || Number.isNaN(amount) ? "" : numberText(calculateVatWon(amount));
+}
+
+/** 새 줄의 받을 금액(자동) 글. 지출은 비움. @param {string} kind @param {string} amountText @param {string} vatText */
+export function newRowTotalText(kind, amountText, vatText) {
+  if (kind === "expense") return "";
+  const amount = parseWon(amountText);
+  const vat = parseWon(vatText);
+  if (amount === null || Number.isNaN(amount) || Number.isNaN(vat)) return "";
+  return numberText(amount + (vat ?? 0));
+}
+
+const NEW_ERROR_COLUMNS = Object.freeze({ entryOn: "basisOn", kind: "kind", label: "label", amount: "amountWon", vat: "vatWon" });
+
+/**
+ * 새 줄 칸 값 → POST 몸통. 입력 화면과 같은 검사(checkLedgerInput)이고, 거래 없는 줄이라 지출·기타 수입은 날짜가 꼭 있어야 한다.
+ * 틀리면 왼쪽 칸부터 첫 오류 하나(칸·글)를 준다.
+ * @param {{ kind: string, entryOn: string, label: string, payerRole: string, amount: string, vat: string }} values
+ * @returns {{ ok: true, body: Record<string, unknown> } | { ok: false, column: string, message: string }}
+ */
+export function planNewRow(values) {
+  const kind = values.kind;
+  if (!LEDGER_NEW_KINDS.includes(kind)) return { ok: false, column: "kind", message: "종류를 골라 주세요." };
+  const checked = checkLedgerInput(
+    { entryOn: values.entryOn, label: values.label, payerRole: values.payerRole, amount: values.amount, vat: kind === "expense" ? "" : values.vat },
+    { kind, hasDeal: false, needsEntryOn: kind !== "fee" },
+  );
+  if (!checked.ok) {
+    const errors = /** @type {Record<string, string>} */ (checked.errors);
+    const first = ["entryOn", "kind", "label", "amount", "vat"].find((key) => errors[key]) ?? Object.keys(errors)[0];
+    return { ok: false, column: NEW_ERROR_COLUMNS[first] ?? "label", message: errors[first] };
+  }
+  return { ok: true, body: { kind, ...checked.value } };
+}
+
+/** 새 줄을 저장한 뒤 알릴 글. shown: 지금 목록에 그 줄이 보이는지 @param {{ kind: string, label: string, amountWon: number, vatWon: number }} entry @param {boolean} shown */
+export function newRowSavedText(entry, shown) {
+  const name = LEDGER_KIND_LABELS[entry.kind] ?? "장부";
+  const what = `${name} ${entry.label ? `${entry.label} ` : ""}${wonText(Number(entry.amountWon ?? 0) + Number(entry.vatWon ?? 0))}`;
+  return `저장했습니다. ${what}.${shown ? "" : " 지금 연도·기준일 목록에는 보이지 않습니다(다른 해의 날짜이거나 이 기준일로는 날짜가 없는 줄)."}`;
+}
+
+// ── 줄 끝 지우기(D-2b) ──
+/** 지우기 전에 줄 아래에 묻는 글. 확인 글은 다른 지우기 화면과 같은 TRASH_MOVE_NOTICE. @param {{ label: string, kind: string }} entry @param {string} notice */
+export function deleteAskText(entry, notice) {
+  const name = entry.label || LEDGER_KIND_LABELS[entry.kind] || "장부";
+  return `'${name}' 줄을 지울까요? ${notice} 휴지통에 있는 동안 합계에서는 빠집니다.`;
 }

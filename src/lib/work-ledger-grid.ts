@@ -6,11 +6,16 @@ import type { LedgerBasis, LedgerEntry, LedgerSaved } from "./work-ledger-client
 import { WorkApiError } from "./work-ledger-client";
 import { element } from "./work-customers-dom";
 import { editButton, kindBadge, warnList } from "./work-ledger-dom";
-import { LEDGER_PAYER_LABELS, numberText } from "./work/ledger-view.mjs";
+import { LEDGER_KIND_LABELS, LEDGER_PAYER_LABELS, numberText } from "./work/ledger-view.mjs";
+import { TRASH_MOVE_NOTICE } from "./work/trash-view.mjs";
 import {
   LEDGER_ASK_DATE_NOTE,
   LEDGER_GRID_COLUMNS,
+  LEDGER_NEW_COLUMNS,
+  LEDGER_NEW_KINDS,
+  LEDGER_NEW_START,
   basisAfterSave,
+  deleteAskText,
   changesBefore,
   createLedgerHistory,
   gridCellEditable,
@@ -22,11 +27,18 @@ import {
   historyStepTitle,
   moveGridFocus,
   movedNote,
+  newRowHasInput,
+  newRowNote,
+  newRowSavedText,
+  newRowTotalText,
+  newRowVatText,
   planCellEdit,
+  planNewRow,
   typedText,
 } from "./work/ledger-grid.mjs";
 
 type Column = (typeof LEDGER_GRID_COLUMNS)[number];
+type NewColumn = (typeof LEDGER_NEW_COLUMNS)[number];
 type GroupLine = { title: string; note: string; net: string; receivable: string; received: string; unpaid: string; due: boolean };
 export interface LedgerGroupPlan { total: GroupLine | null; groups: Map<string, GroupLine> }
 
@@ -52,6 +64,14 @@ export interface LedgerGridHost {
   interrupted(failed: boolean): void;
   // 알릴 한 줄. visible이면 표 위에도 글로 보인다(되돌리기를 못 했을 때처럼 줄 아래에 쓸 자리가 없는 알림).
   announce(text: string, visible?: boolean): void;
+  // 빈 새 줄을 보일지(거르기·'그 줄만 보기'를 켜면 숨김 — 합계 줄·달 줄과 같은 규칙).
+  newRowAllowed(): boolean;
+  // 새 줄 저장(POST 한 번) → 화면이 목록·합계를 다시 읽는다. shown: 다시 읽은 목록에 그 줄이 있는지.
+  create(body: Record<string, unknown>): Promise<{ entry: LedgerEntry; shown: boolean }>;
+  // 줄 지우기(휴지통으로) → 화면이 지운 뒤 알림을 보이고 목록·합계를 다시 읽는다.
+  remove(id: string): Promise<void>;
+  // 지운 뒤 포커스를 둘 줄도 새 줄도 없을 때(거르기 중 마지막 줄을 지움) 표 밖의 갈 곳.
+  focusFallback(): void;
 }
 
 interface Job { changes: Record<string, unknown>; note: string; history: "record" | "undo" | "redo"; title: string; typed: string }
@@ -65,6 +85,7 @@ interface RowState {
   cells: Map<Column, Cell>;
   status: HTMLElement;
   warn: HTMLElement;
+  trash: HTMLButtonElement;
   queue: Job[];
   running: boolean;
   failed: string | null;
@@ -83,6 +104,7 @@ const MONEY = new Set<Column>(["amountWon", "vatWon", "receivedWon"]);
 // 서버 칸 이름 → 표의 칸(줄의 날짜 entryOn은 첫 칸에서 고친다)
 const columnOf = (key: string) => (key === "entryOn" ? "basisOn" : key) as Column;
 const payerLabels = LEDGER_PAYER_LABELS as Record<string, string>;
+const kindLabels = LEDGER_KIND_LABELS as Record<string, string>;
 const fromDeal = (entry: LedgerEntry) => Boolean(entry.dealId || entry.snapContractOn || entry.snapBalanceOn);
 
 // 합계 줄·달 줄. 장부 줄이 아니므로 data-lg-entry를 두지 않는다. 숫자는 '받을 금액'·'입금액'·'미입금' 세 칸만 채운다.
@@ -99,12 +121,39 @@ export function ledgerGroupRow(line: GroupLine, total = false) {
   return row;
 }
 
+// 줄 끝 휴지통 단추(D-2b). 이름은 읽기 프로그램용(물건 표시·종류 + "장부 줄 지우기"), 마우스를 올리면 "이 줄 지우기".
+const SVG_NS = "http://www.w3.org/2000/svg";
+function trashIcon() {
+  const svg = document.createElementNS(SVG_NS, "svg");
+  for (const [name, value] of [["viewBox", "0 0 24 24"], ["width", "20"], ["height", "20"], ["fill", "none"], ["stroke", "currentColor"], ["stroke-width", "1.8"], ["stroke-linecap", "round"], ["stroke-linejoin", "round"], ["aria-hidden", "true"], ["focusable", "false"]]) svg.setAttribute(name, value);
+  for (const d of ["M4.5 7h15", "M9.5 7V5h5v2", "M6.5 7l1 12.5h9l1-12.5", "M10.5 11v5M13.5 11v5"]) {
+    const path = document.createElementNS(SVG_NS, "path");
+    path.setAttribute("d", d);
+    svg.append(path);
+  }
+  return svg;
+}
+function trashButton(entry: LedgerEntry) {
+  const button = element("button", "lg-trash");
+  button.type = "button";
+  button.dataset.lgTrash = entry.id;
+  button.setAttribute("aria-label", `${entry.label || "(물건 표시 없음)"} ${kindLabels[entry.kind] ?? ""} 장부 줄 지우기`);
+  button.title = "이 줄 지우기";
+  button.append(trashIcon());
+  return button;
+}
+const BUSY_TEXT = "다른 줄을 저장하는 중이거나 저장하지 못한 칸이 있습니다. 그 줄을 끝낸 뒤 다시 눌러 주세요.";
+
 export function createLedgerGrid(host: LedgerGridHost) {
   const { tbody } = host;
   const rows = new Map<string, RowState>();
   const history = createLedgerHistory();
   let editor: Editor | null = null;
-  const isDirty = () => [...rows.values()].some((state) => state.queue.length > 0 || state.failed !== null || state.carry !== null);
+  const rowsDirty = () => [...rows.values()].some((state) => state.queue.length > 0 || state.failed !== null || state.carry !== null);
+  // 새 줄 저장·줄 지우기 중에도 목록을 바꾸지 않는다(끝나면 화면이 목록을 다시 그리고 settled로 막아 둔 동작을 이어서 함).
+  let creating = false;
+  let removing = false;
+  const isDirty = () => creating || removing || rowsDirty();
 
   const notifyHistory = () => {
     const undo = history.peekUndo();
@@ -181,6 +230,7 @@ export function createLedgerGrid(host: LedgerGridHost) {
     }
     const warn = state.queue.length === 0 ? warnList(state.entry) : null;
     state.warn.replaceChildren(...(warn ? [warn] : []));
+    state.trash.disabled = state.locked || state.gone;
     state.status.textContent = state.statusText;
     state.status.classList.toggle("is-bad", state.failed !== null);
     state.row.classList.toggle("is-saved", state.saved);
@@ -217,9 +267,10 @@ export function createLedgerGrid(host: LedgerGridHost) {
     }
     const action = element("td", "lg-rowend");
     const status = element("span", "lg-rowstate");
-    action.append(status, editButton(entry));
+    action.append(status, editButton(entry), trashButton(entry));
     row.append(action);
-    return { entry, placedOn: entry.basisOn, row, noteRow: null, cells, status, warn, queue: [], running: false, failed: null, locked: false, gone: false, statusText: "", note: null, carry: null, saved };
+    const trash = action.querySelector<HTMLButtonElement>("button[data-lg-trash]")!;
+    return { entry, placedOn: entry.basisOn, row, noteRow: null, cells, status, warn, trash, queue: [], running: false, failed: null, locked: false, gone: false, statusText: "", note: null, carry: null, saved };
   }
 
   // 줄을 처음부터 다시 만든다(다른 곳에서 고친 줄을 다시 읽었을 때 — 고칠 수 있는 칸이 달라졌을 수 있다).
@@ -231,6 +282,7 @@ export function createLedgerGrid(host: LedgerGridHost) {
     state.cells = next.cells;
     state.status = next.status;
     state.warn = next.warn;
+    state.trash = next.trash;
     if (state.noteRow) state.row.after(state.noteRow);
   }
 
@@ -342,6 +394,7 @@ export function createLedgerGrid(host: LedgerGridHost) {
     }
     const cell = state.cells.get(column);
     if (!cell?.button || state.locked || state.gone) return;
+    closeConfirm(false);
     host.interrupted(false);
     const shown = shownEntry(state);
     const label = gridCellLabel(shown, column, host.year(), host.basis());
@@ -378,6 +431,8 @@ export function createLedgerGrid(host: LedgerGridHost) {
       current.fresh = false;
     }, 0);
     input.addEventListener("keydown", (event) => {
+      // 한글을 조합하는 중의 Enter·Tab·Esc는 입력기 몫이다(조합 중 저장하면 마지막 글자가 빠지거나 다음 칸에 남는다).
+      if ((event as KeyboardEvent).isComposing || (event as KeyboardEvent).keyCode === 229) return;
       const key = (event as KeyboardEvent).key;
       if (key === "Escape") {
         event.preventDefault();
@@ -523,6 +578,20 @@ export function createLedgerGrid(host: LedgerGridHost) {
 
   tbody.addEventListener("click", (event) => {
     const target = event.target instanceof Element ? event.target : null;
+    const trash = target?.closest<HTMLButtonElement>("button[data-lg-trash]");
+    if (trash) {
+      const state = rows.get(trash.dataset.lgTrash ?? "");
+      if (state) openConfirm(state);
+      return;
+    }
+    if (target?.closest("[data-lg-trash-go]")) {
+      void removeConfirmed();
+      return;
+    }
+    if (target?.closest("[data-lg-trash-cancel]")) {
+      closeConfirm(true);
+      return;
+    }
     const cellButton = target?.closest<HTMLButtonElement>("button[data-lg-cell]");
     const id = target?.closest<HTMLTableRowElement>("tr[data-lg-entry]")?.dataset.lgEntry;
     if (cellButton && id) {
@@ -576,16 +645,374 @@ export function createLedgerGrid(host: LedgerGridHost) {
     }
   });
 
+  // ── 빈 새 줄(D-2b, 11:34:13 시안): 합계 줄 바로 아래. 누르면 그 자리에서 거래 없는 장부 줄을 적고 Enter로 POST 한 번, Esc로 버린다 ──
+  // 줄은 한 번만 만들어 목록을 다시 그려도 넣던 값을 지킨다(거르기를 켜면 표에서 빼 두었다가 끄면 다시 넣음).
+  // 칸에 이미 들어 있는 입력칸은 다시 넣지 않는다(다시 넣으면 치던 칸의 포커스가 빠짐).
+  const put = (td: HTMLElement, node: Node) => {
+    if (td.childNodes.length !== 1 || td.firstChild !== node) td.replaceChildren(node);
+  };
+  const newRow = buildNewRow();
+
+  function moneyInput(name: string) {
+    const input = element("input", "lg-newinput");
+    input.type = "text";
+    input.inputMode = "numeric";
+    input.autocomplete = "off";
+    input.setAttribute("aria-label", name);
+    return input;
+  }
+  function buildNewRow() {
+    const row = element("tr", "lg-newrow");
+    row.dataset.lgNewrow = "";
+    const cells = new Map<Column, HTMLTableCellElement>();
+    for (const column of LEDGER_GRID_COLUMNS) {
+      const td = element("td", NUMERIC.has(column) ? "num" : "");
+      td.dataset.lgCol = column;
+      if (column === "totalWon") td.classList.add("lg-auto");
+      cells.set(column, td);
+      row.append(td);
+    }
+    const rowend = element("td", "lg-rowend");
+    const status = element("span", "lg-rowstate");
+    rowend.append(status);
+    row.append(rowend);
+    // 처음 모양: '+' · '종류 ▾' · '새 장부 줄'(누르는 곳은 '새 장부 줄' 단추 하나, 마우스는 줄 어디를 눌러도 됨)
+    const sign = element("span", "lg-newsign", "+");
+    sign.setAttribute("aria-hidden", "true");
+    const hint = element("span", "lg-newhint", "종류 ▾");
+    hint.setAttribute("aria-hidden", "true");
+    const start = element("button", "lg-cell lg-newstart", LEDGER_NEW_START);
+    start.type = "button";
+    start.dataset.lgNewrowStart = "";
+    start.setAttribute("aria-label", "새 장부 줄 적기");
+    const date = element("input", "lg-newinput");
+    date.type = "date";
+    date.setAttribute("aria-label", "새 줄 날짜");
+    const kind = element("select", "lg-newinput");
+    for (const value of LEDGER_NEW_KINDS) kind.append(new Option(kindLabels[value] ?? value, value));
+    kind.setAttribute("aria-label", "새 줄 종류");
+    const label = element("input", "lg-newinput");
+    label.type = "text";
+    label.maxLength = 200;
+    label.autocomplete = "off";
+    label.setAttribute("aria-label", "새 줄 물건 표시·내용");
+    const payer = element("select", "lg-newinput");
+    payer.append(new Option("없음", ""), ...Object.entries(payerLabels).map(([value, name]) => new Option(name, value)));
+    payer.setAttribute("aria-label", "새 줄 낸 쪽");
+    const inputs: Record<NewColumn, HTMLInputElement | HTMLSelectElement> = {
+      basisOn: date, kind, label, payerRole: payer, amountWon: moneyInput("새 줄 공급가액(원)"), vatWon: moneyInput("새 줄 부가세(원)"),
+    };
+    for (const [column, input] of Object.entries(inputs)) input.dataset.lgNewrowInput = column;
+    const note = element("tr", "lg-noterow lg-newnote");
+    const noteCell = element("td");
+    noteCell.colSpan = COLUMN_COUNT;
+    const noteText = element("p");
+    const save = element("button", "work-secondary-button", "저장");
+    save.type = "button";
+    save.dataset.lgNewrowSave = "";
+    const cancel = element("button", "work-secondary-button", "그만두기");
+    cancel.type = "button";
+    cancel.dataset.lgNewrowCancel = "";
+    const actions = element("span", "lg-noterow__actions");
+    actions.append(save, cancel);
+    noteCell.append(noteText, actions);
+    note.append(noteCell);
+    return { row, note, noteText, save, cancel, cells, status, sign, hint, start, inputs, active: false, vatTouched: false, error: null as { column: string; message: string } | null };
+  }
+
+  const newValues = () => {
+    const inputs = newRow.inputs;
+    return { kind: inputs.kind.value, entryOn: inputs.basisOn.value, label: inputs.label.value, payerRole: inputs.payerRole.value, amount: inputs.amountWon.value, vat: inputs.vatWon.value };
+  };
+  const syncNewTotal = () => {
+    const { inputs } = newRow;
+    newRow.cells.get("totalWon")!.textContent = inputs.kind.value === "expense" ? "—" : newRowTotalText(inputs.kind.value, inputs.amountWon.value, inputs.vatWon.value);
+  };
+
+  // 칸 모양을 지금 상태(처음·적는 중·저장 중, 종류)에 맞춘다.
+  function syncNewRow() {
+    const { cells, inputs } = newRow;
+    newRow.row.classList.toggle("is-active", newRow.active);
+    if (!newRow.active) {
+      for (const td of cells.values()) td.replaceChildren();
+      cells.get("basisOn")!.append(newRow.sign);
+      cells.get("kind")!.append(newRow.hint);
+      cells.get("label")!.append(newRow.start);
+      newRow.status.textContent = "";
+      newRow.note.remove();
+      return;
+    }
+    const kind = inputs.kind.value;
+    for (const column of LEDGER_GRID_COLUMNS) {
+      const td = cells.get(column)!;
+      if ((LEDGER_NEW_COLUMNS as readonly string[]).includes(column)) {
+        if (newRowHasInput(kind, column)) put(td, inputs[column as NewColumn]);
+        else td.replaceChildren(element("span", "lg-newdash", "—"));
+      } else if (column === "receivedWon") td.textContent = "—";
+      else if (column !== "totalWon") td.replaceChildren();
+    }
+    syncNewTotal();
+    // 저장 중에는 줄을 잠근다(Enter를 빨리 두 번 눌러도 POST는 한 번). 글 칸은 읽기 전용으로 두어 포커스가 빠지지 않게 한다.
+    for (const [column, input] of Object.entries(inputs)) {
+      if (newRow.error?.column === column) input.setAttribute("aria-invalid", "true");
+      else input.removeAttribute("aria-invalid");
+      if (input instanceof HTMLSelectElement) input.disabled = creating;
+      else input.readOnly = creating;
+    }
+    newRow.row.classList.toggle("is-locked", creating);
+    newRow.save.disabled = creating;
+    newRow.cancel.disabled = creating;
+    newRow.status.textContent = creating ? "저장 중…" : "새 줄";
+    newRow.note.classList.toggle("is-bad", Boolean(newRow.error));
+    newRow.noteText.textContent = newRow.error ? `! ${newRow.error.message}` : newRowNote(kind, host.basis());
+    if (newRow.row.isConnected && newRow.row.nextElementSibling !== newRow.note) newRow.row.after(newRow.note);
+  }
+
+  // 합계 줄 바로 아래(합계 줄이 없으면 맨 위). 이미 그 자리면 옮기지 않는다(옮기면 치던 칸의 포커스가 빠짐).
+  function placeNewRow() {
+    if (!host.newRowAllowed()) {
+      newRow.row.remove();
+      newRow.note.remove();
+      return;
+    }
+    const total = tbody.querySelector("tr.lg-group--total");
+    const inPlace = total ? total.nextElementSibling === newRow.row : tbody.firstElementChild === newRow.row;
+    if (!inPlace) {
+      if (total) total.after(newRow.row);
+      else tbody.prepend(newRow.row);
+    }
+    if (newRow.active) {
+      if (newRow.row.nextElementSibling !== newRow.note) newRow.row.after(newRow.note);
+    } else newRow.note.remove();
+  }
+
+  function activateNewRow(column: string) {
+    if (creating) return;
+    if (!newRow.active) {
+      const { inputs } = newRow;
+      newRow.active = true;
+      newRow.vatTouched = false;
+      newRow.error = null;
+      inputs.basisOn.value = host.today();
+      inputs.kind.value = LEDGER_NEW_KINDS[0];
+      for (const input of [inputs.label, inputs.payerRole, inputs.amountWon, inputs.vatWon]) input.value = "";
+      host.interrupted(false);
+      syncNewRow();
+      placeNewRow();
+    }
+    const kind = newRow.inputs.kind.value;
+    const target = (LEDGER_NEW_COLUMNS as readonly string[]).includes(column) && newRowHasInput(kind, column) ? newRow.inputs[column as NewColumn] : newRow.inputs.label;
+    target.focus();
+  }
+  function resetNewRow() {
+    newRow.active = false;
+    newRow.error = null;
+    syncNewRow();
+    placeNewRow();
+  }
+  function cancelNewRow() {
+    if (creating) return;
+    resetNewRow();
+    if (newRow.start.isConnected) newRow.start.focus();
+  }
+  function showNewError(column: string, message: string) {
+    newRow.error = { column, message };
+    syncNewRow();
+    host.announce(message);
+    const input = (LEDGER_NEW_COLUMNS as readonly string[]).includes(column) && newRowHasInput(newRow.inputs.kind.value, column) ? newRow.inputs[column as NewColumn] : null;
+    (input ?? newRow.inputs.label).focus();
+  }
+
+  async function submitNewRow() {
+    if (!newRow.active || creating) return;
+    if (removing || rowsDirty()) {
+      newRow.error = { column: "", message: BUSY_TEXT };
+      syncNewRow();
+      host.announce(BUSY_TEXT);
+      return;
+    }
+    if (editor) cancelEditor({ focus: false });
+    const plan = planNewRow(newValues());
+    if (!plan.ok) {
+      showNewError(plan.column, plan.message);
+      return;
+    }
+    creating = true;
+    newRow.error = null;
+    syncNewRow();
+    try {
+      await host.create(plan.body);
+      creating = false;
+      resetNewRow();
+      if (newRow.start.isConnected) newRow.start.focus();
+      else host.focusFallback();
+      if (!isDirty()) host.settled();
+    } catch (error) {
+      creating = false;
+      const code = error instanceof WorkApiError ? error.code : null;
+      host.interrupted(true);
+      showNewError("", `저장하지 못했습니다. ${host.errorText(code)} 넣은 값은 칸에 그대로 있습니다.`);
+    }
+  }
+
+  const formatMoney = (input: HTMLInputElement | HTMLSelectElement) => {
+    const digits = input.value.replace(/\D/gu, "").slice(0, 15);
+    input.value = digits ? numberText(Number(digits)) : "";
+  };
+  newRow.row.addEventListener("click", (event) => {
+    if (newRow.active) return;
+    const td = event.target instanceof Element ? event.target.closest<HTMLElement>("td[data-lg-col]") : null;
+    activateNewRow(td?.dataset.lgCol ?? "label");
+  });
+  for (const part of [newRow.row, newRow.note]) part.addEventListener("keydown", (event) => {
+    if (!newRow.active) return;
+    // 한글을 조합하는 중의 Enter·Esc는 입력기 몫이다(조합 중 Enter로 저장하면 마지막 글자가 빠지거나 저장 뒤 비운 칸에 남는다).
+    if (event.isComposing || event.keyCode === 229) return;
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      cancelNewRow();
+    } else if (event.key === "Enter" && target?.matches("input, select")) {
+      event.preventDefault();
+      void submitNewRow();
+    }
+  });
+  newRow.inputs.kind.addEventListener("change", () => {
+    const { inputs } = newRow;
+    if (!newRow.vatTouched) inputs.vatWon.value = newRowVatText(inputs.kind.value, inputs.amountWon.value) ?? "";
+    if (newRow.error && !newRowHasInput(inputs.kind.value, newRow.error.column)) newRow.error = null;
+    syncNewRow();
+  });
+  newRow.inputs.amountWon.addEventListener("input", () => {
+    const { inputs } = newRow;
+    formatMoney(inputs.amountWon);
+    // 보수 줄은 부가세를 직접 고치기 전까지 공급가액의 10%로 채운다(입력 화면의 '10%로 채우기'와 같은 값)
+    const vat = newRowVatText(inputs.kind.value, inputs.amountWon.value);
+    if (!newRow.vatTouched && vat !== null) inputs.vatWon.value = vat;
+    syncNewTotal();
+  });
+  newRow.inputs.vatWon.addEventListener("input", () => {
+    formatMoney(newRow.inputs.vatWon);
+    newRow.vatTouched = true;
+    syncNewTotal();
+  });
+  for (const [column, input] of Object.entries(newRow.inputs)) input.addEventListener("input", () => {
+    if (newRow.error?.column !== column) return;
+    newRow.error = null;
+    syncNewRow();
+  });
+  newRow.save.addEventListener("click", () => void submitNewRow());
+  newRow.cancel.addEventListener("click", cancelNewRow);
+  syncNewRow();
+
+  // ── 줄 끝 지우기(D-2b): 줄 아래에 묻고(확인 창 없음) '휴지통으로 옮기기'를 누르면 지운다. 다른 지우기 화면과 같은 휴지통 규칙 ──
+  let confirm: { state: RowState; row: HTMLTableRowElement; text: HTMLElement; go: HTMLButtonElement; cancel: HTMLButtonElement } | null = null;
+
+  function openConfirm(state: RowState) {
+    if (state.locked || state.gone || removing) return;
+    if (isDirty()) {
+      host.announce(BUSY_TEXT, true);
+      return;
+    }
+    if (editor) cancelEditor({ focus: false });
+    closeConfirm(false);
+    host.interrupted(false);
+    const row = element("tr", "lg-noterow lg-confirmrow");
+    const cell = element("td");
+    cell.colSpan = COLUMN_COUNT;
+    const text = element("p", "", deleteAskText(state.entry, TRASH_MOVE_NOTICE));
+    const go = element("button", "work-secondary-button lg-trash-go", "휴지통으로 옮기기");
+    go.type = "button";
+    go.dataset.lgTrashGo = state.entry.id;
+    const cancel = element("button", "work-secondary-button", "그만두기");
+    cancel.type = "button";
+    cancel.dataset.lgTrashCancel = state.entry.id;
+    const actions = element("span", "lg-noterow__actions");
+    actions.append(go, cancel);
+    cell.append(text, actions);
+    row.append(cell);
+    row.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      closeConfirm(true);
+    });
+    (state.noteRow ?? state.row).after(row);
+    confirm = { state, row, text, go, cancel };
+    go.focus();
+  }
+  function closeConfirm(focus: boolean) {
+    const current = confirm;
+    if (!current || removing) return;
+    confirm = null;
+    current.row.remove();
+    if (focus && current.state.trash.isConnected) current.state.trash.focus();
+  }
+
+  async function removeConfirmed() {
+    const current = confirm;
+    if (!current || removing) return;
+    if (creating || rowsDirty()) {
+      current.text.textContent = `! ${BUSY_TEXT}`;
+      current.row.classList.add("is-bad");
+      return;
+    }
+    const { state } = current;
+    const states = rowStates();
+    // 지운 뒤 포커스: 다음 줄의 지우기 단추, 없으면 빈 새 줄, 그것도 없으면 화면이 정한 곳
+    const nextId = states.slice(states.indexOf(state) + 1).find((one) => !one.gone)?.entry.id ?? null;
+    removing = true;
+    state.locked = true;
+    state.statusText = "지우는 중…";
+    current.go.disabled = true;
+    current.cancel.disabled = true;
+    syncRow(state);
+    try {
+      await host.remove(state.entry.id);
+      removing = false;
+      history.forget(state.entry.id);
+      notifyHistory();
+      if (confirm === current) confirm = null;
+      current.row.remove();
+      if (state.row.isConnected) {
+        // 지웠지만 목록을 다시 그리지 못함: 줄을 흐리게 남기고 글로 알린다
+        state.gone = true;
+        state.statusText = "";
+        state.note = { text: "휴지통으로 옮겼습니다. 목록을 다시 읽지 못했습니다. 화면을 새로 고쳐 주세요.", bad: true };
+        syncRow(state);
+      }
+      const next = nextId ? rows.get(nextId) : undefined;
+      if (next && next.row.isConnected && !next.trash.disabled) next.trash.focus();
+      else if (newRow.start.isConnected) newRow.start.focus();
+      else host.focusFallback();
+      if (!isDirty()) host.settled();
+    } catch (error) {
+      removing = false;
+      const code = error instanceof WorkApiError ? error.code : null;
+      host.interrupted(true);
+      state.locked = false;
+      state.statusText = "";
+      syncRow(state);
+      current.go.disabled = false;
+      current.cancel.disabled = false;
+      current.text.textContent = `! 지우지 못했습니다. ${host.errorText(code)}`;
+      current.row.classList.add("is-bad");
+      host.announce(current.text.textContent);
+      current.go.focus();
+    }
+  }
+
   function renderGroups(plan: LedgerGroupPlan) {
     for (const row of tbody.querySelectorAll("tr.lg-group")) row.remove();
     if (plan.total) tbody.prepend(ledgerGroupRow(plan.total, true));
     for (const [id, line] of plan.groups) rows.get(id)?.row.before(ledgerGroupRow(line));
+    placeNewRow();
   }
 
   return {
     // 목록을 새로 그린다(연도·기준·거르기가 바뀌었거나 입력 화면에서 저장함). 기다리던 저장의 응답은 버린다.
     render(entries: LedgerEntry[], plan: LedgerGroupPlan, savedId: string | null = null) {
       editor = null;
+      confirm = null;
       rows.clear();
       const nodes: HTMLTableRowElement[] = [];
       for (const entry of entries) {
@@ -611,6 +1038,9 @@ export function createLedgerGrid(host: LedgerGridHost) {
     forgetAll() {
       history.clear();
       notifyHistory();
+      resetNewRow();
     },
+    // 새 줄에 글자·금액을 넣다 만 채로 있는지(화면을 떠나기 전에 묻는다. 날짜·종류 처음 값은 넣은 것으로 치지 않음).
+    newRowTyped: () => newRow.active && [newRow.inputs.label, newRow.inputs.amountWon, newRow.inputs.vatWon].some((input) => input.value.trim() !== ""),
   };
 }

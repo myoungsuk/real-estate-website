@@ -5,10 +5,13 @@ import test from "node:test";
 import {
   LEDGER_ASK_DATE_NOTE,
   LEDGER_GRID_COLUMNS,
+  LEDGER_NEW_COLUMNS,
+  LEDGER_NEW_KINDS,
   LEDGER_UNDO_LIMIT,
   basisAfterSave,
   changesBefore,
   createLedgerHistory,
+  deleteAskText,
   gridCellEditable,
   gridCellLabel,
   gridCellText,
@@ -22,9 +25,16 @@ import {
   ledgerGroupPlan,
   moveGridFocus,
   movedNote,
+  newRowHasInput,
+  newRowNote,
+  newRowSavedText,
+  newRowTotalText,
+  newRowVatText,
   planCellEdit,
+  planNewRow,
   typedText,
 } from "../src/lib/work/ledger-grid.mjs";
+import { TRASH_MOVE_NOTICE } from "../src/lib/work/trash-view.mjs";
 
 const entry = (patch = {}) => ({
   id: "a", kind: "fee", dealId: "d1", payerRole: "seller", label: "가상숲1단지 84㎡ 매매", entryOn: null, amountWon: 1_800_000, vatWon: 180_000,
@@ -243,6 +253,67 @@ test("넣던 값 글: 금액은 쉼표, 낸 쪽은 이름, 빈 값은 '(비움)'
   assert.equal(typedText("payerRole", ""), "낸 쪽 없음");
   assert.equal(typedText("receivedOn", ""), "입금일 (비움)");
   assert.equal(typedText("basisOn", "2026-11-02"), "날짜 2026-11-02");
+});
+
+test("새 줄(D-2b): 종류는 지출·보수·기타 수입, 낸 쪽은 보수만·부가세는 지출 빼고 입력칸, 칸은 표 칸 이름 안에서만", () => {
+  assert.deepEqual([...LEDGER_NEW_KINDS], ["expense", "fee", "other_income"]);
+  for (const column of LEDGER_NEW_COLUMNS) assert.ok(LEDGER_GRID_COLUMNS.includes(column), column);
+  assert.equal(newRowHasInput("fee", "payerRole"), true);
+  assert.equal(newRowHasInput("expense", "payerRole"), false);
+  assert.equal(newRowHasInput("other_income", "payerRole"), false);
+  assert.equal(newRowHasInput("expense", "vatWon"), false);
+  assert.equal(newRowHasInput("other_income", "vatWon"), true);
+  assert.equal(newRowHasInput("fee", "label"), true);
+  assert.equal(newRowHasInput("fee", "totalWon"), false, "받을 금액은 자동");
+  assert.equal(newRowHasInput("fee", "receivedWon"), false, "입금은 저장한 뒤 그 줄에서");
+});
+
+test("새 줄 부가세·받을 금액: 보수만 10%로 채우고, 지출은 받을 금액을 비운다", () => {
+  assert.equal(newRowVatText("fee", "1,800,000"), "180,000");
+  assert.equal(newRowVatText("fee", ""), "");
+  assert.equal(newRowVatText("fee", "만원"), "");
+  assert.equal(newRowVatText("other_income", "300,000"), null, "보수가 아니면 건드리지 않음");
+  assert.equal(newRowTotalText("fee", "1,800,000", "180,000"), "1,980,000");
+  assert.equal(newRowTotalText("other_income", "300,000", ""), "300,000");
+  assert.equal(newRowTotalText("expense", "50,000", ""), "");
+  assert.equal(newRowTotalText("fee", "", ""), "");
+});
+
+test("새 줄 저장 몸통: 입력 화면과 같은 검사, 거래 없는 지출·기타 수입은 날짜가 꼭 있고, 첫 오류는 왼쪽 칸부터", () => {
+  const base = { kind: "expense", entryOn: "2026-11-23", label: "가상 현수막", payerRole: "", amount: "120,000", vat: "" };
+  const ok = planNewRow(base);
+  assert.equal(ok.ok, true);
+  assert.equal(ok.body.kind, "expense");
+  assert.equal(ok.body.amountWon, 120000);
+  assert.equal(ok.body.entryOn, "2026-11-23");
+  assert.equal(ok.body.dealId, undefined, "새 줄은 거래에 잇지 않음");
+  assert.equal(planNewRow({ ...base, vat: "9,999" }).body.vatWon, 0, "지출 줄은 부가세 칸 값을 보내지 않음");
+  const noDate = planNewRow({ ...base, entryOn: "" });
+  assert.equal(noDate.ok, false);
+  assert.equal(noDate.column, "basisOn");
+  const twoBad = planNewRow({ ...base, entryOn: "", amount: "" });
+  assert.equal(twoBad.column, "basisOn", "날짜가 공급가액보다 왼쪽");
+  const noAmount = planNewRow({ ...base, amount: "" });
+  assert.equal(noAmount.column, "amountWon");
+  assert.equal(planNewRow({ ...base, kind: "transfer" }).column, "kind");
+  const fee = planNewRow({ kind: "fee", entryOn: "", label: "가상 보수", payerRole: "buyer", amount: "1,000,000", vat: "100,000" });
+  assert.equal(fee.ok, true, "거래 없는 보수 줄은 날짜 없이도 저장(입력 화면과 같음)");
+  assert.equal(fee.body.payerRole, "buyer");
+  assert.equal(fee.body.vatWon, 100000);
+});
+
+test("새 줄 안내·저장 알림·지우기 묻는 글", () => {
+  assert.match(newRowNote("expense"), /^새 지출 줄입니다. Enter로 저장하고 Esc로 지웁니다./u);
+  assert.match(newRowNote("fee"), /'장부 줄 만들기'나 손님 카드의 거래 칸/u, "거래에 잇는 길을 한 문장으로");
+  assert.doesNotMatch(newRowNote("fee"), /찾아/u, "칸 안 거래 찾기는 없음(대장 결정)");
+  assert.match(newRowNote("other_income", "received"), /입금일 기준에서는 입금하지 않은 수입 줄이 목록에 보이지 않습니다/u);
+  assert.doesNotMatch(newRowNote("expense", "received"), /입금일 기준/u, "지출은 입금일 기준에서도 장부 줄 날짜로 보임");
+  assert.equal(newRowSavedText({ kind: "fee", label: "가상", amountWon: 1_000_000, vatWon: 100_000 }, true), "저장했습니다. 보수 가상 1,100,000원.");
+  assert.match(newRowSavedText({ kind: "other_income", label: "", amountWon: 5_000, vatWon: 0 }, false), /지금 연도·기준일 목록에는 보이지 않습니다/u);
+  const ask = deleteAskText({ label: "가상 현수막", kind: "expense" }, TRASH_MOVE_NOTICE);
+  assert.ok(ask.startsWith("'가상 현수막' 줄을 지울까요? "));
+  assert.ok(ask.includes(TRASH_MOVE_NOTICE), "다른 지우기 화면과 같은 휴지통 글");
+  assert.ok(deleteAskText({ label: "", kind: "expense" }, TRASH_MOVE_NOTICE).startsWith("'지출' 줄"));
 });
 
 test("이 모듈은 서버·브라우저를 건드리지 않는 순수 함수만 둔다", async () => {

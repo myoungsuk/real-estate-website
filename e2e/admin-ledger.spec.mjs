@@ -87,6 +87,7 @@ async function setup(page, { width = 390, enabled = true, store = makeStore(), s
     const method = request.method();
     if (method === "PATCH" && control.hold) await control.hold;
     const path = url.pathname.replace(/^.*\/api\/admin\/v1\/work/u, "");
+    if (method === "POST" && path === "/ledger" && control.holdPost) await control.holdPost;
     calls.all.push(`${method} ${path}${url.search}`);
     const body = method === "GET" ? null : request.postDataJSON();
     if (method !== "GET") {
@@ -586,7 +587,7 @@ const gridState = (page, n) => gridRow(page, n).locator(".lg-rowstate");
 const noteOf = (page, n) => gridRow(page, n).locator("xpath=following-sibling::tr[1][contains(@class,'lg-noterow')]");
 const patches = (calls) => calls.writes.filter((write) => write.method === "PATCH");
 const countCalls = (calls, head) => calls.all.filter((call) => call.startsWith(head)).length;
-const tableOrder = (page) => page.locator(".lg-table tbody > tr:not(.lg-noterow)").evaluateAll((rows) => rows.map((row) => (row.dataset.lgEntry ? "줄" : row.querySelector("strong").textContent)));
+const tableOrder = (page) => page.locator(".lg-table tbody > tr:not(.lg-noterow)").evaluateAll((rows) => rows.map((row) => (row.dataset.lgEntry ? "줄" : row.dataset.lgNewrow !== undefined ? "새 줄" : row.querySelector("strong").textContent)));
 const leaveWarned = (page) => page.evaluate(() => {
   const event = new Event("beforeunload", { cancelable: true });
   window.dispatchEvent(event);
@@ -604,8 +605,8 @@ test("PC 표 1280px: 합계 칸 대신 표 안의 합계 줄·달 줄(서버 합
   await page.goto("/admin/work/ledger/");
   await expect(page.locator(".lg-table")).toBeVisible();
   await expect(page.locator(".lg-sum"), "합계 칸·달별 표·부가세 단추는 PC에서 숨김").toBeHidden();
-  await expect(page.locator(".lg-table thead th")).toHaveText(["기준일", "종류", "물건 표시·내용", "낸 쪽", "공급가액(원)", "부가세(원)", "받을 금액자동", "입금액(원)", "입금일", "미입금", "줄 상태·고치기"]);
-  expect(await tableOrder(page)).toEqual(["2026년 합계", "11월", "줄", "줄", "줄", "10월", "줄"]);
+  await expect(page.locator(".lg-table thead th")).toHaveText(["기준일", "종류", "물건 표시·내용", "낸 쪽", "공급가액(원)", "부가세(원)", "받을 금액자동", "입금액(원)", "입금일", "미입금", "줄 상태·고치기·지우기"]);
+  expect(await tableOrder(page)).toEqual(["2026년 합계", "새 줄", "11월", "줄", "줄", "줄", "10월", "줄"]);
   // 숫자는 '받을 금액'·'입금액'·'미입금' 세 칸만(공급가액·부가세 칸은 묶음 제목 글에)
   const total = page.locator("tr.lg-group--total");
   await expect(total.locator("th")).toHaveText("2026년 합계보수 3,600,000원 + 부가세 360,000원 · 기타 수입 300,000원 · 지출 50,000원 · 순수익 3,850,000원");
@@ -714,7 +715,7 @@ test("PC 표 칸 고치기: 누르면 그 자리에 입력칸이 열리고, Ente
   expect(patches(calls).at(-1).body).toEqual({ entryOn: "2026-10-30", version: 1 });
   await expect(gridCell(page, 3, "basisOn")).toHaveText("10. 30.");
   await expect(noteOf(page, 3)).toHaveText("10월로 옮겨짐");
-  expect(await tableOrder(page), "줄 자리는 그대로").toEqual(["2026년 합계", "11월", "줄", "줄", "줄", "10월", "줄"]);
+  expect(await tableOrder(page), "줄 자리는 그대로").toEqual(["2026년 합계", "새 줄", "11월", "줄", "줄", "줄", "10월", "줄"]);
   await expect(page.locator("tr.lg-group:not(.lg-group--total) th").nth(1)).toHaveText("10월기타 수입 300,000원 · 지출 50,000원 · 순수익 250,000원");
 
   // Tab: 저장하고 오른쪽 고칠 수 있는 칸으로('받을 금액'은 건너뜀). 따로 넣은 부가세는 경고를 글로 알린다
@@ -1448,4 +1449,282 @@ test("손가락으로 쓰는 넓은 화면 1280px 매출장부: 표로 보이되
   } finally {
     await context.close();
   }
+});
+
+// ── D-2b: 빈 새 줄에서 새 줄 적기·줄 끝 지우기(1221px 이상 표, 11:34:13 시안. 칸 안 거래 찾기는 대장 결정으로 뺌) ──
+const newRowOf = (page) => page.locator(".lg-table tr[data-lg-newrow]");
+const newNote = (page) => page.locator(".lg-table tr.lg-newnote");
+const newInput = (page, name) => newRowOf(page).getByLabel(`새 줄 ${name}`, { exact: true });
+
+test("PC 표 빈 새 줄: 합계 줄 아래 '새 장부 줄'을 누르면 오늘·지출로 열리고, 빈 공급가액은 보내지 않으며, Enter는 저장 중 줄을 잠가 빨리 두 번 눌러도 POST 한 번이고, 저장 뒤 목록·합계를 다시 읽어 그 줄을 강조한다. Esc는 버린다", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const control = {};
+  const calls = await setup(page, { width: 1280, control });
+  const sent = [];
+  page.on("request", (request) => {
+    if (request.method() === "POST" && new URL(request.url()).pathname.endsWith("/work/ledger")) sent.push(request);
+  });
+  await page.goto("/admin/work/ledger/");
+  expect(await tableOrder(page)).toEqual(["2026년 합계", "새 줄", "11월", "줄", "줄", "줄", "10월", "줄"]);
+  const start = newRowOf(page).getByRole("button", { name: "새 장부 줄 적기" });
+  await expect(start).toHaveText("새 장부 줄");
+  await expect(newRowOf(page).locator("input, select"), "처음에는 입력칸이 없음").toHaveCount(0);
+  await expect(newNote(page)).toHaveCount(0);
+
+  // 열기: 날짜는 오늘, 종류는 지출(낸 쪽·부가세 칸 없음), 물건 표시 칸에 포커스. Esc는 넣던 것을 버리고 '새 장부 줄'로 돌아온다
+  await start.click();
+  await expect(newInput(page, "물건 표시·내용")).toBeFocused();
+  await expect(newInput(page, "날짜")).toHaveValue("2026-11-21");
+  await expect(newInput(page, "종류")).toHaveValue("expense");
+  await expect(newInput(page, "낸 쪽")).toHaveCount(0);
+  await expect(newInput(page, "부가세(원)")).toHaveCount(0);
+  await expect(newRowOf(page).locator(".lg-rowstate")).toHaveText("새 줄");
+  await expect(newNote(page)).toContainText("새 지출 줄입니다. Enter로 저장하고 Esc로 지웁니다.");
+  await expect(newNote(page), "거래에 잇는 길을 한 문장으로").toContainText("거래에 잇는 보수 줄은 '장부 줄 만들기'나 손님 카드의 거래 칸에서 만듭니다.");
+  await newInput(page, "물건 표시·내용").fill("가상 버릴 줄");
+  expect(await leaveWarned(page), "넣다 만 새 줄이 있으면 떠나기 전에 묻는다").toBe(true);
+  await newInput(page, "물건 표시·내용").press("Escape");
+  await expect(start).toBeFocused();
+  await expect(newNote(page)).toHaveCount(0);
+  expect(await leaveWarned(page)).toBe(false);
+
+  // 보수로 바꾸면 낸 쪽·부가세 칸이 생기고, 부가세는 직접 고치기 전까지 공급가액의 10%, 받을 금액은 자동
+  await start.click();
+  await newInput(page, "종류").selectOption("fee");
+  await expect(newInput(page, "낸 쪽")).toBeVisible();
+  await newInput(page, "공급가액(원)").fill("1000000");
+  await expect(newInput(page, "공급가액(원)")).toHaveValue("1,000,000");
+  await expect(newInput(page, "부가세(원)")).toHaveValue("100,000");
+  await expect(newRowOf(page).locator('[data-lg-col="totalWon"]')).toHaveText("1,100,000");
+  await newInput(page, "부가세(원)").fill("90000");
+  await newInput(page, "공급가액(원)").fill("2000000");
+  await expect(newInput(page, "부가세(원)"), "직접 고친 부가세는 덮어쓰지 않음").toHaveValue("90,000");
+  await expect(newRowOf(page).locator('[data-lg-col="totalWon"]')).toHaveText("2,090,000");
+  await newInput(page, "공급가액(원)").press("Escape");
+  await expect(start).toBeFocused();
+
+  // 빈 공급가액: 보내지 않고 그 칸을 빨갛게, 줄 아래 '!' 글
+  await start.click();
+  await expect(newInput(page, "부가세(원)"), "다시 열면 처음 값(지출)").toHaveCount(0);
+  await newInput(page, "물건 표시·내용").fill("가상 현수막");
+  await newInput(page, "물건 표시·내용").press("Enter");
+  await expect(newInput(page, "공급가액(원)")).toBeFocused();
+  await expect(newInput(page, "공급가액(원)")).toHaveAttribute("aria-invalid", "true");
+  await expect(newNote(page)).toHaveClass(/is-bad/u);
+  await expect(newNote(page).locator("p")).toHaveText(/^! /u);
+  expect(sent).toHaveLength(0);
+
+  // 저장 중에는 줄을 잠근다: Enter를 빨리 두 번(+ 한 번 더) 눌러도 POST는 한 번
+  let release;
+  control.holdPost = new Promise((resolve) => {
+    release = resolve;
+  });
+  const amount = newInput(page, "공급가액(원)");
+  await amount.fill("120000");
+  await expect(amount).not.toHaveAttribute("aria-invalid", "true");
+  await amount.press("Enter");
+  await amount.press("Enter");
+  await expect(newRowOf(page).locator(".lg-rowstate")).toHaveText("저장 중…");
+  await expect(amount).toHaveJSProperty("readOnly", true);
+  await expect(amount, "잠가도 포커스는 그 칸에 남음").toBeFocused();
+  await expect(newInput(page, "종류")).toBeDisabled();
+  await expect(newNote(page).getByRole("button", { name: "저장" })).toBeDisabled();
+  await amount.press("Enter");
+  await page.getByRole("button", { name: /^(✓ )?지출$/u }).first().click();
+  await page.waitForTimeout(150);
+  expect(sent, "저장 중 누른 Enter는 보내지 않음").toHaveLength(1);
+  release();
+  // 저장 중에 누른 '지출' 거르기는 저장이 끝난 뒤 이어서 한다(표의 다른 저장과 같은 규칙) → 거른 목록에서 새 줄은 숨는다
+  await expect(page.getByRole("button", { name: /^(✓ )?지출$/u }).first()).toHaveAttribute("aria-pressed", "true");
+  await expect(newRowOf(page)).toHaveCount(0);
+  expect(sent).toHaveLength(1);
+  const posts = calls.writes.filter((write) => write.method === "POST" && write.path === "/ledger");
+  expect(posts).toHaveLength(1);
+  expect(posts[0].csrf).toBe("test-csrf");
+  expect(posts[0].body).toMatchObject({ kind: "expense", entryOn: "2026-11-21", label: "가상 현수막", amountWon: 120000, vatWon: 0 });
+  expect(posts[0].body.dealId, "새 줄은 거래에 잇지 않음").toBeUndefined();
+  await expect(page.locator("[data-lg-saved]")).toHaveText("✓ 저장했습니다. 지출 가상 현수막 120,000원.");
+  await page.getByRole("button", { name: /^(✓ )?전체$/u }).click();
+  await expect(newRowOf(page)).toBeVisible();
+  await expect(newNote(page), "저장한 뒤 새 줄은 처음 모양").toHaveCount(0);
+  await expect(page.locator(".lg-table tr[data-lg-entry]").filter({ hasText: "가상 현수막" })).toHaveCount(1);
+  expect(await overflowOf(page)).toBeLessThanOrEqual(0);
+  await expectNoTrace(page);
+  assertNoErrors();
+});
+
+test("PC 표 빈 새 줄: 한글 조합 중의 Enter(isComposing·keyCode 229)는 저장하지 않고, Esc도 줄을 버리지 않는다. 조합이 끝난 Enter만 저장한다", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const calls = await setup(page, { width: 1280 });
+  await page.goto("/admin/work/ledger/");
+  await newRowOf(page).getByRole("button", { name: "새 장부 줄 적기" }).click();
+  await newInput(page, "물건 표시·내용").fill("가상 현수막");
+  await newInput(page, "공급가액(원)").fill("120000");
+  const fire = (name, init) => newInput(page, name).evaluate((input, value) => {
+    const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...value });
+    input.dispatchEvent(event);
+    return event.defaultPrevented;
+  }, init);
+  expect(await fire("물건 표시·내용", { key: "Enter", isComposing: true }), "조합 중 Enter는 막지 않고 입력기에 맡김").toBe(false);
+  expect(await fire("물건 표시·내용", { key: "Enter", keyCode: 229 })).toBe(false);
+  expect(await fire("물건 표시·내용", { key: "Escape", isComposing: true })).toBe(false);
+  await page.waitForTimeout(150);
+  expect(calls.writes.filter((write) => write.method === "POST"), "조합 중 Enter로는 보내지 않음").toHaveLength(0);
+  await expect(newInput(page, "물건 표시·내용"), "조합 중 Esc로 줄을 버리지 않음").toHaveValue("가상 현수막");
+  await newInput(page, "물건 표시·내용").press("Enter");
+  await expect(newRowOf(page).getByRole("button", { name: "새 장부 줄 적기" })).toBeFocused();
+  expect(calls.writes.filter((write) => write.method === "POST")).toHaveLength(1);
+  assertNoErrors();
+});
+
+test("PC 표 칸 고치기: 한글 조합 중의 Enter·Tab(isComposing·keyCode 229)은 저장하지 않고, Esc도 고치던 값을 버리지 않는다. 조합이 끝난 Enter만 저장한다", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const calls = await setup(page, { width: 1280 });
+  await page.goto("/admin/work/ledger/");
+  await gridCell(page, 3, "label").click();
+  await gridInput(page, 3, "label").fill("가상 전단 인쇄 다시");
+  const fire = (init) => gridInput(page, 3, "label").evaluate((input, value) => {
+    const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...value });
+    input.dispatchEvent(event);
+    return event.defaultPrevented;
+  }, init);
+  expect(await fire({ key: "Enter", isComposing: true }), "조합 중 Enter는 막지 않고 입력기에 맡김").toBe(false);
+  expect(await fire({ key: "Tab", isComposing: true })).toBe(false);
+  expect(await fire({ key: "Enter", keyCode: 229 })).toBe(false);
+  expect(await fire({ key: "Escape", isComposing: true })).toBe(false);
+  await page.waitForTimeout(150);
+  expect(patches(calls), "조합 중 Enter·Tab으로는 보내지 않음").toHaveLength(0);
+  await expect(gridInput(page, 3, "label"), "조합 중 Esc로 고치던 값을 버리지 않음").toHaveValue("가상 전단 인쇄 다시");
+  await gridInput(page, 3, "label").press("Enter");
+  await expect(gridState(page, 3)).toHaveText("저장함");
+  expect(patches(calls)).toHaveLength(1);
+  expect(patches(calls)[0].body).toMatchObject({ label: "가상 전단 인쇄 다시" });
+  assertNoErrors();
+});
+
+test("PC 표 빈 새 줄: 저장한 뒤 포커스는 '새 장부 줄'로 돌아오고, 그 줄을 강조한다", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  await setup(page, { width: 1280 });
+  await page.goto("/admin/work/ledger/");
+  const start = newRowOf(page).getByRole("button", { name: "새 장부 줄 적기" });
+  await start.click();
+  await newInput(page, "물건 표시·내용").fill("가상 명함");
+  await newInput(page, "날짜").fill("2026-11-05");
+  await newInput(page, "공급가액(원)").fill("33000");
+  await newNote(page).getByRole("button", { name: "저장" }).click();
+  await expect(start).toBeFocused();
+  const savedRow = page.locator(".lg-table tr[data-lg-entry].is-saved");
+  await expect(savedRow).toHaveCount(1);
+  await expect(savedRow).toContainText("가상 명함");
+  expect(await tableOrder(page)).toEqual(["2026년 합계", "새 줄", "11월", "줄", "줄", "줄", "줄", "10월", "줄"]);
+  assertNoErrors();
+});
+
+test("PC 표 빈 새 줄은 거르기·'미입금만'·기준일 없는 줄 보기에서 숨고, 끄면 넣던 값 그대로 돌아온다. 저장하지 못하면 넣은 값을 두고 알린다", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  await setup(page, { width: 1280 });
+  await page.route("**/api/admin/v1/work/ledger", async (route) => {
+    if (route.request().method() !== "POST") return route.fallback();
+    return route.fulfill(failure(503, "STORAGE_UNAVAILABLE"));
+  });
+  await page.goto("/admin/work/ledger/");
+  await newRowOf(page).getByRole("button", { name: "새 장부 줄 적기" }).click();
+  await newInput(page, "물건 표시·내용").fill("가상 남길 줄");
+  await page.getByRole("button", { name: "지출", exact: true }).click();
+  await expect(gridRow(page, 1)).toHaveCount(0);
+  await expect(newRowOf(page), "종류 거르기 중에는 숨김").toHaveCount(0);
+  await expect(newNote(page)).toHaveCount(0);
+  await page.getByRole("button", { name: /^(✓ )?전체$/u }).click();
+  await expect(newInput(page, "물건 표시·내용"), "끄면 넣던 값 그대로").toHaveValue("가상 남길 줄");
+  await expect(newNote(page)).toBeVisible();
+  await page.getByRole("button", { name: /^(✓ )?미입금만$/u }).click();
+  await expect(newRowOf(page), "미입금만 볼 때도 숨김").toHaveCount(0);
+  await page.getByRole("button", { name: /^(✓ )?미입금만$/u }).click();
+  await expect(newRowOf(page)).toBeVisible();
+  await page.getByRole("button", { name: "그 줄만 보기" }).click();
+  await expect(gridRow(page, 5)).toBeVisible();
+  await expect(newRowOf(page), "기준일 없는 줄만 볼 때도 숨김").toHaveCount(0);
+  await page.getByRole("button", { name: "전체 줄로 돌아가기" }).click();
+  await expect(newRowOf(page)).toBeVisible();
+  // 저장 실패: 값은 칸에 남고 줄 아래 '!' 글, 다시 고칠 수 있음
+  await newInput(page, "공급가액(원)").fill("70000");
+  await newInput(page, "공급가액(원)").press("Enter");
+  await expect(newNote(page)).toContainText("! 저장하지 못했습니다.");
+  await expect(newNote(page)).toContainText("넣은 값은 칸에 그대로 있습니다.");
+  await expect(newInput(page, "물건 표시·내용")).toHaveValue("가상 남길 줄");
+  await expect(newInput(page, "공급가액(원)")).toHaveJSProperty("readOnly", false);
+  expect(await leaveWarned(page)).toBe(true);
+  assertNoErrors();
+});
+
+test("PC 표 줄 끝 지우기: 그림 단추(키보드로도 닿음)를 누르면 줄 아래에 휴지통 글로 묻고, '휴지통으로 옮기기'만 DELETE를 보내며, 지운 뒤 포커스는 다음 줄 → 없으면 빈 새 줄 → 거른 목록이 비면 '장부 줄 만들기'로 간다", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const calls = await setup(page, { width: 1280 });
+  await page.goto("/admin/work/ledger/");
+  const trashOf = (n) => gridRow(page, n).locator("button[data-lg-trash]");
+  await expect(trashOf(2)).toHaveAccessibleName("가상숲1단지 84㎡ 매매 보수 장부 줄 지우기");
+  await expect(trashOf(2)).toHaveAttribute("title", "이 줄 지우기");
+  const box = await trashOf(2).boundingBox();
+  expect(box.height, "마우스 PC 누르는 곳 36px").toBeGreaterThanOrEqual(36);
+  expect(box.width).toBeGreaterThanOrEqual(36);
+  // 키보드: '고치기' 다음 Tab이 지우기 단추
+  await gridRow(page, 2).getByRole("button", { name: /장부 줄 고치기$/u }).focus();
+  await page.keyboard.press("Tab");
+  await expect(trashOf(2)).toBeFocused();
+  await page.keyboard.press("Enter");
+  const ask = page.locator(".lg-table tr.lg-confirmrow");
+  await expect(ask).toHaveCount(1);
+  await expect(ask).toContainText("'가상숲1단지 84㎡ 매매' 줄을 지울까요? 휴지통으로 옮깁니다. 7일 안에 되살릴 수 있고, 그 뒤 자동으로 영구 삭제됩니다. 휴지통에 있는 동안 합계에서는 빠집니다.");
+  await expect(ask.getByRole("button", { name: "휴지통으로 옮기기" })).toBeFocused();
+  // Esc·'그만두기'는 보내지 않고 지우기 단추로 돌아온다
+  await page.keyboard.press("Escape");
+  await expect(ask).toHaveCount(0);
+  await expect(trashOf(2)).toBeFocused();
+  await trashOf(2).click();
+  await ask.getByRole("button", { name: "그만두기" }).click();
+  await expect(ask).toHaveCount(0);
+  expect(calls.writes.filter((write) => write.method === "DELETE")).toHaveLength(0);
+  // 지우기: DELETE 한 번 → 휴지통 알림('되살리기'·'휴지통 보기') → 다음 줄(3번)의 지우기 단추
+  await trashOf(2).click();
+  await ask.getByRole("button", { name: "휴지통으로 옮기기" }).press("Enter");
+  await expect(gridRow(page, 2)).toHaveCount(0);
+  await expect(trashOf(3)).toBeFocused();
+  expect(calls.writes.filter((write) => write.method === "DELETE").map((write) => write.path)).toEqual([`/ledger/${uuid(302)}`]);
+  await expect(page.locator("[data-lg-saved]")).toHaveText("✓ 장부 줄을 휴지통으로 옮겼습니다. 되살리기 · 휴지통 보기");
+  await expect(page.locator("tr.lg-group--total td").nth(3), "합계에서 빠짐(미입금 없음)").toHaveText("—");
+  // 맨 아래 줄을 지우면 빈 새 줄로
+  await trashOf(4).click();
+  await ask.getByRole("button", { name: "휴지통으로 옮기기" }).click();
+  await expect(gridRow(page, 4)).toHaveCount(0);
+  await expect(newRowOf(page).getByRole("button", { name: "새 장부 줄 적기" })).toBeFocused();
+  // 거른 목록의 마지막 줄을 지우면(빈 새 줄도 숨어 있음) '장부 줄 만들기'로
+  await page.getByRole("button", { name: "지출", exact: true }).click();
+  await expect(gridRow(page, 1)).toHaveCount(0);
+  await trashOf(3).click();
+  await ask.getByRole("button", { name: "휴지통으로 옮기기" }).click();
+  await expect(gridRow(page, 3)).toHaveCount(0);
+  await expect(page.locator("[data-lg-new]")).toBeFocused();
+  expect(calls.writes.filter((write) => write.method === "DELETE")).toHaveLength(3);
+  await expectNoTrace(page);
+  assertNoErrors();
+});
+
+test("PC 표: 칸을 저장하는 동안에는 줄 끝 지우기를 열지 않고 글로 알린다(지우면 목록을 다시 그려 저장 중인 값이 사라지므로)", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  let release;
+  const control = { hold: new Promise((resolve) => {
+    release = resolve;
+  }) };
+  await setup(page, { width: 1280, control });
+  await page.goto("/admin/work/ledger/");
+  await typeCell(page, 3, "amountWon", "60000");
+  await expect(gridState(page, 3)).toHaveText("저장 중…");
+  await gridRow(page, 1).locator("button[data-lg-trash]").click();
+  await expect(page.locator(".lg-table tr.lg-confirmrow")).toHaveCount(0);
+  await expect(page.locator("[data-lg-grid-status]")).toContainText("다른 줄을 저장하는 중이거나 저장하지 못한 칸이 있습니다.");
+  release();
+  await expect(gridState(page, 3)).toHaveText("저장함");
+  await gridRow(page, 1).locator("button[data-lg-trash]").click();
+  await expect(page.locator(".lg-table tr.lg-confirmrow")).toHaveCount(1);
+  assertNoErrors();
 });

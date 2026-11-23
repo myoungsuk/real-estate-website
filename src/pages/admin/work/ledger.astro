@@ -249,7 +249,7 @@ const gridNumeric = ["amountWon", "vatWon", "totalWon", "receivedWon", "unpaidWo
               {gridColumns.map((column) => (
                 <th scope="col" class={gridNumeric.includes(column) ? "num" : undefined}>{gridHeadText(column)}{column === "totalWon" && <small class="lg-autotag">자동</small>}</th>
               ))}
-              <th scope="col"><span class="sr-only">줄 상태·고치기</span></th>
+              <th scope="col"><span class="sr-only">줄 상태·고치기·지우기</span></th>
             </tr>
           </thead>
           <tbody data-lg-tbody></tbody>
@@ -260,7 +260,7 @@ const gridNumeric = ["amountWon", "vatWon", "totalWon", "receivedWon", "unpaidWo
           <span><kbd>Tab</kbd> 저장하고 다음 칸</span>
           <span><kbd>Esc</kbd> 그만두기</span>
           <span><kbd>Ctrl</kbd><kbd>Z</kbd> 되돌리기</span>
-          <span>메모·지우기는 줄 끝 '고치기'</span>
+          <span>메모는 줄 끝 '고치기', 지우기는 휴지통 그림</span>
         </p>
         <section class="admin-panel rt-state cu-state" aria-labelledby="lg-empty-title" data-lg-empty hidden>
           <div class="admin-empty-state">
@@ -300,7 +300,7 @@ const gridNumeric = ["amountWon", "vatWon", "totalWon", "receivedWon", "unpaidWo
     import { element, setStatus } from "../../../lib/work-customers-dom";
     import { entryCard } from "../../../lib/work-ledger-dom";
     import { createLedgerGrid } from "../../../lib/work-ledger-grid";
-    import { ledgerGroupPlan } from "../../../lib/work/ledger-grid.mjs";
+    import { ledgerGroupPlan, newRowSavedText } from "../../../lib/work/ledger-grid.mjs";
     import { showMovedToTrash } from "../../../lib/work-trash-dom";
     import legalRules from "../../../data/work/legal-rules.json";
     import { todayInKorea } from "../../../lib/work/legal-dates.mjs";
@@ -611,6 +611,32 @@ const gridNumeric = ["amountWon", "vatWon", "totalWon", "receivedWon", "unpaidWo
             setStatus(gridStatus, failed ? DROPPED_TEXT : "", failed ? "error" : "idle");
           } else if (!failed) clearDropped();
         },
+        // 빈 새 줄은 합계 줄·달 줄과 같이 거르기·기준일 없는 줄 보기에서는 숨긴다(새 줄이 거른 목록에 맞지 않을 수 있음).
+        newRowAllowed: () => !groupFiltered(),
+        // 표의 새 줄 저장: 입력 화면의 '장부 줄 만들기' 저장과 같은 알림·다시 읽기. 목록에 안 보이는 줄이면 알림에 까닭을 붙인다.
+        async create(body) {
+          const result = await createLedgerEntry(body);
+          savedId = result.entry.id;
+          await refresh({ keepSaved: true });
+          const shown = items.some((item) => item.id === result.entry.id);
+          const text = `✓ ${newRowSavedText(result.entry, shown)}`;
+          setStatus(saved, result.warnings.length > 0 ? `${text} 아래 굵은 경고를 확인하세요(저장은 그대로 됩니다).` : text, "success");
+          return { entry: result.entry, shown };
+        },
+        // 표의 줄 끝 지우기: 입력 화면의 지우기와 같은 휴지통 알림('되살리기'·'휴지통 보기')과 다시 읽기.
+        async remove(id) {
+          const result = await deleteLedgerEntry(id);
+          if (editing?.id === id) closeForm();
+          showMovedToTrash(saved, "장부 줄", result.trash, {
+            reload: () => refresh(),
+            begin: () => (busy || gridBusy() ? false : (busy = true)),
+            end: () => {
+              busy = false;
+            },
+          });
+          await refresh();
+        },
+        focusFallback: () => newButton.focus(),
       });
       undoButton.addEventListener("click", () => grid.undo());
       redoButton.addEventListener("click", () => grid.redo());
@@ -1113,7 +1139,7 @@ const gridNumeric = ["amountWon", "vatWon", "totalWon", "receivedWon", "unpaidWo
 
       // 저장하지 않은 줄 넣기·고치기, 표에서 저장 중이거나 저장하지 못한 칸이 있으면 떠나기 전에 묻는다.
       window.addEventListener("beforeunload", (event) => {
-        if (!isDirty() && !grid.dirty()) return;
+        if (!isDirty() && !grid.dirty() && !grid.newRowTyped()) return;
         event.preventDefault();
       });
 
