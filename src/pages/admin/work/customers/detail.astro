@@ -182,6 +182,11 @@ import { TRASH_MOVE_NOTICE } from "../../../../lib/work/trash-view.mjs";
               <small class="ph-desc__n" aria-hidden="true" data-ph-view-desc-n></small>
             </div>
             <div class="cu-actions"><button class="work-secondary-button ph-save" type="button" data-ph-view-save>설명 저장</button></div>
+            <!-- 얼굴 가려서 내보내기(단계 3 M-b, 사용자 결정 2026-11-23 08:55:04 "나안: 화면 전체 (Recommended)"). 원본 내려받기 단추는 두지 않는다(DEC-WT-42). -->
+            <div class="ph-mask-entry">
+              <button class="work-secondary-button" type="button" aria-haspopup="dialog" disabled data-ph-mask-open>얼굴 가려서 내보내기</button>
+              <p class="cu-soft">블로그·문자로 보낼 사진의 얼굴을 가린 사본을 이 기기에만 저장합니다. 앱에 보관한 사진은 바뀌지 않습니다.</p>
+            </div>
             <p class="admin-form-status" role="status" aria-live="polite" data-ph-view-status></p>
             <div class="cu-actions cu-actions--quiet">
               <button class="admin-text-link cu-linkbtn cu-danger" type="button" aria-expanded="false" aria-controls="ph-del-panel" data-ph-view-delete>사진 지우기</button>
@@ -196,6 +201,32 @@ import { TRASH_MOVE_NOTICE } from "../../../../lib/work/trash-view.mjs";
               <p class="admin-form-status" role="status" aria-live="polite" data-ph-del-status></p>
             </section>
           </section>
+
+          <!-- 화면 전체 편집 창. 가린 사본은 화면 메모리에서만 만들어 내려받기·공유로만 내보내고 서버로 올리지 않는다(T3-20). -->
+          <dialog class="ph-mask" aria-labelledby="ph-mask-title" data-ph-mask>
+            <div class="ph-mask__head">
+              <h3 id="ph-mask-title">얼굴 가려서 내보내기</h3>
+              <button class="work-secondary-button ph-mask__close" type="button" data-ph-mask-close>그만두기</button>
+            </div>
+            <p class="ph-mask__guide">가릴 얼굴을 마우스나 손가락으로 끌어 네모를 그리세요. 여러 곳을 그릴 수 있습니다. 키보드로는 그릴 수 없습니다.</p>
+            <div class="ph-mask__stage">
+              <p class="ph-mask__wait" role="status" data-ph-mask-wait>사진을 준비하고 있습니다…</p>
+              <canvas aria-label="가릴 곳을 그리는 사진" data-ph-mask-canvas hidden></canvas>
+            </div>
+            <div class="ph-mask__tools">
+              <p class="ph-mask__count" role="status" aria-live="polite" data-ph-mask-count></p>
+              <div class="ph-mask__row">
+                <button class="work-secondary-button" type="button" disabled data-ph-mask-undo>되돌리기</button>
+                <button class="work-secondary-button" type="button" disabled data-ph-mask-redo>다시 하기</button>
+                <button class="work-secondary-button" type="button" disabled data-ph-mask-clear>다 지우기</button>
+              </div>
+              <div class="ph-mask__row">
+                <button class="work-primary-button" type="button" disabled data-ph-mask-download>가려서 내려받기</button>
+                <button class="work-secondary-button" type="button" disabled hidden data-ph-mask-share>가려서 공유</button>
+              </div>
+              <p class="admin-form-status" role="status" aria-live="polite" data-ph-mask-status></p>
+            </div>
+          </dialog>
 
           <div data-ph-list></div>
           <p class="cu-soft" data-ph-empty hidden>아직 올린 사진이 없습니다.</p>
