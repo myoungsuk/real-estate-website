@@ -121,7 +121,8 @@ export function nextUuid() {
 
 // 업무 API를 부르는 도우미. now와 randomUUID를 고정해 결과를 예측할 수 있게 한다.
 // openaiFetch: 글 초안(P3) 시험의 가짜 OpenAI(tests/openai-fixtures.mjs). 넣지 않으면 부르는 순간 실패하는 함수를 넘긴다(실제 OpenAI 0번).
-export async function work(env, path, { method = "GET", body, token, email = OWNER, now = NOW, auditLog = () => {}, openaiFetch } = {}) {
+// naverListings: 글 초안 시험의 가상 네이버 매물({ items }). 넣지 않으면 번들 공개 자료(운영과 같음).
+export async function work(env, path, { method = "GET", body, token, email = OWNER, now = NOW, auditLog = () => {}, openaiFetch, naverListings } = {}) {
   const headers = { "Cf-Access-Jwt-Assertion": token ?? await signToken({ email }) };
   if (!["GET", "HEAD"].includes(method)) {
     headers.Origin = ORIGIN;
@@ -132,7 +133,7 @@ export async function work(env, path, { method = "GET", body, token, email = OWN
   const noOpenAi = async () => {
     throw new Error("이 시험은 OpenAI를 부르지 않아야 함");
   };
-  const response = await handleAdminApi(request, env, { authenticate, work: { now: () => now, auditLog, randomUUID: nextUuid, openaiFetch: openaiFetch ?? noOpenAi } });
+  const response = await handleAdminApi(request, env, { authenticate, work: { now: () => now, auditLog, randomUUID: nextUuid, openaiFetch: openaiFetch ?? noOpenAi, blogNaverListings: naverListings } });
   return { response, status: response.status, json: await response.json() };
 }
 

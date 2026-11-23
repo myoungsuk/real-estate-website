@@ -172,6 +172,8 @@ export async function handleWorkApi(request, env, options = {}) {
       db, actor, requestId, now, auditLog, method, route,
       randomUUID: options.randomUUID ?? (() => crypto.randomUUID()),
       openaiFetch: options.openaiFetch ?? ((...args) => fetch(...args)),
+      // blogNaverListings: 시험만 넣는 가상 네이버 매물(work-blog.mjs blogSourcesFor). 운영은 넘기지 않아 번들 자료를 쓴다.
+      blogNaverListings: options.blogNaverListings,
     });
   }
 
