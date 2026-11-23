@@ -308,6 +308,21 @@ test("T0-127 iPhone 대체 버튼은 내려받기와 같은 .ics 문자열을 �
   assert.match(schedulePage, /link\.download = icsFileName\(currentContractDate\);/u);
 });
 
+test("계약 일정 구독 칸의 '알림이 오지 않을 때'는 Google 캘린더 두 단계('종일 일정 알림'·'동기화')를 번호 목록으로 알리고, 옛 문장은 없다", async () => {
+  const schedulePage = await readSource("src/pages/admin/work/schedule.astro");
+  const fold = schedulePage.match(/<details class="bl-fold cf-alarm" data-cf-alarm hidden>[\s\S]*?<\/details>/u)?.[0] ?? "";
+  assert.match(fold, /<summary>알림이 오지 않을 때<\/summary>/u);
+  assert.match(fold, /Google 캘린더는 이 알림을 쓰지 않습니다/u, "구독 파일 알림을 Google이 쓰지 않음(2026-11-23 확인)");
+  const steps = [...(fold.match(/<ol class="cf-alarm__steps">([\s\S]*?)<\/ol>/u)?.[1] ?? "").matchAll(/<li>([^<]+)<\/li>/gu)].map((m) => m[1]);
+  assert.equal(steps.length, 2, "두 단계");
+  assert.match(steps[0], /'종일 일정 알림'에 전날 오후 6시 알림을 더합니다\. 두 분 계정에서 따로/u);
+  assert.match(steps[1], /'동기화'를 켭니다/u);
+  assert.match(fold, /iPhone 설정에서 캘린더 알림이 켜져 있는지 확인/u, "iPhone은 단정하지 않음");
+  assert.doesNotMatch(schedulePage, /알림 설정을 켜 주세요/u, "옛 문장 없음");
+  // 주소를 막 만들었을 때와 이미 있을 때 모두 보인다
+  assert.match(schedulePage, /alarmHelp\.hidden = part !== "created" && part !== "existing";/u);
+});
+
 test("안내 문자 화면은 받는 사람 없는 sms 주소와 복사 실패 안내를 쓴다", async () => {
   const page = await readSource("src/pages/admin/work/messages.astro");
   assert.match(page, /buildSmsHref\(message\.text, link\.dataset\.messageSms === "ampersand" \? "ampersand" : "query"\)/u);

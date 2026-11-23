@@ -2298,6 +2298,16 @@ nav.tr-homelinks { display: flex; flex-wrap: wrap; gap: 0 24px; margin: 0 0 14px
 .cf-qr__box p { margin: 0; }
 .cf-qr__canvas { display: block; box-sizing: content-box; max-width: 100%; height: auto; border: 1px solid var(--ds-edge); image-rendering: pixelated; }
 .cf-qr__how { font-weight: 700; }
+/* 구독 칸 '알림이 오지 않을 때'(접힌 상자, 2026-11-23): 단계는 번호 목록 */
+/* .cf-panel p(margin: 8px 0)가 접힌 상자 안쪽 여백(.bl-fold > :not(summary))을 덮으므로 여기서 다시 준다 */
+.cf-alarm { margin-top: 12px; }
+.cf-alarm[open] { padding-bottom: 6px; }
+.cf-alarm > p, .cf-alarm__steps { margin: 8px 14px; }
+.cf-alarm__steps { padding-left: 1.5em; }
+.cf-alarm__steps li + li { margin-top: 6px; }
+/* 펼칠 수 있다는 표시: '이 화면 사용법' 상자와 같은 꺾쇠 */
+.cf-alarm > summary::after { content: ""; flex: 0 0 auto; width: 9px; height: 9px; margin: 0 4px 4px auto; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); }
+.cf-alarm[open] > summary::after { margin-bottom: -4px; transform: rotate(-135deg); }
 
 /* ── 새 겉모양(사용자 승인 2026-11-23 11:34:13 "이대로 구현", 관리자 화면 전체) ──────────────────────────────
    색은 위 .admin-body의 값으로 바뀌었고(남색 → 짙은 먹색, 회색 채움 2단계), 여기서는 부품 모양만 다시 정한다.
