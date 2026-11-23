@@ -823,9 +823,16 @@ export function parseTrashPurge(body) {
   }
 }
 
-// 파일(사진, 단계 2 바로 찍기 F-a). 이 PR은 손님 사진만 연다(photo-pr-plan F-1). 나머지 종류는 그 기능 PR에서 연다(0001 CHECK는 그대로).
-export const FILE_KINDS_OPEN = Object.freeze(["property_photo", "other"]);
-export const FILE_KINDS_NOT_READY = Object.freeze(["contract_copy", "registry", "recording", "document"]);
+// 파일(사진, 단계 2 바로 찍기 F-a). 손님 사진(property_photo·other)과 계약서 사본(contract_copy, 단계 4 K-a)을 연다.
+// 나머지 종류는 그 기능 PR에서 연다(0001 CHECK는 그대로).
+export const FILE_KINDS_OPEN = Object.freeze(["property_photo", "other", "contract_copy"]);
+export const FILE_KINDS_NOT_READY = Object.freeze(["registry", "recording", "document"]);
+// 주인 규칙(사용자 2026-11-23 09:37:40 "거래에 붙임"): 계약서 사본은 거래에만, 손님 사진은 손님에게만 붙인다.
+export const FILE_KINDS_DEAL_OWNED = Object.freeze(["contract_copy"]);
+// 한 거래에 붙이는 계약서 사본 장수(본문 + 특약 + 확인설명서, 대장 2026-11-23).
+export const FILE_CONTRACT_COPY_MAX_PER_DEAL = 10;
+// 가림 확인(설계서 9.3절): 사람이 주민등록번호를 가렸다고 확인한 올리기만 받는다. 값은 정확히 "rrn=1".
+export const FILE_MASK_CONFIRMED = "rrn=1";
 export const FILE_PHOTO_MIME_TYPES = Object.freeze(["image/jpeg", "image/webp"]);
 // 미리보기는 WebP·JPEG 둘 다 받는다(iPhone Safari canvas는 WebP를 만들지 못해 JPEG로 보냄, 대장 2026-11-22 날개-4 지적).
 export const FILE_THUMB_MIME_TYPES = Object.freeze(["image/webp", "image/jpeg"]);
@@ -864,7 +871,9 @@ function readSha256(headers) {
   return text.toLowerCase();
 }
 
-// 사진 올리기 헤더(설계서 9.3절). 순서: 본문 종류(415) → 파일 종류(400) → 길이(413·400) → SHA-256 → 주인(customer:{uuid}만).
+// 사진 올리기 헤더(설계서 9.3절). 순서: 본문 종류(415) → 파일 종류(400) → 길이(413·400) → SHA-256 → 주인 → 가림 확인.
+// 주인: 손님 사진은 customer:{uuid}만, 계약서 사본은 deal:{uuid}만(종류와 주인이 어긋나면 400).
+// 가림 확인: 계약서 사본은 X-Work-Masked: rrn=1이 없으면 400 MASK_CONFIRMATION_REQUIRED. 손님 사진에 이 헤더가 오면 무시한다.
 // 원래 파일 이름은 받지 않는다(헤더·본문 어디에도 없음).
 export function parseFileUploadHeaders(headers) {
   const mimeType = fileMediaType(headers);
@@ -877,9 +886,14 @@ export function parseFileUploadHeaders(headers) {
   const length = readContentLength(headers, FILE_PHOTO_MAX_BYTES);
   const sha256 = readSha256(headers);
   const owner = (headers.get("X-Work-Owner") ?? "").trim();
-  const customerId = owner.startsWith("customer:") ? owner.slice("customer:".length) : null;
-  if (!isUuid(customerId)) throw invalid(["X-Work-Owner"]);
-  return { mimeType, kind, length, sha256, customerId };
+  const dealOwned = FILE_KINDS_DEAL_OWNED.includes(kind);
+  const prefix = dealOwned ? "deal:" : "customer:";
+  const ownerId = owner.startsWith(prefix) ? owner.slice(prefix.length) : null;
+  if (!isUuid(ownerId)) throw invalid(["X-Work-Owner"]);
+  if (dealOwned && (headers.get("X-Work-Masked") ?? "").trim() !== FILE_MASK_CONFIRMED) {
+    throw new WorkApiError("MASK_CONFIRMATION_REQUIRED", "주민등록번호를 가렸는지 확인한 뒤에 올릴 수 있습니다.", 400);
+  }
+  return { mimeType, kind, length, sha256, customerId: dealOwned ? null : ownerId, dealId: dealOwned ? ownerId : null, rrnMasked: dealOwned ? 1 : 0 };
 }
 
 // 미리보기 올리기 헤더(Q-2): WebP·JPEG, 256KB 이하, SHA-256.

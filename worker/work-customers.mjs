@@ -86,15 +86,18 @@ const SQL = Object.freeze({
     "SELECT id, customer_id, deal_id, body, source, file_id, version, created_at, updated_at FROM notes WHERE customer_id = ? ORDER BY created_at DESC, id DESC LIMIT ?",
   customerFiles:
     "SELECT id, kind, mime_type, byte_size, caption, deal_id, created_at FROM files WHERE customer_id = ? ORDER BY created_at DESC, id DESC",
-  // 손님 삭제 미리 확인(친절한 오류용): R2 바인딩이 없을 때의 손님 파일 수(? 첫째가 1이면 바인딩 있음이라 0), 그 손님 단독 거래의 파일 수.
-  // 실제 막기는 아래 batch 첫 문장(guard)이 한다. 거래 파일은 이 PR에서 생기지 않지만(F-2), 생기면 거래를 지울 때 ON DELETE SET NULL로
-  // 주인 없는 사진이 되므로 계속 막는다(거래 파일 PR에서 바꿈).
-  customerFileCount: "SELECT count(*) AS n FROM files WHERE (? = 0 AND customer_id = ?) OR deal_id IN (" + EXCLUSIVE_DEALS_OF + ")",
+  // 손님 카드의 거래마다 싣는 파일(계약서 사본, 단계 4 K-a). 같이 하는 거래의 사본은 참여자 모두의 카드에 보인다(사본은 거래의 것).
+  customerDealFiles:
+    "SELECT id, kind, mime_type, byte_size, caption, deal_id, created_at FROM files"
+    + " WHERE deal_id IN (SELECT deal_id FROM deal_parties WHERE customer_id = ?) ORDER BY created_at DESC, id DESC",
+  // 손님 삭제 미리 확인(친절한 오류용): R2 바인딩이 없을 때(? 첫째가 0)만 세는 손님 파일 수 + 그 손님 단독 거래의 파일 수(? 첫째가 1이면 0).
+  // 실제 막기는 아래 batch 첫 문장(guard)이 한다. 바인딩이 있으면 손님 사진과 단독 거래의 파일(계약서 사본, 단계 4 K-a)을 함께 휴지통으로 옮긴다.
+  customerFileCount: "SELECT count(*) AS n FROM files WHERE ? = 0 AND (customer_id = ? OR deal_id IN (" + EXCLUSIVE_DEALS_OF + "))",
   // 손님 삭제 batch 첫 문장: 손님이 없거나 이름이 바뀌었거나 막을 파일 행이 있으면 json('guard')(잘못된 JSON)로 일부러 오류를 내
   // batch 전체를 되돌린다. batch는 한 트랜잭션이라 이 판정과 뒤 문장 사이에 다른 쓰기가 끼지 않는다.
   customerDeleteGuard:
     "SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM customers WHERE id = ? AND display_name = ?)"
-    + " OR EXISTS (SELECT 1 FROM files WHERE (? = 0 AND customer_id = ?) OR deal_id IN (" + EXCLUSIVE_DEALS_OF + "))"
+    + " OR EXISTS (SELECT 1 FROM files WHERE ? = 0 AND (customer_id = ? OR deal_id IN (" + EXCLUSIVE_DEALS_OF + ")))"
     + " THEN json('guard') ELSE 1 END AS ok",
   // 감사 기록은 지우기 전에 남기며, 남길 메모 수(notes_kept)를 batch 안에서 센다.
   customerDeleteAudit:
@@ -122,6 +125,8 @@ const SQL = Object.freeze({
   // 손님 사진: 0001 files.customer_id가 ON DELETE SET NULL이라 이 문장을 빠뜨리거나 손님 행 삭제 뒤에 두면 오류 없이 주인 없는 사진이 남는다(1절 2번, T2-137d).
   // 그래서 손님 행 삭제보다 앞(단독 거래 삭제보다도 앞)에 둔다.
   filesDeleteByCustomer: "DELETE FROM files WHERE " + W.filesByCustomer,
+  // 지우는 단독 거래의 파일(계약서 사본): files.deal_id도 ON DELETE SET NULL이라 exclusiveDealsDelete 앞에서 직접 지운다(거래 삭제의 dealFilesDelete와 같음).
+  exclusiveDealFilesDelete: "DELETE FROM files WHERE " + W.inExclusiveDeals,
   // 휴지통 복사 문장(0007). 각 지우기·끊기 문장 바로 앞에 같은 WHERE로 둔다. 첫 ?는 묶음 id, 그 뒤는 짝 문장의 WHERE 값과 같다.
   trashSharedDealNotes: trashLinksSql("note_customer", W.sharedDealNotes),
   trashExclusiveDealOtherNotes: trashLinksSql("note_deal", W.exclusiveDealOtherNotes),
@@ -137,6 +142,7 @@ const SQL = Object.freeze({
   trashCustomerParties: trashRowsSql("deal_parties", W.customerParties),
   trashCustomer: trashRowsSql("customers", W.customer),
   trashFilesByCustomer: trashRowsSql("files", W.filesByCustomer),
+  trashExclusiveDealFiles: trashRowsSql("files", W.inExclusiveDeals),
   dealExists: "SELECT id FROM deals WHERE id = ?",
   partyExists: "SELECT 1 AS ok FROM deal_parties WHERE deal_id = ? AND customer_id = ? LIMIT 1",
   noteList:
@@ -268,6 +274,13 @@ async function getCustomer(ctx, id) {
     const events = await all(ctx.db.prepare(SQL.customerDealEvents).bind(id));
     const notes = await all(ctx.db.prepare(SQL.customerNotes).bind(id, DETAIL_NOTE_LIMIT));
     const files = await all(ctx.db.prepare(SQL.customerFiles).bind(id));
+    const dealFiles = await all(ctx.db.prepare(SQL.customerDealFiles).bind(id));
+    const fileView = (file) => ({ id: file.id, kind: file.kind, mimeType: file.mime_type, byteSize: file.byte_size, caption: file.caption, dealId: file.deal_id, createdAt: file.created_at });
+    const filesByDeal = new Map();
+    for (const file of dealFiles) {
+      if (!filesByDeal.has(file.deal_id)) filesByDeal.set(file.deal_id, []);
+      filesByDeal.get(file.deal_id).push(fileView(file));
+    }
     const eventsByDeal = new Map();
     for (const event of events) {
       if (!eventsByDeal.has(event.deal_id)) eventsByDeal.set(event.deal_id, []);
@@ -278,9 +291,10 @@ async function getCustomer(ctx, id) {
       deals: deals.map((deal) => ({
         id: deal.id, title: deal.title, dealType: deal.deal_type, status: deal.status, role: deal.role, version: deal.version, updatedAt: deal.updated_at,
         events: eventsByDeal.get(deal.id) ?? [],
+        files: filesByDeal.get(deal.id) ?? [],
       })),
       notes: notes.map(noteView),
-      files: files.map((file) => ({ id: file.id, kind: file.kind, mimeType: file.mime_type, byteSize: file.byte_size, caption: file.caption, dealId: file.deal_id, createdAt: file.created_at })),
+      files: files.map(fileView),
     };
   }, () => auditBase(ctx, "customer.view", { targetType: "customer", targetId: id }));
   if (!data) throw notFound();
@@ -372,6 +386,8 @@ async function deleteCustomer(ctx, id) {
     ["notesDeleteByCustomer", prepare(SQL.notesDeleteByCustomer).bind(id)],
     ["trashFilesByCustomer", prepare(SQL.trashFilesByCustomer).bind(b, id)],
     ["filesDeleteByCustomer", prepare(SQL.filesDeleteByCustomer).bind(id)],
+    ["trashExclusiveDealFiles", prepare(SQL.trashExclusiveDealFiles).bind(b, id, id)],
+    ["exclusiveDealFilesDelete", prepare(SQL.exclusiveDealFilesDelete).bind(id, id)],
     ["trashExclusiveDealEvents", prepare(SQL.trashExclusiveDealEvents).bind(b, id, id)],
     ["exclusiveDealEventsDelete", prepare(SQL.exclusiveDealEventsDelete).bind(id, id)],
     ["trashExclusiveDealLedger", prepare(SQL.trashExclusiveDealLedger).bind(b, id, id)],
@@ -402,7 +418,7 @@ async function deleteCustomer(ctx, id) {
   // deleted.tasks: 지운 단독 거래의 할 일 수. trash: 되살릴 묶음(7일 뒤 영구 삭제).
   return {
     data: {
-      deleted: { customers: 1, deals: n("exclusiveDealsDelete"), notes, files: n("filesDeleteByCustomer"), tasks: n("exclusiveDealTasksDelete") },
+      deleted: { customers: 1, deals: n("exclusiveDealsDelete"), notes, files: n("filesDeleteByCustomer") + n("exclusiveDealFilesDelete"), tasks: n("exclusiveDealTasksDelete") },
       kept: { notes: kept, ledger: n("exclusiveDealLedgerDetach") },
       trash: trash.trash,
     },

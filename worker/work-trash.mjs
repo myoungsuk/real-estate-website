@@ -99,8 +99,9 @@ const BATCH_SOURCES = Object.freeze({
   ledger: ["ledger_entries", "substr(CASE WHEN label <> '' THEN label ELSE '장부 줄 ' || amount_won || '원' END, 1, 80)"],
   task: ["tasks", "substr(title, 1, 80)"],
   // 사진 한 장(F-5, 사용자 2026-11-22 15:39:08): 설명이 있으면 설명 앞 40자, 없으면 "사진 · 11월 22일 14:05 올림"(올린 시각 created_at을 한국 시각으로,
-  // 월·일은 앞 0 없이, 시:분은 두 자리). 손님 이름은 넣지 않는다.
-  file: ["files", "coalesce(substr(CASE WHEN caption <> '' THEN substr(caption, 1, 40) ELSE '사진 · ' || CAST(strftime('%m', created_at, '+9 hours') AS INTEGER) || '월 '"
+  // 월·일은 앞 0 없이, 시:분은 두 자리). 손님 이름은 넣지 않는다. 계약서 사본(단계 4 K-a)은 설명이 있든 없든 앞에 '계약서 사본 · '을 붙인다.
+  file: ["files", "coalesce(substr(CASE WHEN kind = 'contract_copy' THEN '계약서 사본 · ' WHEN caption <> '' THEN '' ELSE '사진 · ' END"
+    + " || CASE WHEN caption <> '' THEN substr(caption, 1, 40) ELSE CAST(strftime('%m', created_at, '+9 hours') AS INTEGER) || '월 '"
     + " || CAST(strftime('%d', created_at, '+9 hours') AS INTEGER) || '일 ' || strftime('%H:%M', created_at, '+9 hours') || ' 올림' END, 1, 80), '사진')"],
 });
 const BATCH_INSERT_SQL = Object.freeze(Object.fromEntries(Object.entries(BATCH_SOURCES).map(([kind, [table, label]]) => [kind,

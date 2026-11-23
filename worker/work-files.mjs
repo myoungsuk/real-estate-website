@@ -1,5 +1,7 @@
 // 업무 도구 단계 2 사진(바로 찍기, photo-pr-plan F-a, 설계서 9장). 모든 SQL은 준비된 문장(고정 문자열 + bind)만 쓴다.
-// - 이 PR은 손님에게만 붙인다(X-Work-Owner는 customer:{uuid}만, F-1·1절 3번). 그래서 files.deal_id는 늘 NULL이다.
+// - 손님 사진(property_photo·other)은 손님에게만 붙인다(X-Work-Owner customer:{uuid}, files.deal_id는 NULL).
+// - 계약서 사본(contract_copy, 단계 4 K-a)은 거래에만 붙인다(X-Work-Owner deal:{uuid}, files.customer_id는 NULL, rrn_masked 1). 한 거래에 10장까지,
+//   미리보기 사본은 만들지 않는다(사용자 2026-11-23 09:37:40 "거래에 붙임"·"만들지 않음"). 그래서 한 파일 행에 손님·거래가 함께 있는 일은 없다.
 // - 올리기: Content-Length를 먼저 보고(없거나 한도를 넘으면 본문을 읽지 않고 413) → 본문을 다 받아 길이 대조(다르면 400) →
 //   매직 넘버·메타데이터 검사(JPEG APP 조각·끝 EOI, WebP RIFF 조각 끝까지) → 통과한 뒤에만 R2 put(sha256은 R2가 대조, Worker는 다시 계산하지 않음)
 //   → D1 행(실패하면 R2 보상 삭제). 검사에 걸리면 R2를 부르지 않으므로 남는 객체가 없다(대장 2026-11-22: 흘려 보내기 대신 다 받아 검사).
@@ -9,19 +11,35 @@
 import { WorkApiError } from "./work-security.mjs";
 import { auditStatement, runBatch } from "./work-audit.mjs";
 import { FILE_THUMB_SUFFIX, trashBatchFor, trashRowsSql } from "./work-trash.mjs";
-import { FILE_THUMB_MIME_TYPES as THUMB_MIME_TYPES, invalid, isUuid, koreaDate, parseFilePatch, parseFileUploadHeaders, parseThumbUploadHeaders } from "./work-input.mjs";
+import {
+  FILE_CONTRACT_COPY_MAX_PER_DEAL,
+  FILE_KINDS_DEAL_OWNED,
+  FILE_THUMB_MIME_TYPES as THUMB_MIME_TYPES,
+  invalid,
+  isUuid,
+  koreaDate,
+  parseFilePatch,
+  parseFileUploadHeaders,
+  parseThumbUploadHeaders,
+} from "./work-input.mjs";
 
 const FILE_COLUMNS = "id, r2_key, kind, mime_type, byte_size, sha256_hex, customer_id, deal_id, caption, created_at";
 const SQL = Object.freeze({
   customerExists: "SELECT id FROM customers WHERE id = ?",
+  dealExists: "SELECT id FROM deals WHERE id = ?",
+  contractCopyCount: "SELECT count(*) AS n FROM files WHERE deal_id = ? AND kind = 'contract_copy'",
   fileById: "SELECT " + FILE_COLUMNS + " FROM files WHERE id = ?",
   // batch 첫 문장(guard): 조건이 깨졌으면 json('guard')(잘못된 JSON)로 batch 전체를 되돌린다(8.5절).
   customerGuard: "SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM customers WHERE id = ?) THEN json('guard') ELSE 1 END AS ok",
   fileGuard: "SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM files WHERE id = ?) THEN json('guard') ELSE 1 END AS ok",
-  // retention_until은 비워 둔다: 사진 보관은 손님 기록을 따른다(Q-4, 손님이 지워질 때 함께 휴지통으로).
+  // 계약서 사본: 거래가 있고 그 거래의 사본이 상한(? 셋째) 아래일 때만 넣는다. 같은 때 두 번 올려도 상한을 넘지 않게 batch 안에서 다시 센다.
+  contractCopyGuard:
+    "SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM deals WHERE id = ?)"
+    + " OR (SELECT count(*) FROM files WHERE deal_id = ? AND kind = 'contract_copy') >= ? THEN json('guard') ELSE 1 END AS ok",
+  // retention_until은 비워 둔다: 사진 보관은 손님 기록을 따른다(Q-4, 손님이 지워질 때 함께 휴지통으로). 계약서 사본은 거래를 따른다.
   fileInsert:
     "INSERT INTO files (id, r2_key, kind, mime_type, byte_size, sha256_hex, customer_id, deal_id, rrn_masked, caption, retention_until, created_at)"
-    + " VALUES (?, ?, ?, ?, ?, ?, ?, NULL, 0, '', NULL, ?)",
+    + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '', NULL, ?)",
   // 설명 고치기: files에 version 칸이 없어 마지막 쓰기가 이긴다(동시 수정을 막지 않음, 3.1절 주의, T2-137h).
   captionUpdate: "UPDATE files SET caption = ? WHERE id = ?",
   fileDelete: "DELETE FROM files WHERE id = ?",
@@ -50,6 +68,14 @@ function metadataPresent() {
 
 function checksumMismatch() {
   return new WorkApiError("CHECKSUM_MISMATCH", "받은 파일이 보낸 파일과 다릅니다. 다시 올려 주세요.", 422, true);
+}
+
+function fileLimitReached() {
+  return new WorkApiError("FILE_LIMIT_REACHED", `이 거래에는 계약서 사본을 ${FILE_CONTRACT_COPY_MAX_PER_DEAL}장까지 올릴 수 있습니다.`, 409);
+}
+
+function thumbNotAllowed() {
+  return new WorkApiError("FILE_THUMB_NOT_ALLOWED", "이 종류의 파일은 미리보기를 만들지 않습니다.", 400);
 }
 
 function fileStorageFailed() {
@@ -232,10 +258,23 @@ function fileContentResponse(object, contentType, requestId) {
 
 // ── 경로 ─────────────────────────────────────────────────────────────────
 
+// 주인 확인: 손님 사진은 손님이, 계약서 사본은 거래가 있어야 한다(없으면 404). 계약서 사본은 그 거래의 장수 상한도 본다(409).
+// 올리기 전(본문을 읽기 전)과 batch가 guard로 되돌려진 뒤(그사이 바뀐 상황 판정)에 같은 순서로 본다.
+async function assertOwnerReady(db, input) {
+  if (input.dealId === null) {
+    if (!(await db.prepare(SQL.customerExists).bind(input.customerId).first())) throw notFound();
+    return;
+  }
+  if (!(await db.prepare(SQL.dealExists).bind(input.dealId).first())) throw notFound();
+  const row = await db.prepare(SQL.contractCopyCount).bind(input.dealId).first();
+  if (Number(row?.n ?? 0) >= FILE_CONTRACT_COPY_MAX_PER_DEAL) throw fileLimitReached();
+}
+
 async function uploadFile(ctx) {
   const input = parseFileUploadHeaders(ctx.request.headers);
-  // 손님이 없으면 본문을 읽지 않고 404(R2 부르지 않음).
-  if (!(await ctx.db.prepare(SQL.customerExists).bind(input.customerId).first())) throw notFound();
+  const dealOwned = input.dealId !== null;
+  // 주인이 없거나 상한에 닿았으면 본문을 읽지 않고 끝낸다(R2 부르지 않음).
+  await assertOwnerReady(ctx.db, input);
   const bytes = await readBodyExactly(ctx.request, input.length);
   checkImageBytes(bytes, input.mimeType);
   const id = ctx.randomUUID();
@@ -244,14 +283,17 @@ async function uploadFile(ctx) {
   await putChecked(ctx, key, bytes, { sha256: input.sha256, contentType: input.mimeType, kind: input.kind });
   try {
     await runBatch(ctx.db, [
-      ctx.db.prepare(SQL.customerGuard).bind(input.customerId),
-      ctx.db.prepare(SQL.fileInsert).bind(id, key, input.kind, input.mimeType, input.length, input.sha256, input.customerId, at),
-      auditStatement(ctx.db, { ...auditBase(ctx, "file.upload", id), outcome: "ok" }),
+      dealOwned
+        ? ctx.db.prepare(SQL.contractCopyGuard).bind(input.dealId, input.dealId, FILE_CONTRACT_COPY_MAX_PER_DEAL)
+        : ctx.db.prepare(SQL.customerGuard).bind(input.customerId),
+      ctx.db.prepare(SQL.fileInsert).bind(id, key, input.kind, input.mimeType, input.length, input.sha256, input.customerId, input.dealId, input.rrnMasked, at),
+      // 계약서 사본은 종류를 reason에 남긴다(거래 번호·이름·내용은 남기지 않음). 손님 사진은 이전과 같이 비운다.
+      auditStatement(ctx.db, { ...auditBase(ctx, "file.upload", id), outcome: "ok", reason: dealOwned ? "kind=" + input.kind : null }),
     ]);
   } catch (error) {
-    // D1 저장 실패: 방금 만든 R2 객체를 지운다(보상, 9.3절). 그사이 손님이 지워졌으면 404.
+    // D1 저장 실패: 방금 만든 R2 객체를 지운다(보상, 9.3절). 그사이 주인이 지워졌으면 404, 계약서 사본이 상한에 닿았으면 409.
     await deleteQuietly(ctx, [key], "FILE_COMPENSATE_FAILED");
-    if (!(await ctx.db.prepare(SQL.customerExists).bind(input.customerId).first())) throw notFound();
+    await assertOwnerReady(ctx.db, input);
     throw error;
   }
   return { status: 201, data: { file: fileView(await loadFile(ctx.db, id)) } };
@@ -261,6 +303,8 @@ async function uploadFile(ctx) {
 async function getFileContent(ctx, id, { thumb }) {
   const row = await loadFile(ctx.db, id);
   if (!row) throw notFound();
+  // 계약서 사본은 미리보기가 없다(R2를 부르지 않고 404, 화면은 글자 자리표).
+  if (thumb && FILE_KINDS_DEAL_OWNED.includes(row.kind)) throw notFound();
   let object;
   try {
     object = await ctx.files.get(thumb ? row.r2_key + FILE_THUMB_SUFFIX : row.r2_key);
@@ -298,10 +342,12 @@ async function getFileContent(ctx, id, { thumb }) {
 }
 
 // 미리보기 올리기(Q-2): 원본 201 뒤에 보낸다(WebP·JPEG). 이미 있으면 덮어쓴다. 원본이 없거나 휴지통에 있으면 404.
+// 계약서 사본은 받지 않는다(400 FILE_THUMB_NOT_ALLOWED, 본문을 읽지 않음): 이름·주소가 든 서류의 작은 그림을 감사 없이 보이지 않게.
 async function putThumb(ctx, id) {
   const input = parseThumbUploadHeaders(ctx.request.headers);
   const row = await loadFile(ctx.db, id);
   if (!row) throw notFound();
+  if (FILE_KINDS_DEAL_OWNED.includes(row.kind)) throw thumbNotAllowed();
   const bytes = await readBodyExactly(ctx.request, input.length);
   checkImageBytes(bytes, input.mimeType);
   const key = row.r2_key + FILE_THUMB_SUFFIX;

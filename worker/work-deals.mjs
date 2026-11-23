@@ -1,6 +1,7 @@
 // 업무 도구 단계 2 PR-B1: 거래·참여자 API(설계서 8.2·8.7·8.8·10.2절). 모든 SQL은 준비된 문장(고정 문자열 + bind)만 쓴다.
-// 일정(다시 계산·직접 추가·.ics)은 PR-B2에서 더한다. 파일(R2)은 아직 없어서, 파일 행이 있는 거래는 409 FILES_REQUIRE_STORAGE로 막는다.
-import { WorkApiError } from "./work-security.mjs";
+// 일정(다시 계산·직접 추가·.ics)은 PR-B2에서 더한다. 거래에 붙은 파일(계약서 사본, 단계 4 K-a)은 거래를 지울 때 함께 휴지통으로 옮긴다.
+// WORK_FILES 바인딩이 없으면 파일 행이 있는 거래 삭제는 409 FILES_REQUIRE_STORAGE로 막는다(R2를 지울 수 없어 7일 만료가 멈추지 않게, 손님 삭제와 같음).
+import { WorkApiError, hasR2 } from "./work-security.mjs";
 import { auditStatement, loadThenAudit, runBatch } from "./work-audit.mjs";
 import {
   CLOSED_DEAL_STATUSES,
@@ -93,9 +94,9 @@ const SQL = Object.freeze({
     "SELECT id, customer_id, deal_id, body, source, file_id, version, created_at, updated_at FROM notes WHERE deal_id = ? ORDER BY created_at DESC, id DESC LIMIT 50",
   dealFiles: "SELECT id, kind, mime_type, byte_size, caption, customer_id, created_at FROM files WHERE deal_id = ? ORDER BY created_at DESC, id DESC",
   dealFileCount: "SELECT count(*) AS n FROM files WHERE deal_id = ?",
-  // 거래 삭제 batch 첫 문장: 거래가 없거나 제목이 바뀌었거나 파일 행이 있으면 전체를 되돌린다.
+  // 거래 삭제 batch 첫 문장: 거래가 없거나 제목이 바뀌었거나, R2 바인딩이 없는데(? 셋째가 0) 파일 행이 있으면 전체를 되돌린다.
   dealDeleteGuard:
-    "SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM deals WHERE id = ? AND title = ?) OR EXISTS (SELECT 1 FROM files WHERE deal_id = ?)"
+    "SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM deals WHERE id = ? AND title = ?) OR (? = 0 AND EXISTS (SELECT 1 FROM files WHERE deal_id = ?))"
     + " THEN json('guard') ELSE 1 END AS ok",
   // 감사 기록은 지우기 전에 남기고, 손님 메모로 남길 메모 수(notes_kept)를 batch 안에서 센다.
   dealDeleteAudit:
@@ -111,6 +112,9 @@ const SQL = Object.freeze({
   dealLedgerDetach: LEDGER_DETACH_SET + " WHERE " + W.byDeal,
   // 그 거래의 할 일은 함께 지운다(2026-11-21 사용자 결정 11:15:11 U-4). 0006은 ON DELETE CASCADE가 없으므로 dealDelete 앞에서 직접 지운다.
   dealTasksDelete: "DELETE FROM tasks WHERE " + W.byDeal,
+  // 거래의 파일(계약서 사본): 0001 files.deal_id가 ON DELETE SET NULL이라 이 문장을 빠뜨리거나 dealDelete 뒤에 두면 오류 없이 주인 없는 사본이 남는다.
+  // 그래서 거래 행 삭제보다 앞에 둔다(손님 삭제의 filesDeleteByCustomer와 같은 까닭). R2 객체는 영구 삭제·7일 만료 때 지운다.
+  dealFilesDelete: "DELETE FROM files WHERE " + W.byDeal,
   dealDelete: "DELETE FROM deals WHERE " + W.deal,
   // 휴지통 복사 문장(0007). 각 지우기·끊기 문장 바로 앞에 같은 WHERE로 둔다. 첫 ?는 묶음 id.
   trashDealCustomerNotes: trashLinksSql("note_deal", W.dealCustomerNotes),
@@ -119,6 +123,7 @@ const SQL = Object.freeze({
   trashDealParties: trashRowsSql("deal_parties", W.byDeal),
   trashDealLedger: trashLinksSql("ledger_deal", W.byDeal),
   trashDealTasks: trashRowsSql("tasks", W.byDeal),
+  trashDealFiles: trashRowsSql("files", W.byDeal),
   trashDeal: trashRowsSql("deals", W.deal),
 });
 
@@ -300,25 +305,27 @@ async function updateDeal(ctx, id) {
   return { data: { deal: dealView(await loadDeal(ctx.db, id)), parties: await loadParties(ctx.db, id) } };
 }
 
-async function assertDealDeletable(db, id, confirmTitle) {
+// 거래 삭제 앞 확인. batch 전(친절한 오류)과 batch가 guard로 되돌려진 뒤에 같은 순서로 본다. 파일은 R2 바인딩이 없을 때만 막는다.
+async function assertDealDeletable(db, id, confirmTitle, hasStorage) {
   const row = await loadDeal(db, id);
   if (!row) throw notFound();
   if (confirmTitle !== row.title) throw new WorkApiError("CONFIRMATION_MISMATCH", "확인 제목이 거래 제목과 다릅니다.", 400);
-  if (await count(db, SQL.dealFileCount, id) > 0) {
+  if (!hasStorage && await count(db, SQL.dealFileCount, id) > 0) {
     throw new WorkApiError("FILES_REQUIRE_STORAGE", "연결된 파일이 있어 파일 저장소가 연결된 뒤에 지울 수 있습니다.", 409);
   }
 }
 
 async function deleteDeal(ctx, id) {
   const confirmTitle = parseConfirmation(ctx.body, "confirmTitle");
-  await assertDealDeletable(ctx.db, id, confirmTitle);
+  const hasStorage = hasR2(ctx.files);
+  await assertDealDeletable(ctx.db, id, confirmTitle, hasStorage);
   const at = new Date(ctx.now).toISOString();
   // 휴지통(0007): 지운 행·끊은 연결을 각 문장 바로 앞에서 trash_rows로 옮겨 적는다. 결과 수는 문장 이름으로 읽는다(R-3).
   const trash = trashBatchFor(ctx, "deal", id);
   const b = trash.batchId;
   const prepare = (sql) => ctx.db.prepare(sql);
   const batch = namedStatements([
-    ["guard", prepare(SQL.dealDeleteGuard).bind(id, confirmTitle, id)],
+    ["guard", prepare(SQL.dealDeleteGuard).bind(id, confirmTitle, hasStorage ? 1 : 0, id)],
     ["audit", prepare(SQL.dealDeleteAudit).bind(at, ctx.actor.email.toLowerCase(), id, ctx.requestId, id)],
     ["trashBatch", trash.statement],
     ["trashDealCustomerNotes", prepare(SQL.trashDealCustomerNotes).bind(b, id)],
@@ -333,6 +340,8 @@ async function deleteDeal(ctx, id) {
     ["dealLedgerDetach", prepare(SQL.dealLedgerDetach).bind(at, id)],
     ["trashDealTasks", prepare(SQL.trashDealTasks).bind(b, id)],
     ["dealTasksDelete", prepare(SQL.dealTasksDelete).bind(id)],
+    ["trashDealFiles", prepare(SQL.trashDealFiles).bind(b, id)],
+    ["dealFilesDelete", prepare(SQL.dealFilesDelete).bind(id)],
     ["trashDeal", prepare(SQL.trashDeal).bind(b, id)],
     ["dealDelete", prepare(SQL.dealDelete).bind(id)],
   ]);
@@ -340,13 +349,13 @@ async function deleteDeal(ctx, id) {
   try {
     results = await runBatch(ctx.db, batch.statements);
   } catch (error) {
-    await assertDealDeletable(ctx.db, id, confirmTitle);
+    await assertDealDeletable(ctx.db, id, confirmTitle, hasStorage);
     throw error;
   }
   const n = (name) => batch.changes(results, name);
   return {
     data: {
-      deleted: { deals: 1, events: n("dealEventsDelete"), notes: n("dealOnlyNotesDelete"), files: 0, tasks: n("dealTasksDelete") },
+      deleted: { deals: 1, events: n("dealEventsDelete"), notes: n("dealOnlyNotesDelete"), files: n("dealFilesDelete"), tasks: n("dealTasksDelete") },
       kept: { notes: n("dealCustomerNotesDetach"), ledger: n("dealLedgerDetach") },
       trash: trash.trash,
     },
