@@ -194,7 +194,7 @@ test("실거래가 사용 안내 숫자는 서버 상수·작업 예약과 맞�
   ]);
   const facts = ADMIN_HELP_FACTS;
   assert.equal(facts.realpriceFetchMinutes, store.REALPRICE_CRON_MINUTES, "받는 간격");
-  assert.ok(wrangler.includes(`"crons": ["*/${facts.realpriceFetchMinutes} * * * *"]`), "Worker Cron 간격");
+  assert.ok(wrangler.includes(`"crons": ["*/${facts.realpriceFetchMinutes} * * * *", `), "Worker Cron 간격(첫 항목이 실거래가 받기)");
   assert.equal(facts.realpricePageSize, query.REALPRICE_TRADES_LIMIT_DEFAULT, "한 번에 보이는 거래 수");
   assert.equal(facts.realpriceWatchMax, query.REALPRICE_WATCH_MAX, "관심 단지 최대");
   assert.equal(facts.realpriceSearchYears * 12, query.REALPRICE_COMPLEX_SEARCH_MONTHS, "단지 찾기 범위");

@@ -67,8 +67,9 @@ export async function openaiRequest(path, { method = "GET", body, timeoutMs } = 
 }
 
 // background 생성(재시도 0회). 돌려주는 값: { id, status, upstreamRequestId }.
-export async function createBackgroundResponse(body, env, fetcher) {
-  const { json, upstreamRequestId } = await openaiRequest("/responses", { method: "POST", body }, env, fetcher);
+// timeoutMs: 사진을 실어 보내는 요청(단계 4)만 넣는다. 넣지 않으면 이전과 같은 60초.
+export async function createBackgroundResponse(body, env, fetcher, { timeoutMs } = {}) {
+  const { json, upstreamRequestId } = await openaiRequest("/responses", { method: "POST", body, timeoutMs }, env, fetcher);
   if (typeof json?.id !== "string" || !RESPONSE_ID_PATTERN.test(json.id)) throw new WorkAiError("AI_RESPONSE_INVALID", { upstreamRequestId });
   return { id: json.id, status: typeof json.status === "string" ? json.status : "queued", upstreamRequestId };
 }

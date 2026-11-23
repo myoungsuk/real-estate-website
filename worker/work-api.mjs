@@ -13,6 +13,8 @@ import { routeWorkTasks } from "./work-tasks.mjs";
 import { routeWorkTrash } from "./work-trash.mjs";
 import { isWorkFileUpload, isWorkFilesRoute, routeWorkFiles } from "./work-files.mjs";
 import { routeWorkCalendarFeeds } from "./work-calendar-feeds.mjs";
+import { getWorkAiState } from "./work-ai-config.mjs";
+import { isWorkAiRoute, readAiWarnings, routeWorkAi } from "./work-ai-jobs.mjs";
 import { handlePublicToolsApi, isPublicToolsRoute } from "./work-public-tools.mjs";
 
 // 기존 시험·다른 모듈이 쓰던 이름을 그대로 내보낸다(감사 도우미는 work-audit.mjs로 옮김).
@@ -212,6 +214,16 @@ export async function handleWorkApi(request, env, options = {}) {
     await recordDenied(db, actor, env, request, requestId, now, "FILES_DISABLED", auditLog, { storeInD1: false });
     return workError(requestId, new WorkApiError("FILES_DISABLED", "파일 저장소가 아직 켜지지 않았습니다.", 503));
   }
+  // AI 작업 API(단계 4): WORK_AI_ENABLED·파일 기능·OpenAI 설정(키·모델·추론·출력 상한·사진 세부도)이 모두 있어야 한다.
+  // 없으면 503 AI_DISABLED, 설정 모델이 단가표에 없으면 503 AI_CONFIG_INVALID(D1에 거부 기록 없음, R2·OpenAI를 부르지 않음).
+  const aiState = getWorkAiState(env, files);
+  if (isWorkAiRoute(route) && aiState !== "enabled") {
+    const invalidConfig = aiState === "config_invalid";
+    await recordDenied(db, actor, env, request, requestId, now, invalidConfig ? "AI_CONFIG_INVALID" : "AI_DISABLED", auditLog, { storeInD1: false });
+    return workError(requestId, invalidConfig
+      ? new WorkApiError("AI_CONFIG_INVALID", "AI 설정(키·모델)을 확인해야 합니다.", 503)
+      : new WorkApiError("AI_DISABLED", "AI 기능이 아직 켜지지 않았습니다.", 503));
+  }
   // 사진·미리보기 올리기는 본문이 그림 바이트라 JSON 검사·JSON 읽기 대신 Origin·CSRF만 보고, 본문은 work-files.mjs가 읽는다.
   const fileUpload = isWorkFileUpload(route, method);
 
@@ -244,14 +256,23 @@ export async function handleWorkApi(request, env, options = {}) {
     if (method !== "GET") {
       return workError(requestId, new WorkApiError("METHOD_NOT_ALLOWED", "허용되지 않은 요청 방식입니다.", 405), { Allow: "GET" });
     }
+    // aiWarnings: AI가 켜졌을 때만 설정(settings 1행)을 읽는다. 예: CONTRACT_CROSS_MODEL_UNSET(두 번 읽기가 같은 모델, 14.2절).
+    let aiWarnings = [];
+    if (aiState === "enabled") {
+      try {
+        aiWarnings = await readAiWarnings(db, env);
+      } catch {
+        return workError(requestId, new WorkApiError("STORAGE_UNAVAILABLE", "업무 자료 저장소에 연결하지 못했습니다.", 503, true));
+      }
+    }
     return workSuccess({
       enabled: true,
       filesEnabled,
-      aiEnabled: false,
+      aiEnabled: aiState === "enabled",
       administrator: maskEmail(actor.email),
       csrfToken: await createWorkCsrfToken(actor.email, env.ADMIN_CSRF_SECRET, now),
       schemaVersion,
-      aiWarnings: [],
+      aiWarnings,
     }, requestId);
   }
 
@@ -264,10 +285,12 @@ export async function handleWorkApi(request, env, options = {}) {
       request, files, filesEnabled, log: auditLog,
       // 캘린더 구독 주소(단계 3): 토큰 해시 키와 무작위 바이트(시험만 고정값을 넣음)
       feedPepper: env?.WORK_FEED_TOKEN_PEPPER, randomBytes: options.randomBytes,
+      // AI 작업(단계 4): OpenAI 설정을 읽을 env와 OpenAI 요청에 쓸 fetch(시험은 가짜를 넣어 실제 OpenAI를 부르지 않음)
+      env, openaiFetch: options.openaiFetch ?? ((...args) => fetch(...args)),
     };
     const handled = (await routeWorkData(dataContext)) ?? (await routeWorkDeals(dataContext)) ?? (await routeWorkEvents(dataContext))
       ?? (await routeWorkLedger(dataContext)) ?? (await routeWorkTasks(dataContext)) ?? (await routeWorkTrash(dataContext)) ?? (await routeWorkFiles(dataContext))
-      ?? (await routeWorkCalendarFeeds(dataContext));
+      ?? (await routeWorkCalendarFeeds(dataContext)) ?? (await routeWorkAi(dataContext));
     if (handled?.response) return handled.response;
     if (handled?.raw) return workFileResponse(handled.raw, requestId);
     if (handled) return jsonResponse({ ok: true, data: handled.data, requestId }, { status: handled.status ?? 200, headers: { "X-Request-Id": requestId } });

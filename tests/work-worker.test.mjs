@@ -457,13 +457,13 @@ test("G. maskEmail·getAuditActorId를 옮긴 뒤에도 같은 입력에 같은 
   assert.match(await getAuditActorId("owner@example.com", SECRET), /^[A-Za-z0-9_-]{16}$/u);
 });
 
-test("G. 배포 설정은 D1 WORK_DB 하나와 R2 WORK_FILES 하나만 두고 vars를 넣지 않으며 Cron은 단계 P 실거래가 */10 하나만 둔다(켜기 값 덮어쓰기·처리 함수 없는 Cron 방지)", async () => {
+test("G. 배포 설정은 D1 WORK_DB 하나와 R2 WORK_FILES 하나만 두고 vars를 넣지 않으며 Cron은 단계 P 실거래가 */10과 단계 4 AI 작업 1분 둘만 둔다(켜기 값 덮어쓰기·처리 함수 없는 Cron 방지)", async () => {
   const raw = await readFile(new URL("../wrangler.jsonc", import.meta.url), "utf8");
   const config = JSON.parse(raw.replace(/^\s*\/\/.*$/gmu, ""));
   assert.deepEqual(config.d1_databases, [{ binding: "WORK_DB", database_name: "leaderscity-work", database_id: config.d1_databases[0].database_id, migrations_dir: "migrations/work" }]);
   assert.match(config.d1_databases[0].database_id, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u);
   assert.equal("vars" in config, false, "vars에 켜기 값 기본값을 두면 배포 때마다 다시 쓰임(켜기 값은 Secret으로 등록, 설계서 16.1)");
-  assert.deepEqual(config.triggers, { crons: ["*/10 * * * *"] }, "Cron은 처리 함수가 있는 단계 P 실거래가 받기 하나만(단계 2·4 Cron은 그 PR에서 더함)");
+  assert.deepEqual(config.triggers, { crons: ["*/10 * * * *", "* * * * *"] }, "Cron은 처리 함수가 있는 둘만: 단계 P 실거래가 받기(*/10)와 단계 4 AI 작업 보조 조회(1분)");
   assert.equal("observability" in config, false, "Workers 자동 추적(traces)을 켜지 않음(요청 주소에 인증키가 들어감, TK-34)");
   assert.deepEqual(config.r2_buckets, [{ binding: "WORK_FILES", bucket_name: "leaderscity-work-files" }], "파일 저장소는 이 이름의 버킷 하나만(공개 주소·사용자 도메인 없음은 버킷 설정에서 확인)");
   assert.equal(getWorkConfigState({ WORK_DB: { prepare() {}, batch() {} }, WORK_FILES: { put() {}, get() {}, delete() {} }, ADMIN_CSRF_SECRET: SECRET }), "disabled", "D1·R2 바인딩이 있어도 WORK_TOOLS_ENABLED가 없으면 꺼짐");
