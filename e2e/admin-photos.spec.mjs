@@ -568,3 +568,187 @@ test("휴대폰 하단 막대 '사진 찍기'는 그 자리에서 카메라를 �
   await expect(page.getByRole("button", { name: "바로 찍기" })).toBeFocused();
   assertNoErrors();
 });
+
+// ── 얼굴 가려서 내보내기(단계 3 M-b, 사용자 결정 2026-11-23 08:55:04 "나안: 화면 전체 (Recommended)") ──
+// 가상 사진 1200×600(왼쪽 빨강·오른쪽 파랑)을 원본으로 두고, 경계(x=600)를 가로지르는 네모를 그려 경계 칸이 섞인 색이 되는지 본다.
+function jpegSegments(buffer) {
+  const markers = [];
+  for (let at = 2; at + 3 < buffer.length;) {
+    if (buffer[at] !== 0xff) break;
+    const marker = buffer[at + 1];
+    if (marker === 0xda) break;
+    markers.push(marker);
+    at += 2 + buffer.readUInt16BE(at + 2);
+  }
+  return markers;
+}
+async function openMaskEditor(page, { width = 390, share = false, photo = [1200, 600] } = {}) {
+  if (share) {
+    await page.addInitScript(() => {
+      window.__shared = [];
+      Object.defineProperty(navigator, "canShare", { configurable: true, value: (data) => Array.isArray(data?.files) && data.files.length > 0 });
+      Object.defineProperty(navigator, "share", { configurable: true, value: async (data) => { window.__shared.push(data.files.map((file) => [file.name, file.type, file.size])); } });
+    });
+  }
+  const store = makeStore();
+  const calls = await setup(page, { width, store });
+  await openDetail(page);
+  store.bytes.set(uuid(301), await makeJpeg(page, ...photo));
+  await page.locator(".ph-thumb").first().click();
+  const view = page.locator("[data-ph-view]");
+  const entry = view.getByRole("button", { name: "얼굴 가려서 내보내기" });
+  await expect(view.locator("[data-ph-view-img]")).toBeVisible();
+  await expect(entry).toBeEnabled();
+  await entry.click();
+  const dialog = page.getByRole("dialog", { name: "얼굴 가려서 내보내기" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator("[data-ph-mask-canvas]")).toBeVisible();
+  return { calls, dialog, view, entry };
+}
+async function dragBox(page, dialog, [x1, y1], [x2, y2]) {
+  const box = await dialog.locator("[data-ph-mask-canvas]").boundingBox();
+  const at = (x, y) => [box.x + (x / 1200) * box.width, box.y + (y / 600) * box.height];
+  await page.mouse.move(...at(x1, y1));
+  await page.mouse.down();
+  await page.mouse.move(...at((x1 + x2) / 2, (y1 + y2) / 2), { steps: 4 });
+  await page.mouse.move(...at(x2, y2), { steps: 4 });
+  await page.mouse.up();
+}
+
+test("T3-16·T3-19·T3-20·T3-20a 얼굴 가리기: 화면 전체 창에서 네모를 그려 되돌리기·다시 하기, 가린 JPEG만 내려받고(EXIF 없음) 서버로 올리지 않으며 원본 내려받기 단추가 없다", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const { calls, dialog, entry } = await openMaskEditor(page);
+  const callsBefore = calls.all.length;
+  const viewport = page.viewportSize();
+  const frame = await dialog.boundingBox();
+  expect(Math.round(frame.width)).toBe(viewport.width);
+  expect(Math.round(frame.height)).toBe(viewport.height);
+  await expect(dialog).toContainText("마우스나 손가락으로 끌어 네모를 그리세요");
+  await expect(dialog.locator("button:visible")).toHaveText(["그만두기", "되돌리기", "다시 하기", "다 지우기", "가려서 내려받기"]);
+  await expect(dialog.locator("[data-ph-mask-share]")).toBeHidden();
+  await expect(page.getByRole("button", { name: /원본/u })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /원본|내려받기/u })).toHaveCount(0);
+  const count = dialog.locator("[data-ph-mask-count]");
+  await expect(count).toHaveText("아직 가린 곳이 없습니다");
+  await expect(dialog.getByRole("button", { name: "가려서 내려받기" })).toBeDisabled();
+
+  await dragBox(page, dialog, [380, 100], [760, 390]);
+  await expect(count).toHaveText("1곳 가림");
+  // 포인터를 올려도(휴대폰은 누른 뒤에도 남음) 단추 글자가 바탕과 구분된다(명암비 4.5 이상).
+  for (const name of ["그만두기", "되돌리기", "다 지우기", "가려서 내려받기"]) {
+    const button = dialog.getByRole("button", { name });
+    await button.hover();
+    const ratio = await button.evaluate((node) => {
+      const parse = (text) => (text.match(/[0-9.]+/gu) ?? []).map(Number);
+      const lum = ([r, g, b]) => [r, g, b].map((v) => v / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)).reduce((sum, v, index) => sum + v * [0.2126, 0.7152, 0.0722][index], 0);
+      const text = parse(getComputedStyle(node).color);
+      let back = parse(getComputedStyle(node).backgroundColor);
+      if (back.length === 4 && back[3] === 0) back = parse(getComputedStyle(node.closest("dialog")).backgroundColor);
+      const [hi, lo] = [lum(text), lum(back)].sort((a, b) => b - a);
+      return (hi + 0.05) / (lo + 0.05);
+    });
+    expect(ratio, `'${name}'에 포인터를 올렸을 때 명암비`).toBeGreaterThanOrEqual(4.5);
+  }
+  await page.mouse.move(2, 2);
+  await dragBox(page, dialog, [900, 450], [902, 452]); // 손가락이 살짝 끌린 것(8px 밑)은 넣지 않음
+  await expect(count).toHaveText("1곳 가림");
+  await dialog.getByRole("button", { name: "되돌리기" }).click();
+  await expect(count).toHaveText("아직 가린 곳이 없습니다");
+  await dialog.getByRole("button", { name: "다시 하기" }).click();
+  await expect(count).toHaveText("1곳 가림");
+
+  const downloading = page.waitForEvent("download");
+  await dialog.getByRole("button", { name: "가려서 내려받기" }).click();
+  const download = await downloading;
+  expect(download.suggestedFilename()).toBe("photo-masked-20261122.jpg");
+  const { readFile } = await import("node:fs/promises");
+  const bytes = await readFile(await download.path());
+  expect([bytes[0], bytes[1]]).toEqual([0xff, 0xd8]);
+  expect(jpegSegments(bytes), "EXIF(APP1)·XMP 조각 없음").not.toContain(0xe1);
+  await expect(dialog.locator("[data-ph-mask-status]")).toHaveText("✓ photo-masked-20261122.jpg 파일을 만들었습니다. 가린 사본은 이 기기에만 있고, 앱에 보관한 사진은 그대로입니다.");
+
+  // 네모 380×290 → 블록 58, 가로 6칸(칸 폭 약 63). 경계 칸(약 570 ~ 633)은 빨강·파랑이 반쯤 섞이고, 네모 밖은 그대로 빨강이다(JPEG 손실 허용).
+  const pixels = await page.evaluate(async (base64) => {
+    const bitmap = await createImageBitmap(new Blob([Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))], { type: "image/jpeg" }));
+    const canvas = document.createElement("canvas");
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const context = canvas.getContext("2d");
+    context.drawImage(bitmap, 0, 0);
+    const at = (x, y) => [...context.getImageData(x, y, 1, 1).data.slice(0, 3)];
+    return { size: [bitmap.width, bitmap.height], inside: at(590, 250), outside: at(300, 250) };
+  }, bytes.toString("base64"));
+  expect(pixels.size).toEqual([1200, 600]);
+  expect(pixels.inside[2] - 51, "네모 안 경계 칸은 파랑이 섞임").toBeGreaterThan(20);
+  expect(Math.abs(pixels.outside[0] - 204) + Math.abs(pixels.outside[2] - 51), "네모 밖은 원래 빨강").toBeLessThan(30);
+
+  expect(calls.all.slice(callsBefore), "편집·내려받기는 서버를 부르지 않음(올리기 0건)").toEqual([]);
+  expect(calls.all.filter((call) => call === `GET /files/${uuid(301)}/content`), "원본은 크게 보기에서 한 번만 받음").toHaveLength(1);
+  expect(fileWrites(calls)).toEqual([]);
+
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(entry).toBeFocused();
+  expect(await page.locator("[data-ph-mask-canvas]").evaluate((node) => [node.width, node.height])).toEqual([0, 0]);
+  assertNoErrors();
+});
+
+test("얼굴 가리기 큰 사진(4032×3024, 휴대폰 사진 크기): 화면에서 1 ~ 6px 끌린 것은 네모가 아니라 '가려서 내려받기'가 꺼진 채이고, 8px 넘게 끌어야 '1곳 가림'이 된다", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const { dialog } = await openMaskEditor(page, { width: 360, photo: [4032, 3024] });
+  const shown = await dialog.locator("[data-ph-mask-canvas]").boundingBox();
+  expect(4032 / shown.width, "화면 1px이 사진 여러 픽셀(사진 픽셀로 8을 재면 1px 끌림도 네모가 됨)").toBeGreaterThan(8);
+  const count = dialog.locator("[data-ph-mask-count]");
+  const download = dialog.getByRole("button", { name: "가려서 내려받기" });
+  const drag = async (pixels) => {
+    const x = Math.round(shown.x + shown.width / 2);
+    const y = Math.round(shown.y + shown.height / 2);
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + pixels, y + pixels, { steps: 2 });
+    await page.mouse.up();
+  };
+  for (const pixels of [1, 2, 3, 6]) {
+    await drag(pixels);
+    await expect(count, `화면 ${pixels}px 끌림`).toHaveText("아직 가린 곳이 없습니다");
+    await expect(download, `화면 ${pixels}px 끌림 뒤 내려받기`).toBeDisabled();
+  }
+  await drag(12);
+  await expect(count).toHaveText("1곳 가림");
+  await expect(download).toBeEnabled();
+  assertNoErrors();
+});
+
+test("얼굴 가리기 360px: 공유 창이 사진을 받으면 '가려서 공유'가 보이고 가린 JPEG 파일 하나만 넘기며, 단추는 44px 이상·한 줄, 가로 넘침 없음", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const { calls, dialog } = await openMaskEditor(page, { width: 360, share: true });
+  const callsBefore = calls.all.length;
+  await expect(dialog.locator("button:visible")).toHaveText(["그만두기", "되돌리기", "다시 하기", "다 지우기", "가려서 내려받기", "가려서 공유"]);
+  await dragBox(page, dialog, [100, 100], [400, 400]);
+  await expectTouchSize(dialog.locator("button:visible"), "얼굴 가리기 창");
+  for (const button of await dialog.locator("button:visible").all()) expect(await lineCount(button), await button.textContent()).toBe(1);
+  const canvas = await dialog.locator("[data-ph-mask-canvas]").boundingBox();
+  const tools = await dialog.locator(".ph-mask__tools").boundingBox();
+  expect(canvas.y + canvas.height, "사진이 단추에 가리지 않음").toBeLessThanOrEqual(tools.y + 1);
+  await dialog.getByRole("button", { name: "가려서 공유" }).click();
+  await expect(dialog.locator("[data-ph-mask-status]")).toHaveText("✓ 가린 사진을 공유 창으로 보냈습니다.");
+  const shared = await page.evaluate(() => window.__shared);
+  expect(shared).toHaveLength(1);
+  expect(shared[0]).toHaveLength(1);
+  expect(shared[0][0].slice(0, 2)).toEqual(["photo-masked-20261122.jpg", "image/jpeg"]);
+  expect(calls.all.slice(callsBefore)).toEqual([]);
+  expect(await overflowOf(page)).toBeLessThanOrEqual(0);
+  // 가로로 넓고 낮은 화면(PC·눕힌 휴대폰)에서도 사진 전체가 사진 자리 안에 들어온다(아래가 잘리면 그 자리를 가릴 수 없음).
+  for (const [w, h] of [[1280, 720], [800, 480]]) {
+    await page.setViewportSize({ width: w, height: h });
+    const stage = await dialog.locator(".ph-mask__stage").boundingBox();
+    const shown = await dialog.locator("[data-ph-mask-canvas]").boundingBox();
+    expect(shown.height, `${w}×${h} 사진 높이`).toBeGreaterThan(40);
+    expect(shown.y, `${w}×${h} 사진 위`).toBeGreaterThanOrEqual(stage.y - 1);
+    expect(shown.y + shown.height, `${w}×${h} 사진 아래`).toBeLessThanOrEqual(stage.y + stage.height + 1);
+    expect(Math.abs(shown.width / shown.height - 2), `${w}×${h} 사진 비율(1200×600)`).toBeLessThan(0.05);
+  }
+  await dialog.getByRole("button", { name: "그만두기" }).click();
+  await expect(dialog).toBeHidden();
+  assertNoErrors();
+});

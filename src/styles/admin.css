@@ -2120,6 +2120,42 @@ nav.tr-homelinks { display: flex; flex-wrap: wrap; gap: 0 24px; margin: 0 0 14px
 .ph-big__wait { margin: 0; padding: 32px 12px; text-align: center; }
 .ph-meta { margin: 6px 0 0; color: var(--ds-ink-soft); font-size: 1rem; }
 .ph-save { flex: 0 1 auto; padding: 0 22px; }
+/* 손님 카드 '얼굴 가려서 내보내기'(단계 3 M-b): 크게 보기의 입구 + 화면 전체 창(dialog, 휴대폰 아래 막대 위 맨 위 층). 사진 위 끌기는 화면을 스크롤하지 않는다.
+   창은 어두운 바탕(--ds-ink)에 사진을 두고, 주 단추는 흰 바탕·검은 글자, 나머지는 흰 테두리, 못 누르는 단추는 점선으로 구분한다(색은 --ds-* 이름만). */
+.ph-mask-entry { display: grid; gap: 4px; margin: 12px 0 0; }
+.ph-mask-entry .work-secondary-button { flex: 0 1 auto; justify-self: start; padding: 0 22px; }
+.ph-mask-entry .work-secondary-button:disabled { border-style: dashed; color: var(--ds-ink-soft); background: var(--ds-paper-2); cursor: not-allowed; }
+.ph-mask-entry .cu-soft { margin: 0; }
+.ph-mask { box-sizing: border-box; width: 100%; max-width: none; height: 100%; height: 100dvh; max-height: none; margin: 0; padding: 12px 12px calc(12px + env(safe-area-inset-bottom)); border: 0; color: var(--ds-paper); background: var(--ds-ink); }
+.ph-mask [hidden] { display: none !important; }
+.ph-mask[open] { display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 10px; }
+.ph-mask__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ph-mask__head h3 { margin: 0; font-size: 1.125rem; }
+.ph-mask p { margin: 0; font-size: 1rem; }
+/* 사진 자리: 칸 크기를 줄(1fr)로 못 박아야 canvas의 max-height: 100%가 먹는다(안 그러면 가로로 넓은 화면에서 사진 아래가 잘려 그 자리를 가릴 수 없음). */
+.ph-mask__stage { display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); place-items: center; min-height: 0; overflow: hidden; }
+.ph-mask__stage canvas { display: block; width: auto; height: auto; max-width: 100%; max-height: 100%; touch-action: none; cursor: crosshair; }
+.ph-mask__wait { text-align: center; }
+.ph-mask__tools { display: grid; gap: 8px; }
+.ph-mask__count { font-weight: 800; }
+.ph-mask__row { display: flex; flex-wrap: wrap; gap: 8px; }
+.ph-mask__row > * { flex: 1 1 auto; width: auto; }
+.ph-mask .work-secondary-button { border-color: var(--ds-paper); color: var(--ds-paper); background: transparent; }
+/* 공통 규칙은 포인터를 올리면 밝은 바탕을 깔아 흰 글자가 안 보이게 된다(휴대폰은 누른 뒤에도 그 상태가 남음). 창 안에서는 바탕을 그대로 두고, 마우스에서만 글자·바탕을 함께 뒤집는다. */
+.ph-mask .work-secondary-button:hover:not(:disabled) { background: transparent; }
+@media (hover: hover) {
+  .ph-mask .work-secondary-button:hover:not(:disabled) { color: var(--ds-ink); background: var(--ds-paper-2); }
+}
+.ph-mask__close { flex: 0 0 auto; padding: 0 18px; }
+.ph-mask .work-primary-button { color: var(--ds-ink); background: var(--ds-paper); }
+.ph-mask .work-primary-button:hover:not(:disabled) { background: var(--ds-paper-2); }
+.ph-mask .work-secondary-button:disabled,
+.ph-mask .work-primary-button:disabled { border: 1.5px dashed var(--ds-field-edge); color: var(--ds-field-edge); background: transparent; cursor: not-allowed; }
+.ph-mask .admin-form-status { color: var(--ds-paper); font-size: 1rem; }
+.ph-mask :focus-visible { outline: 3px solid var(--ds-paper); outline-offset: 2px; }
+@media (min-width: 900px) {
+  .ph-mask { padding: 24px 15%; }
+}
 /* 휴대폰 하단 막대: '메모 추가' + '사진 찍기' 반반(파일 저장소가 켜졌을 때만 '사진 찍기') */
 .cu-bar:has(.cu-bar__camera:not([hidden])) { display: flex; gap: 8px; }
 .cu-bar:has(.cu-bar__camera:not([hidden])) > * { flex: 1 1 0; }

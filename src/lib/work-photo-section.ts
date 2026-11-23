@@ -4,12 +4,18 @@
 // - iPhone은 찍은 사진을 사진첩에 남기지 않을 수 있어(추정) 다 올릴 때까지 화면 메모리에 두고, 못 올리면 '다시 올리기'(같은 바이트·같은 SHA-256).
 //   남은 사진이 있으면 떠날 때 묻는다(hasPending, 손님 카드의 beforeunload). 브라우저 저장소에는 넣지 않는다.
 // - 사진을 누르면 칸 위 '사진 크게 보기'에서 원본을 보고 설명을 고치거나 지운다(지우기는 칸 안에서 한 번 더 묻기, 휴지통 7일).
+// - 크게 보기의 '얼굴 가려서 내보내기'(단계 3 M-b, 사용자 결정 2026-11-23 08:55:04 "나안: 화면 전체 (Recommended)")는 화면 전체 창에서
+//   이미 받아 둔 원본 그림에 네모를 그려 모자이크한 사본을 '가려서 내려받기'·'가려서 공유'로만 내보낸다. 서버로 올리지 않고(T3-20),
+//   원본 내려받기 단추는 없다(DEC-WT-42). 키보드로는 그릴 수 없다(첫판에서 뺌, 창에 안내).
 // 설명에는 손님 이름이 들어갈 수 있으므로 화면에만 보이고 주소·브라우저 저장소·로그에 넣지 않는다.
 import type { CustomerFile } from "./work-customers-client";
 import { element, setStatus } from "./work-customers-dom";
 import { WorkApiError, deleteFile, fileContentUrl, fileThumbUrl, updateFileCaption, uploadPhoto, uploadThumb, type PhotoKind } from "./work-files-client";
 import { PhotoPrepareError, preparePhoto, previewCanvas, type PreparedPhoto } from "./work-photo-dom";
+import { MaskError, openMaskEditor, type MaskEditor, type MaskState } from "./work-mask-canvas";
 import { showMovedToTrash } from "./work-trash-dom";
+import { todayInKorea } from "./work/legal-dates.mjs";
+import { maskCountText, maskedFileName } from "./work/mosaic.mjs";
 import { customerErrorText } from "./work/customers-view.mjs";
 import {
   PHOTO_GO_LABEL,
@@ -108,6 +114,18 @@ export function mountPhotoSection(root: HTMLElement, options: PhotoSectionOption
   const del = pick("[data-ph-del]");
   const delGo = pick<HTMLButtonElement>("[data-ph-del-go]");
   const delStatus = pick("[data-ph-del-status]");
+  // 얼굴 가려서 내보내기
+  const maskOpen = pick<HTMLButtonElement>("[data-ph-mask-open]");
+  const mask = pick<HTMLDialogElement>("[data-ph-mask]");
+  const maskCanvas = pick<HTMLCanvasElement>("[data-ph-mask-canvas]");
+  const maskWait = pick("[data-ph-mask-wait]");
+  const maskCount = pick("[data-ph-mask-count]");
+  const maskUndo = pick<HTMLButtonElement>("[data-ph-mask-undo]");
+  const maskRedo = pick<HTMLButtonElement>("[data-ph-mask-redo]");
+  const maskClear = pick<HTMLButtonElement>("[data-ph-mask-clear]");
+  const maskDownload = pick<HTMLButtonElement>("[data-ph-mask-download]");
+  const maskShare = pick<HTMLButtonElement>("[data-ph-mask-share]");
+  const maskStatus = pick("[data-ph-mask-status]");
 
   let files: CustomerFile[] = [];
   let enabled = false;
@@ -408,6 +426,7 @@ export function mountPhotoSection(root: HTMLElement, options: PhotoSectionOption
     viewWait.hidden = false;
     viewWait.textContent = "사진을 불러오고 있습니다…";
     viewImage.hidden = true;
+    maskOpen.disabled = true;
     viewImage.alt = `사진 원본 · ${photoAtText(file.createdAt)}`;
     viewImage.src = fileContentUrl(id);
     viewMeta.textContent = photoMetaText(file, index, files.length);
@@ -422,6 +441,7 @@ export function mountPhotoSection(root: HTMLElement, options: PhotoSectionOption
   viewImage.addEventListener("load", () => {
     viewImage.hidden = false;
     viewWait.hidden = true;
+    maskOpen.disabled = false;
   });
   viewImage.addEventListener("error", () => {
     if (!viewId) return;
@@ -433,7 +453,9 @@ export function mountPhotoSection(root: HTMLElement, options: PhotoSectionOption
     if (!viewId && view.hidden) return;
     const id = viewId;
     viewId = null;
+    closeMask();
     view.hidden = true;
+    maskOpen.disabled = true;
     viewImage.removeAttribute("src");
     openDelete(false);
     if (!focusBack) return;
@@ -442,6 +464,125 @@ export function mountPhotoSection(root: HTMLElement, options: PhotoSectionOption
     (back ?? cameraButton).focus();
   }
   pick("[data-ph-view-close]").addEventListener("click", () => closeView());
+
+  // ── 얼굴 가려서 내보내기(화면 전체 창) ──
+  let editor: MaskEditor | null = null;
+  let maskSequence = 0;
+  // 공유는 누른 그 순간(사용자 동작 안)에 불러야 하는 브라우저가 있어(Safari, 추정), 상자가 바뀔 때마다 가린 사본을 미리 만들어 둔다.
+  let exported: { state: MaskState; blob: Blob } | null = null;
+  let exportTimer = 0;
+  const shareProbe = () => {
+    try {
+      return typeof navigator.canShare === "function" && navigator.canShare({ files: [new File([new Uint8Array(1)], "photo-masked.jpg", { type: "image/jpeg" })] });
+    } catch {
+      return false;
+    }
+  };
+  function renderMask(state: MaskState) {
+    const count = state.boxes.length;
+    maskCount.textContent = maskCountText(count);
+    maskUndo.disabled = count === 0;
+    maskRedo.disabled = state.redo.length === 0;
+    maskClear.disabled = count === 0;
+    maskDownload.disabled = count === 0;
+    maskShare.disabled = count === 0;
+    exported = null;
+    window.clearTimeout(exportTimer);
+    if (count === 0 || maskShare.hidden) return;
+    exportTimer = window.setTimeout(() => {
+      const current = editor;
+      if (!current) return;
+      void current.exportJpeg().then((blob) => {
+        if (editor === current && current.state() === state) exported = { state, blob };
+      }, () => undefined);
+    }, 300);
+  }
+  function closeMask() {
+    maskSequence += 1;
+    window.clearTimeout(exportTimer);
+    exported = null;
+    editor?.destroy();
+    editor = null;
+    maskCanvas.hidden = true;
+    maskCanvas.width = 0;
+    maskCanvas.height = 0;
+    if (mask.open) mask.close();
+  }
+  async function openMask() {
+    if (!viewId || viewImage.hidden || !viewImage.complete || viewImage.naturalWidth === 0) return;
+    const sequence = ++maskSequence;
+    maskShare.hidden = !shareProbe();
+    maskWait.hidden = false;
+    maskWait.textContent = "사진을 준비하고 있습니다…";
+    maskCanvas.hidden = true;
+    setStatus(maskStatus, "", "idle");
+    renderMask({ boxes: [], redo: [] });
+    mask.showModal();
+    try {
+      const next = await openMaskEditor(maskCanvas, viewImage, { onChange: renderMask });
+      if (sequence !== maskSequence) {
+        next.destroy();
+        return;
+      }
+      editor = next;
+      maskWait.hidden = true;
+      maskCanvas.hidden = false;
+    } catch {
+      if (sequence !== maskSequence) return;
+      maskWait.textContent = "사진을 준비하지 못했습니다. '그만두기'를 누른 뒤 다시 해 주세요.";
+    }
+  }
+  async function maskedBlob() {
+    if (!editor) throw new MaskError("NO_BOXES");
+    const state = editor.state();
+    if (exported && exported.state === state) return exported.blob;
+    const blob = await editor.exportJpeg();
+    exported = { state, blob };
+    return blob;
+  }
+  const maskFailText = (error: unknown) => (error instanceof MaskError && error.code === "NO_BOXES" ? "먼저 가릴 곳에 네모를 그리세요." : "가린 사진을 만들지 못했습니다. 다시 해 주세요.");
+  maskOpen.addEventListener("click", () => void openMask());
+  pick("[data-ph-mask-close]").addEventListener("click", () => {
+    closeMask();
+    maskOpen.focus();
+  });
+  // Esc로 닫혀도 비트맵·canvas 메모리를 푼다.
+  mask.addEventListener("close", () => {
+    if (editor || maskCanvas.width > 0) closeMask();
+  });
+  maskUndo.addEventListener("click", () => editor?.undo());
+  maskRedo.addEventListener("click", () => editor?.redo());
+  maskClear.addEventListener("click", () => editor?.clear());
+  maskDownload.addEventListener("click", async () => {
+    try {
+      const blob = await maskedBlob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = maskedFileName(todayInKorea());
+      mask.append(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setStatus(maskStatus, `✓ ${link.download} 파일을 만들었습니다. 가린 사본은 이 기기에만 있고, 앱에 보관한 사진은 그대로입니다.`, "success");
+    } catch (error) {
+      setStatus(maskStatus, maskFailText(error), "error");
+    }
+  });
+  maskShare.addEventListener("click", async () => {
+    try {
+      const blob = await maskedBlob();
+      await navigator.share({ files: [new File([blob], maskedFileName(todayInKorea()), { type: "image/jpeg" })] });
+      setStatus(maskStatus, "✓ 가린 사진을 공유 창으로 보냈습니다.", "success");
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      if (error instanceof DOMException && error.name === "NotAllowedError") {
+        setStatus(maskStatus, "공유 창을 열지 못했습니다. '가려서 공유'를 한 번 더 눌러 주세요.", "error");
+        return;
+      }
+      setStatus(maskStatus, error instanceof MaskError ? maskFailText(error) : "공유하지 못했습니다. '가려서 내려받기'로 저장한 뒤 보내 주세요.", "error");
+    }
+  });
 
   viewDesc.addEventListener("input", () => {
     viewDescCount.textContent = captionCountText(viewDesc.value);
