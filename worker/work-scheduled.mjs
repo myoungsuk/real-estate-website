@@ -1,5 +1,5 @@
 // Worker Cron 진입점(설계서 22.7절). worker/index.mjs의 scheduled()가 부르고, controller.cron 문자열로 할 일을 나눈다.
-// 지금은 단계 P 실거래가 받기(`*/10 * * * *`) 하나뿐이다. 단계 2·4 Cron은 그 PR에서 이 파일에 더한다.
+// 단계 P 실거래가 받기(`*/10 * * * *`)와 단계 4 AI 작업 보조 조회(`* * * * *`, work-ai-cron.mjs) 둘이다. 아래 03:00 정리는 `*/10` 차례에서만 한다.
 // 같은 Cron의 한국 시각 03:00 차례에는 실거래가 켜기 값을 보기 **전에** 글 초안 보관 정리(P3, DEC-WT-24)를 먼저 한다(지시서 D-5).
 // 조건은 D1이 있고 구조 번호가 4 이상인 것뿐이다(글 초안·실거래가 켜기 값과 상관없이, 꺼 둔 뒤에도 오래된 초안이 지워지게).
 // 같은 차례에 휴지통 7일 영구 삭제(runTrashExpire)와 감사 로그 3년 삭제(runAuditExpire)도 켜기 값과 상관없이 한다.
@@ -43,6 +43,7 @@ import { getRealpriceConfigState } from "./work-public-tools.mjs";
 import { cleanupBlogDrafts } from "./work-blog.mjs";
 import { expireTrash } from "./work-trash.mjs";
 import { hasD1 } from "./work-security.mjs";
+import { AI_POLL_CRON, runAiPollCron } from "./work-ai-cron.mjs";
 
 export const REALPRICE_CRON = "*/10 * * * *";
 const LOG_EVENT = "realprice_cron";
@@ -401,6 +402,7 @@ export async function handleScheduled(controller, env, ctx, options = {}) {
   const log = options.log ?? defaultLog;
   try {
     if (controller?.cron === REALPRICE_CRON) return await runRealpriceCron(env, { scheduledTime: controller.scheduledTime, ...options });
+    if (controller?.cron === AI_POLL_CRON) return await runAiPollCron(env, { scheduledTime: controller.scheduledTime, ...options });
     log({ event: "cron_unknown", level: "warn" });
     return { outcome: "unknown_cron" };
   } catch {

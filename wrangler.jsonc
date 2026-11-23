@@ -38,7 +38,8 @@
     "not_found_handling": "404-page"
   },
   // 단계 P 실거래가 받기(10분마다 1개월 1종류). 켜기 값 Secret WORK_REALPRICE_ENABLED가 없으면 D1·외부 요청 없이 끝난다.
+  // 단계 4 AI 작업 보조 조회(1분마다 열린 작업의 결과 받기). 켜기 값 Secret WORK_AI_ENABLED가 없으면 D1·외부 요청 없이 끝난다.
   "triggers": {
-    "crons": ["*/10 * * * *"]
+    "crons": ["*/10 * * * *", "* * * * *"]
   }
 }

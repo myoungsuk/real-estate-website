@@ -116,3 +116,55 @@ export function saveLimitsStatements(db, value, nowIso) {
     db.prepare(UPSERT_SETTING_SQL).bind(AI_LIMITS_VERSION_KEY, JSON.stringify(value.version + 1), nowIso),
   ];
 }
+
+// ── 단계 4 AI 작업(ai_jobs)용. 글 초안과 같은 한도 행·사용량 행을 쓴다(2026-11-23 사용자 결정 "같은 프로젝트·한도 하나"). 위 글 초안 문장은 그대로 둔다. ──
+
+// 여러 번(계약서 두 번 읽기 = 2회)을 한 문장으로 확인 + 늘리기. 전부 들어가거나 하나도 안 들어간다(?7 = 횟수, ?2 = 합계 최대 예상 비용).
+const RESERVE_MANY_SQL = `INSERT INTO ai_usage_daily (day, create_requests, estimated_cost_micro_usd)
+SELECT ?1, ?7, ?2 WHERE ?3 >= ?7
+  AND (SELECT COALESCE(SUM(estimated_cost_micro_usd), 0) FROM ai_usage_daily WHERE day >= ?4 AND day <= ?5) + ?2 <= ?6
+ON CONFLICT(day) DO UPDATE SET create_requests = ai_usage_daily.create_requests + excluded.create_requests,
+  estimated_cost_micro_usd = ai_usage_daily.estimated_cost_micro_usd + excluded.estimated_cost_micro_usd
+WHERE ai_usage_daily.create_requests + excluded.create_requests <= ?3
+RETURNING create_requests`;
+
+// 돌려주는 값: { day }. 한도 행이 없으면 409 AI_LIMITS_MISSING, 넘으면 429 AI_BUDGET_EXCEEDED(details: daily·monthly). 넘으면 아무 행도 바뀌지 않는다.
+export async function reserveAiBudgetMany(db, { nowMs, count, reservedCostMicroUsd }) {
+  const limits = await readAiLimits(db);
+  if (limits.dailyCreateLimit === null || limits.monthlyCostLimitMicroUsd === null) {
+    throw new WorkApiError("AI_LIMITS_MISSING", "AI 사용 한도를 먼저 저장해 주세요.", 409);
+  }
+  const day = kstDay(nowMs);
+  const { first, last } = monthRange(day);
+  const row = await db.prepare(RESERVE_MANY_SQL).bind(day, reservedCostMicroUsd, limits.dailyCreateLimit, first, last, limits.monthlyCostLimitMicroUsd, count).first();
+  if (row) return { day };
+  const usage = await readAiUsage(db, nowMs);
+  const which = usage.todayCreates + count > limits.dailyCreateLimit ? "daily" : "monthly";
+  throw new WorkApiError("AI_BUDGET_EXCEEDED", which === "daily" ? "오늘 만들 수 있는 횟수를 다 썼습니다." : "이번 달 AI 비용 한도에 닿았습니다.", 429, false, [which]);
+}
+
+// 작업 행을 넣지 못했을 때(OpenAI를 부르기 전) 예약 전체를 되돌린다(행이 없으므로 조건 없이 1번).
+const REFUND_MANY_SQL = `UPDATE ai_usage_daily SET create_requests = MAX(create_requests - ?3, 0),
+  estimated_cost_micro_usd = MAX(estimated_cost_micro_usd - ?2, 0) WHERE day = ?1`;
+export function refundManyStatement(db, { day, count, reservedCostMicroUsd }) {
+  return db.prepare(REFUND_MANY_SQL).bind(day, reservedCostMicroUsd, count);
+}
+
+// 생성 요청이 확실히 만들어지지 않았을 때(OpenAI 4xx) 그 작업 1회 몫을 되돌린다. 작업이 아직 queued이고 OpenAI 응답 ID가 없을 때만(한 번만) 바뀐다.
+// 같은 batch에서 작업을 failed로 바꾸는 문장보다 **먼저** 둔다.
+const REFUND_JOB_SQL = `UPDATE ai_usage_daily SET create_requests = MAX(create_requests - 1, 0),
+  estimated_cost_micro_usd = MAX(estimated_cost_micro_usd - ?2, 0)
+  WHERE day = ?1 AND EXISTS (SELECT 1 FROM ai_jobs WHERE id = ?3 AND status = 'queued' AND openai_response_id IS NULL)`;
+export function refundJobStatement(db, { jobId, day, reservedCostMicroUsd }) {
+  return db.prepare(REFUND_JOB_SQL).bind(day, reservedCostMicroUsd, jobId);
+}
+
+// 결과를 받았을 때 예약한 최대 예상 비용을 실제 값으로 바꾼다. 작업이 아직 열려 있을 때만(queued·in_progress, 두 번 받아도 한 번만) 바뀐다.
+// reservedCostMicroUsd는 열린 행의 토큰 칸(예약값)으로 계산한 값이어야 한다. 이 guard가 "열린 행일 때만 그 칸을 예약값으로 읽는다"를 지킨다
+// (행이 닫히는 문장은 토큰 칸을 실제 값이나 NULL로 함께 바꾼다). 같은 batch에서 작업 상태를 바꾸는 문장보다 **먼저** 둔다.
+const SETTLE_JOB_SQL = `UPDATE ai_usage_daily SET estimated_cost_micro_usd = MAX(estimated_cost_micro_usd - ?2 + ?3, 0),
+  input_tokens = input_tokens + ?4, output_tokens = output_tokens + ?5
+  WHERE day = ?1 AND EXISTS (SELECT 1 FROM ai_jobs WHERE id = ?6 AND status IN ('queued','in_progress'))`;
+export function settleJobUsageStatement(db, { jobId, day, reservedCostMicroUsd, actualCostMicroUsd, inputTokens, outputTokens }) {
+  return db.prepare(SETTLE_JOB_SQL).bind(day, reservedCostMicroUsd, actualCostMicroUsd, inputTokens, outputTokens, jobId);
+}
