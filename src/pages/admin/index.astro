@@ -1,12 +1,16 @@
 ---
 import AdminApiStatus from "../../components/admin/AdminApiStatus.astro";
+import AdminIcon from "../../components/admin/AdminIcon.astro";
 import AdminPageHelp from "../../components/admin/AdminPageHelp.astro";
 import AdminLayout from "../../layouts/AdminLayout.astro";
-import { naverListings, naverListingsUpdatedAt } from "../../lib/naver-listings";
+import { naverListings } from "../../lib/naver-listings";
 import { buildListingReviewQueue } from "../../lib/listing-review.mjs";
 import reviewPolicy from "../../../.github/listing-review-policy.json";
 import reviewState from "../../../.github/listing-review-state.json";
 
+// 관리자 대시보드(사용자 선택 2026-11-23 A안 "숫자 띠 + 칸 넷", 휴대폰은 숫자 띠 빼기, 글자는 규칙 그대로).
+// 할 일·계약 일정·이번 달 돈·실거래는 화면이 보인 뒤 업무 API GET /work/dashboard 하나로 부른다(칸마다 켜기 값을 서버가 따로 봄).
+// 네이버 공개 매물 수와 재확인 대기는 지금처럼 빌드 때 값이다(서버를 부르지 않음).
 const counts = {
   total: naverListings.length,
   sale: naverListings.filter((listing) => listing.tradeType === "sale").length,
@@ -24,110 +28,266 @@ const reviewQueue = buildListingReviewQueue(
   reviewPolicy,
   `${todayParts.year}-${todayParts.month}-${todayParts.day}`,
 );
+const reviewText = reviewQueue.enabled ? `재확인 필요 ${reviewQueue.needsReview}건` : "재확인 경고 기준 미설정";
 ---
 
 <AdminLayout
   title="관리자 대시보드 | 행복한부동산"
-  description="행복한부동산 콘텐츠와 배포 상태를 확인하는 관리자 대시보드입니다."
+  description="오늘 할 일, 다가오는 계약 일정, 이번 달 돈, 실거래·매물을 한눈에 보는 관리자 대시보드입니다."
 >
-  <div class="admin-page-header">
-    <div>
-      <h1>운영 현황을 한눈에 확인하세요.</h1>
-      <p>네이버 공개 매물과 첫 화면 문구, 블로그·유튜브·인스타그램, 지역·단지 설명을 한곳에서 확인합니다.</p>
+  <div class="dsh" data-dsh>
+    <header class="dsh-head">
+      <span class="work-round-icon work-round-icon--title" data-tone="navy">
+        <AdminIcon name="dashboard" size={22} />
+      </span>
+      <div class="dsh-head__title">
+        <h1>대시보드</h1>
+        <p class="dsh-date" data-dsh-date></p>
+      </div>
+      <AdminApiStatus />
+    </header>
+    <AdminPageHelp page="/admin/" />
+
+    <p class="dsh-boot" role="status" data-dsh-boot>오늘 숫자를 불러오고 있습니다…</p>
+
+    <!-- 숫자 4칸(980px 이상만 보임). 칸을 누르면 그 화면으로 간다. -->
+    <nav class="dsh-strip" aria-label="오늘 숫자" data-dsh-strip hidden></nav>
+
+    <div class="dsh-grid">
+      <section class="dsh-panel" aria-labelledby="dsh-tasks-title" data-dsh-section="tasks">
+        <header class="dsh-panel__head">
+          <h2 id="dsh-tasks-title">할 일</h2>
+          <span class="dsh-count" data-dsh-count></span>
+          <a class="dsh-more" href="/admin/work/tasks/">할 일 화면</a>
+        </header>
+        <div class="dsh-body" data-dsh-body></div>
+      </section>
+
+      <section class="dsh-panel" aria-labelledby="dsh-events-title" data-dsh-section="events">
+        <header class="dsh-panel__head">
+          <h2 id="dsh-events-title">다가오는 계약 일정</h2>
+          <span class="dsh-count" data-dsh-count></span>
+          <a class="dsh-more" href="/admin/work/customers/">손님</a>
+        </header>
+        <div class="dsh-body" data-dsh-body></div>
+      </section>
+
+      <section class="dsh-panel" aria-labelledby="dsh-money-title" data-dsh-section="money">
+        <header class="dsh-panel__head">
+          <h2 id="dsh-money-title">이번 달 돈</h2>
+          <span class="dsh-count" data-dsh-count></span>
+          <a class="dsh-more" href="/admin/work/ledger/">매출장부</a>
+        </header>
+        <div class="dsh-body" data-dsh-body></div>
+      </section>
+
+      <section class="dsh-panel" aria-labelledby="dsh-realprice-title" data-dsh-section="realprice">
+        <header class="dsh-panel__head">
+          <h2 id="dsh-realprice-title">실거래·매물</h2>
+          <span class="dsh-count" data-dsh-count></span>
+          <a class="dsh-more" href="/admin/work/realprice/">실거래가</a>
+        </header>
+        <div class="dsh-body" data-dsh-body></div>
+        <a class="dsh-listing" href="/admin/listings/">
+          <span>네이버 공개 매물 <b>{counts.total.toLocaleString("ko-KR")}건</b> · 매매 {counts.sale.toLocaleString("ko-KR")} · 전세·월세 {counts.lease.toLocaleString("ko-KR")}</span>
+          <span class="dsh-meta">{reviewText}</span>
+        </a>
+      </section>
     </div>
-    <span class="admin-stage-badge">2단계 · 콘텐츠 관리</span>
   </div>
 
-  <AdminPageHelp page="/admin/" />
+  <script>
+    import { getDashboard, WorkApiError, type Dashboard, type DashboardEvents, type DashboardMoney, type DashboardRealprice, type DashboardTasks } from "../../lib/work-dashboard-client";
+    import { todayInKorea } from "../../lib/work/legal-dates.mjs";
+    import {
+      DASHBOARD_LINKS,
+      dateTitle,
+      emptyText,
+      eventHref,
+      eventKindText,
+      eventPartyText,
+      eventWhen,
+      kpiItems,
+      loadFailedState,
+      moneyFigures,
+      moneyItemMeta,
+      moneyKindText,
+      sectionCount,
+      sectionState,
+      taskWhen,
+      tradeAreaText,
+      tradePriceText,
+      undatedText,
+    } from "../../lib/work/dashboard-view.mjs";
 
-  <section class="admin-dash-group admin-dash-group--todo">
-    <h2 class="admin-dash-label">지금 할 일</h2>
-    <section class="admin-panel admin-next-action" aria-labelledby="admin-next-action-title">
-      <div class="admin-panel__heading">
-        <div>
-          <p class="admin-eyebrow">바로가기</p>
-          <h2 id="admin-next-action-title">콘텐츠 관리 시작</h2>
-        </div>
-        <span class="admin-panel__number" aria-hidden="true">01</span>
-      </div>
-      <p>하루 1회 자동 동기화되는 부동산뱅크 매물과 그 밖의 직접 등록 네이버 매물을 확인하고 보완할 수 있습니다.</p>
-      <a class="admin-action-link" href="/admin/listings/">
-        네이버 매물 관리로 이동
-        <span aria-hidden="true">→</span>
-      </a>
-    </section>
+    // 손님 이름·할 일 제목·거래 제목은 textContent로만 그린다(주소에는 손님 UUID만, 브라우저 저장소에는 아무것도 넣지 않음).
+    type Key = "tasks" | "events" | "money" | "realprice";
+    const KEYS: Key[] = ["tasks", "events", "money", "realprice"];
+    const root = document.querySelector<HTMLElement>("[data-dsh]");
+    const boot = root?.querySelector<HTMLElement>("[data-dsh-boot]");
+    const strip = root?.querySelector<HTMLElement>("[data-dsh-strip]");
+    const dateLine = root?.querySelector<HTMLElement>("[data-dsh-date]");
 
-    <section class="admin-panel admin-next-action" aria-labelledby="admin-review-action-title">
-      <div class="admin-panel__heading">
-        <div>
-          <p class="admin-eyebrow">재확인 대기열</p>
-          <h2 id="admin-review-action-title">{reviewQueue.enabled ? `재확인 필요 ${reviewQueue.needsReview}건` : "경고 기준 미설정"}</h2>
-        </div>
-        <span class="admin-panel__number" aria-hidden="true">02</span>
-      </div>
-      <p>Bank 자동 확인 {reviewQueue.bank}건 · 직접 등록 {reviewQueue.manual}건입니다. 승인된 경고 일수가 없으므로 현재는 날짜와 출처만 추적하며 자동 종료하지 않습니다.</p>
-      <a class="admin-action-link" href="/admin/listings/?sort=review-oldest">
-        매물 확인 상태 보기
-        <span aria-hidden="true">→</span>
-      </a>
-    </section>
-  </section>
+    const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className = "", text = "") => {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (text) node.textContent = text;
+      return node;
+    };
+    const rowLink = (href: string, parts: (HTMLElement | string)[], className = "dsh-row") => {
+      const item = el("li");
+      const anchor = el("a", className);
+      anchor.href = href;
+      anchor.append(...parts);
+      item.append(anchor);
+      return item;
+    };
+    const list = (items: HTMLElement[]) => {
+      const node = el("ul", "dsh-rows");
+      node.append(...items);
+      return node;
+    };
+    const monthDay = (dateText: string) => {
+      const [, month, day] = dateText.split("-").map(Number);
+      return `${month}.${day}`;
+    };
 
-  <section class="admin-dash-group admin-dash-group--numbers">
-    <h2 class="admin-dash-label">운영 숫자</h2>
-    <section class="admin-stat-grid" aria-label="매물 현황">
-      <article class="admin-stat-card">
-        <span>전체 매물</span>
-        <strong>{counts.total.toLocaleString("ko-KR")}</strong>
-        <small>네이버 공개 데이터 기준</small>
-      </article>
-      <article class="admin-stat-card admin-stat-card--published">
-        <span>매매</span>
-        <strong>{counts.sale.toLocaleString("ko-KR")}</strong>
-        <small>네이버 거래유형 기준</small>
-      </article>
-      <article class="admin-stat-card">
-        <span>전세·월세</span>
-        <strong>{counts.lease.toLocaleString("ko-KR")}</strong>
-        <small>네이버 거래유형 기준</small>
-      </article>
-      <article class="admin-stat-card">
-        <span>최근 동기화 기준</span>
-        <strong>{naverListingsUpdatedAt}</strong>
-        <small>매물 목록 업데이트일</small>
-      </article>
-    </section>
-  </section>
+    function renderStrip(data: Dashboard) {
+      strip!.replaceChildren(...kpiItems(data).map((item) => {
+        const cell = el("a", "dsh-kpi");
+        cell.href = item.href;
+        const value = el("strong", item.value === "—" ? "dsh-kpi__value is-off" : "dsh-kpi__value", item.value);
+        if (item.unit) value.append(el("small", "", item.unit));
+        cell.append(el("span", "dsh-kpi__label", item.label), value, el("span", item.warn ? "dsh-kpi__sub is-warn" : "dsh-kpi__sub", item.sub));
+        return cell;
+      }));
+      strip!.hidden = false;
+    }
 
-  <section class="admin-dash-group admin-dash-group--system">
-    <h2 class="admin-dash-label">시스템 상태</h2>
-    <AdminApiStatus />
+    function renderTasks(section: DashboardTasks, today: string) {
+      if (section.items.length === 0) return [el("p", "dsh-empty", emptyText("tasks", section))];
+      return [list(section.items.map((task) => {
+        const when = taskWhen(task.dueOn, today);
+        const repeatText = task.repeat === "weekly" ? "매주 반복" : task.repeat === "monthly" ? "매월 반복" : "";
+        return rowLink(DASHBOARD_LINKS.tasks, [
+          el("span", when.late ? "dsh-when is-late" : "dsh-when", when.text),
+          el("span", "dsh-what", task.title),
+          el("span", "dsh-meta", task.deal?.title ?? repeatText),
+        ]);
+      }))];
+    }
 
-    <section class="admin-panel admin-roadmap" aria-labelledby="admin-roadmap-title">
-      <div class="admin-panel__heading">
-        <div>
-          <p class="admin-eyebrow">개발 순서</p>
-          <h2 id="admin-roadmap-title">관리자 페이지 진행 단계</h2>
-        </div>
-      </div>
-      <ol>
-        <li>
-          <span>1</span>
-          <div><strong>보호된 관리자</strong><small>대시보드·Access 연결</small></div>
-        </li>
-        <li class="is-current">
-          <span>2</span>
-          <div><strong>네이버 매물 관리</strong><small>부동산뱅크 자동 동기화·엑셀 보완·직접 등록</small></div>
-        </li>
-        <li>
-          <span>3</span>
-          <div><strong>자체 콘텐츠 편집</strong><small>문구·링크·지역 설명</small></div>
-        </li>
-        <li>
-          <span>4</span>
-          <div><strong>배포·복구</strong><small>미리보기·상태 확인·롤백</small></div>
-        </li>
-      </ol>
-    </section>
-  </section>
+    function renderEvents(section: DashboardEvents, today: string) {
+      if (section.items.length === 0) return [el("p", "dsh-empty", emptyText("events", section))];
+      return [list(section.items.map((item) => {
+        const when = eventWhen(item.dueOn, today);
+        const whenNode = el("span", when.late ? "dsh-when is-late" : "dsh-when");
+        whenNode.append(el("b", "", when.lead), ` ${when.date}`);
+        const what = el("span", "dsh-what");
+        what.append(el("span", "dsh-chip", eventKindText(item)), ` ${item.deal.title}`);
+        return rowLink(eventHref(item), [whenNode, what, el("span", "dsh-meta", eventPartyText(item))], "dsh-row dsh-row--stack");
+      }))];
+    }
+
+    function renderMoney(section: DashboardMoney) {
+      const figures = el("dl", "dsh-money");
+      figures.append(...moneyFigures(section).map((figure) => {
+        const box = el("div", figure.due ? "is-due" : "");
+        box.append(el("dt", "", figure.label), el("dd", "", figure.value));
+        return box;
+      }));
+      const nodes: HTMLElement[] = [figures];
+      if (section.items.length > 0) {
+        nodes.push(el("h3", "dsh-sub", "미입금 장부 줄"));
+        nodes.push(list(section.items.map((item) => {
+          const what = el("span", "dsh-what");
+          what.append(el("span", "dsh-chip", moneyKindText(item.kind)), ` ${item.label}`);
+          return rowLink(DASHBOARD_LINKS.ledger, [el("span", "dsh-when", monthDay(item.basisOn)), what, el("span", "dsh-meta", moneyItemMeta(item))]);
+        })));
+      } else if (section.receivableWon === 0) {
+        nodes.push(el("p", "dsh-empty", emptyText("money", section)));
+      }
+      const undated = undatedText(section);
+      if (undated) nodes.push(el("p", "dsh-note", undated));
+      return nodes;
+    }
+
+    function renderRealprice(section: DashboardRealprice) {
+      const nodes: HTMLElement[] = [el("h3", "dsh-sub", "최근 30일 신고가")];
+      if (section.partial) nodes.push(el("p", "dsh-note", "거래가 많아 일부 기간만 판정했습니다. 실거래가 화면에서 전부 볼 수 있습니다."));
+      if (section.items.length === 0) {
+        nodes.push(el("p", "dsh-empty", emptyText("realprice", section)));
+        return nodes;
+      }
+      nodes.push(list(section.items.map((item) => {
+        const what = el("span", "dsh-what", `${item.aptName} ${tradeAreaText(item.areaM2)} 매매 `);
+        what.append(el("span", "dsh-chip dsh-chip--high", "신고가"));
+        return rowLink(DASHBOARD_LINKS.realprice, [el("span", "dsh-when", monthDay(item.dealDate)), what, el("span", "dsh-meta dsh-price", tradePriceText(item.priceWon))]);
+      })));
+      return nodes;
+    }
+
+    function renderFailed(state: { text: string; canRetry: boolean; off: boolean }) {
+      const box = el("div", state.off ? "dsh-state is-off" : "dsh-state is-fail");
+      box.append(el("p", "", state.off ? `꺼짐 · ${state.text}` : `! ${state.text}`));
+      if (state.canRetry) {
+        const again = el("button", "work-secondary-button", "다시 불러오기");
+        again.type = "button";
+        again.addEventListener("click", () => void load());
+        box.append(again);
+      }
+      return [box];
+    }
+
+    function renderSection(key: Key, data: Dashboard | null, code: string | null) {
+      const panel = root!.querySelector<HTMLElement>(`[data-dsh-section="${key}"]`);
+      const body = panel?.querySelector<HTMLElement>("[data-dsh-body]");
+      const count = panel?.querySelector<HTMLElement>("[data-dsh-count]");
+      if (!panel || !body || !count) return;
+      const section = data ? data[key] : null;
+      count.textContent = section ? sectionCount(key, section) : "";
+      if (!data || !section || !section.ok) {
+        body.replaceChildren(...renderFailed(section && !section.ok ? sectionState(section.code) : loadFailedState(code)));
+        return;
+      }
+      if (key === "tasks") body.replaceChildren(...renderTasks(data.tasks as DashboardTasks, data.today));
+      else if (key === "events") body.replaceChildren(...renderEvents(data.events as DashboardEvents, data.today));
+      else if (key === "money") body.replaceChildren(...renderMoney(data.money as DashboardMoney));
+      else body.replaceChildren(...renderRealprice(data.realprice as DashboardRealprice));
+    }
+
+    let token = 0;
+    async function load() {
+      const mine = ++token;
+      boot!.hidden = false;
+      boot!.textContent = "오늘 숫자를 불러오고 있습니다…";
+      try {
+        const data = await getDashboard();
+        if (mine !== token) return;
+        dateLine!.textContent = dateTitle(data.today);
+        boot!.hidden = true;
+        renderStrip(data);
+        KEYS.forEach((key) => renderSection(key, data, null));
+      } catch (error) {
+        if (mine !== token) return;
+        // 응답 자체를 받지 못함(로그인 만료·연결 끊김 등): 네 칸 모두 같은 까닭으로 알리고 숫자 띠는 숨긴다.
+        const code = error instanceof WorkApiError ? error.code : null;
+        boot!.hidden = true;
+        strip!.hidden = true;
+        KEYS.forEach((key) => renderSection(key, null, code));
+      }
+    }
+
+    if (root && boot && strip && dateLine) {
+      dateLine.textContent = dateTitle(todayInKorea());
+      // 화면이 실제로 보인 뒤에만 부른다(탭 미리 그리기 중에는 부르지 않음).
+      const doc = document as Document & { prerendering?: boolean };
+      if (doc.prerendering) document.addEventListener("prerenderingchange", () => void load(), { once: true });
+      else void load();
+      // 뒤로 가기 캐시에서 돌아오면 다시 부른다(그사이 끝낸 할 일·들어온 돈이 옛 숫자로 남지 않게).
+      window.addEventListener("pageshow", (event) => {
+        if (event.persisted) void load();
+      });
+    }
+  </script>
 </AdminLayout>

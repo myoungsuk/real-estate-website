@@ -1,11 +1,9 @@
-<section class="admin-panel admin-api-status" aria-labelledby="admin-api-title" data-admin-api-status>
-  <div class="admin-panel__heading">
-    <div>
-      <p class="admin-eyebrow">보안 연결</p>
-      <h2 id="admin-api-title">관리 API 상태</h2>
-    </div>
+<!-- 대시보드 머리 오른쪽의 접힌 상자(2026-11-23 대시보드 A안). 문제가 있으면 스스로 펼친다. -->
+<details class="admin-api-status" data-admin-api-status>
+  <summary>
+    <span>관리 API 상태</span>
     <span class="admin-badge admin-badge--checking" data-api-badge>확인 중</span>
-  </div>
+  </summary>
 
   <p class="admin-api-status__message" data-api-message aria-live="polite">
     Cloudflare Access 세션과 Worker 상태를 확인하고 있습니다.
@@ -31,7 +29,7 @@
   </dl>
 
   <button class="admin-text-button" type="button" data-api-retry hidden>다시 확인</button>
-</section>
+</details>
 
 <script>
   interface ApiEnvelope<T> {
@@ -55,7 +53,7 @@
     workerVersion: { id: string; createdAt: string } | null;
   }
 
-  const panels = document.querySelectorAll<HTMLElement>("[data-admin-api-status]");
+  const panels = document.querySelectorAll<HTMLDetailsElement>("[data-admin-api-status]");
 
   panels.forEach((panel) => {
     const badge = panel.querySelector<HTMLElement>("[data-api-badge]");
@@ -110,6 +108,7 @@
         write.textContent = "비활성화";
         worker.textContent = "확인 불가";
         retry.hidden = false;
+        panel.open = true;
       }
     };
 

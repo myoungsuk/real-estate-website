@@ -286,3 +286,23 @@ test("사용 안내는 업무 도구 아래 단계 맨 위를 옛 이름 '업무
   assert.equal(help.split("업무 도구 처음").length - 1, 0, "옛 이름(2026-11-23 '도구 모음'으로 바꿈)");
   assert.ok(help.split("도구 모음").length - 1 >= 3, "할 일·휴지통 안내 3곳");
 });
+
+test("대시보드 사용 안내 숫자는 대시보드 서버·화면 상수와 맞다(2026-11-23 A안)", async () => {
+  const [dashboard, ledger, query, view] = await Promise.all([
+    import("../worker/work-dashboard.mjs"),
+    import("../worker/work-ledger.mjs"),
+    import("../worker/realprice-query.mjs"),
+    readSource("src/lib/work/dashboard-view.mjs"),
+  ]);
+  const help = await readSource("src/lib/admin-help.mjs");
+  const once = (text, label) => assert.equal(help.split(text).length - 1, 1, `${label}: "${text}"`);
+  once(`끝내지 않은 할 일을 ${dashboard.DASHBOARD_ITEMS_MAX}개까지 보입니다.`, "할 일 줄 수");
+  once(`지난 ${dashboard.DASHBOARD_EVENT_PAST_DAYS}일부터 앞으로 ${dashboard.DASHBOARD_EVENT_DAYS}일까지를 ${dashboard.DASHBOARD_ITEMS_MAX}개까지 보입니다.`, "계약 일정 범위·줄 수");
+  once(`지난 일정은 ${dashboard.DASHBOARD_EVENT_PAST_ITEMS_MAX}개까지이고, 앞으로 있을 일정이 적으면 지난 일정을 더 보입니다.`, "지난 일정 줄 수");
+  once(`아직 안 들어온 장부 줄 ${ledger.DASHBOARD_UNPAID_ITEMS_MAX}개까지입니다.`, "미입금 줄 수");
+  once(`지난 ${query.REALPRICE_NEW_DAYS}일 새로 들어온 실거래 수`, "새 실거래 기간");
+  once(`최근 ${query.REALPRICE_MAJOR_DAYS}일 신고가 ${dashboard.DASHBOARD_TRADE_ITEMS_MAX}건`, "신고가 기간·줄 수");
+  once(`숫자 네 칸(오늘 할 일·${dashboard.DASHBOARD_EVENT_DAYS}일 안 계약 일정·미입금·새 실거래)`, "숫자 띠 이름");
+  assert.ok(view.includes(`label: "${dashboard.DASHBOARD_EVENT_DAYS}일 안 계약 일정"`), "화면 숫자 띠 이름");
+  assert.ok(view.includes(`label: "새 실거래 ${query.REALPRICE_NEW_DAYS}일"`), "화면 새 실거래 이름");
+});

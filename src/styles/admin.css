@@ -2446,6 +2446,104 @@ nav.tr-homelinks { display: flex; flex-wrap: wrap; gap: 0 24px; margin: 0 0 14px
   .rt-table td.rt-pick .rt-pick-button { min-width: 36px; min-height: 36px; padding: 0 10px; font-size: 0.8125rem; }
 }
 
+/* 대시보드(/admin/, 2026-11-23 사용자 선택 A안 "숫자 띠 + 칸 넷", 휴대폰은 숫자 띠 빼기, 글자는 규칙 그대로). 이 구역은 대시보드만 쓴다.
+   날짜·곁말은 1221px 이상 + 마우스에서만 14px이고 그 밖은 16px, 누르는 곳은 44px(같은 예외에서만 36px). 색은 변수만 쓰고, 상태는 '!'·'꺼짐' 글자로도 알린다. */
+.dsh { max-width: 1240px; margin-inline: auto; }
+.dsh-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 14px; }
+.dsh-head__title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; min-width: 0; }
+.dsh-head h1 { margin: 0; color: var(--ds-navy); font-size: clamp(1.7rem, 3.2vw, 2.1rem); font-weight: 800; letter-spacing: -0.035em; }
+.dsh-date { margin: 0; color: var(--ds-ink-soft); font-size: 1.0625rem; font-weight: 700; }
+.dsh .admin-page-help { margin: 0 0 16px; }
+.dsh .admin-api-status { flex: 1 1 100%; min-width: 0; padding: 0 12px; border: 1px solid var(--ds-edge); border-radius: var(--ad-radius); background: var(--ds-paper); }
+.dsh .admin-api-status > summary { display: flex; align-items: center; gap: 10px; min-height: 44px; color: var(--ds-ink); font-weight: 700; cursor: pointer; }
+.dsh .admin-api-status[open] { padding-bottom: 12px; }
+.dsh .admin-api-status__message { min-height: 0; margin: 4px 0 10px; }
+.dsh-boot { margin: 0 0 12px; color: var(--ds-ink-soft); }
+.dsh-boot[hidden] { display: none; }
+
+.dsh-strip { display: none; }
+.dsh-kpi { display: grid; align-content: start; gap: 4px; min-height: 44px; padding: 14px 16px; color: var(--ds-ink); border-right: 1px solid var(--ds-edge); text-decoration: none; }
+.dsh-kpi:last-child { border-right: 0; }
+.dsh-kpi:hover { background: var(--ds-paper-2); }
+.dsh-kpi__label { color: var(--ds-ink-soft); font-size: 1rem; font-weight: 700; }
+.dsh-kpi__value { color: var(--ds-navy); font-size: 1.625rem; font-weight: 800; line-height: 1.15; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; overflow-wrap: anywhere; }
+.dsh-kpi__value small { margin-left: 2px; font-size: 1rem; font-weight: 700; }
+.dsh-kpi__value.is-off { color: var(--ds-ink-soft); }
+.dsh-kpi__sub { color: var(--ds-ink-soft); font-size: 1rem; font-weight: 600; }
+.dsh-kpi__sub.is-warn { color: var(--ad-warn-ink); font-weight: 800; }
+
+.dsh-grid { display: grid; gap: 16px; }
+.dsh-panel { min-width: 0; padding: 14px 16px 10px; border: 1px solid var(--ds-edge); border-radius: var(--ad-radius); color: var(--ds-ink); background: var(--ds-paper); }
+.dsh-panel__head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding-bottom: 8px; border-bottom: 2px solid var(--ds-navy); }
+.dsh-panel__head h2 { margin: 0; color: var(--ds-navy); font-size: 1.125rem; font-weight: 800; }
+.dsh-count { color: var(--ds-ink-soft); font-size: 1rem; font-weight: 700; }
+.dsh-more { display: inline-flex; align-items: center; min-height: 44px; margin: -12px 0 -12px auto; color: var(--ds-ink); font-size: 1rem; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.dsh-sub { margin: 12px 0 0; color: var(--ds-navy); font-size: 1rem; font-weight: 800; }
+.dsh-rows { margin: 0; padding: 0; list-style: none; }
+.dsh-rows li + li { border-top: 1px solid var(--ds-edge); }
+.dsh-row { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; align-items: baseline; min-height: 44px; padding: 10px 0; color: var(--ds-ink); text-decoration: none; }
+.dsh-row:hover .dsh-what { text-decoration: underline; text-underline-offset: 3px; }
+.dsh-row .dsh-meta { grid-column: 2; }
+.dsh-row .dsh-meta:empty { display: none; }
+/* 계약 일정 줄은 날짜 글('! 3일 지남 11.20(금)')이 길어 휴대폰에서는 날짜 → 일정 → 손님을 세 줄로 쌓는다 */
+.dsh-row--stack { grid-template-columns: minmax(0, 1fr); }
+.dsh-row--stack > * { grid-column: 1; justify-self: start; }
+.dsh-row--stack .dsh-meta { grid-column: 1; }
+.dsh-when { color: var(--ds-ink-soft); font-size: 1rem; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.dsh-when b { color: var(--ds-navy); font-weight: 800; }
+.dsh-when.is-late { padding: 1px 6px; border-radius: 4px; color: var(--ad-warn-ink); background: var(--ad-warn); font-weight: 800; }
+.dsh-when.is-late b { color: inherit; }
+.dsh-what { min-width: 0; font-size: 1rem; font-weight: 700; overflow-wrap: anywhere; word-break: keep-all; }
+.dsh-meta { color: var(--ds-ink-soft); font-size: 1rem; font-weight: 500; overflow-wrap: anywhere; word-break: keep-all; }
+.dsh-price { color: var(--ds-ink); font-weight: 800; font-variant-numeric: tabular-nums; }
+.dsh-chip { display: inline-block; padding: 0 8px; border: 1px solid var(--ds-navy); border-radius: 999px; color: var(--ds-navy); font-size: 1rem; font-weight: 800; line-height: 1.45; white-space: nowrap; }
+.dsh-chip--high { border-color: var(--ds-stamp); color: var(--ds-stamp); }
+.dsh-empty { margin: 12px 0 6px; color: var(--ds-ink-soft); font-size: 1rem; }
+.dsh-note { margin: 6px 0 4px; color: var(--ad-warn-ink); font-size: 1rem; font-weight: 700; }
+.dsh-money { display: grid; grid-template-columns: 1fr; gap: 6px; margin: 12px 0 6px; }
+.dsh-money div { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 8px 10px; border-radius: 6px; background: var(--ds-paper-2); }
+.dsh-money .is-due { color: var(--ad-warn-ink); background: var(--ad-warn); }
+.dsh-money dt { font-size: 1rem; font-weight: 700; }
+.dsh-money dd { margin: 0; font-size: 1.0625rem; font-weight: 800; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.dsh-listing { display: grid; gap: 2px; min-height: 44px; margin-top: 6px; padding: 10px 0 4px; border-top: 2px solid var(--ds-edge); color: var(--ds-ink); font-weight: 600; text-decoration: none; }
+.dsh-listing:hover > span:first-child { text-decoration: underline; text-underline-offset: 3px; }
+.dsh-listing b { font-weight: 800; }
+.dsh-state { display: grid; gap: 8px; justify-items: start; margin: 12px 0 6px; padding: 12px; border-radius: 6px; }
+.dsh-state p { margin: 0; font-weight: 700; }
+.dsh-state.is-off { border-left: 4px solid var(--ds-navy); background: var(--ds-paper-2); }
+.dsh-state.is-off p { color: var(--ds-ink); }
+.dsh-state.is-fail { background: var(--ad-bad-soft); }
+.dsh-state.is-fail p { color: var(--ds-stamp); }
+
+@media (min-width: 980px) {
+  .dsh .admin-api-status { flex: 0 1 auto; margin-left: auto; }
+  .dsh .admin-api-status[open] { flex-basis: 100%; }
+  .dsh-strip:not([hidden]) { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 16px; border: 1px solid var(--ds-edge); border-radius: var(--ad-radius); background: var(--ds-paper); overflow: hidden; }
+  .dsh-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dsh-money { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .dsh-money div { display: block; }
+  .dsh-money dd { margin-top: 2px; }
+  /* 한 칸 안의 줄들이 날짜 칸 폭을 같이 쓰도록(가장 긴 날짜 글에 맞춤) 목록을 격자로, 줄은 subgrid로 둔다 */
+  .dsh-rows { display: grid; grid-template-columns: max-content minmax(0, 1fr) auto; column-gap: 10px; }
+  .dsh-rows li { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; }
+  .dsh-row,
+  .dsh-row--stack { grid-column: 1 / -1; grid-template-columns: subgrid; }
+  .dsh-row > *,
+  .dsh-row--stack > * { grid-column: auto; }
+  .dsh-row .dsh-meta { grid-column: auto; justify-self: end; text-align: right; }
+}
+@media (min-width: 1221px) and (hover: hover) and (pointer: fine) {
+  .dsh-row { min-height: 36px; padding: 7px 0; }
+  .dsh-meta,
+  .dsh-when,
+  .dsh-count,
+  .dsh-kpi__label,
+  .dsh-kpi__sub,
+  .dsh-chip { font-size: 0.875rem; }
+  .dsh-more { min-height: 36px; margin-block: -10px; }
+  .dsh .admin-api-status > summary { min-height: 36px; }
+}
+
 /* 매출장부 PC 표에서 칸을 바로 고치기(D-2a, 1221px 이상). 1220px 이하는 카드와 입력 화면 그대로라 표 쪽 부품을 보이지 않는다. */
 .lg-history,
 .lg-keys { display: none; }

@@ -180,7 +180,7 @@ test("B. 업무 도구는 정확히 \"true\"일 때만 켜지고, 꺼져 있으�
     assert.deepEqual(session.json.data, {
       enabled: false, filesEnabled: false, aiEnabled: false, administrator: maskEmail(OWNER), csrfToken: null, schemaVersion: null, aiWarnings: [],
     });
-    const other = await call(workRequest("/dashboard", { token }), env);
+    const other = await call(workRequest("/customers", { token }), env);
     assert.equal(other.response.status, 503);
     assert.equal(other.json.error.code, "WORK_DISABLED");
   }
