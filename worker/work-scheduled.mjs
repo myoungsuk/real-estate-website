@@ -2,7 +2,7 @@
 // 단계 P 실거래가 받기(`*/10 * * * *`)와 단계 4 AI 작업 보조 조회(`* * * * *`, work-ai-cron.mjs) 둘이다. 아래 03:00 정리는 `*/10` 차례에서만 한다.
 // 같은 Cron의 한국 시각 03:00 차례에는 실거래가 켜기 값을 보기 **전에** 글 초안 보관 정리(P3, DEC-WT-24)를 먼저 한다(지시서 D-5).
 // 조건은 D1이 있고 구조 번호가 4 이상인 것뿐이다(글 초안·실거래가 켜기 값과 상관없이, 꺼 둔 뒤에도 오래된 초안이 지워지게).
-// 같은 차례에 휴지통 7일 영구 삭제(runTrashExpire)와 감사 로그 3년 삭제(runAuditExpire)도 켜기 값과 상관없이 한다.
+// 같은 차례에 휴지통 7일 영구 삭제(runTrashExpire)와 감사 로그 3년 삭제(runAuditExpire), AI 작업 기록 30일 삭제(runAiJobExpire)도 켜기 값과 상관없이 한다.
 // 시각은 Cron이 정한 시각(controller.scheduledTime)을 쓴다. 실행이 몇 초 늦게 시작해도 03:00 차례를 그 시각으로 판정한다.
 // - 맨 바깥에서 모든 예외를 잡아 실행 번호와 고정 코드 RT_INTERNAL만 남긴다. 잡지 못한 예외는 플랫폼이 메시지·스택을
 //   기록해 그 안에 요청 주소(인증키 포함)가 섞일 수 있어서다.
@@ -42,6 +42,7 @@ import { WORK_SCHEMA_VERSION, readSchemaVersion } from "./work-api.mjs";
 import { getRealpriceConfigState } from "./work-public-tools.mjs";
 import { cleanupBlogDrafts } from "./work-blog.mjs";
 import { expireTrash } from "./work-trash.mjs";
+import { expireAiJobs } from "./work-ai-expire.mjs";
 import { hasD1 } from "./work-security.mjs";
 import { AI_POLL_CRON, runAiPollCron } from "./work-ai-cron.mjs";
 
@@ -126,10 +127,11 @@ async function runInner(env, options, state) {
   const fetcher = options.fetcher ?? fetch;
   const randomUUID = options.randomUUID ?? (() => crypto.randomUUID());
 
-  // ⓪ 03:00 차례면 글 초안 보관 정리, 휴지통 7일 영구 삭제, 감사 로그 3년 삭제부터(켜기 값과 상관없이, D-5·T-9·8.7절). 실패해도 아래로 이어 간다.
+  // ⓪ 03:00 차례면 글 초안 보관 정리, 휴지통 7일 영구 삭제, 감사 로그 3년 삭제, AI 작업 기록 30일 삭제부터(켜기 값과 상관없이, D-5·T-9·8.7절). 실패해도 아래로 이어 간다.
   await runBlogCleanup(db, nowMs, log);
   await runTrashExpire(db, nowMs, log, randomUUID, options.files ?? env?.WORK_FILES);
   await runAuditExpire(db, nowMs, log);
+  await runAiJobExpire(db, nowMs, log, randomUUID);
 
   // ① 켜기 값·설정. 꺼져 있으면 D1·외부 요청 없이 끝(로그도 남기지 않음, 10분마다 쌓이지 않게).
   const config = getRealpriceConfigState(env, db);
@@ -363,6 +365,24 @@ export async function runAuditExpire(db, nowMs, log = defaultLog) {
     return { outcome: "ok", ...result };
   } catch {
     log({ event: "audit_expire", level: "warn", code: "AUDIT_EXPIRE_FAILED" });
+    return { outcome: "failed" };
+  }
+}
+
+// AI 작업 기록 30일 자동 삭제(설계서 8.7절 예외 2, 14.10절 약점 4, work-ai-expire.mjs). 03:00 차례 1번, AI 켜기 값과 상관없이 돈다(꺼 둔 뒤에도
+// 남은 결과의 원문 근거가 지워지게). 조건은 D1이 있고 구조 번호가 7 이상인 것뿐(휴지통 정리와 같은 문턱). 지울 것이 없으면 로그를 남기지 않는다.
+// 로그에는 지운 묶음·행 수와 결과 코드만(묶음 id·계약서 글 없음). 실패는 AI_EXPIRE_FAILED만 남기고 Cron은 이어 간다.
+export async function runAiJobExpire(db, nowMs, log = defaultLog, randomUUID = () => crypto.randomUUID()) {
+  if (!isDailyCheckWindow(nowMs) || !hasD1(db)) return { outcome: "skipped" };
+  try {
+    const schemaVersion = await readSchemaVersion(db);
+    if (schemaVersion === null || schemaVersion < 7) return { outcome: "skipped" };
+    const result = await expireAiJobs(db, nowMs, randomUUID);
+    if (result.backlog) log({ event: "ai_expire", level: "warn", code: "AI_EXPIRE_BACKLOG", groups: result.groups, rows: result.rows });
+    else if (result.groups > 0) log({ event: "ai_expire", groups: result.groups, rows: result.rows });
+    return { outcome: "ok", ...result };
+  } catch {
+    log({ event: "ai_expire", level: "warn", code: "AI_EXPIRE_FAILED" });
     return { outcome: "failed" };
   }
 }

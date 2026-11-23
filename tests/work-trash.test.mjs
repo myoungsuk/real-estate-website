@@ -405,7 +405,8 @@ test("T2-87 7일 지난 묶음이 101개면 한 번의 03시 차례에 모두 �
   const expireAudit = rows(small.database, "SELECT request_id FROM audit_events WHERE action = 'trash.expire'");
   assert.equal(expireAudit.length, 101, "묶음마다 1줄");
   assert.equal(new Set(expireAudit.map((entry) => entry.request_id)).size, 2, "100개씩 2번 = 요청 번호 2개");
-  assert.deepEqual(small.db.stats.batches.filter((size) => size === 3).length, 2);
+  // 한 번(batch) = 감사 · AI 작업 묶음 지우기(파일 행이 없으면 0행) · 휴지통 행 · 묶음 = 문장 4개(AI 작업 지우기는 14.10절 약점 4로 더함)
+  assert.deepEqual(small.db.stats.batches.filter((size) => size === 4).length, 2);
 
   const big = freshDb();
   insertExpired(big.database, 1005, iso(at - DAY));

@@ -56,6 +56,10 @@ const R2_DELETE_MAX_KEYS = 1000; // R2 delete(keys[]) 한 번에 1,000개까지
 
 // ── 지우는 batch에 넣는 문장 ────────────────────────────────────────────────
 
+// 휴지통 묶음(조건 batchWhere)의 파일 행을 읽은, 끝난 AI 작업 묶음의 행을 모두 지우는 문장(purgeAiJobs·expireAiJobs).
+const aiJobsOfTrashFilesSql = (batchWhere) => "DELETE FROM ai_jobs WHERE group_id IN (SELECT j.group_id FROM ai_jobs j JOIN json_each(j.input_file_ids) e"
+  + " JOIN trash_rows r ON r.row_id = e.value AND r.table_name = 'files' AND r.op = 'row' WHERE " + batchWhere + ")"
+  + " AND group_id NOT IN (SELECT group_id FROM ai_jobs WHERE status IN ('queued','in_progress'))";
 const rowIdOf = (table) => (table === "deal_parties" ? "deal_id || '|' || customer_id || '|' || role" : "id");
 
 function rowJsonOf(table) {
@@ -285,6 +289,11 @@ const SQL = Object.freeze({
   restoreCleanup: "DELETE FROM trash_rows WHERE batch_id = ? AND coalesce(json_extract(row_json, '$._skip'), '') IN ('', 'exists', 'relinked', 'changed')",
   restoreUnmark: "UPDATE trash_rows SET row_json = json_remove(row_json, '$._skip') WHERE batch_id = ?",
   batchDeleteIfEmpty: "DELETE FROM trash_batches WHERE id = ? AND NOT EXISTS (SELECT 1 FROM trash_rows WHERE batch_id = ?)",
+  // 영구 삭제하는 묶음의 파일 행(계약서 사본 등)을 읽은 AI 작업 묶음을 같은 batch에서 지운다(설계서 14.10절 약점 4: result_json의 원문 근거에
+  // 계약서 글이 들어 있음). ai_jobs에는 거래 칸이 없어 input_file_ids로 찾는다. 거래를 지운 묶음에는 그 거래의 파일 행이 함께 들어 있다.
+  // 열린 행(queued·in_progress)이 있는 AI 묶음은 건드리지 않는다(예약 비용·조회 Cron이 씀). 끝난 뒤 30일 정리(work-ai-expire.mjs)가 지운다.
+  // trash_rows를 지우기 전에 돌아야 한다(파일 ID를 거기서 읽음).
+  purgeAiJobs: aiJobsOfTrashFilesSql("r.batch_id = ?"),
   purgeRows: "DELETE FROM trash_rows WHERE batch_id = ?",
   purgeBatch: "DELETE FROM trash_batches WHERE id = ?",
   // 묶음 안 파일 행의 R2 키(영구 삭제·만료 때 R2를 먼저 지움). 되살려 휴지통에서 빠진 파일은 들어 있지 않다.
@@ -298,6 +307,7 @@ const SQL = Object.freeze({
   expireAudit:
     "INSERT INTO audit_events (at, actor_email, action, target_type, target_id, request_id, outcome, reason)"
     + " SELECT ?, ?, 'trash.expire', 'trash', id, ?, 'ok', NULL FROM trash_batches WHERE id IN (SELECT value FROM json_each(?)) AND purge_after <= ?",
+  expireAiJobs: aiJobsOfTrashFilesSql("r.batch_id IN (SELECT id FROM trash_batches WHERE id IN (SELECT value FROM json_each(?)) AND purge_after <= ?)"),
   expireRows: "DELETE FROM trash_rows WHERE batch_id IN (SELECT id FROM trash_batches WHERE id IN (SELECT value FROM json_each(?)) AND purge_after <= ?)",
   expireBatches: "DELETE FROM trash_batches WHERE id IN (SELECT value FROM json_each(?)) AND purge_after <= ?",
   expireLeft: "SELECT 1 AS ok FROM trash_batches WHERE purge_after <= ? AND id NOT IN (SELECT value FROM json_each(?)) LIMIT 1",
@@ -431,6 +441,7 @@ async function purgeBatch(ctx, batchId) {
   try {
     await runBatch(ctx.db, [
       ctx.db.prepare(SQL.purgeGuard).bind(batchId),
+      ctx.db.prepare(SQL.purgeAiJobs).bind(batchId),
       ctx.db.prepare(SQL.purgeRows).bind(batchId),
       ctx.db.prepare(SQL.purgeBatch).bind(batchId),
       auditStatement(ctx.db, { ...auditBase(ctx, "trash.purge", { targetType: "trash", targetId: batchId }), outcome: "ok" }),
@@ -493,10 +504,11 @@ export async function expireTrash(db, nowMs, randomUUID = () => crypto.randomUUI
       const ids = JSON.stringify(ready);
       const results = await db.batch([
         db.prepare(SQL.expireAudit).bind(nowIso, TRASH_CRON_ACTOR, `cron-${randomUUID()}`, ids, nowIso),
+        db.prepare(SQL.expireAiJobs).bind(ids, nowIso),
         db.prepare(SQL.expireRows).bind(ids, nowIso),
         db.prepare(SQL.expireBatches).bind(ids, nowIso),
       ]);
-      expired += changesOf(results[2]);
+      expired += changesOf(results[3]);
     }
     if (picked.length < TRASH_EXPIRE_PER_ROUND) return done(round, false);
   }
