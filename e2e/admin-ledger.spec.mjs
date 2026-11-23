@@ -1200,28 +1200,80 @@ test("넓은 PC 표 위 한 줄: 1221px 이상 + 마우스에서만 연도·기�
   ].join("|"));
   const homeExpected = "new,csv,history|true|true|true";
   const allTrue = parts.map(() => true);
-  // 클래스가 아니라 결과를 잰다: 표 머리 윗변(1221·1280px 모두 374px로 잼, +2px까지), 안내 줄 높이, 빈 단추 칸 숨김
-  const layout = () => page.evaluate(() => ({
-    head: document.querySelector(".lg-table thead").getBoundingClientRect().top + scrollY,
-    line: document.querySelector("[data-lg-line]").getBoundingClientRect().height,
-    tools: getComputedStyle(document.querySelector(".lg-tools")).display,
-  }));
+  // 클래스가 아니라 결과를 잰다. 글꼴에 따라 한 줄 칸이 두 줄이 될 수 있어(리눅스 CI) 고정 y 대신 사이 거리로 본다:
+  // 안내 줄 아래 끝 → 한 줄 칸 위 끝 10px, 한 줄 칸 아래 끝 → 표 머리 41px(줄 수 제목 31px 포함)로 잼, +2px까지. 안내 줄 높이, 빈 단추 칸 숨김
+  const layout = () => page.evaluate(() => {
+    const box = (selector) => document.querySelector(selector).getBoundingClientRect();
+    return {
+      lineToBar: box("[data-lg-bar]").top - box("[data-lg-line]").bottom,
+      barToHead: box(".lg-table thead").top - box("[data-lg-bar]").bottom,
+      line: box("[data-lg-line]").height,
+      tools: getComputedStyle(document.querySelector(".lg-tools")).display,
+    };
+  });
   const expectTight = async (label) => {
     const now = await layout();
-    expect(now.head, `${label}: 표 머리가 위로 올라옴`).toBeLessThanOrEqual(376);
+    expect(now.lineToBar, `${label}: 안내 줄 바로 아래 한 줄 칸`).toBeLessThanOrEqual(12);
+    expect(now.barToHead, `${label}: 한 줄 칸 바로 아래 표(빈 칸이 끼지 않음)`).toBeLessThanOrEqual(43);
     expect(now.line, `${label}: 안내는 얇은 한 줄`).toBeLessThanOrEqual(44);
     expect(now.tools, `${label}: 빈 단추 칸은 자리도 차지하지 않음`).toBe("none");
   };
+  // 한 줄 칸 모양: 한 줄이거나, 오른쪽 묶음(되돌리기 ~ 장부 줄 만들기)이 통째로 둘째 줄 오른쪽 끝. 묶음 안은 꺾이지 않는다
+  const barShape = () => page.evaluate(() => {
+    const rect = (node) => node.getBoundingClientRect();
+    const rows = (group) => new Set([...group.querySelectorAll("button")].filter((button) => rect(button).width > 0).map((button) => Math.round((rect(button).top + rect(button).bottom) / 2))).size;
+    const bar = rect(document.querySelector("[data-lg-bar]"));
+    const leftGroup = document.querySelector(".lg-bar__left");
+    const rightGroup = document.querySelector(".lg-bar__right");
+    const left = rect(leftGroup);
+    const right = rect(rightGroup);
+    const oneLine = right.top < left.bottom && right.left > left.right;
+    const wrapped = right.top >= left.bottom && Math.abs(right.right - bar.right) <= 1;
+    const gap = parseFloat(getComputedStyle(document.querySelector("[data-lg-bar]")).columnGap);
+    return {
+      shape: oneLine ? "한 줄" : wrapped ? "오른쪽 묶음 둘째 줄" : "어긋남",
+      leftRows: rows(leftGroup),
+      rightRows: rows(rightGroup),
+      need: Math.round((left.width + gap + right.width) * 10) / 10,
+      avail: Math.round(bar.width * 10) / 10,
+      font: getComputedStyle(document.querySelector("[data-lg-new]")).fontFamily,
+    };
+  });
+  const expectShape = async (label, allowed) => {
+    const now = await barShape();
+    // CI(리눅스 글꼴)에서 여유를 숫자로 알려고 남긴다: 필요한 폭(왼쪽 + 사이 + 오른쪽)과 줄 폭
+    console.log(`[lg-bar] ${label} need=${now.need} avail=${now.avail} spare=${Math.round((now.avail - now.need) * 10) / 10} shape=${now.shape} font=${now.font}`);
+    expect(allowed, `${label}: ${now.shape}`).toContain(now.shape);
+    expect([now.leftRows, now.rightRows], `${label}: 묶음 안은 꺾이지 않음`).toEqual([1, 1]);
+    expect(await overflowOf(page), `${label}: 가로 넘침 없음`).toBeLessThanOrEqual(0);
+    return now.shape;
+  };
+  // Tab 차례 = 보이는 차례(위 줄 → 아래 줄, 같은 줄은 왼쪽 → 오른쪽). 못 누르는 되돌리기·다시 하기는 건너뜀
+  const tabNames = ["앞 해", "다음 해", "잔금일", "계약일", "입금일", "전체", "보수", "지출", "기타 수입", "미입금만", "CSV 내려받기", "장부 줄 만들기"];
+  const expectTabOrder = async (label) => {
+    await page.locator("[data-lg-undated-show]").focus();
+    const order = [];
+    for (let i = 0; i < tabNames.length; i += 1) {
+      await page.keyboard.press("Tab");
+      order.push(await page.evaluate(() => {
+        const node = document.activeElement;
+        const box = node.getBoundingClientRect();
+        return { name: node.getAttribute("aria-label") || node.textContent.replace("＋", "").trim(), x: box.left, y: (box.top + box.bottom) / 2 };
+      }));
+    }
+    expect(order.map((item) => item.name), label).toEqual(tabNames);
+    for (let i = 1; i < order.length; i += 1) {
+      const [before, now] = [order[i - 1], order[i]];
+      const after = now.y > before.y + 4 || (Math.abs(now.y - before.y) <= 4 && now.x > before.x);
+      expect(after, `${label}: ${now.name}는 ${before.name}의 뒤(아래 줄이거나 같은 줄 오른쪽)`).toBe(true);
+    }
+  };
   const barHidden = () => bar.evaluate((node) => node.hidden);
 
-  // 1221px(가장 좁은 넓은 PC): 한 줄, 가로 넘침 없음
+  // 1221px(가장 좁은 넓은 PC): 한 줄, 또는 글꼴이 넓으면 오른쪽 묶음이 통째로 둘째 줄. 가로 넘침 없음
   await expect(bar).toBeVisible();
   expect(await placed(inBar)).toEqual(allTrue);
-  const left = await page.locator(".lg-bar__left").boundingBox();
-  const right = await page.locator(".lg-bar__right").boundingBox();
-  expect(right.y, "오른쪽 묶음이 같은 줄").toBeLessThan(left.y + left.height);
-  expect(right.x).toBeGreaterThan(left.x + left.width);
-  expect(await overflowOf(page)).toBeLessThanOrEqual(0);
+  await expectShape("1221px", ["한 줄", "오른쪽 묶음 둘째 줄"]);
   await expect(page.locator(".lg-tools")).toBeHidden();
   await expectTight("1221px");
   await expect(page.locator(".lg-line .lg-notice")).toHaveText("참고용 집계입니다. 세무 장부가 아닙니다.");
@@ -1245,19 +1297,13 @@ test("넓은 PC 표 위 한 줄: 1221px 이상 + 마우스에서만 연도·기�
   await expect.poll(barHidden, "1221px: 다시 보임").toBe(false);
   expect(await placed(inBar)).toEqual(allTrue);
 
-  // Tab 차례 = 보이는 차례(왼쪽 → 오른쪽). 못 누르는 되돌리기·다시 하기는 건너뜀
-  await page.locator("[data-lg-undated-show]").focus();
-  const order = [];
-  for (let i = 0; i < 12; i += 1) {
-    await page.keyboard.press("Tab");
-    order.push(await page.evaluate(() => {
-      const node = document.activeElement;
-      const box = node.getBoundingClientRect();
-      return { name: node.getAttribute("aria-label") || node.textContent.replace("＋", "").trim(), x: box.left, y: box.top };
-    }));
-  }
-  expect(order.map((item) => item.name)).toEqual(["앞 해", "다음 해", "잔금일", "계약일", "입금일", "전체", "보수", "지출", "기타 수입", "미입금만", "CSV 내려받기", "장부 줄 만들기"]);
-  for (let i = 1; i < order.length; i += 1) expect(order[i].x, `${order[i].name}는 ${order[i - 1].name}의 오른쪽`).toBeGreaterThan(order[i - 1].x);
+  await expectTabOrder("1221px");
+  // 글꼴이 넓어 꺾이는 경우를 어느 글꼴에서나 보이도록 왼쪽 묶음을 시험으로만 넓혀 본다: 오른쪽 묶음만 통째로 내려가고, 거리·Tab 차례는 그대로
+  const wider = await page.addStyleTag({ content: ".lg-bar__left { padding-right: 300px; }" });
+  expect(await expectShape("왼쪽이 넓을 때", ["오른쪽 묶음 둘째 줄"])).toBe("오른쪽 묶음 둘째 줄");
+  await expectTight("둘째 줄로 꺾였을 때");
+  await expectTabOrder("둘째 줄로 꺾였을 때");
+  await wider.evaluate((node) => node.remove());
 
   // 칸을 하나 고치면 되돌리기가 켜진다: 36×36 그림 단추, 이름은 무엇을 되돌리는지
   await typeCell(page, 3, "label", "가상 현수막");
@@ -1287,6 +1333,7 @@ test("넓은 PC 표 위 한 줄: 1221px 이상 + 마우스에서만 연도·기�
   await page.setViewportSize({ width: 1280, height: 900 });
   await expect(bar).toBeVisible();
   expect(await placed(inBar)).toEqual(allTrue);
+  await expectShape("1280px", ["한 줄"]);
   await expectTight("1280px");
   await expect(expense).toBeFocused();
   await page.setViewportSize({ width: 1000, height: 900 });
