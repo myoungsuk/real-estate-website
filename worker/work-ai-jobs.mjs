@@ -1,6 +1,7 @@
 // 업무 도구 단계 4 AI 작업 API (가): 계약서 사본 → 날짜·금액 두 번 읽기 작업 만들기·조회·취소·목록(설계서 14.3 ~ 14.5절).
 // work-api.mjs가 업무 도구·구조 번호·AI 켜기 값(WORK_AI_ENABLED + 파일 기능 + OpenAI 설정)·(쓰기면) Origin·CSRF·본문 읽기를 끝낸 뒤 routeWorkAi()를 부른다.
-// 비교표·확정(거래·일정 쓰기, /confirm)은 다음 PR이라 이 파일에 없다(그 경로는 404).
+// 확정(/confirm, 거래·일정 쓰기)과 예상 비용 미리 보기(/ai/estimate)는 2026-11-23 확정 서버 PR에서 넣었다(이 파일 아래 '확정'·'미리 보기'). 비교 규칙은
+// 화면과 같은 src/lib/work/contract-compare.mjs 하나를 쓴다.
 // - 읽을 사진은 거래에 붙인 계약서 사본뿐이다(files.kind = contract_copy, rrn_masked = 1, 2026-11-23 사용자 결정 "거래에 붙임").
 //   조건에 맞지 않는 파일·다른 거래·휴지통에 간 파일·없는 거래는 모두 같은 404다(어느 조건인지 알려 주지 않음).
 // - 한 번에 5장·합계 12MB까지(Worker 메모리 128MB, 넘으면 413 AI_INPUT_TOO_LARGE). 사진의 base64 글은 한 번만 만들어 두 요청이 함께 쓰고,
@@ -20,11 +21,16 @@
 // 행을 닫는 문장은 모두 이 칸을 함께 바꾸고, 정산·되돌리기 문장(work-ai-budget.mjs)은 "아직 열린 행일 때만" 바뀌는 guard를 건다.
 // 응답 jobs[]에는 토큰 수를 내보내지 않는다.
 import { contractInstructions, contractResultSchema, maskContractResult, validateContractResult } from "../src/lib/work/contract-extract.mjs";
+import { CONFIRM_AMOUNT_FIELDS, CONFIRM_FIELDS, CONFIRM_MIDDLE_PAYMENTS_MAX, compareContractResults, confirmFieldsFor, missingDecisions } from "../src/lib/work/contract-compare.mjs";
+import { MAX_AMOUNT_WON_EXCLUSIVE, cleanSingleLine } from "../src/lib/work/work-format.mjs";
 import { WorkAiError, cancelResponse, createBackgroundResponse, readResponseOutput, retrieveResponse } from "./openai-client.mjs";
 import { IMAGE_TOKENS_MAX, estimateCostMicroUsd, readContractAiConfig, readModelPrices } from "./work-ai-config.mjs";
-import { kstDay, refundJobStatement, refundManyStatement, reserveAiBudgetMany, settleJobUsageStatement } from "./work-ai-budget.mjs";
+import { kstDay, readAiLimits, readAiUsage, refundJobStatement, refundManyStatement, reserveAiBudgetMany, settleJobUsageStatement } from "./work-ai-budget.mjs";
 import { auditStatement, changesOf, runBatch } from "./work-audit.mjs";
-import { invalid, isUuid, maskResidentNumbers } from "./work-input.mjs";
+import { CLOSED_DEAL_STATUSES, assertDealConsistent, invalid, isCalendarDate, isUuid, maskResidentNumbers } from "./work-input.mjs";
+import { dealView, loadDeal, rowToDeal } from "./work-deals.mjs";
+import { loadDealEvents, planDealSchedule, scheduleOutcome } from "./work-events.mjs";
+import { DEFAULT_ALARM_TRIGGERS } from "./work-calendar.mjs";
 import { WorkApiError } from "./work-security.mjs";
 
 export const AI_JOB_KIND = "contract_schedule";
@@ -128,6 +134,14 @@ export function buildContractRequest(model, detail, runIndex, images) {
 // 입력 토큰 추정(최대 쪽으로). 요청 본문을 글로 만들지 않고 계산한다: 지시문·스키마는 글자 1개 = 토큰 1개, 사진은 세부도별 장당 상한.
 export function estimateContractInputTokens(runIndex, pages, detail) {
   return contractInstructions(runIndex).length + JSON.stringify(contractResultSchema(runIndex)).length + pages * (IMAGE_TOKENS_MAX[detail] + 10) + 200;
+}
+
+// 두 번 읽기의 예약값(입력 토큰 추정·예약 비용). 만들기와 예상 비용 미리 보기가 같은 함수를 쓴다(두 값이 어긋나지 않게).
+export function contractReservation(config, pages) {
+  const models = [config.a, config.b];
+  const inputTokens = [1, 2].map((runIndex) => estimateContractInputTokens(runIndex, pages, config.detail));
+  const reserved = models.map((model, index) => estimateCostMicroUsd(model.prices, inputTokens[index], model.maxOutputTokens));
+  return { inputTokens, reserved, reservedTotal: reserved[0] + reserved[1] };
 }
 
 // ── 작업 행 ──
@@ -334,9 +348,7 @@ async function createJobs(ctx) {
   const images = await readImages(ctx, fileRows);
 
   const models = [config.a, config.b];
-  const inputTokens = [1, 2].map((runIndex) => estimateContractInputTokens(runIndex, images.length, config.detail));
-  const reserved = models.map((model, index) => estimateCostMicroUsd(model.prices, inputTokens[index], model.maxOutputTokens));
-  const reservedTotal = reserved[0] + reserved[1];
+  const { inputTokens, reserved, reservedTotal } = contractReservation(config, images.length);
   const { day } = await reserveAiBudgetMany(db, { nowMs: now, count: 2, reservedCostMicroUsd: reservedTotal });
   const refundAll = async () => {
     try {
@@ -522,6 +534,225 @@ async function listGroups(ctx) {
   };
 }
 
+// ── 예상 비용 미리 보기 ──
+
+// GET /work/ai/estimate?pages=1 ~ 5  만들기 전에 화면이 보여 줄 최대 예상 비용과 남은 한도(2026-11-23 사용자 선택 "넣음").
+// 읽기만 한다: D1 쓰기·감사·R2·OpenAI 0번. 계약서 사본 ID는 받지 않고 장수만 받는다(예약 비용은 장수로만 정해지고, 다른 거래의 파일이 있는지 알려 주지 않게).
+// 예상 비용은 만들기가 미리 더하는 값과 같은 함수(contractReservation)로 계산하고, 막히는 까닭도 만들기(reserveAiBudgetMany)와 같은 순서로 본다.
+// 단가·토큰 수는 싣지 않는다. 비용 단위는 마이크로달러다.
+async function estimateCreate(ctx) {
+  const { db, env, url, now } = ctx;
+  const keys = [...url.searchParams.keys()];
+  const raw = url.searchParams.get("pages") ?? "";
+  if (keys.length !== 1 || keys[0] !== "pages" || !/^[1-9]$/u.test(raw) || Number(raw) > AI_MAX_FILES) throw invalid(["pages"]);
+  const pages = Number(raw);
+  const config = readContractAiConfig(env);
+  if (config.error) throw aiUnavailable(config.error);
+  const { reservedTotal } = contractReservation(config, pages);
+  const requests = 2;
+  const limits = await readAiLimits(db);
+  const usage = await readAiUsage(db, now);
+  const limitsSet = limits.dailyCreateLimit !== null && limits.monthlyCostLimitMicroUsd !== null;
+  let blockedBy = null;
+  if (!limitsSet) blockedBy = "limits_missing";
+  else if (usage.todayCreates + requests > limits.dailyCreateLimit) blockedBy = "daily";
+  else if (usage.monthCostMicroUsd + reservedTotal > limits.monthlyCostLimitMicroUsd) blockedBy = "monthly";
+  return {
+    data: {
+      pages,
+      requests,
+      estimatedCostMicroUsd: reservedTotal,
+      dailyCreateLimit: limits.dailyCreateLimit,
+      todayCreates: usage.todayCreates,
+      remainingCreates: limitsSet ? Math.max(limits.dailyCreateLimit - usage.todayCreates, 0) : null,
+      monthlyCostLimitMicroUsd: limits.monthlyCostLimitMicroUsd,
+      monthCostMicroUsd: usage.monthCostMicroUsd,
+      remainingCostMicroUsd: limitsSet ? Math.max(limits.monthlyCostLimitMicroUsd - usage.monthCostMicroUsd, 0) : null,
+      allowed: blockedBy === null,
+      blockedBy,
+    },
+  };
+}
+
+// ── 확정 ──
+// POST /work/ai/jobs/:groupId/confirm  { dealVersion, apply: { 칸: 값 }, keep: [칸 이름] }(2026-11-23 대장 결정 G18 ~ G21, 사용자 선택 "다섯 다 추천대로")
+// - 두 결과가 다르거나 한쪽만 있는 칸은 apply(넣음)·keep(지금 거래 값 그대로) 가운데 정확히 한 곳에 있어야 한다. 같은 칸은 apply에 있을 때만 쓴다.
+//   서버가 화면과 같은 비교 함수(contract-compare.mjs)로 다시 견줘 확인한다.
+// - 거래에는 계약일·중도금 날짜·잔금일·거래 종류에 맞는 금액만 쓴다(계약금·중도금·잔금 금액, 물건 표시, 거래 종류는 보기만).
+//   첫 중도금은 deals.middle_payment_on, 둘째부터는 직접 일정(kind custom, source ai_confirmed, 금액 없음)으로 넣는다. 다시 확정하면
+//   그 거래의 custom·ai_confirmed·끝나지 않은 일정만 바꾼다(사람이 날짜·제목을 고친 것은 manual이라 남음).
+//   같은 차 수('n차 중도금'으로 시작하는 직접 일정)를 이미 완료로 표시했으면 그 차는 새로 넣지 않고 notices로 알린다(대장 결정 2026-11-23).
+// - 일정은 '다시 계산'과 같은 함수(planDealSchedule)로 같은 batch에서 만든다(모두 source calculated, AI 기한은 쓰지 않음).
+// - 한 batch: guard(거래 version·진행 중·묶음 확정 전·결과 있음·사본이 그 거래에 그대로) → 거래 → 일정 → 묶음 confirmed_at → 감사 ai.confirm.
+// - 응답은 { deal, events, notices, kept }이고 결과를 다시 싣지 않는다(그래서 ai.view 없음). OpenAI·R2·한도·result_json은 건드리지 않는다.
+const CONFIRM_KEYS = Object.freeze(["dealVersion", "apply", "keep"]);
+// 확정 칸 → deals 칸(중도금은 따로).
+const CONFIRM_COLUMNS = Object.freeze({ contractDate: "contract_on", balanceDate: "balance_on", priceWon: "price_won", depositWon: "deposit_won", monthlyRentWon: "monthly_rent_won" });
+// 거래·일정 검사가 돌려주는 칸 이름 → 확정 칸 이름(화면이 그 칸을 짚을 수 있게).
+const DEAL_TO_CONFIRM_FIELD = Object.freeze({ contractOn: "contractDate", middlePaymentOn: "middlePayments", balanceOn: "balanceDate" });
+const dealClosed = () => new WorkApiError("DEAL_CLOSED", "끝난 거래와 취소한 거래에는 AI 결과를 넣을 수 없습니다.", 409);
+const versionConflict = () => new WorkApiError("VERSION_CONFLICT", "다른 화면에서 먼저 고쳤습니다. 다시 불러온 뒤 고쳐 주세요.", 409);
+// 묶음의 사본이 모두 아직 한 거래에 붙어 있을 때만 그 거래가 나온다(하나라도 휴지통에 갔거나 다른 거래면 n이 장수와 다름).
+const CONFIRM_FILES_SQL = `SELECT count(*) AS n, min(f.deal_id) AS lo, max(f.deal_id) AS hi FROM files f
+  WHERE f.id IN (SELECT value FROM json_each(?1)) AND f.kind = 'contract_copy' AND f.deal_id IS NOT NULL`;
+const CONFIRM_GUARD_SQL = `SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM deals WHERE id = ?1 AND version = ?2 AND status NOT IN ('completed', 'cancelled'))
+  OR EXISTS (SELECT 1 FROM ai_jobs WHERE group_id = ?3 AND (confirmed_at IS NOT NULL OR status IN ('queued', 'in_progress', 'cancelled')))
+  OR NOT EXISTS (SELECT 1 FROM ai_jobs WHERE group_id = ?3 AND status = 'completed' AND result_json IS NOT NULL)
+  OR (SELECT count(*) FROM files f WHERE f.deal_id = ?1 AND f.kind = 'contract_copy' AND f.id IN (SELECT value FROM json_each(?4))) <> ?5
+  THEN json('guard') ELSE 1 END AS ok`;
+const CONFIRM_DEAL_SQL = `UPDATE deals SET contract_on = ?1, middle_payment_on = ?2, balance_on = ?3, price_won = ?4, deposit_won = ?5, monthly_rent_won = ?6,
+  version = version + 1, updated_at = ?7 WHERE id = ?8 AND version = ?9`;
+const AI_MIDDLE_DELETE_SQL = "DELETE FROM deal_events WHERE deal_id = ?1 AND kind = 'custom' AND source = 'ai_confirmed' AND done_at IS NULL";
+const AI_MIDDLE_INSERT_SQL = `INSERT INTO deal_events (id, deal_id, kind, due_on, title, alarm_offsets, source, done_at, version, created_at, updated_at)
+  VALUES (?1, ?2, 'custom', ?3, ?4, ?5, 'ai_confirmed', NULL, 1, ?6, ?6)`;
+// 결과가 있던 행(completed)만 확정 시각을 적는다. 실패한 행은 비워 둔다.
+const CONFIRM_JOBS_SQL = "UPDATE ai_jobs SET confirmed_at = ?2 WHERE group_id = ?1 AND kind = 'contract_schedule' AND status = 'completed' AND confirmed_at IS NULL";
+
+// 칸 이름만 details에 싣는다. 모르는 이름은 짧은 영문 이름일 때만 그대로, 아니면 그 묶음 이름(apply·keep)으로.
+const detailName = (name, fallback) => (/^[A-Za-z]{1,40}$/u.test(name) ? name : fallback);
+
+function parseConfirmBody(body) {
+  if (!isPlainObject(body) || Object.keys(body).some((key) => !CONFIRM_KEYS.includes(key))) throw invalid(["body"]);
+  if (!Number.isSafeInteger(body.dealVersion) || body.dealVersion < 1) throw invalid(["dealVersion"]);
+  if (!isPlainObject(body.apply)) throw invalid(["apply"]);
+  if (!Array.isArray(body.keep) || body.keep.some((name) => typeof name !== "string")) throw invalid(["keep"]);
+  const wrong = [];
+  const apply = {};
+  for (const [field, value] of Object.entries(body.apply)) {
+    if (!CONFIRM_FIELDS.includes(field)) {
+      wrong.push(detailName(field, "apply"));
+    } else if (field === "middlePayments") {
+      if (!Array.isArray(value) || value.length > CONFIRM_MIDDLE_PAYMENTS_MAX || value.some((date) => !isCalendarDate(date))) wrong.push(field);
+      else apply[field] = [...value];
+    } else if (CONFIRM_AMOUNT_FIELDS.includes(field)) {
+      if (value !== null && (!Number.isSafeInteger(value) || value < 0 || value >= MAX_AMOUNT_WON_EXCLUSIVE)) wrong.push(field);
+      else apply[field] = value;
+    } else if (value !== null && !isCalendarDate(value)) {
+      wrong.push(field);
+    } else {
+      apply[field] = value;
+    }
+  }
+  const seen = new Set();
+  for (const field of body.keep) {
+    // 모르는 칸, 두 번 쓴 칸, apply에도 있는 칸
+    if (!CONFIRM_FIELDS.includes(field) || seen.has(field) || Object.hasOwn(body.apply, field)) wrong.push(detailName(field, "keep"));
+    seen.add(field);
+  }
+  if (wrong.length > 0) throw invalid([...new Set(wrong)].slice(0, 10));
+  return { dealVersion: body.dealVersion, apply, keep: [...seen] };
+}
+
+// 저장해 둔 결과를 다시 검사해 꺼낸다(결과가 없거나 꼴이 깨졌으면 null).
+function storedResult(row) {
+  if (!row || row.status !== "completed") return null;
+  const stored = parseJson(row.result_json);
+  const checked = stored ? validateContractResult(stored.result) : { ok: false };
+  return checked.ok ? checked.result : null;
+}
+
+function asConfirmFields(error) {
+  if (error instanceof WorkApiError && error.code === "VALIDATION_FAILED" && Array.isArray(error.details)) {
+    return invalid([...new Set(error.details.map((name) => DEAL_TO_CONFIRM_FIELD[name] ?? name))]);
+  }
+  return error;
+}
+
+async function confirmGroup(ctx, groupId) {
+  const { db, actor, requestId, now, randomUUID } = ctx;
+  const input = parseConfirmBody(ctx.body);
+  const rows = await readGroup(db, groupId);
+  if (groupStatusOf(rows) !== "ready") throw jobConflict();
+  const fileIdsJson = rows[0].input_file_ids;
+  const fileIds = parseJson(fileIdsJson);
+  if (!Array.isArray(fileIds) || fileIds.length === 0) throw notFound();
+  const link = await db.prepare(CONFIRM_FILES_SQL).bind(fileIdsJson).first();
+  if (!link || Number(link.n) !== fileIds.length || !link.lo || link.lo !== link.hi) throw notFound();
+  const dealId = link.lo;
+  const deal = await loadDeal(db, dealId);
+  if (!deal) throw notFound();
+  if (CLOSED_DEAL_STATUSES.includes(deal.status)) throw dealClosed();
+  if (deal.version !== input.dealVersion) throw versionConflict();
+
+  // 거래 종류에 맞지 않는 금액 칸은 apply·keep 어디에도 둘 수 없다(G12).
+  const allowed = confirmFieldsFor(deal.deal_type);
+  const offType = [...Object.keys(input.apply), ...input.keep].filter((field) => !allowed.includes(field));
+  if (offType.length > 0) throw invalid(offType);
+  const results = [1, 2].map((runIndex) => storedResult(rows.find((row) => row.run_index === runIndex)));
+  if (results.every((result) => result === null)) throw jobConflict();
+  const missing = missingDecisions(compareContractResults(results[0], results[1], deal.deal_type), input.apply, input.keep);
+  if (missing.length > 0) throw invalid(missing);
+
+  // 새 거래 값(고른 칸만 바꿈).
+  const next = { ...deal };
+  for (const [field, column] of Object.entries(CONFIRM_COLUMNS)) {
+    if (Object.hasOwn(input.apply, field)) next[column] = input.apply[field];
+  }
+  const middles = Object.hasOwn(input.apply, "middlePayments") ? input.apply.middlePayments : null;
+  if (middles) next.middle_payment_on = middles[0] ?? null;
+  let plan;
+  try {
+    assertDealConsistent(rowToDeal(next));
+    // 중도금은 앞 차보다 빠르거나, 계약일보다 빠르거나, 잔금일보다 늦으면 안 된다(뒤 차는 거래 칸이 아니라 여기서만 본다).
+    if (middles && middles.some((date, index) => (index > 0 && date < middles[index - 1]) || (next.contract_on && date < next.contract_on) || (next.balance_on && date > next.balance_on))) {
+      throw invalid(["middlePayments"]);
+    }
+    plan = planDealSchedule(ctx, dealId, next);
+  } catch (error) {
+    throw asConfirmFields(error);
+  }
+
+  const at = iso(now);
+  const alarms = JSON.stringify(DEFAULT_ALARM_TRIGGERS);
+  // 제목은 다시 계산의 날짜 일정과 같은 꼴("2차 중도금(물건 표시)"), 금액은 넣지 않는다(캘린더 구독으로 나가므로).
+  // 같은 차 수의 중도금 일정을 이미 완료로 표시했으면(사람이 고친 manual 포함) 그 차는 새로 넣지 않고 알린다(대장 결정 2026-11-23, 완료 기록은 그대로).
+  const doneEvents = middles && middles.length > 1 ? (await loadDealEvents(db, dealId)).filter((event) => event.kind === "custom" && event.doneAt !== null) : [];
+  const skippedMiddles = [];
+  const aiEvents = [];
+  (middles ?? []).slice(1).forEach((date, index) => {
+    const label = `${index + 2}차 중도금`;
+    if (doneEvents.some((event) => event.title.startsWith(label))) {
+      skippedMiddles.push(label);
+      return;
+    }
+    aiEvents.push({ id: randomUUID(), date, title: cleanSingleLine(next.property_label ? `${label}(${next.property_label})` : label, 80) });
+  });
+  const statements = [
+    db.prepare(CONFIRM_GUARD_SQL).bind(dealId, input.dealVersion, groupId, fileIdsJson, fileIds.length),
+    db.prepare(CONFIRM_DEAL_SQL).bind(next.contract_on, next.middle_payment_on, next.balance_on, next.price_won, next.deposit_won, next.monthly_rent_won, at, dealId, input.dealVersion),
+    ...plan.statements,
+  ];
+  if (middles) {
+    statements.push(db.prepare(AI_MIDDLE_DELETE_SQL).bind(dealId));
+    for (const event of aiEvents) statements.push(db.prepare(AI_MIDDLE_INSERT_SQL).bind(event.id, dealId, event.date, event.title, alarms, at));
+  }
+  statements.push(
+    db.prepare(CONFIRM_JOBS_SQL).bind(groupId, at),
+    // reason은 고정 꼴(넣은 칸 수·계산한 일정 수)만. 날짜·금액·계약서 글·거래 제목은 넣지 않는다.
+    auditStatement(db, { at, actorEmail: actor.email, action: "ai.confirm", targetType: "ai_job_group", targetId: groupId, requestId, outcome: "ok",
+      reason: `kind=${AI_JOB_KIND};fields=${Object.keys(input.apply).length};events=${plan.planned.length + aiEvents.length}` }),
+  );
+  try {
+    await runBatch(db, statements);
+  } catch (error) {
+    // guard가 되돌렸으면 그사이 바뀐 것을 알려 준다: 묶음 상태(취소·다른 확정) 409, 거래 없음·사본이 빠짐 404, 끝난 거래 409, 다른 화면이 거래를 고침 409.
+    const latestRows = await db.prepare(GROUP_SQL).bind(groupId).all().then((result) => result.results ?? [], () => null);
+    if (latestRows && latestRows.length > 0 && groupStatusOf(latestRows) !== "ready") throw jobConflict();
+    const latest = await loadDeal(db, dealId);
+    if (!latest) throw notFound();
+    if (CLOSED_DEAL_STATUSES.includes(latest.status)) throw dealClosed();
+    if (latest.version !== input.dealVersion) throw versionConflict();
+    const latestLink = await db.prepare(CONFIRM_FILES_SQL).bind(fileIdsJson).first().catch(() => null);
+    if (latestLink && (Number(latestLink.n) !== fileIds.length || latestLink.lo !== dealId || latestLink.hi !== dealId)) throw notFound();
+    throw error;
+  }
+  const events = await loadDealEvents(db, dealId);
+  const outcome = scheduleOutcome(plan.planned, plan.schedule, events);
+  outcome.notices.push(...skippedMiddles.map((label) => `${label}은 이미 완료 표시돼 새로 넣지 않았습니다.`));
+  return { data: { deal: dealView(await loadDeal(db, dealId)), events, ...outcome } };
+}
+
+
 // ── 경로 ──
 
 // ctx: { db, env, actor, requestId, now, method, route, url, body, randomUUID, files, log, openaiFetch }
@@ -529,20 +760,24 @@ async function listGroups(ctx) {
 export async function routeWorkAi(ctx) {
   const { method, route } = ctx;
   if (!isWorkAiRoute(route)) return null;
+  if (route === "/ai/estimate") {
+    if (method !== "GET") throw methodNotAllowed("GET");
+    return estimateCreate(ctx);
+  }
   if (route === "/ai/jobs") {
     if (method === "GET") return listGroups(ctx);
     if (method !== "POST") throw methodNotAllowed("GET, POST");
     return createJobs(ctx);
   }
-  const match = route.match(/^\/ai\/jobs\/([^/]+)(\/cancel)?$/u);
+  const match = route.match(/^\/ai\/jobs\/([^/]+)(\/cancel|\/confirm)?$/u);
   if (match) {
-    const [, groupId, cancel] = match;
-    if (!cancel) {
+    const [, groupId, action] = match;
+    if (!action) {
       if (method !== "GET") throw methodNotAllowed("GET");
       return getGroup(ctx, groupId);
     }
     if (method !== "POST") throw methodNotAllowed("POST");
-    return cancelGroup(ctx, groupId);
+    return action === "/cancel" ? cancelGroup(ctx, groupId) : confirmGroup(ctx, groupId);
   }
   throw notFound();
 }

@@ -273,7 +273,7 @@ export function dealRegulatedArea(regulation) {
 }
 const DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/u;
 // 거래 종류마다 받는 금액 칸(공개 매물과 같은 규칙: 매매·교환은 거래가, 전세는 보증금, 월세는 보증금·월세).
-const AMOUNT_FIELDS_BY_TYPE = Object.freeze({
+export const AMOUNT_FIELDS_BY_TYPE = Object.freeze({
   sale: ["priceWon"],
   exchange: ["priceWon"],
   jeonse: ["depositWon"],

@@ -72,11 +72,12 @@ const SQL = Object.freeze({
     + " WHERE NOT EXISTS (SELECT 1 FROM deal_events WHERE deal_id = ? AND kind = ?)",
   customInsert: "INSERT INTO deal_events (" + EVENT_COLUMNS + ") VALUES (?, ?, 'custom', ?, ?, ?, 'manual', NULL, 1, ?, ?)",
   // 고치기: 자동 계산 일정의 날짜·제목을 직접 고치면 사용자 일정(manual)이 되어 다시 계산이 건드리지 않는다(D4).
+  // AI 확정이 넣은 둘째 이후 중도금(custom·ai_confirmed)도 날짜·제목을 고치면 manual이 되어 다시 확정이 바꾸지 않는다(G21, 대장 결정 2026-11-23).
   // 완료 표시·알림만 바꾸면 출처는 자동 그대로다. 완료한 동안은 다시 계산이 건드리지 않고, 완료를 풀면 다시 새 날짜로 계산된다.
   // 알림만 바꾼 끝나지 않은 자동 일정은 다시 계산 때 새 날짜로 바뀌면서 알림을 이어받는다.
   eventUpdate:
     "UPDATE deal_events SET due_on = coalesce(?, due_on), title = coalesce(?, title), alarm_offsets = coalesce(?, alarm_offsets),"
-    + " done_at = CASE WHEN ? = 1 THEN ? ELSE done_at END, source = CASE WHEN source = 'calculated' AND ? = 1 THEN 'manual' ELSE source END,"
+    + " done_at = CASE WHEN ? = 1 THEN ? ELSE done_at END, source = CASE WHEN source IN ('calculated', 'ai_confirmed') AND ? = 1 THEN 'manual' ELSE source END,"
     + " version = version + 1, updated_at = ? WHERE id = ? AND version = ?",
   eventDelete: "DELETE FROM deal_events WHERE id = ?",
   // 휴지통(0007): 사용자가 지운 일정 한 건만 옮겨 적는다. 다시 계산이 지우는 자동 일정(calculatedPrune)은 휴지통을 거치지 않는다(T-2).
@@ -103,7 +104,7 @@ async function loadEvent(db, id) {
   return (await db.prepare(SQL.eventById).bind(id).first()) ?? null;
 }
 
-async function loadDealEvents(db, dealId) {
+export async function loadDealEvents(db, dealId) {
   return (await all(db.prepare(SQL.dealEvents).bind(dealId))).map(eventView);
 }
 
@@ -162,10 +163,10 @@ const SCHEDULE_ERROR_FIELDS = Object.freeze({
   AMOUNT_TOO_LARGE: ["priceWon", "depositWon", "monthlyRentWon"],
 });
 
-async function calculateEvents(ctx, dealId) {
-  parseCalculate(ctx.body);
-  const deal = await loadDeal(ctx.db, dealId);
-  if (!deal) throw notFound();
+// 거래 행(deals 칸 이름)으로 일정을 계산하고, 끝나지 않은 자동 일정을 바꾸는 문장(prune·update·insert)을 만든다.
+// 다시 계산(events/calculate)과 AI 확정(work-ai-jobs.mjs /confirm)이 같은 함수를 쓴다(G1 ①). guard·감사는 부르는 쪽이 붙인다.
+// 계산에 필요한 칸이 비었거나 날짜가 맞지 않으면 400 VALIDATION_FAILED(문장을 만들기 전, 쓰기 0).
+export function planDealSchedule(ctx, dealId, deal) {
   const input = scheduleInput(deal);
   const missing = missingScheduleFields(deal, input);
   if (missing.length > 0) throw invalid(missing);
@@ -182,16 +183,22 @@ async function calculateEvents(ctx, dealId) {
     if (!kind) throw new Error(`schedule kind ${event.kind}`);
     return { kind, date: event.date, title: cleanSingleLine(event.title, 80) };
   });
-  const statements = [
-    ctx.db.prepare(SQL.dealVersionGuard).bind(dealId, deal.version),
-    ctx.db.prepare(SQL.calculatedPrune).bind(dealId, JSON.stringify(planned.map((event) => event.kind))),
-  ];
+  const statements = [ctx.db.prepare(SQL.calculatedPrune).bind(dealId, JSON.stringify(planned.map((event) => event.kind)))];
   for (const event of planned) {
     statements.push(ctx.db.prepare(SQL.calculatedUpdate).bind(event.date, event.title, at, dealId, event.kind, event.date, event.title));
   }
   for (const event of planned) {
     statements.push(ctx.db.prepare(SQL.calculatedInsert).bind(ctx.randomUUID(), dealId, event.kind, event.date, event.title, alarms, at, at, dealId, event.kind));
   }
+  return { planned, schedule, statements };
+}
+
+async function calculateEvents(ctx, dealId) {
+  parseCalculate(ctx.body);
+  const deal = await loadDeal(ctx.db, dealId);
+  if (!deal) throw notFound();
+  const { planned, schedule, statements: scheduleStatements } = planDealSchedule(ctx, dealId, deal);
+  const statements = [ctx.db.prepare(SQL.dealVersionGuard).bind(dealId, deal.version), ...scheduleStatements];
   statements.push(auditStatement(ctx.db, { ...auditBase(ctx, "event.calculate", { targetType: "deal", targetId: dealId }), outcome: "ok" }));
   try {
     await runBatch(ctx.db, statements);
@@ -204,6 +211,11 @@ async function calculateEvents(ctx, dealId) {
   }
   // 안내 문장은 저장이 끝난 뒤의 일정으로 만든다(미리 읽으면 그 사이 다른 화면에서 고친 일정을 놓칠 수 있음).
   const events = await loadDealEvents(ctx.db, dealId);
+  return { data: { events, ...scheduleOutcome(planned, schedule, events) } };
+}
+
+// 저장한 뒤의 일정(events)으로 남긴 종류(kept)와 안내 문장(notices)을 만든다. 다시 계산과 AI 확정이 같은 꼴로 돌려준다.
+export function scheduleOutcome(planned, schedule, events) {
   // 남긴 종류(kept)는 새로 계산한 날짜와 함께 돌려준다. 화면은 keptOn과 calculatedOn이 다르면 크게 보여 준다.
   // reason: manual = 날짜·제목을 직접 고친 일정(manual·ai_confirmed), done = 완료로 표시한 자동 일정. 한 종류에 둘 다 있으면 manual.
   const kept = [];
@@ -231,7 +243,7 @@ async function calculateEvents(ctx, dealId) {
   if (kept.some((item) => item.reason === "manual")) notices.push("직접 고친 일정을 다시 계산한 값으로 바꾸려면 그 일정을 지운 뒤 다시 계산하세요.");
   if (kept.some((item) => item.reason === "done" && item.keptOn !== item.calculatedOn)) notices.push("완료로 표시한 일정을 다시 계산한 날짜로 바꾸려면 완료 표시를 푼 뒤 다시 계산하세요.");
   notices.push(...schedule.notices);
-  return { data: { events, notices, kept } };
+  return { notices, kept };
 }
 
 async function createEvent(ctx, dealId) {
