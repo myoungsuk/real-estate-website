@@ -130,26 +130,31 @@ test("메뉴: 업무 도구 아래 단계에 '실거래가'를 더하고(2026-11
 });
 
 test("P1-e 홍보물: 목록 고르기는 메모리만(최대 6건·해제 막음), 홍보물 화면은 ids로 다시 읽고, 그림은 data 주소 PNG, A4는 인쇄 CSS", async () => {
-  const [index, promo, card, promoLib, css, draw] = await Promise.all([
+  const [index, promo, card, promoLib, css, draw, promoLoad] = await Promise.all([
     readSource(PAGES[0]),
     readSource(PAGES[2]),
     readSource("src/lib/work-realprice-card.ts"),
     readSource("src/lib/work/realprice-promo.mjs"),
     readSource("src/styles/admin.css"),
     readSource("src/lib/work-card-draw.ts"),
+    readSource("src/lib/work/realprice-promo-load.mjs"),
   ]);
   assert.match(index, /<th scope="col" class="rt-pick-col">담기<\/th>/u, "표 끝 열");
   assert.match(index, /const view = takeButtonView\(shown, new Set\(picked\.keys\(\)\)\);/u, "'다 담기'는 보이는 거래만(realprice-promo.mjs)");
   assert.match(index, /const picked = new Map<string, Trade>\(\);/u, "고른 거래는 화면 메모리에만");
   assert.match(index, /box\.disabled = !selectable \|\| \(!box\.checked && picked\.size >= PROMO_IDS_MAX\);/u, "해제는 막고, 다 고르면 나머지를 잠금");
   assert.match(index, /const href = promoHref\(\[\.\.\.picked\.keys\(\)\]\);\r?\n\s*if \(href\) promoLink\.href = href;/u, "링크 주소로만 넘김(주소 바꾸기 없음)");
-  assert.match(promo, /readWork<IdsResponse>\("\/realprice\/trades", `ids=\$\{ids\.join\(","\)\}`\)/u, "고른 ID로 다시 읽음");
-  assert.match(promo, /const selection = promoSelection\(data\);/u, "해제·찾지 못한 거래는 빼고 알림");
-  assert.match(promo, /const blocked = promoBlockReason\(input\);/u, "명시사항·받은 시각이 없으면 막음");
+  // 세 규칙은 홍보물 화면과 목록 오른쪽 미리보기 칸(D-3)이 같이 쓰는 공용 모듈(realprice-promo-load.mjs)에 있다.
+  for (const [name, source] of [["홍보물 화면", promo], ["미리보기 칸", index]]) {
+    assert.match(source, /loaded = await loadPromoTrades\(readWork, ids, office\);/u, `${name}: 공용 모듈로 다시 읽음`);
+  }
+  assert.match(promoLoad, /await read\("\/realprice\/trades", `ids=\$\{ids\.join\(","\)\}`\);/u, "고른 ID로 다시 읽음");
+  assert.match(promoLoad, /const selection = promoSelection\(data\);/u, "해제·찾지 못한 거래는 빼고 알림");
+  assert.match(promoLoad, /blocked: promoBlockReason\(input\)/u, "명시사항·받은 시각이 없으면 막음");
   assert.match(promo, /link\.download = name;/u);
   assert.match(promo, /<div class="rt-print-sheet" data-promo-sheet><\/div>/u);
   assert.match(card, /canvas\.toDataURL\("image\/png"\)/u, "CSP img-src에 blob이 없어 data 주소");
-  assert.doesNotMatch(`${card}\n${promo}`, /createObjectURL|blob:/u);
+  assert.doesNotMatch(`${card}\n${promo}\n${index}`, /createObjectURL|blob:/u);
   // 로고 읽기는 업무 카드 공통 파일로 옮겼다(보드 45번 C). 카드는 그 함수를 가져다 쓴다.
   assert.match(draw, /export const LOGO_SRC = "\/images\/brand\/leaders-city-happy-logo\.webp";/u, "같은 출처 로고(canvas가 오염되지 않음)");
   assert.match(card, /import \{[^}]*\bloadLogo\b[^}]*\} from "\.\/work-card-draw";/u, "카드는 공통 로고 읽기를 씀");

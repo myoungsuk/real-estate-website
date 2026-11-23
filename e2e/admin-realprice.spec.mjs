@@ -1117,3 +1117,221 @@ test("거래 흐름 홍보물: 담은 매매 ID만 한 번 묻고, 흐름을 못
   }
   assertNoErrors();
 });
+
+// ── D-3 오른쪽 미리보기 칸(2026-11-23 사용자 승인 "이대로 구현"·"세로로 2장"): 1221px 이상만 380px 칸, 담는 대로 공용 모듈로 ids를 다시 읽어 지금 홍보물 카드를 그린다 ──
+
+// 목록 응답은 첫 쪽 그대로, ids 요청은 그 거래만(바꾸기 함수로 해제·받은 시각을 바꿈).
+const previewTrades = (change = (items) => ({ items })) => (params) => {
+  const ids = params.get("ids");
+  if (!ids) return envelope({ items: params.get("cancelled") === "include" ? [cancelledTrade, ...firstPage] : firstPage, nextCursor: null, recordHighReady: true, coverage: {}, warnings: [] });
+  const picked = ids.split(",").map((id) => firstPage.find((item) => item.tradeKey === id)).filter(Boolean);
+  return envelope({ missing: [], receivedAt: "2026-11-19T03:10:00Z", recordHighReady: true, warnings: [], ...change(picked) });
+};
+const idCalls = (calls) => calls.trades.filter((query) => new URLSearchParams(query).has("ids"));
+async function withListCsp(page) {
+  const violations = [];
+  await page.route(/\/admin\/work\/realprice\/$/u, async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({ response, headers: { ...response.headers(), "content-security-policy": PRODUCTION_CSP } });
+  });
+  await page.exposeFunction("__cspViolation", (text) => violations.push(text));
+  await page.addInitScript(() => document.addEventListener("securitypolicyviolation", (event) => window.__cspViolation(`${event.violatedDirective} ${event.blockedURI}`)));
+  return violations;
+}
+
+test("D-3 미리보기 칸 1280px: 담으면 ids로 한 번 다시 읽어 홍보물 화면과 같은 카드·글, 그림 저장·글 복사, 층·동은 전용면적 아래, 칸은 화면을 따라옴", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const violations = await withListCsp(page);
+  const picks = [firstPage[0], firstPage[4]];
+  const calls = await setup(page, { width: 1280, trades: previewTrades() });
+  await page.goto("/admin/work/realprice/");
+  await expect(rows(page)).toHaveCount(30);
+  const panel = page.getByRole("complementary", { name: /미리보기/u });
+  await expect(panel).toBeVisible();
+  await expect(panel.locator("[data-rt-preview-empty]")).toContainText("담은 거래가 없습니다");
+  await expect(panel.locator("[data-rt-preview-count]")).toHaveText("담은 거래 0건");
+  const first = rows(page).first();
+  await expect(first.locator(".rt-size"), "글자는 그대로").toHaveText("84.97㎡ · 10층 · 103동");
+  expect(await first.locator(".rt-size__rest").evaluate((element) => getComputedStyle(element).display), "층·동은 전용면적 아래 줄").toBe("block");
+  await expect(first.locator(".rt-size__sep")).toBeHidden();
+
+  // 연달아 두 건 담기 → 기다렸다가 ids 한 번
+  const insightCallsBefore = calls.insights.length;
+  await rows(page).nth(0).getByRole("checkbox").check();
+  await rows(page).nth(4).getByRole("checkbox").check();
+  const image = panel.locator("[data-rt-preview-cards] img");
+  await expect(image).toHaveCount(1);
+  await expect(image).toHaveAttribute("src", /^data:image\/png;base64,/u);
+  expect(idCalls(calls), "ids로만, 한 번").toEqual([new URLSearchParams({ ids: idsOf(picks) }).toString()]);
+  await expect(panel.locator("[data-rt-preview-count]")).toHaveText("담은 거래 2건 · 그림 1장");
+  expect(calls.insights.length, "목록이 이미 받은 거래 흐름은 다시 묻지 않음(날개-2 깨 보기로 보탬)").toBe(insightCallsBefore);
+  await expect(panel.locator("[data-rt-preview-size]")).toHaveText("1080×1350 PNG · 1장");
+  await expect(panel.getByRole("link", { name: "크게 보기·글 미리 보기" })).toHaveAttribute("href", `/admin/work/realprice/promo/?ids=${idsOf(picks)}`);
+  await expect(page.locator("[data-rt-pick-bar]")).toBeVisible();
+  await expect(page.locator("[data-rt-promo-link]"), "막대의 '홍보물 만들기'는 칸의 고리가 대신함").toBeHidden();
+  await expect(page.locator("[data-rt-pick-clear]")).toBeVisible();
+
+  // 그림 저장
+  const save = panel.locator("[data-rt-preview-download]");
+  await expect(save).toHaveText("그림 저장");
+  await expect(save).toHaveAttribute("download", "realprice-20261119.png");
+  const [file] = await Promise.all([page.waitForEvent("download"), save.click()]);
+  expect(pngSize(readFileSync(await file.path()))).toEqual({ width: 1080, height: 1350, signature: "PNG" });
+  await expect(save).toHaveText("✓ 그림 저장함");
+
+  // 글 복사: 처음은 인스타그램, 올릴 곳을 바꾸면 단추 이름이 바뀌고 ✓ 표시는 지움
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"], { origin: new URL(page.url()).origin });
+  const copy = panel.locator("[data-rt-preview-copy]");
+  await expect(copy).toHaveAccessibleName("인스타그램 글 복사");
+  await expect(panel.locator("[data-rt-preview-copy-count]")).toContainText("해시태그");
+  await copy.click();
+  await expect(copy).toHaveAccessibleName("✓ 인스타그램 글 복사함");
+  // Windows 클립보드는 줄바꿈을 CRLF로 바꿔 돌려주므로 줄바꿈만 맞춰 비교한다(홍보물 화면 시험과 같음).
+  const instagram = (await page.evaluate(() => navigator.clipboard.readText())).replaceAll("\r\n", "\n");
+  await expect(panel.locator("[data-rt-preview-post]")).toHaveText("인스타그램 앱에서 새 게시물 → 저장한 그림 고르기 → 글 붙여 넣기.");
+  await panel.getByRole("radio", { name: "스레드" }).check();
+  await expect(copy).toHaveAccessibleName("스레드 글 복사");
+  await expect(panel.locator("[data-rt-preview-status]")).toHaveText("");
+  // 고른 곳의 글을 복사한다(날개-2 깨 보기로 보탬): 스레드로 바꾸면 인스타그램 글이 아니라 스레드 글
+  await copy.click();
+  await expect(copy).toHaveAccessibleName("✓ 스레드 글 복사함");
+  const threads = (await page.evaluate(() => navigator.clipboard.readText())).replaceAll("\r\n", "\n");
+  expect(threads, "스레드 글은 인스타그램 글과 다름").not.toBe(instagram);
+  await expect(panel.locator("[data-rt-preview-print]")).toHaveText("종이로 뽑기(A4)");
+  const cardSrc = await image.getAttribute("src");
+
+  // 칸: 목록 오른쪽 380px, 내려도 위 16px에 붙어 따라옴, 가로 넘침 없음
+  const box = await panel.evaluate((aside) => {
+    const own = aside.getBoundingClientRect();
+    const main = document.querySelector("[data-rt-main]").getBoundingClientRect();
+    return { width: Math.round(own.width), right: own.left >= main.right, bottom: own.bottom <= window.innerHeight };
+  });
+  expect(box).toEqual({ width: 380, right: true, bottom: true });
+  await page.evaluate(() => window.scrollTo(0, 900));
+  await expect.poll(() => panel.evaluate((aside) => Math.round(aside.getBoundingClientRect().top))).toBe(16);
+  expect(await overflowOf(page)).toBeLessThanOrEqual(0);
+  expect(violations, "운영 CSP 위반").toEqual([]);
+  assertNoErrors();
+
+  // 같은 거래로 연 홍보물 화면과 그림·인스타그램 글이 같다(지금 카드 그대로)
+  const promo = await page.context().newPage();
+  await setup(promo, { width: 1280, trades: previewTrades() });
+  await promo.goto(`/admin/work/realprice/promo/?ids=${idsOf(picks)}`);
+  await expect(promo.locator(".rt-promo__card img")).toHaveAttribute("src", cardSrc);
+  expect(await promo.locator("[data-promo-preview]").inputValue()).toBe(instagram);
+  await promo.getByRole("radio", { name: "스레드" }).check();
+  await expect.poll(() => promo.locator("[data-promo-preview]").inputValue()).toBe(threads);
+  await promo.close();
+});
+
+test("D-3 미리보기 칸: 4건 이상은 카드 2장을 세로로, 다시 읽을 때 해제로 바뀐 거래는 빼고 알림, 비우면 빈 칸", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const calls = await setup(page, { width: 1280, trades: previewTrades((items) => ({ items: items.map((item, index) => (index === 2 ? { ...item, cancelled: true } : item)) })) });
+  await page.goto("/admin/work/realprice/");
+  await expect(rows(page)).toHaveCount(30);
+  await page.locator("[data-rt-take]").click();
+  const panel = page.locator("[data-rt-preview]");
+  const images = panel.locator("[data-rt-preview-cards] img");
+  await expect(images).toHaveCount(2);
+  expect(idCalls(calls)).toHaveLength(1);
+  await expect(panel.locator("[data-rt-preview-notice-text]")).toHaveText("해제된 거래 1건을 뺐습니다.");
+  await expect(panel.locator("[data-rt-preview-notice]"), "해제 알림이 보임(날개-2 깨 보기로 보탬)").toBeVisible();
+  await expect(panel.locator("[data-rt-preview-count]")).toHaveText("담은 거래 5건 · 그림 2장");
+  await expect(panel.locator("[data-rt-preview-download]")).toHaveText(["1장 저장", "2장 저장"]);
+  await expect(panel.locator("[data-rt-preview-download]").nth(1)).toHaveAttribute("download", "realprice-20261119-2.png");
+  await expect(images.nth(0)).toHaveAccessibleName(/^카드 그림 1\/2장: /u);
+  const stack = await images.evaluateAll((list) => {
+    const [a, b] = list.map((element) => element.getBoundingClientRect());
+    const body = document.querySelector(".rt-preview__body");
+    return { below: b.top >= a.bottom, sameLeft: Math.abs(a.left - b.left) < 1, scrolls: body.scrollHeight > body.clientHeight };
+  });
+  expect(stack, "두 장은 위아래, 칸 안에서 스크롤").toEqual({ below: true, sameLeft: true, scrolls: true });
+  await page.locator("[data-rt-pick-clear]").click();
+  await expect(images).toHaveCount(0);
+  await expect(panel.locator("[data-rt-preview-empty]")).toBeVisible();
+  await expect(panel.locator("[data-rt-preview-act]")).toBeHidden();
+  await expect(panel.locator("[data-rt-preview-count]")).toHaveText("담은 거래 0건");
+  assertNoErrors();
+});
+
+test("D-3 미리보기 칸: 받은 시각을 모르거나 불러오지 못하면 만들지 않고 까닭과 '미리보기 다시 그리기'", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  let mode = "no-time";
+  const ok = previewTrades();
+  const calls = await setup(page, {
+    width: 1280,
+    trades: (params) => {
+      if (!params.get("ids") || mode === "ok") return ok(params);
+      if (mode === "fail") return failure(503, "WORK_UNAVAILABLE", { retryable: true });
+      return previewTrades((items) => ({ items, receivedAt: null }))(params);
+    },
+  });
+  await page.goto("/admin/work/realprice/");
+  await expect(rows(page)).toHaveCount(30);
+  const panel = page.locator("[data-rt-preview]");
+  await rows(page).nth(0).getByRole("checkbox").check();
+  await expect(panel.locator("[data-rt-preview-blocked-text]")).toHaveText("자료를 받은 시각을 확인하지 못해 홍보물을 만들 수 없습니다. 잠시 뒤 다시 열어 주세요.");
+  await expect(panel.locator("[data-rt-preview-cards] img")).toHaveCount(0);
+  await expect(panel.locator("[data-rt-preview-act]")).toBeHidden();
+  const retry = panel.getByRole("button", { name: "미리보기 다시 그리기" });
+  mode = "fail";
+  await retry.click();
+  await expect(panel.locator("[data-rt-preview-blocked-text]")).toHaveText(/^담은 거래를 불러오지 못했습니다\. /u);
+  mode = "ok";
+  await retry.click();
+  await expect(panel.locator("[data-rt-preview-cards] img")).toHaveCount(1);
+  await expect(panel.locator("[data-rt-preview-blocked]")).toBeHidden();
+  expect(idCalls(calls)).toHaveLength(3);
+  assertNoErrors();
+});
+
+test("D-3 1220px 이하는 칸이 없고 다시 읽지 않음(아래 막대 '홍보물 만들기' 그대로), 1221px 이상으로 넓히면 그때 그림", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const calls = await setup(page, { width: 1220, trades: previewTrades() });
+  await page.goto("/admin/work/realprice/");
+  await expect(rows(page)).toHaveCount(30);
+  await rows(page).nth(0).getByRole("checkbox").check();
+  await expect(page.locator("[data-rt-promo-link]")).toBeVisible();
+  await expect(page.locator("[data-rt-promo-link]")).toHaveText("홍보물 만들기");
+  await expect(page.locator("[data-rt-preview]")).toBeHidden();
+  await page.waitForTimeout(600);
+  expect(idCalls(calls), "칸이 없으면 부르지 않음").toEqual([]);
+  await page.setViewportSize({ width: 1221, height: 900 });
+  await expect(page.locator("[data-rt-preview-cards] img")).toHaveCount(1);
+  expect(idCalls(calls)).toHaveLength(1);
+  await page.setViewportSize({ width: 1220, height: 900 });
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.waitForTimeout(600);
+  expect(idCalls(calls), "담은 거래가 같으면 다시 부르지 않음").toHaveLength(1);
+  for (const width of [360, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    await expect(page.locator("[data-rt-preview]")).toBeHidden();
+    expect(await overflowOf(page), `${width}px 가로 넘침`).toBeLessThanOrEqual(0);
+  }
+  assertNoErrors();
+});
+
+test("D-3 종이로 뽑기(A4): 누를 때만 카드 그림 판을 붙여 인쇄 화면에는 그림만, 인쇄가 끝나면 뗌", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  await setup(page, { width: 1280, trades: previewTrades() });
+  await page.goto("/admin/work/realprice/");
+  await expect(rows(page)).toHaveCount(30);
+  await expect(page.locator(".rt-print-sheet"), "평소에는 인쇄 판이 없음").toHaveCount(0);
+  await page.locator("[data-rt-take]").click();
+  await expect(page.locator("[data-rt-preview-cards] img")).toHaveCount(2);
+  await page.evaluate(() => {
+    window.__printed = [];
+    window.print = () => window.__printed.push(document.querySelectorAll(".rt-print-sheet img").length);
+  });
+  await page.locator("[data-rt-preview-print]").click();
+  await expect.poll(() => page.evaluate(() => window.__printed)).toEqual([2]);
+  await page.emulateMedia({ media: "print" });
+  await expect(page.locator(".rt-print-sheet img")).toHaveCount(2);
+  await expect(page.locator(".rt-print-sheet img").first()).toBeVisible();
+  await expect(page.locator("[data-rt-main]")).toBeHidden();
+  await expect(page.locator("[data-rt-preview]")).toBeHidden();
+  await page.emulateMedia({ media: "screen" });
+  await page.evaluate(() => window.dispatchEvent(new Event("afterprint")));
+  await expect(page.locator(".rt-print-sheet")).toHaveCount(0);
+  assertNoErrors();
+});

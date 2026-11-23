@@ -1317,6 +1317,54 @@ html:has(.rt-pick-bar:not([hidden])) { scroll-padding-bottom: calc(var(--rt-pick
   html:has(.rt-pick-bar:not([hidden])) { scroll-padding-bottom: calc(56px + var(--rt-pick-bar-h, 66px) + 8px + env(safe-area-inset-bottom)); }
 }
 
+/* 오른쪽 미리보기 칸(D-3, 2026-11-23 사용자 승인 "이대로 구현"·"세로로 2장"): 1221px 이상만 목록 오른쪽 380px 칸이 화면을 따라 내려오고(sticky), 그림이 길면 칸 안에서 스크롤한다.
+   1220px 이하는 칸이 없고 아래 막대 '홍보물 만들기' 그대로다. 1221px 이상 막대의 '홍보물 만들기'는 칸의 '크게 보기·글 미리 보기'(같은 주소)로 대신한다. */
+.rt-preview { display: none; }
+@media (min-width: 1221px) {
+  .rt-split { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; align-items: start; }
+  .rt-split > [data-rt-main] { min-width: 0; }
+  .rt-preview { position: sticky; top: 16px; display: flex; flex-direction: column; max-height: calc(100vh - 32px); border: 1px solid var(--ds-edge); border-radius: var(--ad-radius); background: var(--ds-paper); overflow: hidden; }
+  .rt-split:has(> [data-rt-main][hidden]) > .rt-preview { display: none; }
+  .rt-pick-bar .rt-pick-bar__promo { display: none; }
+  .rt-preview__head { padding: 14px 16px 12px; border-bottom: 1px solid var(--ds-edge); }
+  .rt-preview__title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin: 0; font-size: 1.0625rem; font-weight: 800; }
+  .rt-preview__title small { color: var(--ds-ink-soft); font-size: 1rem; font-weight: 700; }
+  .rt-preview__where { margin: 10px 0 6px; color: var(--ds-ink-soft); font-size: 1rem; font-weight: 700; }
+  .rt-preview__chips { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  .rt-preview__chip { position: relative; display: flex; align-items: center; justify-content: center; gap: 4px; min-height: 44px; border: 1.5px solid var(--ds-field-edge); border-radius: 999px; color: var(--ds-ink); background: var(--ds-paper); font-size: 1rem; font-weight: 800; cursor: pointer; }
+  .rt-preview__chip input { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; margin: 0; opacity: 0; cursor: pointer; }
+  .rt-preview__chip:has(input:checked) { border-color: var(--ds-navy); color: var(--ds-paper); background: var(--ds-navy); }
+  .rt-preview__chip:has(input:checked)::before { content: "✓"; }
+  .rt-preview__chip:has(input:focus-visible) { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+  .rt-preview__body { flex: 1 1 auto; min-height: 0; padding: 14px 16px; overflow: auto; background: var(--ds-paper-2); }
+  .rt-preview__cards { display: grid; gap: 12px; }
+  .rt-preview__cards img { display: block; width: 100%; max-width: 300px; height: auto; margin: 0 auto; border: 1px solid var(--ds-edge); background: var(--ds-paper); }
+  .rt-preview__empty { display: grid; place-content: center; gap: 8px; min-height: 320px; padding: 24px 8px; color: var(--ds-ink-soft); text-align: center; }
+  .rt-preview__empty b { color: var(--ds-ink); font-size: 1.0625rem; }
+  .rt-preview__blocked { display: grid; gap: 10px; justify-items: start; }
+  .rt-preview__blocked p { margin: 0; color: var(--ds-ink); font-weight: 700; }
+  .rt-preview__act { display: grid; gap: 8px; padding: 12px 16px 14px; border-top: 1px solid var(--ds-edge); }
+  .rt-preview__downloads { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
+  .rt-preview__save { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; text-decoration: none; }
+  .rt-preview__size,
+  .rt-preview__hint { margin: 0; color: var(--ds-ink-soft); font-size: 1rem; }
+  .rt-preview__copy { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 2px 8px; width: 100%; min-height: 44px; }
+  .rt-preview__copy small { color: var(--ds-ink-soft); font-size: 1rem; font-weight: 600; }
+  .rt-preview__copy small[data-state="over"] { color: var(--ad-warn-ink); }
+  .rt-preview__more { justify-self: start; }
+  /* 표는 칸이 380px 좁아져(1221px에서 약 770px) 칸 여백을 6px로, 단지·금액 칸 최소 폭을 7.5rem·8.5rem으로 줄이고 칸이 모자랄 때만 앞선 최고·전용면적 머리를 두 줄로 감는다(넓은 글꼴에서도 표 안 가로 스크롤 0). */
+  .rt-split .rt-table th,
+  .rt-split .rt-table td { padding-inline: 6px; }
+  .rt-split .rt-table td.rt-name { min-width: 7.5rem; }
+  .rt-split .rt-table td.rt-price { min-width: 8.5rem; }
+  .rt-split .rt-table td.rt-price .rt-prev { white-space: normal; }
+  .rt-split .rt-table th.rt-th-size { white-space: normal; }
+  .rt-split .rt-table th.rt-th-size span { white-space: nowrap; }
+  /* 표: 층·동은 전용면적 아래 작은 줄(글자는 그대로 "84.97㎡ · 10층 · 103동", 가운데 점은 숨김) */
+  .rt-table td.rt-size .rt-size__sep { display: none; }
+  .rt-table td.rt-size .rt-size__rest { display: block; color: var(--ds-ink-soft); font-size: 0.875rem; font-weight: 400; }
+}
+
 /* 1221px 이상: 표 */
 @media (min-width: 1221px) {
   .rt-table th,
@@ -2555,6 +2603,12 @@ nav.tr-homelinks { display: flex; flex-wrap: wrap; gap: 0 24px; margin: 0 0 14px
   .dsh .admin-api-status > summary { min-height: 36px; }
 }
 
+/* 실거래가 오른쪽 미리보기 칸(D-3) — 마우스를 쓰는 1221px 이상 PC(사용자 승인 2026-11-23 11:34:13): 올릴 곳 4개를 한 줄로(누르는 곳 36px), 층·동 줄은 표 안 보조 글 12px. */
+@media (min-width: 1221px) and (hover: hover) and (pointer: fine) {
+  .rt-preview__chips { display: flex; }
+  .rt-preview__chip { flex: 1 1 auto; min-height: 36px; padding: 0 10px; font-size: 0.875rem; }
+  .rt-table td.rt-size .rt-size__rest { font-size: 0.75rem; }
+}
 /* 매출장부 PC 표에서 칸을 바로 고치기(D-2a, 1221px 이상). 1220px 이하는 카드와 입력 화면 그대로라 표 쪽 부품을 보이지 않는다. */
 .lg-history,
 .lg-keys { display: none; }

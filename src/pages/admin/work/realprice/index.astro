@@ -11,12 +11,15 @@ import {
   REALPRICE_PRICE_OPTIONS,
   chipText,
 } from "../../../../lib/work/realprice-view.mjs";
+import { PROMO_IDS_MAX, PROMO_PATH, PROMO_PLACES } from "../../../../lib/work/realprice-promo.mjs";
 
 // 단계 P 실거래가(P1-d, P1-f). 운영자 결정 2026-11-20 13:36:35 D안: 위 상태 한 줄 → 보기 3칸(새 거래·주요 거래·관심 단지) → 찾기칸 →
 // 거르기 단추 6개(기간·평형·금액·신고가만·분양권만·더 보기) → 'n건 보는 중'·켜짐 줄·다 담기 → 목록(거래마다 '담기'). 휴대폰·PC가 같은 순서이고
 // 폭에 따른 모양은 CSS(admin.css '실거래가')가 나눈다. 서버를 부르므로 탭 미리 그리기 prerender 목록에 넣지 않는다.
 // 거래 흐름(보드 63번, 2026-11-20 운영자 "권하는 조합"): 매매 거래마다 12개월 흐름선·직전 거래·최고가 대비(앞선 최고 기준)·최근 3개월 건수.
 // 1221px 이상 표는 칸 3개(흐름 아래 3개월 건수, 거래 종류·표시는 금액 아래, 법정동·준공연도는 단지 아래 작은 줄), 1220px 이하 카드는 '흐름·직전 거래'를 눌러 펼친다. 쪽을 그린 뒤 보이는 매매 ID만 30개씩 한 번에 묻고 페이지 메모리에서 다시 쓴다.
+// 오른쪽 미리보기 칸(D-3, 2026-11-23 사용자 승인 "이대로 구현"·"세로로 2장"): 1221px 이상만 380px 칸에 담은 거래의 홍보물 카드(지금 홍보물 화면 그림 그대로, 2장이면 세로)와
+// 그림 저장·글 복사·종이로 뽑기(A4)를 두고, 층·동은 표의 전용면적 아래 작은 줄로 내린다. 1220px 이하는 칸 없이 아래 막대 '홍보물 만들기' 그대로다.
 const settingsHref = "/admin/work/realprice/settings/";
 const mainLead = "대전 동구 아파트 실거래 신고 자료를 10분마다 조금씩 받아 둡니다. 계약일 기준이며, 신고 기한(30일) 때문에 최근 거래는 늘어날 수 있습니다.";
 const criterion = "같은 단지·같은 전용면적에서 계약일이 앞선 매매(해제·직거래 뺌)의 최고가보다 높은 거래";
@@ -104,151 +107,197 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
       </div>
     </section>
 
-    <div data-rt-main hidden>
-      <div class="work-row rt-mode" role="radiogroup" aria-labelledby="rt-mode-label">
-        <span class="work-row__label" id="rt-mode-label">보기</span>
-        <div class="work-segment">
-          <label class="work-choice">
-            <input type="radio" name="rt-mode" value="new" checked autocomplete="off" />
-            <span>새 거래</span>
-          </label>
-          <label class="work-choice">
-            <input type="radio" name="rt-mode" value="major" autocomplete="off" />
-            <span>주요 거래</span>
-          </label>
-          <label class="work-choice">
-            <input type="radio" name="rt-mode" value="watch" autocomplete="off" />
-            <span>관심 단지</span>
-          </label>
-        </div>
-      </div>
-
-      <p class="rt-watch-line" data-rt-watch-line hidden>
-        <span data-rt-watch-names></span>
-        <a class="admin-text-link" href={settingsHref}>설정에서 바꾸기</a>
-      </p>
-
-      <section class="admin-panel rt-state" aria-labelledby="rt-watch-empty-title" data-rt-watch-empty hidden>
-        <div class="admin-empty-state">
-          <span aria-hidden="true">0</span>
-          <div>
-            <h2 id="rt-watch-empty-title">관심 단지를 아직 고르지 않았습니다</h2>
-            <p>설정에서 관심 단지를 넣으면 그 단지의 거래만 모아 봅니다.</p>
-            <a class="admin-primary-button rt-state__action" href={settingsHref}>설정에서 고르기</a>
+    <div class="rt-split">
+      <div data-rt-main hidden>
+        <div class="work-row rt-mode" role="radiogroup" aria-labelledby="rt-mode-label">
+          <span class="work-row__label" id="rt-mode-label">보기</span>
+          <div class="work-segment">
+            <label class="work-choice">
+              <input type="radio" name="rt-mode" value="new" checked autocomplete="off" />
+              <span>새 거래</span>
+            </label>
+            <label class="work-choice">
+              <input type="radio" name="rt-mode" value="major" autocomplete="off" />
+              <span>주요 거래</span>
+            </label>
+            <label class="work-choice">
+              <input type="radio" name="rt-mode" value="watch" autocomplete="off" />
+              <span>관심 단지</span>
+            </label>
           </div>
         </div>
-      </section>
 
-      <div class="rt-top" data-rt-top>
-        <div class="rt-find" role="search" aria-label="단지·동 이름으로 찾기">
-          <label class="sr-only" for="rt-q">단지 이름이나 동 이름</label>
-          <input id="rt-q" type="search" maxlength="30" placeholder="단지 이름이나 동 이름" enterkeyhint="search" autocomplete="off" data-rt-q />
-          <button class="rt-find__go" type="button" data-rt-q-go>찾기</button>
+        <p class="rt-watch-line" data-rt-watch-line hidden>
+          <span data-rt-watch-names></span>
+          <a class="admin-text-link" href={settingsHref}>설정에서 바꾸기</a>
+        </p>
+
+        <section class="admin-panel rt-state" aria-labelledby="rt-watch-empty-title" data-rt-watch-empty hidden>
+          <div class="admin-empty-state">
+            <span aria-hidden="true">0</span>
+            <div>
+              <h2 id="rt-watch-empty-title">관심 단지를 아직 고르지 않았습니다</h2>
+              <p>설정에서 관심 단지를 넣으면 그 단지의 거래만 모아 봅니다.</p>
+              <a class="admin-primary-button rt-state__action" href={settingsHref}>설정에서 고르기</a>
+            </div>
+          </div>
+        </section>
+
+        <div class="rt-top" data-rt-top>
+          <div class="rt-find" role="search" aria-label="단지·동 이름으로 찾기">
+            <label class="sr-only" for="rt-q">단지 이름이나 동 이름</label>
+            <input id="rt-q" type="search" maxlength="30" placeholder="단지 이름이나 동 이름" enterkeyhint="search" autocomplete="off" data-rt-q />
+            <button class="rt-find__go" type="button" data-rt-q-go>찾기</button>
+          </div>
+          <div class="rt-chips" role="group" aria-label="거르기">
+            {chipSelects.map((select) => (
+              <label class="rt-chip rt-chip--menu rt-chip--select" data-rt-chip={select.key}>
+                <span class="rt-chip__text" aria-hidden="true" data-rt-chip-text={select.key}>{chipTextOf(select.key)}</span>
+                <select id={select.id} aria-label={select.label} data-rt-filter={select.key} autocomplete="off">
+                  {select.options.map((option) => (
+                    <option value={option.value} selected={option.value === defaults[select.key]}>{option.label}</option>
+                  ))}
+                </select>
+              </label>
+            ))}
+            <button class="rt-chip" type="button" aria-pressed="false" data-rt-toggle="highOnly">신고가만</button>
+            <button class="rt-chip" type="button" aria-pressed="false" data-rt-toggle="presale">분양권만</button>
+            <button class="rt-chip rt-chip--menu" type="button" aria-expanded="false" aria-controls="rt-more-filters" data-rt-more-toggle>더 보기</button>
+          </div>
         </div>
-        <div class="rt-chips" role="group" aria-label="거르기">
-          {chipSelects.map((select) => (
-            <label class="rt-chip rt-chip--menu rt-chip--select" data-rt-chip={select.key}>
-              <span class="rt-chip__text" aria-hidden="true" data-rt-chip-text={select.key}>{chipTextOf(select.key)}</span>
-              <select id={select.id} aria-label={select.label} data-rt-filter={select.key} autocomplete="off">
+        <div class="admin-listing-filters rt-filters" id="rt-more-filters" role="group" aria-label="거르기 더 보기" data-rt-more-filters hidden>
+          {moreSelects.map((select) => (
+            <div class="admin-field">
+              <label for={select.id}>{select.label}</label>
+              <select id={select.id} data-rt-filter={select.key} autocomplete="off">
                 {select.options.map((option) => (
                   <option value={option.value} selected={option.value === defaults[select.key]}>{option.label}</option>
                 ))}
               </select>
-            </label>
+            </div>
           ))}
-          <button class="rt-chip" type="button" aria-pressed="false" data-rt-toggle="highOnly">신고가만</button>
-          <button class="rt-chip" type="button" aria-pressed="false" data-rt-toggle="presale">분양권만</button>
-          <button class="rt-chip rt-chip--menu" type="button" aria-expanded="false" aria-controls="rt-more-filters" data-rt-more-toggle>더 보기</button>
-        </div>
-      </div>
-      <div class="admin-listing-filters rt-filters" id="rt-more-filters" role="group" aria-label="거르기 더 보기" data-rt-more-filters hidden>
-        {moreSelects.map((select) => (
-          <div class="admin-field">
-            <label for={select.id}>{select.label}</label>
-            <select id={select.id} data-rt-filter={select.key} autocomplete="off">
-              {select.options.map((option) => (
-                <option value={option.value} selected={option.value === defaults[select.key]}>{option.label}</option>
-              ))}
-            </select>
+          <div class="rt-filter-checks">
+            <label class="work-check">
+              <input type="checkbox" data-rt-filter="excludeCancelled" checked autocomplete="off" />
+              <span>해제 빼기</span>
+            </label>
+            <label class="work-check">
+              <input type="checkbox" data-rt-filter="excludeDirect" autocomplete="off" />
+              <span>직거래 빼기</span>
+            </label>
           </div>
-        ))}
-        <div class="rt-filter-checks">
-          <label class="work-check">
-            <input type="checkbox" data-rt-filter="excludeCancelled" checked autocomplete="off" />
-            <span>해제 빼기</span>
-          </label>
-          <label class="work-check">
-            <input type="checkbox" data-rt-filter="excludeDirect" autocomplete="off" />
-            <span>직거래 빼기</span>
-          </label>
+          <p class="rt-filters__major" data-rt-major-note hidden>주요 거래는 최근 30일 매매(해제·직거래 뺌)만 봅니다. 거래 종류·해제·직거래는 '새 거래'에서 바꿉니다.</p>
+          <button class="admin-filter-reset" type="button" data-rt-reset disabled>거르기 초기화</button>
         </div>
-        <p class="rt-filters__major" data-rt-major-note hidden>주요 거래는 최근 30일 매매(해제·직거래 뺌)만 봅니다. 거래 종류·해제·직거래는 '새 거래'에서 바꿉니다.</p>
-        <button class="admin-filter-reset" type="button" data-rt-reset disabled>거르기 초기화</button>
-      </div>
 
-      <section class="admin-panel rt-list" aria-labelledby="rt-list-title" data-rt-list>
-        <div class="rt-strip" data-rt-strip>
-          <div class="rt-strip__text">
-            <h2 id="rt-list-title"><span class="sr-only" data-rt-list-name>새 거래</span> <span data-rt-count></span><span data-rt-count-suffix> 보는 중</span></h2>
-            <p class="rt-strip__on"><span data-rt-on-text>거르기 없음 · 해제 거래 뺌</span><button class="rt-strip__clear" type="button" data-rt-clear-all hidden>모두 끄기</button></p>
+        <section class="admin-panel rt-list" aria-labelledby="rt-list-title" data-rt-list>
+          <div class="rt-strip" data-rt-strip>
+            <div class="rt-strip__text">
+              <h2 id="rt-list-title"><span class="sr-only" data-rt-list-name>새 거래</span> <span data-rt-count></span><span data-rt-count-suffix> 보는 중</span></h2>
+              <p class="rt-strip__on"><span data-rt-on-text>거르기 없음 · 해제 거래 뺌</span><button class="rt-strip__clear" type="button" data-rt-clear-all hidden>모두 끄기</button></p>
+            </div>
+            <button class="rt-take" type="button" data-rt-take hidden>위에서 6건 담기</button>
           </div>
-          <button class="rt-take" type="button" data-rt-take hidden>위에서 6건 담기</button>
-        </div>
-        <p class="admin-inline-notice rt-notice" data-rt-notice hidden><span aria-hidden="true">i</span><span data-rt-notice-text></span></p>
-        <p class="rt-loading" role="status" data-rt-loading hidden>거래를 불러오고 있습니다…</p>
-        <div class="rt-skeleton" aria-hidden="true" data-rt-skeleton hidden>
-          {[1, 2, 3, 4].map(() => <div><span></span><span></span><span></span></div>)}
-        </div>
-        <div class="rt-error" role="alert" data-rt-error hidden>
-          <p><span class="admin-badge admin-badge--danger">목록을 보일 수 없음</span></p>
-          <p data-rt-error-text></p>
-          <button class="admin-secondary-button" type="button" data-rt-retry>다시 불러오기</button>
-        </div>
-        <div class="rt-empty" data-rt-zero hidden>
-          <h3 data-rt-zero-title>조건에 맞는 거래가 없습니다.</h3>
-          <p data-rt-zero-body>기간을 늘리거나 거래 종류·법정동·금액 조건을 바꿔 보세요.</p>
-          <div class="rt-empty__actions" data-rt-zero-actions>
-            <button type="button" data-rt-zero-action="reset">거르기 초기화</button>
+          <p class="admin-inline-notice rt-notice" data-rt-notice hidden><span aria-hidden="true">i</span><span data-rt-notice-text></span></p>
+          <p class="rt-loading" role="status" data-rt-loading hidden>거래를 불러오고 있습니다…</p>
+          <div class="rt-skeleton" aria-hidden="true" data-rt-skeleton hidden>
+            {[1, 2, 3, 4].map(() => <div><span></span><span></span><span></span></div>)}
+          </div>
+          <div class="rt-error" role="alert" data-rt-error hidden>
+            <p><span class="admin-badge admin-badge--danger">목록을 보일 수 없음</span></p>
+            <p data-rt-error-text></p>
+            <button class="admin-secondary-button" type="button" data-rt-retry>다시 불러오기</button>
+          </div>
+          <div class="rt-empty" data-rt-zero hidden>
+            <h3 data-rt-zero-title>조건에 맞는 거래가 없습니다.</h3>
+            <p data-rt-zero-body>기간을 늘리거나 거래 종류·법정동·금액 조건을 바꿔 보세요.</p>
+            <div class="rt-empty__actions" data-rt-zero-actions>
+              <button type="button" data-rt-zero-action="reset">거르기 초기화</button>
+            </div>
+          </div>
+          <div class="admin-table-wrap rt-table-wrap" data-rt-table-wrap hidden>
+            <table class="admin-table rt-table">
+              <caption class="sr-only">실거래 목록(계약일 최근순)</caption>
+              <thead>
+                <tr>
+                  <th scope="col">단지</th>
+                  <th scope="col" class="rt-th-size"><span>전용면적·</span><wbr />층</th>
+                  <th scope="col">금액</th>
+                  <th scope="col" class="rt-only-card">거래</th>
+                  <th scope="col" class="rt-only-card">표시</th>
+                  <th scope="col" class="rt-only-table rt-th-wrap">흐름<wbr />(12개월)</th>
+                  <th scope="col" class="rt-only-table rt-th-wrap">직전 거래</th>
+                  <th scope="col" class="rt-only-table rt-th-wrap">최고가 대비</th>
+                  <th scope="col">계약일</th>
+                  <th scope="col" class="rt-only-card">법정동</th>
+                  <th scope="col" class="rt-only-card">새로 들어옴</th>
+                  <th scope="col" class="rt-only-card">흐름·직전 거래</th>
+                  <th scope="col" class="rt-pick-col">담기</th>
+                </tr>
+              </thead>
+              <tbody data-rt-rows></tbody>
+            </table>
+          </div>
+          <p class="rt-criterion rt-criterion--below" data-rt-criterion><strong>신고가</strong> {criterion}</p>
+          <div class="rt-more" data-rt-more hidden>
+            <button class="admin-secondary-button" type="button" data-rt-more-button>30건 더 보기</button>
+          </div>
+          <div class="rt-pick-bar" data-rt-pick-bar hidden>
+            <p data-rt-pick-text></p>
+            <a class="admin-primary-button rt-pick-bar__promo" href="/admin/work/realprice/promo/" data-rt-promo-link>홍보물 만들기</a>
+            <button class="admin-secondary-button" type="button" data-rt-pick-clear>비우기</button>
+          </div>
+          <p class="sr-only" role="status" data-rt-live></p>
+        </section>
+      </div>
+      <aside class="rt-preview" aria-labelledby="rt-preview-title" data-rt-preview>
+        <div class="rt-preview__head">
+          <h2 class="rt-preview__title" id="rt-preview-title">미리보기 <small data-rt-preview-count>담은 거래 0건</small></h2>
+          <div data-rt-preview-where hidden>
+            <p class="rt-preview__where" id="rt-preview-where-title">어디에 올릴까요?</p>
+            <div class="rt-preview__chips" role="radiogroup" aria-labelledby="rt-preview-where-title">
+              {PROMO_PLACES.map(([value, label], index) => (
+                <label class="rt-preview__chip">
+                  <input type="radio" name="rt-promo-kind" value={value} checked={index === 0} autocomplete="off" />
+                  <span>{label}</span>
+                </label>
+              ))}
+            </div>
           </div>
         </div>
-        <div class="admin-table-wrap rt-table-wrap" data-rt-table-wrap hidden>
-          <table class="admin-table rt-table">
-            <caption class="sr-only">실거래 목록(계약일 최근순)</caption>
-            <thead>
-              <tr>
-                <th scope="col">단지</th>
-                <th scope="col">전용면적·층</th>
-                <th scope="col">금액</th>
-                <th scope="col" class="rt-only-card">거래</th>
-                <th scope="col" class="rt-only-card">표시</th>
-                <th scope="col" class="rt-only-table rt-th-wrap">흐름<wbr />(12개월)</th>
-                <th scope="col" class="rt-only-table rt-th-wrap">직전 거래</th>
-                <th scope="col" class="rt-only-table rt-th-wrap">최고가 대비</th>
-                <th scope="col">계약일</th>
-                <th scope="col" class="rt-only-card">법정동</th>
-                <th scope="col" class="rt-only-card">새로 들어옴</th>
-                <th scope="col" class="rt-only-card">흐름·직전 거래</th>
-                <th scope="col" class="rt-pick-col">담기</th>
-              </tr>
-            </thead>
-            <tbody data-rt-rows></tbody>
-          </table>
+        <div class="rt-preview__body">
+          <div class="rt-preview__empty" data-rt-preview-empty>
+            <b>담은 거래가 없습니다</b>
+            <span>목록의 '담기'를 누르면 여기에 홍보물 그림이 바로 보입니다(최대 {PROMO_IDS_MAX}건).</span>
+          </div>
+          <p class="rt-loading" role="status" data-rt-preview-loading hidden>홍보물 그림을 그리고 있습니다…</p>
+          <p class="admin-inline-notice rt-notice" data-rt-preview-notice hidden><span aria-hidden="true">i</span><span data-rt-preview-notice-text></span></p>
+          <div class="rt-preview__blocked" data-rt-preview-blocked hidden>
+            <p data-rt-preview-blocked-text></p>
+            <button class="admin-secondary-button" type="button" data-rt-preview-retry hidden>미리보기 다시 그리기</button>
+          </div>
+          <div class="rt-preview__cards" data-rt-preview-cards></div>
+          <p class="rt-promo__warn" data-rt-preview-warn hidden>글이 길어 그림 아래 칸과 겹칠 수 있습니다. '크게 보기·글 미리 보기'에서 확인해 주세요.</p>
         </div>
-        <p class="rt-criterion rt-criterion--below" data-rt-criterion><strong>신고가</strong> {criterion}</p>
-        <div class="rt-more" data-rt-more hidden>
-          <button class="admin-secondary-button" type="button" data-rt-more-button>30건 더 보기</button>
+        <div class="rt-preview__act" data-rt-preview-act hidden>
+          <div class="rt-preview__downloads" data-rt-preview-downloads></div>
+          <p class="rt-preview__size" data-rt-preview-size></p>
+          <button class="admin-secondary-button rt-preview__copy" type="button" aria-describedby="rt-preview-copy-count" data-rt-preview-copy>
+            <span data-rt-preview-copy-text>인스타그램 글 복사</span>
+            <small id="rt-preview-copy-count" aria-hidden="true" data-rt-preview-copy-count></small>
+          </button>
+          <button class="admin-secondary-button" type="button" data-rt-preview-print>종이로 뽑기(A4)</button>
+          <p class="rt-preview__hint" data-rt-preview-post></p>
+          <p class="admin-form-status" role="status" aria-live="polite" data-rt-preview-status></p>
+          <a class="admin-text-link rt-preview__more" href={PROMO_PATH} data-rt-preview-link>크게 보기·글 미리 보기 <span aria-hidden="true">→</span></a>
         </div>
-        <div class="rt-pick-bar" data-rt-pick-bar hidden>
-          <p data-rt-pick-text></p>
-          <a class="admin-primary-button" href="/admin/work/realprice/promo/" data-rt-promo-link>홍보물 만들기</a>
-          <button class="admin-secondary-button" type="button" data-rt-pick-clear>비우기</button>
-        </div>
-        <p class="sr-only" role="status" data-rt-live></p>
-      </section>
+      </aside>
     </div>
   </div>
 
   <script>
+    import office from "../../../../data/office.json";
+    import { renderPromoCard, type PromoCard } from "../../../../lib/work-realprice-card";
     import { getWorkSession, readWork, WorkApiError } from "../../../../lib/work-realprice-client";
     import { renderBackfillBars } from "../../../../lib/work-realprice-dom";
     import { todayInKorea } from "../../../../lib/work/legal-dates.mjs";
@@ -275,13 +324,21 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
     } from "../../../../lib/work/realprice-view.mjs";
     import {
       PROMO_IDS_MAX,
+      PROMO_PATH,
+      PROMO_PLACES,
       isPromoSelectable,
+      promoCards,
+      promoFileName,
       promoHref,
+      promoSteps,
+      promoTexts,
       selectionText,
       takeButtonView,
       takeResultText,
       takeVisible,
+      textCount,
     } from "../../../../lib/work/realprice-promo.mjs";
+    import { loadPromoTrades } from "../../../../lib/work/realprice-promo-load.mjs";
     import { formatKoreanWon } from "../../../../lib/work/work-format.mjs";
     import { INSIGHT_BUDGET_NOTICE, INSIGHT_ERROR_NOTICE, insightBatches, insightView, isInsightCandidate, sparkGeometry } from "../../../../lib/work/realprice-insight-view.mjs";
 
@@ -523,6 +580,7 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
         if (href) promoLink.href = href;
         pickBar.hidden = picked.size === 0;
         syncTake();
+        schedulePreview();
       }
       rows.addEventListener("change", (event) => {
         const box = event.target as HTMLInputElement;
@@ -552,6 +610,224 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
         }).observe(pickBar);
       }
 
+      // ── 오른쪽 미리보기 칸(D-3, 1221px 이상만) ──
+      // 담은 거래가 바뀌면 잠깐 기다렸다가(연달아 담기) 공용 모듈로 ids를 다시 읽고(해제 거래 빼기·명시사항 빈 칸 막기), 지금 홍보물 화면과 같은 카드를 그린다.
+      // 칸이 보이지 않으면(1220px 이하, CSS가 숨김) 부르지 않고, 넓혀서 보이게 되면 그때 그린다. 그림은 data 주소(CSP img-src에 blob 없음)이고, 서버 값은 textContent·속성으로만 넣는다.
+      type PromoKind = "instagram" | "threads" | "blog" | "kakao";
+      const preview = pick("[data-rt-preview]");
+      const previewShown = () => preview.getClientRects().length > 0;
+      const previewCount = pick("[data-rt-preview-count]");
+      const previewWhere = pick("[data-rt-preview-where]");
+      const previewEmpty = pick("[data-rt-preview-empty]");
+      const previewLoading = pick("[data-rt-preview-loading]");
+      const previewNotice = pick("[data-rt-preview-notice]");
+      const previewBlocked = pick("[data-rt-preview-blocked]");
+      const previewRetry = pick<HTMLButtonElement>("[data-rt-preview-retry]");
+      const previewCards = pick("[data-rt-preview-cards]");
+      const previewWarn = pick("[data-rt-preview-warn]");
+      const previewAct = pick("[data-rt-preview-act]");
+      const previewDownloads = pick("[data-rt-preview-downloads]");
+      const previewCopy = pick<HTMLButtonElement>("[data-rt-preview-copy]");
+      const previewCopyText = pick("[data-rt-preview-copy-text]");
+      const previewCopyCount = pick("[data-rt-preview-copy-count]");
+      const previewPost = pick("[data-rt-preview-post]");
+      const previewStatus = pick("[data-rt-preview-status]");
+      const previewLink = pick<HTMLAnchorElement>("[data-rt-preview-link]");
+      const promoKindNames = Object.fromEntries(PROMO_PLACES) as Record<PromoKind, string>;
+      let previewKey = "";
+      let previewSeq = 0;
+      let previewTimer = 0;
+      let previewTexts: Record<PromoKind, string> | null = null;
+      let previewImages: { src: string; alt: string }[] = [];
+
+      function schedulePreview() {
+        window.clearTimeout(previewTimer);
+        previewTimer = window.setTimeout(() => void renderPreview(), 250);
+      }
+      if (typeof ResizeObserver === "function") new ResizeObserver(() => { if (previewShown()) schedulePreview(); }).observe(preview);
+      previewRetry.addEventListener("click", () => {
+        previewKey = "";
+        void renderPreview();
+      });
+
+      const previewKind = () => (root.querySelector<HTMLInputElement>('input[name="rt-promo-kind"]:checked')?.value ?? "instagram") as PromoKind;
+      // 올릴 곳을 바꾸면 복사 단추·글자 수·붙여 넣기 안내를 그 곳에 맞추고 복사함 표시는 지운다(홍보물 화면과 같은 글).
+      function showPreviewText() {
+        if (!previewTexts) return;
+        const kind = previewKind();
+        const counted = textCount(kind, previewTexts[kind]);
+        previewCopyText.textContent = `${promoKindNames[kind]} 글 복사`;
+        previewCopyCount.textContent = kind === "instagram" ? `${counted.label} · 해시태그 ${counted.tags}개` : counted.label;
+        previewCopyCount.dataset.state = counted.over ? "over" : "";
+        previewCopy.classList.remove("is-done");
+        previewPost.textContent = promoSteps(kind, { cardCount: previewImages.length || 1, counted }).post;
+        previewStatus.textContent = "";
+      }
+      root.addEventListener("change", (event) => {
+        if ((event.target as HTMLInputElement).name === "rt-promo-kind") showPreviewText();
+      });
+
+      function showPreviewBlocked(text: string, canRetry: boolean) {
+        previewLoading.hidden = true;
+        pick("[data-rt-preview-blocked-text]").textContent = text;
+        previewRetry.hidden = !canRetry;
+        previewBlocked.hidden = false;
+      }
+
+      // 거래 흐름: 목록이 이미 받은 것은 다시 쓰고, 없는 매매만 한 번 묻는다. 못 받으면 그 거래는 흐름 없이 그린다(홍보물 화면과 같음).
+      async function previewInsights(items: { tradeKey: string; kind: string }[]) {
+        const found: Record<string, unknown> = {};
+        const need: string[] = [];
+        for (const item of items) {
+          if (item.kind !== "sale") continue;
+          const known = insights.get(item.tradeKey);
+          if (known) found[item.tradeKey] = known;
+          else need.push(item.tradeKey);
+        }
+        if (need.length === 0) return found;
+        try {
+          const data = await readWork<InsightsResponse>("/realprice/insights", `ids=${need.join(",")}`);
+          for (const insight of data.items) {
+            insights.set(insight.tradeKey, insight);
+            found[insight.tradeKey] = insight;
+          }
+        } catch {
+          // 흐름 없이 그린다.
+        }
+        return found;
+      }
+
+      async function renderPreview() {
+        if (!previewShown()) return;
+        const ids = [...picked.keys()];
+        const key = ids.join(",");
+        if (key === previewKey) return;
+        previewKey = key;
+        const seq = ++previewSeq;
+        previewCount.textContent = `담은 거래 ${ids.length}건`;
+        previewLink.href = promoHref(ids) ?? PROMO_PATH;
+        previewTexts = null;
+        previewImages = [];
+        previewCards.replaceChildren();
+        previewDownloads.replaceChildren();
+        previewWarn.hidden = true;
+        previewNotice.hidden = true;
+        previewBlocked.hidden = true;
+        previewAct.hidden = true;
+        previewWhere.hidden = true;
+        previewEmpty.hidden = ids.length > 0;
+        if (ids.length === 0) {
+          previewLoading.hidden = true;
+          return;
+        }
+        previewLoading.hidden = false;
+        let loaded: Awaited<ReturnType<typeof loadPromoTrades>>;
+        try {
+          loaded = await loadPromoTrades(readWork, ids, office);
+        } catch (error) {
+          if (seq !== previewSeq) return;
+          const code = errorCode(error);
+          showPreviewBlocked(`담은 거래를 불러오지 못했습니다. ${apiErrorText(code)}`, code !== "AUTH_REQUIRED");
+          return;
+        }
+        if (seq !== previewSeq) return;
+        const { selection, input, blocked } = loaded;
+        if (selection.notices.length > 0) {
+          pick("[data-rt-preview-notice-text]").textContent = selection.notices.join(" ");
+          previewNotice.hidden = false;
+        }
+        if (blocked) {
+          showPreviewBlocked(blocked, selection.items.length > 0 && !selection.receivedAt);
+          return;
+        }
+        previewTexts = promoTexts(input) as Record<PromoKind, string>;
+        const flow = await previewInsights(selection.items);
+        if (seq !== previewSeq) return;
+        const cards = promoCards({ ...input, insights: flow }) as PromoCard[];
+        const canvas = document.createElement("canvas");
+        const today = todayInKorea();
+        const figures: HTMLElement[] = [];
+        const links: HTMLElement[] = [];
+        const images: { src: string; alt: string }[] = [];
+        let overflow = false;
+        try {
+          for (const [index, card] of cards.entries()) {
+            const result = await renderPromoCard(canvas, card);
+            if (seq !== previewSeq) return;
+            overflow ||= result.overflow;
+            const alt = `카드 그림${cards.length > 1 ? ` ${index + 1}/${cards.length}장` : ""}: ${card.title}`;
+            const image = document.createElement("img");
+            image.src = result.dataUrl;
+            image.width = 540;
+            image.height = 675;
+            image.alt = alt;
+            figures.push(image);
+            images.push({ src: result.dataUrl, alt });
+            const link = document.createElement("a");
+            link.className = "work-primary-button rt-preview__save";
+            link.href = result.dataUrl;
+            link.download = promoFileName(today, index, cards.length);
+            link.dataset.rtPreviewDownload = "";
+            link.textContent = cards.length > 1 ? `${index + 1}장 저장` : "그림 저장";
+            link.addEventListener("click", () => {
+              link.textContent = `✓ ${cards.length > 1 ? `${index + 1}장` : "그림"} 저장함`;
+              link.classList.add("is-done");
+            });
+            links.push(link);
+          }
+        } catch {
+          if (seq !== previewSeq) return;
+          showPreviewBlocked("카드 그림을 그리지 못했습니다. '크게 보기·글 미리 보기'에서 다시 만들어 주세요.", false);
+          return;
+        }
+        previewImages = images;
+        previewCards.replaceChildren(...figures);
+        previewDownloads.replaceChildren(...links);
+        pick("[data-rt-preview-size]").textContent = `1080×1350 PNG · ${cards.length}장`;
+        previewCount.textContent = `담은 거래 ${selection.items.length}건 · 그림 ${cards.length}장`;
+        previewWarn.hidden = !overflow;
+        previewLoading.hidden = true;
+        previewWhere.hidden = false;
+        previewAct.hidden = false;
+        showPreviewText();
+      }
+
+      previewCopy.addEventListener("click", async () => {
+        if (!previewTexts) return;
+        const kind = previewKind();
+        const name = promoKindNames[kind];
+        try {
+          await navigator.clipboard.writeText(previewTexts[kind]);
+          previewCopyText.textContent = `✓ ${name} 글 복사함`;
+          previewCopy.classList.add("is-done");
+          previewStatus.textContent = `✓ ${name} 글을 복사했습니다.`;
+          previewStatus.dataset.state = "success";
+        } catch {
+          previewStatus.textContent = "자동 복사가 막혔습니다. '크게 보기·글 미리 보기'에서 글을 골라 직접 복사해 주세요.";
+          previewStatus.dataset.state = "error";
+        }
+      });
+
+      // 종이로 뽑기(A4): 누를 때만 인쇄용 판(.rt-print-sheet, 홍보물 화면과 같은 인쇄 CSS)을 붙였다가 인쇄가 끝나면 뗀다. 평소 목록 인쇄는 그대로다.
+      pick<HTMLButtonElement>("[data-rt-preview-print]").addEventListener("click", async () => {
+        if (previewImages.length === 0) return;
+        for (const old of root.querySelectorAll(".rt-print-sheet")) old.remove();
+        const sheet = document.createElement("div");
+        sheet.className = "rt-print-sheet";
+        sheet.dataset.count = String(previewImages.length);
+        const printed = previewImages.map(({ src, alt }) => {
+          const image = document.createElement("img");
+          image.src = src;
+          image.alt = alt;
+          return image;
+        });
+        sheet.append(...printed);
+        root.append(sheet);
+        await Promise.all(printed.map((image) => image.decode().catch(() => undefined)));
+        window.addEventListener("afterprint", () => sheet.remove(), { once: true });
+        window.print();
+      });
+
       // 서버 값은 모두 textContent로 넣는다(HTML로 해석하지 않음).
       function rowOf(item: Trade, showHigh: boolean) {
         const tr = document.createElement("tr");
@@ -566,7 +842,18 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
         sub.textContent = [item.umdName, Number.isInteger(item.buildYear) ? `${item.buildYear}년` : ""].filter(Boolean).join(" · ");
         name.append(sub);
         const size = cell("rt-size", "전용면적·층");
-        size.textContent = sizeText(item);
+        // 1221px 이상 표는 층·동을 전용면적 아래 작은 줄로 내린다(D-3, 미리보기 칸 자리). 글자는 그대로 "84.97㎡ · 10층 · 103동"이고 카드는 한 줄이다.
+        const [areaPart, ...restParts] = sizeText(item).split(" · ");
+        size.append(areaPart);
+        if (restParts.length > 0) {
+          const sep = document.createElement("span");
+          sep.className = "rt-size__sep";
+          sep.textContent = " · ";
+          const rest = document.createElement("span");
+          rest.className = "rt-size__rest";
+          rest.textContent = restParts.join(" · ");
+          size.append(sep, rest);
+        }
         const price = cell("rt-price", "금액");
         const parts = priceParts(item);
         price.append(parts.main);
