@@ -33,6 +33,8 @@ const LOCATION = "대전 동구 ZZTEST-7F3A동 999-9";
 const OFFICE_PHONE = "010-2790-8675";
 const LISTING = { type: "naver_listing", id: "2645736151" }; // 휴먼시아2단지 202동, 아파트 매매 2억 6,000, 전용 84.77㎡, 2/22층, 남향(공개 매물)
 const COMPLEX = { type: "complex", id: "leaders-city-5" };
+// 분양권 매물은 매일 부동산뱅크 동기화로 바뀌므로 번호를 박지 않고 지금 공개 자료에서 고른다(없으면 그 줄만 건너뜀).
+const PRESALE_ID = blogSources().find((item) => item.type === "naver_listing" && item.facts.propertyType === "아파트분양권")?.id;
 const FULL_FEE_ITEMS = { general: 50000, electricity: 30000, water: 10000, gas: 10000, heating: 20000, internet: 10000, tv: 10000, other: 10000 };
 const listingInputs = (extra = {}) => ({
   location: LOCATION,
@@ -345,7 +347,7 @@ test("TK-48·TK-49 만들기 전에 막기: 명시사항 빈 칸은 400 DISCLOSU
     [{ source: LISTING, style: "plain", inputs: listingInputs({ approvalDate: "2016-02-30" }) }, "approvalDate"],
     [{ source: LISTING, style: "plain", inputs: listingInputs({ unit: "101" }) }, "unit"],
     [{ source: LISTING, style: "plain", inputs: listingInputs(), emphasis: "가".repeat(501) }, "emphasis"], // 대표 현장 메모 500자 초과
-    [{ source: { type: "naver_listing", id: "2656951321" }, style: "plain" }, "source"], // 분양권
+    ...(PRESALE_ID ? [[{ source: { type: "naver_listing", id: PRESALE_ID }, style: "plain" }, "source"]] : []), // 분양권
     [{ source: { type: "customer", id: "x" }, style: "plain" }, "source"],
     [{ source: COMPLEX, style: "urgent" }, "style"], // 단지 소개 글에 급매
   ]) {
