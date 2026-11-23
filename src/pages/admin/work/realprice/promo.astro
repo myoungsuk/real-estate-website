@@ -120,14 +120,13 @@ const listHref = "/admin/work/realprice/";
       PROMO_PLACES,
       parsePromoIds,
       priceText,
-      promoBlockReason,
       promoCards,
       promoFileName,
-      promoSelection,
       promoSteps,
       promoTexts,
       textCount,
     } from "../../../../lib/work/realprice-promo.mjs";
+    import { loadPromoTrades } from "../../../../lib/work/realprice-promo-load.mjs";
     import { apiErrorText, kindLabel } from "../../../../lib/work/realprice-view.mjs";
 
     type Kind = "threads" | "instagram" | "blog" | "kakao";
@@ -140,13 +139,6 @@ const listHref = "/admin/work/realprice/";
       priceWon: number | null;
       depositWon: number | null;
       monthlyRentWon: number | null;
-    }
-    interface IdsResponse {
-      items: PromoItem[];
-      missing: string[];
-      receivedAt: string | null;
-      recordHighReady: boolean;
-      warnings: { code: string; level?: string }[];
     }
 
     const root = document.querySelector<HTMLElement>("[data-promo-page]");
@@ -311,11 +303,12 @@ const listHref = "/admin/work/realprice/";
           showState("담은 거래가 없습니다", error === "none" ? "실거래가 목록에서 홍보물에 넣을 거래를 담은 뒤 '홍보물 만들기'를 눌러 주세요." : "주소의 거래 목록이 올바르지 않습니다. 실거래가 목록에서 다시 담아 주세요.", { symbol: "0" });
           return;
         }
-        let data: IdsResponse;
+        let loaded: Awaited<ReturnType<typeof loadPromoTrades>>;
         try {
           const session = await getWorkSession({ refresh: true });
           if (!session.realpriceEnabled) throw new WorkApiError("disabled", { code: "REALPRICE_DISABLED" });
-          data = await readWork<IdsResponse>("/realprice/trades", `ids=${ids.join(",")}`);
+          // 세 규칙(ids로 다시 읽기·해제 거래 빼기·명시사항 빈 칸 막기)은 목록 오른쪽 미리보기 칸과 같은 공용 모듈을 쓴다(D-3).
+          loaded = await loadPromoTrades(readWork, ids, office);
         } catch (failure) {
           const code = failure instanceof WorkApiError ? failure.code : null;
           const retryAt = failure instanceof WorkApiError ? failure.retryAt : null;
@@ -323,9 +316,7 @@ const listHref = "/admin/work/realprice/";
           else showState("담은 거래를 불러오지 못했습니다", apiErrorText(code, { retryAt }), { canRetry: code !== "AUTH_REQUIRED" });
           return;
         }
-        const selection = promoSelection(data);
-        const input = { items: selection.items, receivedAt: selection.receivedAt, office };
-        const blocked = promoBlockReason(input);
+        const { selection, input, blocked } = loaded;
         if (selection.notices.length > 0) {
           pick("[data-promo-notice-text]").textContent = selection.notices.join(" ");
           notice.hidden = false;
