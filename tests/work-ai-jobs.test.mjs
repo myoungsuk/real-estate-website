@@ -815,13 +815,13 @@ test("목록: 그 거래의 최근 묶음 5개를 결과·토큰 없이 주고 O
   assert.deepEqual((await work(ctx.env, `/ai/jobs?dealId=${seedDeal(ctx.database)}`)).json.data, { items: [] });
 });
 
-test("경로: 없는 묶음·UUID가 아닌 값·확정 경로(/confirm, 다음 PR)는 404, 허용하지 않는 방식은 405다", async (t) => {
+test("경로: 없는 묶음·UUID가 아닌 값은 404(확정 경로 /confirm도), 허용하지 않는 방식은 405다", async (t) => {
   installNetworkTrap(t);
   const ctx = await setupAi();
   assert.equal((await getGroup(ctx, nextUuid())).status, 404);
   assert.equal((await getGroup(ctx, "not-a-uuid")).status, 404);
   assert.equal((await cancel(ctx, nextUuid())).status, 404);
-  const confirm = await work(ctx.env, `/ai/jobs/${nextUuid()}/confirm`, { method: "POST", body: {} });
+  const confirm = await work(ctx.env, `/ai/jobs/${nextUuid()}/confirm`, { method: "POST", body: { dealVersion: 1, apply: {}, keep: [] } });
   assert.equal(confirm.status, 404);
   assert.equal((await work(ctx.env, "/ai/transcriptions", { method: "POST", body: {} })).status, 404);
   const put = await work(ctx.env, "/ai/jobs", { method: "PUT", body: {} });

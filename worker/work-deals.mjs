@@ -129,7 +129,7 @@ const SQL = Object.freeze({
 
 const bool = (value) => value === 1;
 
-function dealView(row) {
+export function dealView(row) {
   return {
     id: row.id,
     title: row.title,
@@ -162,7 +162,7 @@ function dealView(row) {
 }
 
 // 저장된 행을 입력과 같은 모양(0/1 깃발)으로 바꾼다. 고치기 때 바뀐 칸과 합쳐 앞뒤를 다시 본다.
-function rowToDeal(row) {
+export function rowToDeal(row) {
   return {
     title: row.title,
     dealType: row.deal_type,
