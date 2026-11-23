@@ -43,7 +43,8 @@ const publicEntry = (item, basis) => {
   return { ...rest, unpaidWon: unpaidOf(item), basisOn: dates[basis] ?? null };
 };
 function summaryOf(store, year, basis) {
-  const blank = () => ({ feeWon: 0, vatWon: 0, feeWithVatWon: 0, receivedWon: 0, unpaidWon: 0, expenseWon: 0, otherIncomeWon: 0, netWon: 0 });
+  // 실제 서버(worker/work-ledger.mjs summaryByMonth)와 같은 셈: 기타 수입·지출·순수익은 공급가액만, 받을 금액은 보수·기타 수입의 공급가액 + 부가세
+  const blank = () => ({ feeWon: 0, vatWon: 0, feeWithVatWon: 0, receivedWon: 0, unpaidWon: 0, expenseWon: 0, otherIncomeWon: 0, netWon: 0, receivableWon: 0 });
   const months = Array.from({ length: 12 }, (_, index) => ({ month: `${year}-${String(index + 1).padStart(2, "0")}`, ...blank() }));
   const total = blank();
   for (const item of store.entries) {
@@ -56,13 +57,14 @@ function summaryOf(store, year, basis) {
         line.feeWithVatWon += item.amountWon + item.vatWon;
         line.netWon += item.amountWon;
       } else if (item.kind === "other_income") {
-        line.otherIncomeWon += item.amountWon + item.vatWon;
-        line.netWon += item.amountWon + item.vatWon;
+        line.otherIncomeWon += item.amountWon;
+        line.netWon += item.amountWon;
       } else {
-        line.expenseWon += item.amountWon + item.vatWon;
-        line.netWon -= item.amountWon + item.vatWon;
+        line.expenseWon += item.amountWon;
+        line.netWon -= item.amountWon;
       }
       if (item.kind !== "expense") {
+        line.receivableWon += item.amountWon + item.vatWon;
         line.receivedWon += item.receivedWon;
         line.unpaidWon += unpaidOf(item);
       }
@@ -73,16 +75,17 @@ function summaryOf(store, year, basis) {
 }
 
 // 늘 같은 시각에서 시작하고 실제 서버는 부르지 않는다(맞지 않는 관리 API는 503).
-async function setup(page, { width = 390, enabled = true, store = makeStore(), schemaOutdated = false, failSummaryOnce = false, failExport = false, conflictOnce = false } = {}) {
+async function setup(page, { width = 390, enabled = true, store = makeStore(), schemaOutdated = false, failSummaryOnce = false, failExport = false, conflictOnce = false, control = {} } = {}) {
   await page.clock.install({ time: NOW });
   await page.setViewportSize({ width, height: 900 });
   const calls = { all: [], writes: [] };
   let nextId = 900;
   await page.route("**/api/admin/**", (route) => route.fulfill(failure(503, "TEST_OFFLINE")));
-  await page.route("**/api/admin/v1/work/**", (route) => {
+  await page.route("**/api/admin/v1/work/**", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const method = request.method();
+    if (method === "PATCH" && control.hold) await control.hold;
     const path = url.pathname.replace(/^.*\/api\/admin\/v1\/work/u, "");
     calls.all.push(`${method} ${path}${url.search}`);
     const body = method === "GET" ? null : request.postDataJSON();
@@ -141,6 +144,10 @@ async function setup(page, { width = 390, enabled = true, store = makeStore(), s
       if (index < 0) return route.fulfill(failure(404, "NOT_FOUND"));
       const current = store.entries[index];
       if (method === "PATCH") {
+        if (control.failPatch > 0) {
+          control.failPatch -= 1;
+          return route.fulfill(failure(503, "STORAGE_UNAVAILABLE"));
+        }
         if (conflictOnce || body.version !== current.version) {
           conflictOnce = false;
           store.entries[index] = { ...current, memo: "다른 화면에서 고친 메모", version: current.version + 1 };
@@ -149,6 +156,7 @@ async function setup(page, { width = 390, enabled = true, store = makeStore(), s
         const { version, ...changes } = body;
         const next = { ...current, ...changes, version: version + 1 };
         if (changes.receivedOn !== undefined && next.kind !== "expense") next.dates = { ...next.dates, received: changes.receivedOn };
+        if (changes.entryOn !== undefined && !next.dealId) next.dates = { ...next.dates, balance: changes.entryOn, contract: changes.entryOn, ...(next.kind === "expense" ? { received: changes.entryOn } : {}) };
         next.warnings = warningsOf(next);
         store.entries[index] = next;
         return route.fulfill(envelope({ entry: publicEntry(next, "balance"), warnings: next.warnings }));
@@ -201,7 +209,8 @@ async function expectNoTrace(page) {
   expect(decodeURIComponent(page.url())).toMatch(/\/admin\/work\/(ledger|customers\/detail)\/(\?id=[0-9a-f-]+)?$/u);
   expect(await page.evaluate(() => [localStorage.length, sessionStorage.length])).toEqual([0, 0]);
 }
-const visibleRows = (page) => page.locator(".lg-rows > li:visible, .lg-table tbody tr:visible");
+// 장부 줄만 센다(PC 표의 합계 줄·달 줄·줄 아래 알림 줄은 장부 줄이 아님)
+const visibleRows = (page) => page.locator(".lg-rows > li:visible, .lg-table tbody tr[data-lg-entry]:visible");
 
 test("업무 세션이 꺼져 있으면 매출장부가 켜지지 않았다고 알리고 장부 자료는 부르지 않는다", async ({ page }) => {
   const assertNoErrors = collectErrors(page);
@@ -231,13 +240,19 @@ test("자료 구조가 옛날(5번 전)이면 갱신 전이라고 알리고, 잠
 });
 
 for (const width of [360, 390, 1280]) {
-  test(`매출장부 ${width}px: 합계 칸·달별 표·기준일 없는 줄 알림, 부가세 단추는 다시 부르지 않고, 거르기는 서버에 묻고, 가로 넘침 없음`, async ({ page }) => {
+  test(`매출장부 ${width}px: 합계 칸·달별 표(1221px 이상은 표 안 합계 줄)·기준일 없는 줄 알림, 부가세 단추는 다시 부르지 않고, 거르기는 서버에 묻고, 가로 넘침 없음`, async ({ page }) => {
+    // 1221px 이상은 합계 칸·달별 표·부가세 단추를 숨기고 표 안의 합계 줄·달 줄로 본다(D-2a)
+    const wide = width >= 1221;
     const assertNoErrors = collectErrors(page);
     const calls = await setup(page, { width });
     await page.goto("/admin/work/ledger/");
     await expect(page.locator("[data-lg-year]")).toHaveText("2026년");
     expect(calls.all).toEqual(expect.arrayContaining(["GET /session", "GET /ledger/summary?year=2026&basis=balance", "GET /ledger?year=2026&basis=balance&limit=50"]));
     const tiles = page.locator("[data-lg-tiles] .lg-tile");
+    if (wide) await expect(page.locator(".lg-sum")).toBeHidden();
+    else await expect(page.locator(".lg-sum")).toBeVisible();
+    await expect(page.locator(".lg-history"), "되돌리기·다시 하기는 표가 보일 때만").toBeVisible({ visible: wide });
+    await expect(page.locator("[data-lg-keys]")).toBeVisible({ visible: wide });
     await expect(tiles).toHaveCount(5);
     await expect(tiles.nth(0)).toContainText("3,600,000원");
     await expect(tiles.nth(2)).toContainText("미입금1,980,000원");
@@ -264,14 +279,16 @@ for (const width of [360, 390, 1280]) {
     await expect(page.locator(width >= 1221 ? ".lg-table" : ".lg-rows")).toBeVisible();
     await expect(page.locator(width >= 1221 ? ".lg-rows" : ".lg-table")).toBeHidden();
     await expect(page.locator("[data-lg-count]")).toHaveText("장부 줄 4개 · 기준일 최근 순");
-    await expect(visibleRows(page).filter({ hasText: "미입금 1,980,000원" })).toHaveCount(1);
+    await expect(visibleRows(page).filter({ hasText: wide ? "미입금 1,980,000" : "미입금 1,980,000원" })).toHaveCount(1);
     expect(await overflowOf(page)).toBeLessThanOrEqual(0);
 
-    const before = calls.all.length;
-    await page.getByRole("button", { name: "부가세 넣고" }).click();
-    await expect(page.getByRole("button", { name: "부가세 넣고" })).toHaveAttribute("aria-pressed", "true");
-    await expect(tiles.nth(0)).toContainText("3,960,000원");
-    expect(calls.all.length, "부가세 단추는 서버를 다시 부르지 않음").toBe(before);
+    if (!wide) {
+      const before = calls.all.length;
+      await page.getByRole("button", { name: "부가세 넣고" }).click();
+      await expect(page.getByRole("button", { name: "부가세 넣고" })).toHaveAttribute("aria-pressed", "true");
+      await expect(tiles.nth(0)).toContainText("3,960,000원");
+      expect(calls.all.length, "부가세 단추는 서버를 다시 부르지 않음").toBe(before);
+    }
 
     await page.getByRole("button", { name: "입금일", exact: true }).click();
     await expect(page.locator("[data-lg-basis-note]")).toHaveText("· 입금일 기준 · 지출은 잔금일(거래 없는 지출은 지출일)로 셈");
@@ -285,7 +302,7 @@ for (const width of [360, 390, 1280]) {
     expect(calls.all).toContain("GET /ledger?basis=received&unpaid=1&limit=50");
     expect(calls.all.filter((call) => call.startsWith("GET /ledger?") && call.includes("unpaid=1") && call.includes("year="))).toEqual([]);
     await expect(page.locator("[data-lg-unpaid-note]")).toHaveText("입금일 기준에서는 미입금 줄을 연도와 상관없이 모두 보여 줍니다(아직 입금일이 없으므로).");
-    await expect(visibleRows(page).first()).toContainText("미입금 1,980,000원");
+    await expect(visibleRows(page).first()).toContainText(wide ? "미입금 1,980,000" : "미입금 1,980,000원");
     // 잔금일 기준으로 바꾸면 다시 연도로 거르고 안내 줄은 숨김
     await page.getByRole("button", { name: /^(✓ )?잔금일$/u }).click();
     await expect(page.locator("[data-lg-unpaid-note]")).toBeHidden();
@@ -555,3 +572,634 @@ for (const width of [360, 1280]) {
     assertNoErrors();
   });
 }
+
+// ── PC 표에서 칸을 바로 고치기(D-2a, 1221px 이상. 사용자 승인 2026-11-23 11:34:13 "이대로 구현"·"10%였던 줄만 함께 바꿈") ──
+const gridRow = (page, n) => page.locator(`.lg-table tr[data-lg-entry="${uuid(300 + n)}"]`);
+const gridCell = (page, n, column) => gridRow(page, n).locator(`[data-lg-cell="${column}"]`);
+const gridInput = (page, n, column) => gridRow(page, n).locator(`[data-lg-input="${column}"]`);
+const gridState = (page, n) => gridRow(page, n).locator(".lg-rowstate");
+const noteOf = (page, n) => gridRow(page, n).locator("xpath=following-sibling::tr[1][contains(@class,'lg-noterow')]");
+const patches = (calls) => calls.writes.filter((write) => write.method === "PATCH");
+const countCalls = (calls, head) => calls.all.filter((call) => call.startsWith(head)).length;
+const tableOrder = (page) => page.locator(".lg-table tbody > tr:not(.lg-noterow)").evaluateAll((rows) => rows.map((row) => (row.dataset.lgEntry ? "줄" : row.querySelector("strong").textContent)));
+const leaveWarned = (page) => page.evaluate(() => {
+  const event = new Event("beforeunload", { cancelable: true });
+  window.dispatchEvent(event);
+  return event.defaultPrevented;
+});
+async function typeCell(page, n, column, text, key = "Enter") {
+  await gridCell(page, n, column).click();
+  await gridInput(page, n, column).fill(text);
+  if (key) await gridInput(page, n, column).press(key);
+}
+
+test("PC 표 1280px: 합계 칸 대신 표 안의 합계 줄·달 줄(서버 합계 그대로)을 보이고, 거르면 그 줄은 없으며, 칸은 11개다", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  await setup(page, { width: 1280 });
+  await page.goto("/admin/work/ledger/");
+  await expect(page.locator(".lg-table")).toBeVisible();
+  await expect(page.locator(".lg-sum"), "합계 칸·달별 표·부가세 단추는 PC에서 숨김").toBeHidden();
+  await expect(page.locator(".lg-table thead th")).toHaveText(["기준일", "종류", "물건 표시·내용", "낸 쪽", "공급가액(원)", "부가세(원)", "받을 금액자동", "입금액(원)", "입금일", "미입금", "줄 상태·고치기"]);
+  expect(await tableOrder(page)).toEqual(["2026년 합계", "11월", "줄", "줄", "줄", "10월", "줄"]);
+  // 숫자는 '받을 금액'·'입금액'·'미입금' 세 칸만(공급가액·부가세 칸은 묶음 제목 글에)
+  const total = page.locator("tr.lg-group--total");
+  await expect(total.locator("th")).toHaveText("2026년 합계보수 3,600,000원 + 부가세 360,000원 · 기타 수입 300,000원 · 지출 50,000원 · 순수익 3,850,000원");
+  await expect(total.locator("th")).toHaveAttribute("colspan", "6");
+  // 순수익 값만 굵게·본문색(합계 칸을 숨긴 PC에서 순수익이 보이는 곳이 이 줄뿐)
+  await expect(total.locator("th .lg-net")).toHaveText("3,850,000원");
+  await expect(page.locator("tr.lg-group .lg-net")).toHaveText(["3,850,000원", "3,550,000원", "300,000원"]);
+  expect(await total.locator("th").evaluate((head) => {
+    const note = getComputedStyle(head.querySelector("small"));
+    const net = getComputedStyle(head.querySelector(".lg-net"));
+    return [Number(net.fontWeight) >= 700, Number(note.fontWeight) < 700, net.color !== note.color, net.fontSize === note.fontSize].join(",");
+  }), "순수익 값: 굵게, 나머지 글과 다른 색, 글자 크기는 같음").toBe("true,true,true,true");
+  await expect(total.locator("td")).toHaveText(["4,260,000", "2,280,000", "", "! 1,980,000", ""]);
+  const months = page.locator("tr.lg-group:not(.lg-group--total)");
+  await expect(months.nth(0).locator("th")).toHaveText("11월보수 3,600,000원 + 부가세 360,000원 · 지출 50,000원 · 순수익 3,550,000원");
+  await expect(months.nth(0).locator("td")).toHaveText(["3,960,000", "1,980,000", "", "! 1,980,000", ""]);
+  await expect(months.nth(1).locator("th"), "0인 것(보수·지출)은 쓰지 않음").toHaveText("10월기타 수입 300,000원 · 순수익 300,000원");
+  await expect(months.nth(1).locator("td")).toHaveText(["300,000", "300,000", "", "—", ""]);
+  await expect(page.locator("tr.lg-group [data-lg-cell], tr.lg-group button"), "묶음 줄은 고치는 칸이 아님").toHaveCount(0);
+  // 장부 줄 11칸: 거래에 이은 줄의 날짜·종류·받을 금액·미입금은 글, 나머지는 칸 단추
+  await expect(gridRow(page, 2).locator("td")).toHaveText(["11. 20. (거래의 날짜, 여기서 고치지 않음)", "보수", "가상숲1단지 84㎡ 매매", "매도인", "1,800,000", "180,000", "1,980,000", "0", "", "미입금 1,980,000", "고치기"]);
+  await expect(gridRow(page, 1).locator("td").nth(9)).toHaveText("입금 끝");
+  await expect(gridRow(page, 3).locator("td")).toHaveText(["11. 2.", "지출", "가상 전단 인쇄", "—", "50,000", "—", "", "—", "—", "—", "고치기"]);
+  expect(await gridRow(page, 2).locator("[data-lg-cell]").evaluateAll((cells) => cells.map((cell) => cell.dataset.lgCell))).toEqual(["label", "payerRole", "amountWon", "vatWon", "receivedWon", "receivedOn"]);
+  expect(await gridRow(page, 3).locator("[data-lg-cell]").evaluateAll((cells) => cells.map((cell) => cell.dataset.lgCell)), "지출: 낸 쪽·입금 칸 없음, 거래 없는 줄이라 날짜는 고침").toEqual(["basisOn", "label", "amountWon", "vatWon"]);
+  await expect(gridCell(page, 2, "receivedOn"), "빈 칸도 이름이 있음").toHaveAccessibleName("11. 20. 가상숲1단지 84㎡ 매매 매도인 입금일 고치기");
+  // 칸 단추는 칸을 꽉 채우고 마우스 PC에서 36px
+  const cellBox = await gridCell(page, 2, "receivedOn").boundingBox();
+  const tdBox = await gridRow(page, 2).locator('[data-lg-col="receivedOn"]').boundingBox();
+  expect(cellBox.height, "칸 단추 높이").toBeGreaterThanOrEqual(36);
+  expect(Math.abs(cellBox.width - tdBox.width), "칸 단추가 칸 폭을 채움").toBeLessThanOrEqual(2);
+  expect((await gridRow(page, 2).getByRole("button", { name: /장부 줄 고치기$/u }).boundingBox()).height, "줄 끝 '고치기' 36px").toBeGreaterThanOrEqual(36);
+  // 되돌리기·다시 하기는 고친 것이 없으면 꺼져 있고, 키 안내가 표 아래에 있다
+  await expect(page.getByRole("button", { name: "되돌리기" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "다시 하기" })).toBeDisabled();
+  await expect(page.locator("[data-lg-keys]")).toContainText("Enter 고치기·저장");
+  // 거르기를 켜면 합계 줄·달 줄 없음(달 합계는 거르지 않은 값이라 보이는 줄과 어긋남)
+  await page.getByRole("button", { name: "지출", exact: true }).click();
+  await expect(gridRow(page, 3)).toBeVisible();
+  await expect(page.locator("tr.lg-group")).toHaveCount(0);
+  await page.getByRole("button", { name: /^(✓ )?지출$/u }).first().click();
+  await page.getByRole("button", { name: /^(✓ )?전체$/u }).click();
+  await expect(page.locator("tr.lg-group")).toHaveCount(3);
+  await page.getByRole("button", { name: /^(✓ )?미입금만$/u }).click();
+  await expect(page.locator("tr.lg-group")).toHaveCount(0);
+  await page.getByRole("button", { name: /^(✓ )?미입금만$/u }).click();
+  // 기준일 없는 줄만 볼 때도 없음
+  await page.getByRole("button", { name: "그 줄만 보기" }).click();
+  await expect(gridRow(page, 5)).toBeVisible();
+  await expect(page.locator("tr.lg-group")).toHaveCount(0);
+  await expect(gridRow(page, 5).locator(".lg-warn")).toContainText("부가세가 10%와 다릅니다(10%면 90,000원)");
+  expect(await overflowOf(page)).toBeLessThanOrEqual(0);
+  await expectNoTrace(page);
+  assertNoErrors();
+});
+
+test("PC 표 칸 고치기: 누르면 그 자리에 입력칸이 열리고, Enter는 그 칸만(10%였던 줄은 부가세와 함께) version과 보낸 뒤 아래 칸으로 가며, 합계 줄은 서버 합계를 다시 읽고, Esc와 잘못된 값은 보내지 않는다", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const calls = await setup(page, { width: 1280 });
+  await page.goto("/admin/work/ledger/");
+  const amount = gridCell(page, 2, "amountWon");
+  await expect(amount).toHaveAccessibleName("11. 20. 가상숲1단지 84㎡ 매매 매도인 공급가액 고치기");
+  const sums = countCalls(calls, "GET /ledger/summary");
+  await amount.click();
+  await expect(gridInput(page, 2, "amountWon")).toBeFocused();
+  await expect(gridInput(page, 2, "amountWon")).toHaveValue("1,800,000");
+  await expect(gridInput(page, 2, "amountWon")).toHaveAccessibleName("11. 20. 가상숲1단지 84㎡ 매매 매도인 공급가액 고치기");
+  await gridInput(page, 2, "amountWon").fill("2000000");
+  await expect(gridInput(page, 2, "amountWon"), "쉼표는 저절로").toHaveValue("2,000,000");
+  await gridInput(page, 2, "amountWon").press("Enter");
+  await expect(gridState(page, 2)).toHaveText("저장함");
+  expect(patches(calls)).toEqual([{ method: "PATCH", path: `/ledger/${uuid(302)}`, body: { amountWon: 2_000_000, vatWon: 200_000, version: 1 }, csrf: "test-csrf" }]);
+  await expect(amount).toHaveText("2,000,000");
+  await expect(gridCell(page, 2, "vatWon")).toHaveText("200,000");
+  await expect(gridRow(page, 2).locator('[data-lg-col="totalWon"]')).toHaveText("2,200,000");
+  await expect(gridRow(page, 2).locator('[data-lg-col="unpaidWon"]')).toHaveText("미입금 2,200,000");
+  await expect(noteOf(page, 2)).toHaveText("부가세도 200,000원으로 함께 바꿨습니다(고치기 전 부가세가 공급가액의 10%였던 줄).");
+  await expect(gridCell(page, 3, "amountWon"), "Enter는 저장하고 아래 칸으로").toBeFocused();
+  // 합계 줄·달 줄은 서버 합계를 다시 읽어 그린다(목록은 다시 읽지 않음)
+  await expect(page.locator("tr.lg-group--total td").nth(0)).toHaveText("4,480,000");
+  await expect(page.locator("tr.lg-group--total td").nth(3)).toHaveText("! 2,200,000");
+  await expect(page.locator("tr.lg-group--total th")).toContainText("보수 3,800,000원 + 부가세 380,000원");
+  expect(countCalls(calls, "GET /ledger/summary")).toBe(sums + 1);
+  expect(countCalls(calls, "GET /ledger?"), "목록은 다시 읽지 않음").toBe(1);
+
+  // Esc: 보내지 않고 원래 값, 포커스는 그 칸으로
+  await typeCell(page, 3, "label", "가상 현수막", "Escape");
+  await expect(gridCell(page, 3, "label")).toHaveText("가상 전단 인쇄");
+  await expect(gridCell(page, 3, "label")).toBeFocused();
+  // 같은 값이면 보내지 않음
+  await typeCell(page, 3, "label", "가상 전단 인쇄");
+  // 잘못된 값: 보내지 않고 줄 아래 글로 알림(거래 없는 지출은 날짜가 있어야 함)
+  await typeCell(page, 3, "basisOn", "");
+  await expect(noteOf(page, 3)).toHaveText("! 거래에 잇지 않은 지출·기타 수입은 날짜가 있어야 합니다.");
+  await expect(gridInput(page, 3, "basisOn")).toHaveAttribute("aria-invalid", "true");
+  await gridInput(page, 3, "basisOn").press("Escape");
+  await expect(noteOf(page, 3)).toHaveCount(0);
+  await typeCell(page, 2, "amountWon", "");
+  await expect(noteOf(page, 2)).toHaveText("! 금액을 넣어 주세요.");
+  await gridInput(page, 2, "amountWon").press("Escape");
+  expect(patches(calls), "Esc·같은 값·잘못된 값은 보내지 않음").toHaveLength(1);
+
+  // 기준일이 다른 달이 되면 줄은 그 자리에 두고 글을 붙인다. 달 줄 숫자는 서버 합계로 바뀐다
+  await typeCell(page, 3, "basisOn", "2026-10-30");
+  await expect(gridState(page, 3)).toHaveText("저장함");
+  expect(patches(calls).at(-1).body).toEqual({ entryOn: "2026-10-30", version: 1 });
+  await expect(gridCell(page, 3, "basisOn")).toHaveText("10. 30.");
+  await expect(noteOf(page, 3)).toHaveText("10월로 옮겨짐");
+  expect(await tableOrder(page), "줄 자리는 그대로").toEqual(["2026년 합계", "11월", "줄", "줄", "줄", "10월", "줄"]);
+  await expect(page.locator("tr.lg-group:not(.lg-group--total) th").nth(1)).toHaveText("10월기타 수입 300,000원 · 지출 50,000원 · 순수익 250,000원");
+
+  // Tab: 저장하고 오른쪽 고칠 수 있는 칸으로('받을 금액'은 건너뜀). 따로 넣은 부가세는 경고를 글로 알린다
+  await typeCell(page, 1, "vatWon", "150000", "Tab");
+  await expect(gridState(page, 1)).toHaveText("저장함");
+  expect(patches(calls).at(-1).body).toEqual({ vatWon: 150_000, version: 1 });
+  await expect(gridCell(page, 1, "receivedWon")).toBeFocused();
+  await expect(gridRow(page, 1).locator(".lg-warn")).toContainText("부가세가 10%와 다릅니다(10%면 180,000원)");
+  // 부가세를 따로 넣은 줄은 공급가액을 고쳐도 부가세를 건드리지 않는다
+  await typeCell(page, 1, "amountWon", "1900000");
+  await expect(gridCell(page, 1, "amountWon")).toHaveText("1,900,000");
+  expect(patches(calls).at(-1).body).toEqual({ amountWon: 1_900_000, version: 2 });
+  // 다른 곳을 눌러 칸을 떠나도 저장한다
+  await typeCell(page, 4, "label", "가상 강의료 2회", null);
+  await page.locator("h1").click();
+  await expect(gridState(page, 4)).toHaveText("저장함");
+  expect(patches(calls).at(-1).body).toEqual({ label: "가상 강의료 2회", version: 1 });
+
+  // 계약일 기준: 저장 응답의 기준일(늘 잔금일 기준)로 바뀌지 않고 계약일 그대로다
+  await page.getByRole("button", { name: /^(✓ )?계약일$/u }).click();
+  await expect(gridRow(page, 2).locator("td").first()).toContainText("10. 5.");
+  await typeCell(page, 2, "label", "가상숲1단지 84㎡ 매매(매도)");
+  await expect(gridState(page, 2)).toHaveText("저장함");
+  await expect(gridRow(page, 2).locator("td").first()).toContainText("10. 5.");
+  await expect(noteOf(page, 2), "옮겨졌다는 글이 붙지 않음").toHaveCount(0);
+  await expectNoTrace(page);
+  assertNoErrors();
+});
+
+test("PC 표 입금액: 입금일이 빈 줄은 저장하지 않고 입금일 칸을 오늘로 열어 두며, Enter는 두 칸을 함께 저장하고 Esc는 둘 다 그만둔다. 입금일 칸을 떠나면 값이 맞을 때 저장한다", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const calls = await setup(page, { width: 1280 });
+  await page.goto("/admin/work/ledger/");
+  const money = gridCell(page, 2, "receivedWon");
+  const dateInput = gridInput(page, 2, "receivedOn");
+  await typeCell(page, 2, "receivedWon", "1980000");
+  await expect(dateInput).toBeFocused();
+  await expect(dateInput, "오늘(한국 날짜)").toHaveValue("2026-11-21");
+  await expect(noteOf(page, 2)).toHaveText("입금일을 확인해 주세요. Enter로 입금액과 함께 저장하고, Esc로 둘 다 그만둡니다.");
+  await expect(money, "넣은 입금액은 칸에 보임").toHaveText("1,980,000");
+  expect(patches(calls), "아직 저장하지 않음").toHaveLength(0);
+  expect(await leaveWarned(page), "입금일을 묻는 중이면 떠날 때 물음").toBe(true);
+  // Esc: 둘 다 그만둠
+  await dateInput.press("Escape");
+  await expect(money).toHaveText("0");
+  await expect(gridCell(page, 2, "receivedOn")).toHaveText("");
+  await expect(noteOf(page, 2)).toHaveCount(0);
+  expect(patches(calls)).toHaveLength(0);
+  expect(await leaveWarned(page)).toBe(false);
+  // 입금일을 비우고 Enter: 보내지 않음
+  await typeCell(page, 2, "receivedWon", "1980000");
+  await dateInput.fill("");
+  await dateInput.press("Enter");
+  await expect(noteOf(page, 2)).toHaveText("! 입금액이 있으면 입금일을 넣어 주세요.");
+  expect(patches(calls)).toHaveLength(0);
+  // 날짜를 고치고 Enter: 두 칸을 한 번에
+  await dateInput.fill("2026-11-22");
+  await dateInput.press("Enter");
+  await expect(gridState(page, 2)).toHaveText("저장함");
+  expect(patches(calls)).toEqual([{ method: "PATCH", path: `/ledger/${uuid(302)}`, body: { receivedWon: 1_980_000, receivedOn: "2026-11-22", version: 1 }, csrf: "test-csrf" }]);
+  await expect(noteOf(page, 2)).toHaveText("입금액과 입금일(2026-11-22)을 함께 저장했습니다.");
+  await expect(gridCell(page, 2, "receivedOn")).toHaveText("11. 22.");
+  await expect(gridRow(page, 2).locator('[data-lg-col="unpaidWon"]')).toHaveText("입금 끝");
+  await expect(page.locator("tr.lg-group--total td").nth(3), "미입금 합계 0").toHaveText("—");
+  // 되돌리기 한 번이면 두 칸 모두 앞 값으로
+  await page.getByRole("button", { name: "되돌리기: 가상숲1단지 84㎡ 매매 입금액" }).click();
+  await expect(money).toHaveText("0");
+  expect(patches(calls).at(-1).body).toEqual({ receivedWon: 0, receivedOn: null, version: 2 });
+  await expect(gridState(page, 2)).toHaveText("저장함");
+
+  // 입금액 칸에서 다른 칸을 눌러 떠남: 입금일 칸이 열린 채 남고, 그 누름으로 저장하거나 다른 칸으로 넘어가지 않는다
+  await typeCell(page, 2, "receivedWon", "500000", null);
+  await gridCell(page, 3, "label").click();
+  await expect(dateInput).toBeFocused();
+  await expect(dateInput).toHaveValue("2026-11-21");
+  await expect(gridInput(page, 3, "label")).toHaveCount(0);
+  expect(patches(calls), "아직 저장하지 않음").toHaveLength(2);
+  // 입금일 칸을 떠나면(값이 맞음) 다른 칸과 같은 규칙으로 저장한다
+  await page.locator("h1").click();
+  await expect(gridState(page, 2)).toHaveText("저장함");
+  expect(patches(calls).at(-1).body).toEqual({ receivedWon: 500_000, receivedOn: "2026-11-21", version: 3 });
+  await expect(gridRow(page, 2).locator('[data-lg-col="unpaidWon"]')).toHaveText("미입금 1,480,000");
+  // 입금일이 있는 줄은 입금액만 고쳐도 묻지 않고 두 값을 함께 보낸다
+  await typeCell(page, 2, "receivedWon", "600000");
+  await expect(gridCell(page, 2, "receivedWon")).toHaveText("600,000");
+  expect(patches(calls).at(-1).body).toEqual({ receivedWon: 600_000, receivedOn: "2026-11-21", version: 4 });
+  // 0원으로 고치면 입금일도 함께 비운다
+  await typeCell(page, 2, "receivedWon", "0");
+  await expect(noteOf(page, 2)).toHaveText("입금액이 0원이라 입금일도 함께 비웠습니다.");
+  expect(patches(calls).at(-1).body).toEqual({ receivedWon: 0, receivedOn: null, version: 5 });
+  await expectNoTrace(page);
+  assertNoErrors();
+});
+
+test("PC 표 409·404: 다른 곳에서 먼저 고친 줄은 덮어쓰지 않고 목록을 다시 읽어 그 줄만 갈아 끼우며 넣던 값을 줄 아래에 남기고, 없어진 줄은 잠근다", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const store = makeStore();
+  const control = {};
+  const calls = await setup(page, { width: 1280, store, conflictOnce: true, control });
+  await page.goto("/admin/work/ledger/");
+  const undo = page.locator("[data-lg-undo]");
+  const redo = page.locator("[data-lg-redo]");
+  await typeCell(page, 3, "label", "가상 현수막");
+  await expect(noteOf(page, 3)).toHaveText("! 다른 곳에서 먼저 고쳐 저장하지 않았습니다. 저장된 값을 다시 읽었습니다. 넣던 값: 물건 표시·내용 가상 현수막");
+  expect(patches(calls), "저절로 다시 보내지 않음").toHaveLength(1);
+  expect(countCalls(calls, "GET /ledger?"), "같은 조건으로 목록을 한 번 다시 읽음").toBe(2);
+  expect(calls.all.filter((call) => call.startsWith("GET /ledger?")).at(-1)).toBe("GET /ledger?year=2026&basis=balance&limit=50");
+  await expect(gridCell(page, 3, "label"), "저장된 값 그대로").toHaveText("가상 전단 인쇄");
+  await expect(gridCell(page, 3, "label")).toBeEnabled();
+  await expect(page.getByRole("button", { name: "되돌리기" }), "저장하지 못한 것은 되돌리기 단계가 아님").toBeDisabled();
+  // 다시 읽은 줄은 새 version으로 고친다
+  await typeCell(page, 3, "label", "가상 현수막");
+  await expect(gridState(page, 3)).toHaveText("저장함");
+  expect(patches(calls).at(-1).body).toEqual({ label: "가상 현수막", version: 2 });
+  await expect(noteOf(page, 3)).toHaveCount(0);
+
+  // 넷째 줄을 먼저 한 번 저장해 두면 되돌리기는 그 줄의 단계를 가리킨다
+  await typeCell(page, 4, "amountWon", "310000");
+  await expect(gridState(page, 4)).toHaveText("저장함");
+  await expect(undo).toHaveAccessibleName("되돌리기: 가상 강의료 공급가액");
+
+  // 다른 화면에서 지운 줄(404): 줄을 잠그고 넣던 값을 남긴다
+  store.entries.splice(store.entries.findIndex((item) => item.id === uuid(304)), 1);
+  await typeCell(page, 4, "label", "가상 강의료 2회");
+  await expect(noteOf(page, 4)).toHaveText("! 이 장부 줄을 찾지 못했습니다. 다른 화면에서 지웠을 수 있습니다. 넣던 값: 물건 표시·내용 가상 강의료 2회");
+  await expect(gridCell(page, 4, "label")).toBeDisabled();
+  await expect(gridCell(page, 4, "amountWon")).toBeDisabled();
+  await expect(gridRow(page, 4), "없어진 줄 표시").toHaveClass(/is-gone/u);
+  // 없어진 줄의 단계는 버리고, 되돌리기는 그 앞 단계(셋째 줄)를 가리킨다
+  await expect(undo, "없어진 줄의 단계를 건너뜀").toHaveAccessibleName("되돌리기: 가상 전단 인쇄 물건 표시·내용");
+  await expect(undo).toBeEnabled();
+  await expect(redo).toBeDisabled();
+  // 먼저 고쳐졌는데(409) 다시 읽은 목록에 없음(다른 해로 옮겨짐): 잠그고 까닭을 알린다
+  const moved = store.entries.find((item) => item.id === uuid(301));
+  moved.version = 5;
+  moved.dates = { ...moved.dates, balance: "2025-12-30" };
+  await typeCell(page, 1, "label", "가상숲1단지 84㎡ 매매(매수)");
+  await expect(noteOf(page, 1)).toHaveText("! 이 줄이 지금 목록에 없습니다. 지워졌거나, 날짜·입금이 바뀌어 다른 연도나 거르기 밖으로 옮겨졌습니다. 넣던 값: 물건 표시·내용 가상숲1단지 84㎡ 매매(매수)");
+  await expect(gridCell(page, 1, "label")).toBeDisabled();
+  expect(await leaveWarned(page), "멈춘 줄은 저장 중이 아님").toBe(false);
+
+  // 되돌리기 저장이 그 밖의 오류(가짜 서버 503)로 실패: 단계를 옮기지 않고 칸도 그대로 둔다
+  control.failPatch = 1;
+  const writes = patches(calls).length;
+  await undo.click();
+  await expect(noteOf(page, 3)).toContainText("! 되돌리지 못했습니다.");
+  expect(patches(calls), "되돌리기 저장은 한 번 보냄").toHaveLength(writes + 1);
+  await expect(gridCell(page, 3, "label"), "칸은 고친 값 그대로").toHaveText("가상 현수막");
+  await expect(undo, "단계 그대로").toHaveAccessibleName("되돌리기: 가상 전단 인쇄 물건 표시·내용");
+  await expect(undo).toBeEnabled();
+  await expect(redo, "다시 하기 단계는 생기지 않음").toBeDisabled();
+  await expect(redo).toHaveAccessibleName("다시 하기");
+  // 다시 누르면 같은 단계를 한다. 남은 단계는 이 하나뿐이라 끝나면 되돌리기가 꺼진다
+  await undo.click();
+  await expect(noteOf(page, 3)).toHaveText("되돌렸습니다: 가상 전단 인쇄 물건 표시·내용");
+  await expect(gridCell(page, 3, "label")).toHaveText("가상 전단 인쇄");
+  expect(patches(calls).at(-1).body).toEqual({ label: "가상 전단 인쇄", version: 3 });
+  await expect(undo, "남은 단계 0").toBeDisabled();
+  await expect(redo).toHaveAccessibleName("다시 하기: 가상 전단 인쇄 물건 표시·내용");
+  assertNoErrors();
+});
+
+test("PC 표 저장 실패: 칸에 넣은 값과 빨간 테두리를 두고 '다시 저장'·'고치기 전 값으로'를 보이며, 그동안 목록을 바꾸거나 떠나려 하면 막는다", async ({ page }) => {
+  const control = { failPatch: 1 };
+  const calls = await setup(page, { width: 1280, control });
+  await page.goto("/admin/work/ledger/");
+  await typeCell(page, 3, "amountWon", "70000");
+  await expect(gridState(page, 3)).toHaveText("저장 못 함");
+  await expect(gridCell(page, 3, "amountWon")).toHaveClass(/is-failed/u);
+  await expect(gridCell(page, 3, "amountWon"), "넣은 값은 칸에 그대로").toHaveText("70,000");
+  await expect(noteOf(page, 3)).toContainText("! 저장하지 못했습니다.");
+  await expect(noteOf(page, 3)).toContainText("넣은 값은 칸에 그대로 있습니다.");
+  expect(await leaveWarned(page), "저장하지 못한 칸이 있으면 떠날 때 물음").toBe(true);
+  // 목록을 바꾸는 단추와 줄 끝 '고치기'는 막고 글로 알린다
+  await page.getByRole("button", { name: "앞 해" }).click();
+  await expect(page.locator("[data-lg-year]")).toHaveText("2026년");
+  await expect(page.locator("[data-lg-grid-status]")).toContainText("표에 저장 중이거나 저장하지 못한 칸이 있습니다.");
+  await gridRow(page, 3).getByRole("button", { name: /장부 줄 고치기$/u }).click();
+  await expect(page.locator("#lg-form")).toBeHidden();
+  // 같은 줄의 다른 칸은 고칠 수 있지만 앞 저장이 끝나야 보낸다
+  await typeCell(page, 3, "label", "가상 현수막");
+  expect(patches(calls), "앞 칸이 저장되지 않아 기다림").toHaveLength(1);
+  await noteOf(page, 3).getByRole("button", { name: "다시 저장" }).click();
+  await expect(gridState(page, 3)).toHaveText("저장함");
+  expect(patches(calls).map((write) => write.body)).toEqual([{ amountWon: 70_000, version: 1 }, { amountWon: 70_000, version: 1 }, { label: "가상 현수막", version: 2 }]);
+  await expect(gridCell(page, 3, "amountWon")).not.toHaveClass(/is-failed/u);
+  await expect(noteOf(page, 3)).toHaveCount(0);
+  expect(await leaveWarned(page)).toBe(false);
+  await expect(page.locator("[data-lg-grid-status]")).toHaveText("");
+  // '고치기 전 값으로': 보내지 않고 저장된 값으로 돌아간다
+  control.failPatch = 1;
+  await typeCell(page, 3, "amountWon", "90000");
+  await expect(gridState(page, 3)).toHaveText("저장 못 함");
+  await noteOf(page, 3).getByRole("button", { name: "고치기 전 값으로" }).click();
+  await expect(gridCell(page, 3, "amountWon")).toHaveText("70,000");
+  await expect(gridCell(page, 3, "amountWon")).not.toHaveClass(/is-failed/u);
+  await expect(noteOf(page, 3)).toHaveCount(0);
+  expect(patches(calls)).toHaveLength(4);
+  expect(await leaveWarned(page)).toBe(false);
+  // 입력 화면이 열린 채 표 칸을 저장하지 못했을 때: 입력 화면의 저장은 목록을 다시 그려 표에 넣은 값을 버리므로 막는다
+  await gridRow(page, 4).getByRole("button", { name: /장부 줄 고치기$/u }).click();
+  await expect(page.locator("#lg-form")).toBeVisible();
+  await page.locator("#lg-label").fill("가상 강의료 2회");
+  control.failPatch = 1;
+  await typeCell(page, 3, "amountWon", "95000");
+  await expect(gridState(page, 3)).toHaveText("저장 못 함");
+  const sent = calls.writes.length;
+  await page.getByRole("button", { name: "장부 줄 저장" }).click();
+  await expect(page.locator("[data-lg-form-status]")).toContainText("표에 저장 중이거나 저장하지 못한 칸이 있습니다.");
+  expect(calls.writes, "입력 화면 저장을 보내지 않음").toHaveLength(sent);
+  await expect(gridCell(page, 3, "amountWon"), "표에 넣은 값은 그대로").toHaveText("95,000");
+  await noteOf(page, 3).getByRole("button", { name: "다시 저장" }).click();
+  await expect(gridState(page, 3)).toHaveText("저장함");
+  await page.getByRole("button", { name: "장부 줄 저장" }).click();
+  await expect(page.locator("#lg-form")).toBeHidden();
+  expect(calls.writes.at(-1).body).toEqual({ label: "가상 강의료 2회", version: 1 });
+});
+
+test("PC 표: 칸을 고친 직후 곧바로 거르기를 누르면 그 누름을 기억했다가 저장이 끝난 뒤 이어서 하고, 저장이 실패하면 하지 않는다", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  let release = () => {};
+  const hold = () => new Promise((resolve) => {
+    release = resolve;
+  });
+  const control = { hold: hold() };
+  const store = makeStore();
+  const calls = await setup(page, { width: 1280, control, store });
+  await page.goto("/admin/work/ledger/");
+  const status = page.locator("[data-lg-grid-status]");
+  const expenseChip = page.locator('[data-lg-kind="expense"]');
+  const allChip = page.locator('[data-lg-kind=""]');
+  const lists = () => calls.all.filter((call) => call.startsWith("GET /ledger?"));
+  // 칸에 값을 넣고(Enter 없이) 곧바로 '지출'을 누름: 그 누름이 칸을 떠나게 해 저장이 시작되고, 누름은 사라지지 않고 기다린다
+  await typeCell(page, 3, "amountWon", "70000", null);
+  await expenseChip.click();
+  await expect(gridState(page, 3)).toHaveText("저장 중…");
+  await expect(status).toHaveText("칸을 저장한 뒤 이어서 합니다…");
+  await expect(expenseChip, "아직 거르지 않음").toHaveAttribute("aria-pressed", "false");
+  expect(lists(), "저장이 끝나기 전에는 목록을 다시 읽지 않음").toHaveLength(1);
+  release();
+  await expect(expenseChip, "저장이 끝나면 이어서 거름").toHaveAttribute("aria-pressed", "true");
+  await expect.poll(() => lists().at(-1)).toContain("kind=expense");
+  expect(patches(calls).map((write) => write.body)).toEqual([{ amountWon: 70_000, version: 1 }]);
+  await expect(gridCell(page, 3, "amountWon"), "저장한 값").toHaveText("70,000");
+  await expect(page.locator("tr.lg-group"), "거르면 합계 줄·달 줄 없음").toHaveCount(0);
+  await expect(status).toHaveText("");
+  expect(await leaveWarned(page)).toBe(false);
+
+  // 마지막 누름 하나만 기억한다: '전체'를 누른 뒤 '기타 수입'을 누르면 기타 수입만 걸린다
+  control.hold = hold();
+  await typeCell(page, 3, "amountWon", "75000", null);
+  await allChip.click();
+  await page.locator('[data-lg-kind="other_income"]').click();
+  release();
+  await expect(page.locator('[data-lg-kind="other_income"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(allChip).toHaveAttribute("aria-pressed", "false");
+  await expect.poll(() => lists().at(-1)).toContain("kind=other_income");
+  expect(lists().filter((call) => !call.includes("kind=")), "'전체'로는 다시 읽지 않음").toHaveLength(1);
+  await expenseChip.click();
+  await expect(gridRow(page, 3)).toBeVisible();
+
+  // 저장이 실패하면 기억한 누름을 버린다(거르기는 그대로, 줄 아래 알림만 남음)
+  control.hold = hold();
+  control.failPatch = 1;
+  const before = lists().length;
+  await typeCell(page, 3, "amountWon", "80000", null);
+  await allChip.click();
+  await expect(status).toHaveText("칸을 저장한 뒤 이어서 합니다…");
+  release();
+  await expect(gridState(page, 3)).toHaveText("저장 못 함");
+  await expect(status, "버린 것을 글로 알림(눌렀는데 아무 일도 없는 것처럼 보이지 않게)").toHaveText("저장하지 못해 방금 누른 것은 하지 않았습니다. 아래 줄을 확인해 주세요.");
+  await expect(expenseChip, "거르기는 그대로").toHaveAttribute("aria-pressed", "true");
+  await expect(noteOf(page, 3)).toContainText("! 저장하지 못했습니다.");
+  expect(lists(), "목록을 다시 읽지 않음").toHaveLength(before);
+  // 저장하지 못한 칸이 있을 때의 누름은 기억하지 않고 막는다(나중에 저절로 실행되지 않음)
+  control.hold = null;
+  await allChip.click();
+  await expect(status).toContainText("표에 저장 중이거나 저장하지 못한 칸이 있습니다.");
+  await noteOf(page, 3).getByRole("button", { name: "다시 저장" }).click();
+  await expect(gridState(page, 3)).toHaveText("저장함");
+  await expect(expenseChip, "막힌 누름은 저장 뒤에도 실행되지 않음").toHaveAttribute("aria-pressed", "true");
+  expect(lists()).toHaveLength(before);
+
+  // 다른 곳에서 먼저 고쳤으면(409) 기억한 누름을 버린다: 그 줄만 같은 조건(지출)으로 다시 읽고 거르기는 그대로
+  store.entries.find((item) => item.id === uuid(303)).version = 9;
+  control.hold = hold();
+  await typeCell(page, 3, "amountWon", "85000", null);
+  await allChip.click();
+  await expect(status).toHaveText("칸을 저장한 뒤 이어서 합니다…");
+  release();
+  await expect(noteOf(page, 3)).toContainText("! 다른 곳에서 먼저 고쳐 저장하지 않았습니다. 저장된 값을 다시 읽었습니다. 넣던 값: 공급가액 85,000");
+  await expect(status).toHaveText("저장하지 못해 방금 누른 것은 하지 않았습니다. 아래 줄을 확인해 주세요.");
+  await expect(expenseChip, "거르기는 그대로").toHaveAttribute("aria-pressed", "true");
+  expect(lists(), "줄을 다시 읽은 한 번뿐").toHaveLength(before + 1);
+  expect(lists().at(-1)).toContain("kind=expense");
+  // 다음 동작(칸 열기)에서 그 글을 지운다
+  await gridCell(page, 3, "label").click();
+  await expect(status).toHaveText("");
+  await page.keyboard.press("Escape");
+  // 버린 누름은 그 뒤의 저장에도 실행되지 않는다
+  control.hold = null;
+  await typeCell(page, 3, "amountWon", "86000");
+  await expect(gridState(page, 3)).toHaveText("저장함");
+  await expect(expenseChip).toHaveAttribute("aria-pressed", "true");
+  await expect(gridCell(page, 3, "amountWon")).toHaveText("86,000");
+  expect(lists(), "목록을 다시 읽지 않음").toHaveLength(before + 1);
+  assertNoErrors();
+});
+
+test("PC 표: 기억한 누름은 그 사이 다른 줄이 먼저 고쳐져 멈췄으면(409) 남은 저장이 끝나도 하지 않는다", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  let release = () => {};
+  const control = { hold: new Promise((resolve) => {
+    release = resolve;
+  }) };
+  const store = makeStore();
+  const calls = await setup(page, { width: 1280, control, store });
+  await page.goto("/admin/work/ledger/");
+  const expenseChip = page.locator('[data-lg-kind="expense"]');
+  // 넷째 줄은 다른 곳에서 먼저 고쳐진 줄(409가 될 저장), 셋째 줄은 그냥 저장될 칸. 둘 다 응답을 붙잡아 둔다
+  // 화면이 목록을 다 읽은 뒤에 서버 쪽 version만 올린다(먼저 올리면 화면이 새 version을 받아 409가 나지 않는다)
+  await expect(gridRow(page, 4)).toBeVisible();
+  store.entries.find((item) => item.id === uuid(304)).version = 9;
+  await typeCell(page, 4, "label", "가상 강의료 3회", "Tab");
+  await typeCell(page, 3, "amountWon", "70000", null);
+  await expenseChip.click();
+  await expect(page.locator("[data-lg-grid-status]")).toHaveText("칸을 저장한 뒤 이어서 합니다…");
+  release();
+  await expect(noteOf(page, 4)).toHaveText("! 다른 곳에서 먼저 고쳐 저장하지 않았습니다. 저장된 값을 다시 읽었습니다. 넣던 값: 물건 표시·내용 가상 강의료 3회");
+  await expect(gridState(page, 3)).toHaveText("저장함");
+  await expect(expenseChip, "거르지 않음(거르면 넷째 줄 알림이 사라짐)").toHaveAttribute("aria-pressed", "false");
+  await expect(page.locator("[data-lg-grid-status]"), "남은 저장이 끝난 뒤에도 글이 남음").toHaveText("저장하지 못해 방금 누른 것은 하지 않았습니다. 아래 줄을 확인해 주세요.");
+  await expect(gridRow(page, 4)).toBeVisible();
+  expect(calls.all.filter((call) => call.startsWith("GET /ledger?") && call.includes("kind=")), "거르기로 목록을 읽지 않음").toHaveLength(0);
+  // 다음 동작(거르기)에서 그 글을 지우고, 그 거르기는 한다
+  await expenseChip.click();
+  await expect(page.locator("[data-lg-grid-status]")).toHaveText("");
+  await expect(expenseChip).toHaveAttribute("aria-pressed", "true");
+  assertNoErrors();
+});
+
+test("PC 표 되돌리기·다시 하기: 앞 값으로 한 번 저장하는 것이고, 그 사이 다른 곳에서 고쳤으면(409) 멈춰 알리고 단계를 그대로 둔다. 표 안에서는 Ctrl+Z·Ctrl+Y로도 한다", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const store = makeStore();
+  const calls = await setup(page, { width: 1280, store });
+  await page.goto("/admin/work/ledger/");
+  const undo = page.locator("[data-lg-undo]");
+  const redo = page.locator("[data-lg-redo]");
+  await expect(undo).toBeDisabled();
+  await typeCell(page, 3, "label", "가상 현수막");
+  await expect(gridState(page, 3)).toHaveText("저장함");
+  await expect(undo).toBeEnabled();
+  await expect(undo).toHaveAccessibleName("되돌리기: 가상 전단 인쇄 물건 표시·내용");
+  await expect(redo).toBeDisabled();
+  await undo.click();
+  await expect(noteOf(page, 3)).toHaveText("되돌렸습니다: 가상 전단 인쇄 물건 표시·내용");
+  await expect(gridCell(page, 3, "label")).toHaveText("가상 전단 인쇄");
+  expect(patches(calls).at(-1).body).toEqual({ label: "가상 전단 인쇄", version: 2 });
+  await expect(undo).toBeDisabled();
+  await expect(redo).toHaveAccessibleName("다시 하기: 가상 전단 인쇄 물건 표시·내용");
+  await redo.click();
+  await expect(noteOf(page, 3)).toHaveText("다시 했습니다: 가상 전단 인쇄 물건 표시·내용");
+  expect(patches(calls).at(-1).body).toEqual({ label: "가상 현수막", version: 3 });
+  await expect(redo).toBeDisabled();
+
+  // 그 사이 다른 곳에서 고침: 되돌리기를 멈추고 알리며, 단계는 지우지 않는다(다음 단계로 건너뛰지도 않음)
+  store.entries.find((item) => item.id === uuid(303)).version = 9;
+  await undo.click();
+  await expect(noteOf(page, 3)).toHaveText("! 다른 곳에서 먼저 고쳐 저장하지 않았습니다. 저장된 값을 다시 읽었습니다. 되돌리기·다시 하기는 멈췄습니다. 값을 확인한 뒤 다시 눌러 주세요.");
+  expect(patches(calls)).toHaveLength(4);
+  await expect(undo, "남은 단계는 그대로").toBeEnabled();
+  await expect(undo).toHaveAccessibleName("되돌리기: 가상 전단 인쇄 물건 표시·내용");
+  await expect(gridCell(page, 3, "label")).toHaveText("가상 현수막");
+  // 값을 확인한 뒤 다시 누르면 새 version으로 한다
+  await undo.click();
+  await expect(gridCell(page, 3, "label")).toHaveText("가상 전단 인쇄");
+  expect(patches(calls).at(-1).body).toEqual({ label: "가상 전단 인쇄", version: 10 });
+  await expect(gridState(page, 3)).toHaveText("저장함");
+  // 표 안(칸 단추)에서는 Ctrl+Y·Ctrl+Z
+  await gridCell(page, 3, "label").focus();
+  await page.keyboard.press("Control+y");
+  await expect(gridCell(page, 3, "label")).toHaveText("가상 현수막");
+  await expect(gridState(page, 3)).toHaveText("저장함");
+  await page.keyboard.press("Control+z");
+  await expect(gridCell(page, 3, "label")).toHaveText("가상 전단 인쇄");
+  expect(patches(calls).map((write) => write.body.version)).toEqual([1, 2, 3, 4, 10, 11, 12]);
+  // 목록을 바꿔 그 줄이 안 보이면 하지 않고 글로 알린다
+  await expect(gridState(page, 3)).toHaveText("저장함");
+  await page.getByRole("button", { name: "앞 해" }).click();
+  await expect(page.locator("[data-lg-year]")).toHaveText("2025년");
+  await redo.click();
+  await expect(page.locator("[data-lg-grid-status]")).toHaveText("그 줄이 지금 목록에 없어 하지 못했습니다. 그 줄이 보이는 연도·거르기로 바꾼 뒤 다시 눌러 주세요.");
+  expect(patches(calls)).toHaveLength(7);
+  assertNoErrors();
+});
+
+test("PC 표 키보드: 방향키는 고칠 수 있는 칸만 서고, 숫자를 치면 그 숫자로 고치기 시작하며, 입력칸 안의 Ctrl+Z는 표 되돌리기를 부르지 않는다. 낸 쪽은 고르는 칸이다", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const calls = await setup(page, { width: 1280 });
+  await page.goto("/admin/work/ledger/");
+  await gridCell(page, 1, "label").focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(gridCell(page, 1, "payerRole")).toBeFocused();
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("ArrowDown");
+  await expect(gridCell(page, 2, "amountWon")).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(gridCell(page, 3, "amountWon")).toBeFocused();
+  await page.keyboard.press("ArrowLeft");
+  await expect(gridCell(page, 3, "label"), "지출 줄은 낸 쪽 칸을 건너뜀").toBeFocused();
+  await page.keyboard.press("ArrowLeft");
+  await expect(gridCell(page, 3, "basisOn")).toBeFocused();
+  await page.keyboard.press("ArrowUp");
+  await expect(gridCell(page, 3, "basisOn"), "위 줄들은 날짜를 못 고쳐 제자리").toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(gridCell(page, 4, "basisOn"), "달 줄을 건너 다음 장부 줄로").toBeFocused();
+  // 숫자를 치면 그 숫자로 시작
+  await gridCell(page, 3, "amountWon").focus();
+  await page.keyboard.press("6");
+  await expect(gridInput(page, 3, "amountWon")).toBeFocused();
+  await expect(gridInput(page, 3, "amountWon")).toHaveValue("6");
+  await page.keyboard.type("0000");
+  await expect(gridInput(page, 3, "amountWon")).toHaveValue("60,000");
+  await page.keyboard.press("Control+z");
+  expect(patches(calls), "입력칸 안의 Ctrl+Z는 저장을 부르지 않음").toHaveLength(0);
+  await gridInput(page, 3, "amountWon").fill("60000");
+  await page.keyboard.press("Enter");
+  await expect(gridState(page, 3)).toHaveText("저장함");
+  expect(patches(calls).at(-1).body).toEqual({ amountWon: 60_000, version: 1 });
+  await expect(gridCell(page, 4, "amountWon")).toBeFocused();
+  // 되돌릴 단계가 있을 때도 입력칸 안의 Ctrl+Z는 그 칸의 글자만 되돌린다(표 되돌리기를 부르지 않음)
+  await page.keyboard.press("7");
+  await expect(gridInput(page, 4, "amountWon")).toHaveValue("7");
+  await page.keyboard.press("Control+z");
+  await page.keyboard.press("Control+y");
+  expect(patches(calls), "입력칸 안의 Ctrl+Z·Ctrl+Y는 저장을 부르지 않음").toHaveLength(1);
+  await expect(page.locator("[data-lg-undo]")).toHaveAccessibleName("되돌리기: 가상 전단 인쇄 공급가액");
+  await gridInput(page, 4, "amountWon").press("Escape");
+  await expect(gridCell(page, 4, "amountWon")).toHaveText("300,000");
+  // Enter로도 연다(칸 단추). 낸 쪽은 고르는 칸
+  await gridCell(page, 1, "payerRole").focus();
+  await page.keyboard.press("Enter");
+  await expect(gridInput(page, 1, "payerRole")).toBeFocused();
+  await gridInput(page, 1, "payerRole").selectOption("seller");
+  await gridInput(page, 1, "payerRole").press("Enter");
+  await expect(gridCell(page, 1, "payerRole")).toHaveText("매도인");
+  expect(patches(calls).at(-1).body).toEqual({ payerRole: "seller", version: 1 });
+  // Shift+Tab: 저장하고 왼쪽 칸으로, 줄 머리에서는 앞 줄 끝 칸으로
+  await typeCell(page, 2, "label", "가상숲1단지 84㎡ 매매(매도)", "Shift+Tab");
+  await expect(gridCell(page, 1, "receivedOn")).toBeFocused();
+  await expect(gridState(page, 2)).toHaveText("저장함");
+  // 날짜를 넣다 만 칸(브라우저는 값을 빈 글자로 준다)은 비우는 것으로 저장하지 않는다
+  const sent = patches(calls).length;
+  await gridCell(page, 3, "basisOn").click();
+  await gridInput(page, 3, "basisOn").press("Backspace");
+  expect(await gridInput(page, 3, "basisOn").evaluate((input) => `${input.value}/${input.validity.badInput}`), "넣다 만 날짜").toBe("/true");
+  await gridInput(page, 3, "basisOn").press("Enter");
+  await expect(noteOf(page, 3)).toHaveText("! 날짜를 연·월·일 모두 넣어 주세요.");
+  await expect(gridInput(page, 3, "basisOn")).toHaveAttribute("aria-invalid", "true");
+  expect(patches(calls), "넣다 만 날짜는 보내지 않음").toHaveLength(sent);
+  await gridInput(page, 3, "basisOn").press("Escape");
+  await expect(gridCell(page, 3, "basisOn")).toHaveText("11. 2.");
+  assertNoErrors();
+});
+
+test("손가락으로 쓰는 넓은 화면 1280px 매출장부: 표로 보이되 칸·'고치기'를 누르는 곳은 44px, 글자는 16px 그대로다", async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, hasTouch: true, isMobile: true });
+  const page = await context.newPage();
+  try {
+    const calls = await setup(page, { width: 1280 });
+    await page.goto("/admin/work/ledger/");
+    expect(await page.evaluate(() => matchMedia("(hover: hover) and (pointer: fine)").matches), "이 시험은 손가락 화면").toBe(false);
+    await expect(page.locator(".lg-table")).toBeVisible();
+    await expect(page.locator(".lg-sum")).toBeHidden();
+    const cell = gridCell(page, 2, "receivedOn");
+    expect((await cell.boundingBox()).height, "칸을 누르는 곳").toBeGreaterThanOrEqual(44);
+    expect(await gridCell(page, 2, "amountWon").evaluate((button) => getComputedStyle(button).fontSize), "칸 글자").toBe("16px");
+    expect((await gridRow(page, 2).getByRole("button", { name: /장부 줄 고치기$/u }).boundingBox()).height, "줄 끝 '고치기'").toBeGreaterThanOrEqual(44);
+    expect((await page.locator("[data-lg-undo]").boundingBox()).height, "'되돌리기'").toBeGreaterThanOrEqual(44);
+    await gridCell(page, 2, "amountWon").tap();
+    const input = gridInput(page, 2, "amountWon");
+    await expect(input).toBeFocused();
+    expect((await input.boundingBox()).height, "입력칸").toBeGreaterThanOrEqual(44);
+    expect(await input.evaluate((field) => getComputedStyle(field).fontSize), "입력칸 글자(16px 아래면 휴대 기기가 화면을 키움)").toBe("16px");
+    await input.fill("1900000");
+    await input.press("Enter");
+    await expect(gridState(page, 2)).toHaveText("저장함");
+    expect(patches(calls).at(-1).body).toEqual({ amountWon: 1_900_000, vatWon: 190_000, version: 1 });
+    expect(await overflowOf(page)).toBeLessThanOrEqual(0);
+  } finally {
+    await context.close();
+  }
+});

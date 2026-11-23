@@ -31,7 +31,7 @@ export interface LedgerEntry {
   warnings?: LedgerWarning[];
 }
 
-export interface LedgerLine { month?: string; feeWon: number; vatWon: number; feeWithVatWon: number; receivedWon: number; unpaidWon: number; expenseWon: number; otherIncomeWon: number; netWon: number }
+export interface LedgerLine { month?: string; feeWon: number; vatWon: number; feeWithVatWon: number; receivedWon: number; unpaidWon: number; expenseWon: number; otherIncomeWon: number; netWon: number; receivableWon: number }
 export interface LedgerSummary { year: string; months: LedgerLine[]; total: LedgerLine; undatedCount: number }
 export interface LedgerPage { items: LedgerEntry[]; nextCursor: string | null; undatedCount: number }
 export interface LedgerInput {

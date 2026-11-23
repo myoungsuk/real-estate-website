@@ -30,7 +30,7 @@ const basisText = (entry: LedgerEntry, year: string | number) => ledgerDateText(
 const labelText = (entry: LedgerEntry) => entry.label || "(물건 표시 없음)";
 const moneyNote = (entry: LedgerEntry) => (entry.kind === "fee" || entry.vatWon > 0 ? `공급가액 ${wonText(entry.amountWon)} + 부가세 ${wonText(entry.vatWon)}` : "");
 
-function editButton(entry: LedgerEntry) {
+export function editButton(entry: LedgerEntry) {
   const button = element("button", "admin-text-link cu-linkbtn", "고치기");
   button.type = "button";
   button.dataset.lgEdit = entry.id;
@@ -57,38 +57,7 @@ export function entryCard(entry: LedgerEntry, year: string | number, saved = fal
   return item;
 }
 
-// 1221px 이상: 표 한 줄
-export function entryRow(entry: LedgerEntry, year: string | number, saved = false) {
-  const row = element("tr", saved ? "is-saved" : "");
-  row.dataset.lgEntry = entry.id;
-  const cell = (className = "") => element("td", className);
-  const basis = cell();
-  basis.textContent = basisText(entry, year);
-  const kind = cell();
-  kind.append(kindBadge(entry.kind));
-  if (entry.payerRole) kind.append(element("small", "", payerLabels[entry.payerRole] ?? ""));
-  const label = cell();
-  label.append(element("strong", "", labelText(entry)));
-  const warn = warnList(entry);
-  if (warn) label.append(warn);
-  const money = cell("num");
-  money.append(element("strong", "", wonText(entryTotalWon(entry))));
-  if (entry.kind === "fee" || entry.vatWon > 0) money.append(element("small", "", `부가세 ${wonText(entry.vatWon)}`));
-  const received = cell("num");
-  const unpaid = cell("num");
-  if (entry.kind === "expense") {
-    received.textContent = "—";
-    unpaid.textContent = "—";
-  } else {
-    received.textContent = wonText(entry.receivedWon);
-    if (entry.receivedOn) received.append(element("small", "", ledgerDateText(entry.receivedOn, year)));
-    unpaid.append(payState(entry, year));
-  }
-  const action = cell();
-  action.append(editButton(entry));
-  row.append(basis, kind, label, money, received, unpaid, action);
-  return row;
-}
+// 1221px 이상의 표 줄은 work-ledger-grid.ts가 그린다(칸을 바로 고치는 표).
 
 // 손님 카드 거래 칸 안의 장부 한 줄: 종류·낸 쪽·합계 | 입금 상태(+경고)
 export function dealLedgerItem(entry: LedgerEntry, year: string | number) {

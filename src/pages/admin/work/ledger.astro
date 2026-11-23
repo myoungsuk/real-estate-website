@@ -3,6 +3,7 @@ import AdminIcon from "../../../components/admin/AdminIcon.astro";
 import AdminPageHelp from "../../../components/admin/AdminPageHelp.astro";
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 import { LEDGER_BASIS_LABELS, LEDGER_BASES, LEDGER_DEAL_QUERY_MAX, LEDGER_KIND_LABELS, LEDGER_LABEL_MAX, LEDGER_MEMO_MAX, LEDGER_NARROW_MONTHS_NOTE, LEDGER_NOTICE, LEDGER_PAYER_LABELS, LEDGER_UNPAID_ALL_YEARS_NOTE } from "../../../lib/work/ledger-view.mjs";
+import { LEDGER_GRID_COLUMNS, gridHeadText } from "../../../lib/work/ledger-grid.mjs";
 import { TRASH_MOVE_NOTICE } from "../../../lib/work/trash-view.mjs";
 
 // 매출장부(단계 2, 설계서 6.12절, 시안 2026-11-21 03:09:45 "이 시안대로"). 참고용 집계이며 세무 장부가 아니다.
@@ -10,10 +11,14 @@ import { TRASH_MOVE_NOTICE } from "../../../lib/work/trash-view.mjs";
 // - 서버를 부르므로 탭 미리 그리기 prerender 목록에 넣지 않는다(AdminLayout prerenderPages).
 // - 연도·기준일·거르기는 이 화면 메모리에만 둔다(주소·브라우저 저장소에 넣지 않음). 물건 표시·메모는 화면에만 보인다.
 // - 부가세 포함·제외는 같은 합계 응답으로 단추만 바꾼다(서버를 다시 부르지 않음).
+// - PC(1221px 이상) 표는 칸을 눌러 바로 고친다(work-ledger-grid.ts, D-2a). 합계 칸·달별 표는 숨기고 표 안 합계 줄·달 줄(서버 합계 그대로)로 보인다.
+//   1220px 이하는 카드와 입력 화면 그대로다. 넣던 값·되돌리기 단계는 화면 메모리에만 둔다.
 // - 지운 장부 줄은 휴지통으로 간다(7일 보관, 그동안 합계에서 빠짐). 지운 뒤 알림에 '되살리기'·'휴지통 보기'(work-trash-dom.ts).
 const kindLabels = LEDGER_KIND_LABELS as Record<string, string>;
 const payerLabels = LEDGER_PAYER_LABELS as Record<string, string>;
 const basisLabels = LEDGER_BASIS_LABELS as Record<string, string>;
+const gridColumns = LEDGER_GRID_COLUMNS as readonly string[];
+const gridNumeric = ["amountWon", "vatWon", "totalWon", "receivedWon", "unpaidWon"];
 ---
 
 <AdminLayout
@@ -93,7 +98,13 @@ const basisLabels = LEDGER_BASIS_LABELS as Record<string, string>;
             <span aria-hidden="true">＋</span><span>장부 줄 만들기</span>
           </button>
           <button class="work-secondary-button" type="button" data-lg-csv>CSV 내려받기</button>
+          <span class="lg-history" role="group" aria-label="표에서 고친 칸">
+            <button class="work-secondary-button" type="button" data-lg-undo disabled>되돌리기</button>
+            <button class="work-secondary-button" type="button" data-lg-redo disabled>다시 하기</button>
+          </span>
         </div>
+        <p class="admin-form-status lg-gridstatus" role="status" aria-live="polite" data-lg-grid-status></p>
+        <p class="sr-only" role="status" aria-live="polite" data-lg-grid-live></p>
         <p class="lg-csv-note" data-lg-csv-note hidden></p>
         <p class="admin-form-status" role="status" aria-live="polite" data-lg-csv-status></p>
         <a class="admin-text-link" data-lg-csv-link hidden>CSV 파일 저장</a>
@@ -227,10 +238,23 @@ const basisLabels = LEDGER_BASIS_LABELS as Record<string, string>;
         <table class="lg-table">
           <caption class="sr-only">장부 줄</caption>
           <thead>
-            <tr><th scope="col">기준일</th><th scope="col">종류</th><th scope="col">물건 표시·내용</th><th scope="col" class="num">금액</th><th scope="col" class="num">입금</th><th scope="col" class="num">미입금</th><th scope="col"><span class="sr-only">고치기</span></th></tr>
+            <tr>
+              {gridColumns.map((column) => (
+                <th scope="col" class={gridNumeric.includes(column) ? "num" : undefined}>{gridHeadText(column)}{column === "totalWon" && <small class="lg-autotag">자동</small>}</th>
+              ))}
+              <th scope="col"><span class="sr-only">줄 상태·고치기</span></th>
+            </tr>
           </thead>
           <tbody data-lg-tbody></tbody>
         </table>
+        <p class="lg-keys" data-lg-keys hidden>
+          <span><kbd>←</kbd><kbd>↑</kbd><kbd>↓</kbd><kbd>→</kbd> 칸 옮기기</span>
+          <span><kbd>Enter</kbd> 고치기·저장</span>
+          <span><kbd>Tab</kbd> 저장하고 다음 칸</span>
+          <span><kbd>Esc</kbd> 그만두기</span>
+          <span><kbd>Ctrl</kbd><kbd>Z</kbd> 되돌리기</span>
+          <span>메모·지우기는 줄 끝 '고치기'</span>
+        </p>
         <section class="admin-panel rt-state cu-state" aria-labelledby="lg-empty-title" data-lg-empty hidden>
           <div class="admin-empty-state">
             <span aria-hidden="true" data-lg-empty-symbol>0</span>
@@ -267,7 +291,9 @@ const basisLabels = LEDGER_BASIS_LABELS as Record<string, string>;
       type LedgerSummary,
     } from "../../../lib/work-ledger-client";
     import { element, setStatus } from "../../../lib/work-customers-dom";
-    import { entryCard, entryRow } from "../../../lib/work-ledger-dom";
+    import { entryCard } from "../../../lib/work-ledger-dom";
+    import { createLedgerGrid } from "../../../lib/work-ledger-grid";
+    import { ledgerGroupPlan } from "../../../lib/work/ledger-grid.mjs";
     import { showMovedToTrash } from "../../../lib/work-trash-dom";
     import legalRules from "../../../data/work/legal-rules.json";
     import { todayInKorea } from "../../../lib/work/legal-dates.mjs";
@@ -354,7 +380,12 @@ const basisLabels = LEDGER_BASIS_LABELS as Record<string, string>;
       const count = pick("[data-lg-count]");
       const back = pick<HTMLButtonElement>("[data-lg-back]");
       const cards = pick("[data-lg-rows]");
-      const tbody = pick("[data-lg-tbody]");
+      const tbody = pick<HTMLTableSectionElement>("[data-lg-tbody]");
+      const undoButton = pick<HTMLButtonElement>("[data-lg-undo]");
+      const redoButton = pick<HTMLButtonElement>("[data-lg-redo]");
+      const gridStatus = pick("[data-lg-grid-status]");
+      const gridLive = pick("[data-lg-grid-live]");
+      const keys = pick("[data-lg-keys]");
       const empty = pick("[data-lg-empty]");
       const emptyNew = pick<HTMLButtonElement>("[data-lg-empty-new]");
       const more = pick<HTMLButtonElement>("[data-lg-more]");
@@ -455,10 +486,115 @@ const basisLabels = LEDGER_BASIS_LABELS as Record<string, string>;
         pick("[data-lg-wide-total]").replaceChildren(element("td", "", "합계"), ...view.wideTotal.map((text, index) => element("td", index === (vat ? 2 : 3) && Number(summary?.total.unpaidWon) > 0 ? "is-due" : "", text)));
       }
 
+      // ── PC 표(1221px 이상): 칸을 눌러 바로 고친다 ──
+      // 합계 줄·달 줄은 거르기를 켜면 넣지 않는다(달 합계는 거르지 않은 값이라 보이는 줄과 어긋남).
+      const groupFiltered = () => Boolean(kind) || unpaid || undatedMode;
+      // 다른 곳에서 먼저 고친 줄: 같은 조건으로 목록을 다시 읽어 그 줄만 찾는다(서버에 한 줄 읽기가 없음). 목록에 없으면 null.
+      async function reloadRow(id: string) {
+        let next: string | null = null;
+        for (let pageIndex = 0; pageIndex < LEDGER_READ_ALL_PAGES; pageIndex += 1) {
+          const page = await listLedger(undatedMode
+            ? ledgerListQuery({ year, basis, all: true, cursor: next, limit: LEDGER_PAGE_SIZE })
+            : ledgerListQuery({ year, basis, kind, unpaid, cursor: next }));
+          const found = page.items.find((item) => item.id === id);
+          if (found) return undatedMode && found.basisOn ? null : found;
+          next = page.nextCursor;
+          if (!next) return null;
+        }
+        return null;
+      }
+      let totalsToken = 0;
+      // 표가 저장 중일 때 누른 동작 하나(마지막 것만). 저장이 끝나면 이어서 하고, 저장이 실패하거나 다른 칸을 고치기 시작하면 버린다.
+      let pendingAction: (() => void) | null = null;
+      // 저장이 실패해 기억한 동작을 버렸다는 표 위 글. 다음 동작(칸 열기·거르기 등)에서 지운다.
+      const DROPPED_TEXT = "저장하지 못해 방금 누른 것은 하지 않았습니다. 아래 줄을 확인해 주세요.";
+      const clearDropped = () => {
+        if (gridStatus.textContent === DROPPED_TEXT) setStatus(gridStatus, "", "idle");
+      };
+      const grid = createLedgerGrid({
+        tbody,
+        year: () => year,
+        basis: () => basis,
+        today: () => todayInKorea(),
+        save: (id, changes, version) => updateLedgerEntry(id, { ...changes, version }),
+        reloadRow,
+        errorText,
+        entryChanged(entry) {
+          items = items.map((item) => (item.id === entry.id ? entry : item));
+          cards.replaceChildren(...items.map((item) => entryCard(item, year, item.id === savedId)));
+        },
+        // 합계 줄·달 줄은 서버 합계를 다시 읽어 그린다(화면에서 더하지 않음). 늦게 온 응답과 목록이 바뀐 뒤의 응답은 버린다.
+        totalsChanged() {
+          const mine = ++totalsToken;
+          const list = loadToken;
+          readLedgerSummary(year, basis).then((next) => {
+            if (mine !== totalsToken || list !== loadToken) return;
+            summary = next;
+            renderSummary();
+            grid.renderGroups(ledgerGroupPlan(grid.placed(), summary, { filtered: groupFiltered() }));
+            if (!grid.dirty() && gridStatus.textContent !== DROPPED_TEXT) setStatus(gridStatus, "", "idle");
+          }).catch(() => {
+            if (mine !== totalsToken || list !== loadToken) return;
+            setStatus(gridStatus, "합계를 다시 읽지 못했습니다. 합계 줄은 고치기 전 값일 수 있습니다. 화면을 새로 고쳐 주세요.", "error");
+          });
+        },
+        historyChanged({ canUndo, canRedo, undoName, redoName }) {
+          undoButton.disabled = !canUndo;
+          redoButton.disabled = !canRedo;
+          undoButton.setAttribute("aria-label", undoName);
+          redoButton.setAttribute("aria-label", redoName);
+          undoButton.title = canUndo ? undoName : "";
+          redoButton.title = canRedo ? redoName : "";
+        },
+        announce(text, visible = false) {
+          if (visible) setStatus(gridStatus, text, text ? "error" : "idle");
+          else gridLive.textContent = text;
+        },
+        settled() {
+          const run = pendingAction;
+          if (!run) return;
+          pendingAction = null;
+          setStatus(gridStatus, "", "idle");
+          run();
+        },
+        interrupted(failed) {
+          if (pendingAction) {
+            // 저장하지 못해 버릴 때는 글 없이 사라지지 않게 한 줄을 남긴다(눌렀는데 아무 일도 없는 것처럼 보이지 않게)
+            pendingAction = null;
+            setStatus(gridStatus, failed ? DROPPED_TEXT : "", failed ? "error" : "idle");
+          } else if (!failed) clearDropped();
+        },
+      });
+      undoButton.addEventListener("click", () => grid.undo());
+      redoButton.addEventListener("click", () => grid.redo());
+      // 표에 저장 중이거나 저장하지 못한 칸이 있으면 목록을 바꾸지 않는다(바꾸면 그 값이 없어짐).
+      // again: 막힌 동작을 다시 부르는 함수. 저장 중일 뿐이면 기억했다가 저장이 끝난 뒤 부른다(칸을 떠나게 만든 그 누름이 사라지지 않게).
+      const gridBusy = (again?: () => void) => {
+        clearDropped();
+        if (!grid.dirty()) return false;
+        if (again && grid.saving()) {
+          pendingAction = again;
+          setStatus(gridStatus, "칸을 저장한 뒤 이어서 합니다…", "saving");
+          return true;
+        }
+        pendingAction = null;
+        setStatus(gridStatus, "표에 저장 중이거나 저장하지 못한 칸이 있습니다. 끝난 뒤 다시 눌러 주세요. 저장하지 못한 칸은 '다시 저장'이나 '고치기 전 값으로'를 눌러 주세요.", "error");
+        return true;
+      };
+
+      // 입력 화면의 저장·지우기는 목록을 다시 그린다. 표에 저장 중이거나 저장하지 못한 칸이 있으면 그 값이 사라지므로 먼저 막는다.
+      const formBlocked = () => {
+        if (!gridBusy()) return false;
+        setStatus(formStatus, "표에 저장 중이거나 저장하지 못한 칸이 있습니다. 표의 그 칸을 먼저 끝낸 뒤 다시 눌러 주세요.", "error");
+        return true;
+      };
+
       // ── 장부 줄 목록 ──
       function renderList() {
         cards.replaceChildren(...items.map((entry) => entryCard(entry, year, entry.id === savedId)));
-        tbody.replaceChildren(...items.map((entry) => entryRow(entry, year, entry.id === savedId)));
+        grid.render(items, ledgerGroupPlan(items, summary, { filtered: groupFiltered() }), savedId);
+        keys.hidden = items.length === 0;
+        setStatus(gridStatus, "", "idle");
         count.textContent = ledgerCountText(items.length, { more: Boolean(cursor), unpaid, undated: undatedMode, basis });
         more.hidden = !cursor || undatedMode;
         chips.hidden = undatedMode;
@@ -529,40 +665,49 @@ const basisLabels = LEDGER_BASIS_LABELS as Record<string, string>;
       }
 
       function setYear(next: number) {
+        if (gridBusy(() => setYear(next))) return;
         year = next;
         undatedMode = false;
         void refresh();
       }
       yearPrev.addEventListener("click", () => setYear(year - 1));
       yearNext.addEventListener("click", () => setYear(year + 1));
-      for (const button of basisButtons) button.addEventListener("click", () => {
-        basis = (button.dataset.lgBasis as LedgerBasis) ?? "balance";
-        void refresh();
-      });
+      for (const button of basisButtons) {
+        const choose = () => {
+          if (gridBusy(choose)) return;
+          basis = (button.dataset.lgBasis as LedgerBasis) ?? "balance";
+          void refresh();
+        };
+        button.addEventListener("click", choose);
+      }
       for (const button of vatButtons) button.addEventListener("click", () => {
         vat = button.dataset.lgVat === "1";
         renderSummary();
       });
-      for (const button of kindButtons) button.addEventListener("click", () => {
-        kind = (button.dataset.lgKind as LedgerKind | "") ?? "";
-        void refresh();
-      });
+      for (const button of kindButtons) {
+        const choose = () => {
+          if (gridBusy(choose)) return;
+          kind = (button.dataset.lgKind as LedgerKind | "") ?? "";
+          void refresh();
+        };
+        button.addEventListener("click", choose);
+      }
       function setUnpaid(next: boolean) {
+        if (gridBusy(() => setUnpaid(next))) return;
         unpaid = next;
         undatedMode = false;
         void refresh();
       }
       unpaidButton.addEventListener("click", () => setUnpaid(!unpaid));
-      undatedShow.addEventListener("click", () => {
-        undatedMode = true;
+      const showUndated = (next: boolean) => {
+        if (gridBusy(() => showUndated(next))) return;
+        undatedMode = next;
         void refresh();
-      });
-      back.addEventListener("click", () => {
-        undatedMode = false;
-        void refresh();
-      });
-      more.addEventListener("click", async () => {
-        if (!cursor) return;
+      };
+      undatedShow.addEventListener("click", () => showUndated(true));
+      back.addEventListener("click", () => showUndated(false));
+      const loadMore = async () => {
+        if (!cursor || gridBusy(() => void loadMore())) return;
         more.disabled = true;
         setStatus(listStatus, "더 불러오고 있습니다…", "saving");
         try {
@@ -574,7 +719,8 @@ const basisLabels = LEDGER_BASIS_LABELS as Record<string, string>;
         } finally {
           more.disabled = false;
         }
-      });
+      };
+      more.addEventListener("click", () => void loadMore());
 
       // ── CSV(감사 export.ledger를 남긴 뒤에만 만든다) ──
       csvButton.addEventListener("click", async () => {
@@ -748,6 +894,11 @@ const basisLabels = LEDGER_BASIS_LABELS as Record<string, string>;
       }
 
       function openForm(entry: LedgerEntry | null) {
+        // 저장이 끝난 뒤 이어서 열 때는 그 줄의 새 값(새 version)으로 연다
+        if (gridBusy(() => {
+          const now = entry ? items.find((item) => item.id === entry.id) : null;
+          if (!entry || now) openForm(now ?? null);
+        })) return;
         editing = entry;
         chosenDeal = null;
         foundDeals = [];
@@ -821,7 +972,7 @@ const basisLabels = LEDGER_BASIS_LABELS as Record<string, string>;
       });
 
       save.addEventListener("click", async () => {
-        if (busy) return;
+        if (busy || formBlocked()) return;
         const k = currentKind();
         const checked = checkLedgerInput(readValues(), { kind: k, hasDeal: hasDeal() || hasSnap(), needsEntryOn: needsEntryOn() });
         if (!checked.ok) {
@@ -864,7 +1015,7 @@ const basisLabels = LEDGER_BASIS_LABELS as Record<string, string>;
       });
       // 다른 곳에서 먼저 고쳤을 때: 목록을 새로 읽어 그 줄의 새 값으로 다시 채운다(넣던 값은 그때까지 칸에 남아 있음).
       reload.addEventListener("click", async () => {
-        if (busy || !editing) return;
+        if (busy || !editing || formBlocked()) return;
         const id = editing.id;
         busy = true;
         try {
@@ -889,7 +1040,7 @@ const basisLabels = LEDGER_BASIS_LABELS as Record<string, string>;
         deleteButton.focus();
       });
       deleteGo.addEventListener("click", async () => {
-        if (busy || !editing) return;
+        if (busy || !editing || formBlocked()) return;
         busy = true;
         deleteGo.disabled = true;
         setStatus(formStatus, "지우고 있습니다…", "saving");
@@ -898,7 +1049,7 @@ const basisLabels = LEDGER_BASIS_LABELS as Record<string, string>;
           closeForm();
           showMovedToTrash(saved, "장부 줄", result.trash, {
             reload: () => refresh(),
-            begin: () => (busy ? false : (busy = true)),
+            begin: () => (busy || gridBusy() ? false : (busy = true)),
             end: () => {
               busy = false;
             },
@@ -913,9 +1064,9 @@ const basisLabels = LEDGER_BASIS_LABELS as Record<string, string>;
         }
       });
 
-      // 저장하지 않은 줄 넣기·고치기가 있으면 떠나기 전에 묻는다.
+      // 저장하지 않은 줄 넣기·고치기, 표에서 저장 중이거나 저장하지 못한 칸이 있으면 떠나기 전에 묻는다.
       window.addEventListener("beforeunload", (event) => {
-        if (!isDirty()) return;
+        if (!isDirty() && !grid.dirty()) return;
         event.preventDefault();
       });
 
@@ -957,7 +1108,11 @@ const basisLabels = LEDGER_BASIS_LABELS as Record<string, string>;
         busy = false;
         closeForm();
         cards.replaceChildren();
-        tbody.replaceChildren();
+        grid.render([], { total: null, groups: new Map() });
+        grid.forgetAll();
+        keys.hidden = true;
+        setStatus(gridStatus, "", "idle");
+        gridLive.textContent = "";
         setStatus(saved, "", "idle");
         setStatus(csvStatus, "", "idle");
         setStatus(listStatus, "", "idle");
