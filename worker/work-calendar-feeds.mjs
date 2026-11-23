@@ -45,9 +45,10 @@ const SQL = Object.freeze({
   // 하루 1번: 같은 한국 날짜에 이미 썼으면 조건이 맞지 않아 0줄(동시에 받아도 두 번 쓰지 않음).
   touchFeed: "UPDATE calendar_feeds SET last_used_at = ? WHERE id = ? AND revoked_at IS NULL AND (last_used_at IS NULL OR last_used_at < ?)",
   // 끝나지 않은 일정(날짜와 상관없이) + 지난 30일 안의 일정(끝낸 것 포함). 손님 이름·전화번호·메모는 읽지 않는다.
+  // 취소한 거래(status 'cancelled')의 일정은 넣지 않는다(사용자 결정 2026-11-23 08:55:04 "뺌 (Recommended)"). 거래를 다시 열면 다음 받기에 돌아온다.
   feedEvents:
     "SELECT e.id, e.kind, e.due_on, e.title, e.alarm_offsets, e.done_at, d.title AS deal_title FROM deal_events e JOIN deals d ON d.id = e.deal_id "
-    + "WHERE e.done_at IS NULL OR e.due_on >= ? ORDER BY e.due_on DESC, e.id LIMIT ?",
+    + "WHERE d.status <> 'cancelled' AND (e.done_at IS NULL OR e.due_on >= ?) ORDER BY e.due_on DESC, e.id LIMIT ?",
   // 날짜 있는 할 일만, 같은 기준(끝나지 않은 것 + 지난 30일).
   feedTasks:
     "SELECT id, title, due_on, done_at FROM tasks WHERE due_on IS NOT NULL AND (done_at IS NULL OR due_on >= ?) ORDER BY due_on DESC, id LIMIT ?",
@@ -228,16 +229,27 @@ function logFeed(log, entry) {
   }
 }
 
+// HEAD는 GET과 같은 상태·헤더를 본문 없이 돌려준다(캘린더 앱·점검 도구가 먼저 HEAD로 확인하는 경우).
+// 실제로 받아 간 것이 아니므로 last_used_at을 쓰지 않는다.
+function withoutBody(response) {
+  return new Response(null, { status: response.status, headers: response.headers });
+}
+
 /**
- * GET /api/calendar/{token}.ics. 토큰·주소는 어떤 로그에도 남기지 않는다.
+ * GET·HEAD /api/calendar/{token}.ics. 토큰·주소는 어떤 로그에도 남기지 않는다.
  * @param {Request} request
  * @param {object} env
  * @param {{ now?: () => number, log?: (entry: object) => void }} [options]
  */
 export async function handleCalendarFeedRequest(request, env, options = {}) {
+  if (request.method === "HEAD") return withoutBody(await answerFeed(request, env, options, { touch: false }));
+  if (request.method !== "GET") return feedTextResponse(405, "Method not allowed\n", { Allow: "GET, HEAD" });
+  return answerFeed(request, env, options, { touch: true });
+}
+
+async function answerFeed(request, env, options, { touch }) {
   const now = typeof options.now === "function" ? options.now() : Date.now();
   const log = options.log ?? ((entry) => console.info(JSON.stringify(entry)));
-  if (request.method !== "GET") return feedTextResponse(405, "Method not allowed\n", { Allow: "GET" });
   const match = FEED_PATH_PATTERN.exec(new URL(request.url).pathname);
   const token = match?.[1] ?? "";
   const db = env?.WORK_DB;
@@ -254,7 +266,7 @@ export async function handleCalendarFeedRequest(request, env, options = {}) {
     const tasks = await all(db.prepare(SQL.feedTasks).bind(cutoff, FEED_ITEM_LIMIT));
     const body = buildDealIcsCalendar({ now: new Date(now), events: feedCalendarEvents(events, tasks) });
     const dayStart = koreaDayStartIso(now);
-    if (feed.last_used_at === null || feed.last_used_at < dayStart) {
+    if (touch && (feed.last_used_at === null || feed.last_used_at < dayStart)) {
       try {
         await db.prepare(SQL.touchFeed).bind(new Date(now).toISOString(), feed.id, dayStart).run();
       } catch (error) {
