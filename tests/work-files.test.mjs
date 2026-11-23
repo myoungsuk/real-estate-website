@@ -1,4 +1,4 @@
-// 손님 사진(바로 찍기) 서버 F-a 시험(photo-pr-plan 3.2절 T2-137 ~ T2-137h, 테스트 체크리스트 4.3절 T2-20 ~ T2-33). 실제 SQLite(node:sqlite)에
+// 손님 사진(바로 찍기) 서버 F-a 시험(photo-pr-plan 3.2절 T2-137 ~ T2-137h, 테스트 체크리스트 4.3절 T2-20 ~ T2-33)과 계약서 사본 서버 K-a 시험(파일 끝). 실제 SQLite(node:sqlite)에
 // 0001 ~ 0007을 적용하고 가짜 R2(tests/work-test-kit.mjs createR2)와 가상 그림 바이트만 쓴다. 실제 R2·사진은 쓰지 않는다.
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -198,10 +198,10 @@ test("T2-23·T2-24 Content-Length: 없으면 413, 실제 본문과 다르면 400
   assert.equal(r2.objects.size, 1);
 });
 
-test("F-1 파일 종류: property_photo·other만 열고, contract_copy·registry·recording·document는 400 FILE_KIND_NOT_READY, 모르는 종류·빈 값은 400 VALIDATION_FAILED", async () => {
+test("F-1 파일 종류: property_photo·other·contract_copy(K-a)만 열고, registry·recording·document는 400 FILE_KIND_NOT_READY, 모르는 종류·빈 값은 400 VALIDATION_FAILED", async () => {
   const { env, r2 } = filesSetup();
   const customerId = await makeCustomer(env);
-  for (const kind of ["contract_copy", "registry", "recording", "document"]) {
+  for (const kind of ["registry", "recording", "document"]) {
     const result = await upload(env, customerId, jpeg(), { kind });
     assert.deepEqual([result.status, result.json.error.code], [400, "FILE_KIND_NOT_READY"], kind);
   }
@@ -645,4 +645,200 @@ test("CSRF·Origin: 사진 올리기도 Origin·업무 CSRF가 없으면 403, R2
   assert.equal(puts(r2), 0);
   const listFiles = await work(env, "/files");
   assert.deepEqual([listFiles.status, listFiles.response.headers.get("Allow")], [405, "POST"]);
+});
+
+// ── 계약서 사본(단계 4 K-a): 거래에 붙임·가림 확인·10장 상한·미리보기 없음 ─────────────────────
+
+const GET_HEADERS = { Origin: null, "X-Admin-CSRF": null, "Content-Type": null, "Content-Length": null, "X-Work-File-Sha256": null };
+
+async function makeDeal(env, { title = "가상 거래", parties = [] } = {}) {
+  const created = await work(env, "/deals", { method: "POST", body: { title, dealType: "sale", propertyKind: "housing", parties } });
+  assert.equal(created.status, 201, JSON.stringify(created.json));
+  return created.json.data.deal.id;
+}
+
+const uploadCopy = (env, dealId, bytes, { headers = {}, ...rest } = {}) =>
+  raw(env, "/files", { bytes, headers: { "X-Work-File-Kind": "contract_copy", "X-Work-Owner": `deal:${dealId}`, "X-Work-Masked": "rrn=1", ...headers }, ...rest });
+const copyRows = (database) => rows(database, "SELECT id, r2_key, kind, customer_id, deal_id, rrn_masked, retention_until FROM files ORDER BY id");
+
+test("K-a 계약서 사본 올리기: deal:{uuid} + X-Work-Masked rrn=1이면 201, 거래에만 붙고(customer_id NULL) rrn_masked 1, 키는 work/contract_copy/…, 감사 reason은 kind=contract_copy", async () => {
+  const { env, r2, database } = filesSetup();
+  const customerId = await makeCustomer(env, "가상 손님 계약");
+  const dealId = await makeDeal(env, { title: "가상 계약 거래", parties: [{ customerId, role: "buyer" }] });
+  const logs = [];
+  const bytes = jpeg({ scanBytes: 2048 });
+  const created = await uploadCopy(env, dealId, bytes, { logs });
+  assert.equal(created.status, 201, JSON.stringify(created.json));
+  const file = created.json.data.file;
+  assert.deepEqual(file, { id: file.id, kind: "contract_copy", mimeType: "image/jpeg", byteSize: bytes.length, caption: "", customerId: null, dealId, createdAt: new Date(NOW).toISOString() });
+  const [row] = copyRows(database);
+  assert.deepEqual(row, { id: file.id, r2_key: `work/contract_copy/2026/11/${file.id}.jpg`, kind: "contract_copy", customer_id: null, deal_id: dealId, rrn_masked: 1, retention_until: null });
+  assert.deepEqual(r2.objects.get(row.r2_key).customMetadata, { sha256: await sha(bytes), kind: "contract_copy" });
+  const uploads = audit(database).filter((entry) => entry.action === "file.upload");
+  assert.deepEqual(uploads, [{ action: "file.upload", target_type: "file", target_id: file.id, outcome: "ok", reason: "kind=contract_copy" }]);
+  const text = JSON.stringify(rows(database, "SELECT * FROM audit_events WHERE action LIKE 'file.%'")) + JSON.stringify(logs);
+  assert.ok(!text.includes(dealId) && !text.includes("가상") && !text.includes("work/contract_copy"), "파일 감사·로그에 거래 번호·이름·R2 키 없음");
+  // 손님 사진에 가림 머리가 와도 무시한다(rrn_masked 0).
+  const photo = await upload(env, customerId, jpeg({ scanBytes: 3 }), { headers: { "X-Work-Masked": "rrn=1" } });
+  assert.equal(photo.status, 201);
+  assert.equal(rows(database, "SELECT rrn_masked FROM files WHERE id = ?", photo.json.data.file.id)[0].rrn_masked, 0);
+  // 원본 내려받기는 사진과 같다(감사 file.download).
+  const content = await raw(env, `/files/${file.id}/content`, { method: "GET", headers: GET_HEADERS });
+  assert.deepEqual([content.status, content.response.headers.get("Cache-Control"), content.response.headers.get("Content-Disposition")], [200, "no-store", "inline"]);
+  assert.equal(audit(database).filter((entry) => entry.action === "file.download" && entry.target_id === file.id).length, 1);
+});
+
+test("K-a 가림 확인·주인 규칙: X-Work-Masked가 없거나 rrn=1이 아니면 400 MASK_CONFIRMATION_REQUIRED, 계약서 사본에 customer:·손님 사진에 deal:은 400, 없는 거래는 404, R2 put 0", async () => {
+  const { env, r2, database } = filesSetup();
+  const customerId = await makeCustomer(env);
+  const dealId = await makeDeal(env, { parties: [{ customerId, role: "buyer" }] });
+  for (const masked of [null, "", "rrn=0", "1", "true", "rrn=1;x"]) {
+    const result = await uploadCopy(env, dealId, jpeg(), { headers: { "X-Work-Masked": masked } });
+    assert.deepEqual([result.status, result.json.error.code], [400, "MASK_CONFIRMATION_REQUIRED"], String(masked));
+  }
+  for (const owner of [`customer:${customerId}`, "", "deal:", "deal:not-a-uuid", null]) {
+    const result = await uploadCopy(env, dealId, jpeg(), { headers: { "X-Work-Owner": owner } });
+    assert.deepEqual([result.status, result.json.error.code, result.json.error.details], [400, "VALIDATION_FAILED", ["X-Work-Owner"]], String(owner));
+  }
+  const photoOnDeal = await raw(env, "/files", { bytes: jpeg(), headers: { "X-Work-File-Kind": "other", "X-Work-Owner": `deal:${dealId}`, "X-Work-Masked": "rrn=1" } });
+  assert.deepEqual([photoOnDeal.status, photoOnDeal.json.error.details], [400, ["X-Work-Owner"]], "손님 사진은 거래에 붙이지 않음");
+  const missing = await uploadCopy(env, "00000000-0000-4000-8000-0000000000ee", jpeg());
+  assert.deepEqual([missing.status, missing.json.error.code], [404, "NOT_FOUND"]);
+  // 형식·메타데이터 검사는 사진과 같다.
+  const exif = await uploadCopy(env, dealId, jpeg({ extra: [EXIF_APP1] }));
+  assert.deepEqual([exif.status, exif.json.error.code], [415, "IMAGE_METADATA_PRESENT"]);
+  assert.equal(puts(r2), 0);
+  assert.equal(copyRows(database).length, 0);
+});
+
+test("K-a 한 거래에 계약서 사본 10장까지: 11번째는 본문을 읽지 않고 409 FILE_LIMIT_REACHED, 올리는 사이 10장이 차면 R2 보상 삭제 뒤 409, 거래가 그사이 지워지면 404", async () => {
+  const { env, r2, db, database } = filesSetup();
+  const customerId = await makeCustomer(env);
+  const dealId = await makeDeal(env, { parties: [{ customerId, role: "buyer" }] });
+  const otherDeal = await makeDeal(env, { title: "가상 다른 거래" });
+  for (let index = 0; index < 9; index += 1) assert.equal((await uploadCopy(env, dealId, jpeg({ scanBytes: 20 + index }))).status, 201, `사본 ${index + 1}`);
+  // 미리 확인은 통과(9장)했지만 batch 직전에 다른 화면이 10번째를 넣음 → guard가 되돌리고 R2 객체를 지운다.
+  const at = new Date(NOW).toISOString();
+  db.beforeNextBatch = () => database.prepare("INSERT INTO files (id, r2_key, kind, mime_type, byte_size, sha256_hex, deal_id, rrn_masked, created_at) VALUES ('race-10', 'work/contract_copy/2026/11/race-10.jpg', 'contract_copy', 'image/jpeg', 10, ?, ?, 1, ?)").run("a".repeat(64), dealId, at);
+  const objectsBefore = r2.objects.size;
+  const raced = await uploadCopy(env, dealId, jpeg({ scanBytes: 99 }));
+  assert.deepEqual([raced.status, raced.json.error.code], [409, "FILE_LIMIT_REACHED"]);
+  assert.equal(r2.objects.size, objectsBefore, "보상 삭제로 R2에 남지 않음");
+  assert.equal(rows(database, "SELECT count(*) AS n FROM files WHERE deal_id = ?", dealId)[0].n, 10);
+  const putsBefore = puts(r2);
+  const eleventh = await uploadCopy(env, dealId, jpeg({ scanBytes: 100 }));
+  assert.deepEqual([eleventh.status, eleventh.json.error.code], [409, "FILE_LIMIT_REACHED"]);
+  assert.equal(puts(r2), putsBefore, "상한에 닿았으면 R2를 부르지 않음");
+  assert.equal((await uploadCopy(env, otherDeal, jpeg({ scanBytes: 101 }))).status, 201, "상한은 거래마다");
+  // 휴지통으로 옮긴 사본은 세지 않는다.
+  const one = rows(database, "SELECT id FROM files WHERE deal_id = ? AND id <> 'race-10' LIMIT 1", dealId)[0].id;
+  assert.equal((await work(env, `/files/${one}`, { method: "DELETE", body: {} })).status, 200);
+  assert.equal((await uploadCopy(env, dealId, jpeg({ scanBytes: 102 }))).status, 201, "한 장 지우면 다시 한 장");
+  // 올리는 사이 거래가 지워짐 → 404, R2에 남지 않음.
+  const gone = await makeDeal(env, { title: "가상 사라질 거래" });
+  db.beforeNextBatch = () => database.prepare("DELETE FROM deals WHERE id = ?").run(gone);
+  const sizeBefore = r2.objects.size;
+  const vanished = await uploadCopy(env, gone, jpeg({ scanBytes: 103 }));
+  assert.deepEqual([vanished.status, vanished.json.error.code], [404, "NOT_FOUND"]);
+  assert.equal(r2.objects.size, sizeBefore);
+});
+
+test("K-a 계약서 사본은 미리보기를 만들지 않는다: PUT thumb은 본문을 읽지 않고 400 FILE_THUMB_NOT_ALLOWED, GET thumb은 R2를 부르지 않고 404", async () => {
+  const { env, r2 } = filesSetup();
+  const dealId = await makeDeal(env);
+  const file = (await uploadCopy(env, dealId, jpeg())).json.data.file;
+  const callsBefore = r2.calls.length;
+  const put = await putThumb(env, file.id, CLEAN_WEBP);
+  assert.deepEqual([put.status, put.json.error.code], [400, "FILE_THUMB_NOT_ALLOWED"]);
+  const get = await raw(env, `/files/${file.id}/thumb`, { method: "GET", headers: GET_HEADERS });
+  assert.deepEqual([get.status, get.json.error.code], [404, "NOT_FOUND"]);
+  assert.equal(r2.calls.length, callsBefore, "R2 호출 0");
+  assert.equal(r2.objects.size, 1, "원본만");
+});
+
+test("K-a 거래 삭제(사본 2장): 사본이 거래와 함께 휴지통으로(주인 없는 사본 0, R2 그대로), 되살리면 같은 행, 영구 삭제하면 R2에서 지움. 바인딩이 없으면 409 FILES_REQUIRE_STORAGE", async () => {
+  const { env, r2, database } = filesSetup();
+  const customerId = await makeCustomer(env, "가상 손님 거래삭제");
+  const dealId = await makeDeal(env, { title: "가상 지울 거래", parties: [{ customerId, role: "buyer" }] });
+  const keepDeal = await makeDeal(env, { title: "가상 남는 거래" });
+  for (let index = 0; index < 2; index += 1) assert.equal((await uploadCopy(env, dealId, jpeg({ scanBytes: 30 + index }))).status, 201);
+  assert.equal((await uploadCopy(env, keepDeal, jpeg({ scanBytes: 40 }))).status, 201);
+  const before = copyRows(database);
+  const keys = before.filter((row) => row.deal_id === dealId).map((row) => row.r2_key);
+  const blocked = await work({ ...env, WORK_FILES: undefined }, `/deals/${dealId}`, { method: "DELETE", body: { confirmTitle: "가상 지울 거래" } });
+  assert.deepEqual([blocked.status, blocked.json.error.code], [409, "FILES_REQUIRE_STORAGE"]);
+  assert.equal(copyRows(database).length, 3, "바인딩이 없으면 아무것도 지우지 않음");
+  const callsBefore = r2.calls.length;
+  const deleted = await work(env, `/deals/${dealId}`, { method: "DELETE", body: { confirmTitle: "가상 지울 거래" } });
+  assert.equal(deleted.status, 200, JSON.stringify(deleted.json));
+  assert.equal(deleted.json.data.deleted.files, 2);
+  assert.equal(r2.calls.length, callsBefore, "거래 삭제는 R2를 부르지 않음");
+  assert.ok(keys.every((key) => r2.objects.has(key)), "R2 객체 그대로");
+  assert.equal(rows(database, "SELECT count(*) AS n FROM files WHERE customer_id IS NULL AND deal_id IS NULL")[0].n, 0, "주인 없는 사본 0");
+  assert.deepEqual(copyRows(database).map((row) => row.deal_id), [keepDeal], "다른 거래의 사본은 그대로");
+  const batchId = deleted.json.data.trash.batchId;
+  assert.equal(rows(database, "SELECT count(*) AS n FROM trash_rows WHERE batch_id = ? AND table_name = 'files' AND op = 'row'", batchId)[0].n, 2);
+  assert.equal((await work(env, "/trash")).json.data.items.find((item) => item.batchId === batchId).counts.files, 2);
+  const restored = await work(env, `/trash/${batchId}/restore`, { method: "POST", body: {} });
+  assert.equal(restored.status, 200, JSON.stringify(restored.json));
+  assert.deepEqual([restored.json.data.restored.files, restored.json.data.skipped], [2, []]);
+  assert.deepEqual(copyRows(database), before, "같은 행·같은 r2_key·rrn_masked로 돌아옴");
+  const again = await work(env, `/deals/${dealId}`, { method: "DELETE", body: { confirmTitle: "가상 지울 거래" } });
+  const purged = await purge(env, again.json.data.trash.batchId);
+  assert.equal(purged.status, 200, JSON.stringify(purged.json));
+  assert.ok(keys.every((key) => !r2.objects.has(key)), "영구 삭제하면 R2에서 지움");
+  assert.equal(r2.objects.size, 1, "다른 거래의 사본은 R2에 그대로");
+});
+
+test("K-a 손님 삭제: 단독 거래의 계약서 사본은 손님 사진과 함께 휴지통으로, 같이 하는 거래의 사본은 남는다. 되살리면 모두 돌아옴", async () => {
+  const { env, database } = filesSetup();
+  const x = await makeCustomer(env, "가상 손님 X");
+  const y = await makeCustomer(env, "가상 손님 Y");
+  const solo = await makeDeal(env, { title: "가상 단독 거래", parties: [{ customerId: x, role: "buyer" }] });
+  const shared = await makeDeal(env, { title: "가상 같이 하는 거래", parties: [{ customerId: x, role: "buyer" }, { customerId: y, role: "seller" }] });
+  assert.equal((await upload(env, x, jpeg({ scanBytes: 50 }))).status, 201);
+  assert.equal((await uploadCopy(env, solo, jpeg({ scanBytes: 51 }))).status, 201);
+  assert.equal((await uploadCopy(env, solo, jpeg({ scanBytes: 52 }))).status, 201);
+  assert.equal((await uploadCopy(env, shared, jpeg({ scanBytes: 53 }))).status, 201);
+  const before = copyRows(database);
+  // 손님 카드: 거래마다 files[], 손님 files[]에는 사진만.
+  const card = (await work(env, `/customers/${x}`)).json.data;
+  assert.deepEqual(card.files.map((file) => file.kind), ["property_photo"]);
+  const byTitle = Object.fromEntries(card.deals.map((deal) => [deal.title, deal.files]));
+  assert.deepEqual([byTitle["가상 단독 거래"].length, byTitle["가상 같이 하는 거래"].length], [2, 1]);
+  assert.ok(byTitle["가상 단독 거래"].every((file) => file.kind === "contract_copy" && file.dealId === solo && !("r2Key" in file)));
+  assert.equal((await work(env, `/customers/${y}`)).json.data.deals[0].files.length, 1, "같이 하는 거래의 사본은 참여자 모두의 카드에");
+  assert.equal((await work(env, `/deals/${solo}`)).json.data.files.length, 2, "거래 상세에도");
+  const blocked = await work({ ...env, WORK_FILES: undefined }, `/customers/${x}`, { method: "DELETE", body: { confirmName: "가상 손님 X" } });
+  assert.deepEqual([blocked.status, blocked.json.error.code], [409, "FILES_REQUIRE_STORAGE"]);
+  const deleted = await work(env, `/customers/${x}`, { method: "DELETE", body: { confirmName: "가상 손님 X" } });
+  assert.equal(deleted.status, 200, JSON.stringify(deleted.json));
+  assert.deepEqual([deleted.json.data.deleted.deals, deleted.json.data.deleted.files], [1, 3], "사진 1 + 단독 거래 사본 2");
+  assert.equal(rows(database, "SELECT count(*) AS n FROM files WHERE customer_id IS NULL AND deal_id IS NULL")[0].n, 0, "주인 없는 파일 0");
+  assert.deepEqual(copyRows(database).map((row) => row.deal_id), [shared], "같이 하는 거래의 사본만 남음");
+  const restored = await work(env, `/trash/${deleted.json.data.trash.batchId}/restore`, { method: "POST", body: {} });
+  assert.equal(restored.status, 200, JSON.stringify(restored.json));
+  assert.equal(restored.json.data.restored.files, 3);
+  assert.deepEqual(copyRows(database), before);
+});
+
+test("K-a 휴지통 이름과 되살리기 순서: 사본 한 장은 '계약서 사본 · 11월 17일 14:00 올림'(설명이 있으면 '계약서 사본 · 설명'), 거래가 없으면 deal_missing으로 남고 거래를 되살린 뒤 들어감", async () => {
+  const { env, database } = filesSetup();
+  const dealId = await makeDeal(env, { title: "가상 순서 거래" });
+  const plain = (await uploadCopy(env, dealId, jpeg())).json.data.file;
+  const captioned = (await uploadCopy(env, dealId, jpeg({ scanBytes: 8 }))).json.data.file;
+  assert.equal((await work(env, `/files/${captioned.id}`, { method: "PATCH", body: { caption: "가상 특약 쪽" } })).status, 200);
+  const plainBatch = (await work(env, `/files/${plain.id}`, { method: "DELETE", body: {} })).json.data.trash.batchId;
+  const captionedBatch = (await work(env, `/files/${captioned.id}`, { method: "DELETE", body: {} })).json.data.trash.batchId;
+  const labels = Object.fromEntries((await work(env, "/trash")).json.data.items.map((item) => [item.batchId, item.label]));
+  assert.equal(labels[plainBatch], "계약서 사본 · 11월 17일 14:00 올림");
+  assert.equal(labels[captionedBatch], "계약서 사본 · 가상 특약 쪽");
+  const dealBatch = (await work(env, `/deals/${dealId}`, { method: "DELETE", body: { confirmTitle: "가상 순서 거래" } })).json.data.trash.batchId;
+  const early = await work(env, `/trash/${plainBatch}/restore`, { method: "POST", body: {} });
+  assert.deepEqual([early.json.data.restored.files, early.json.data.remaining, early.json.data.skipped], [0, 1, [{ table: "files", reason: "deal_missing", count: 1 }]]);
+  assert.equal(rows(database, "SELECT count(*) AS n FROM files")[0].n, 0, "주인 없는 사본을 넣지 않음");
+  assert.equal((await work(env, `/trash/${dealBatch}/restore`, { method: "POST", body: {} })).status, 200);
+  const late = await work(env, `/trash/${plainBatch}/restore`, { method: "POST", body: {} });
+  assert.deepEqual([late.json.data.restored.files, late.json.data.remaining, late.json.data.skipped], [1, 0, []]);
+  assert.deepEqual(copyRows(database).map((row) => [row.id, row.deal_id, row.rrn_masked]), [[plain.id, dealId, 1]]);
 });
