@@ -105,7 +105,7 @@ test("관리자 화면은 네이버 매물 목록과 등록·동기화 화면을
     readSource("src/pages/admin/listings/index.astro"),
     readSource("src/components/admin/AdminWriteGate.astro"),
   ]);
-  assert.match(dashboard, /2단계 · 콘텐츠 관리/);
+  assert.match(dashboard, /<a class="dsh-listing" href="\/admin\/listings\/">/u, "대시보드 매물 줄은 네이버 매물 목록으로(2026-11-23 A안, 단계 배지는 없앰)");
   assert.match(listings, /\/admin\/listings\/editor\//);
   assert.match(listings, /매물 등록·동기화/);
   assert.match(listings, /수정·종료/);

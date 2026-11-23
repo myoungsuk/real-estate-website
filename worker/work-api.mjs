@@ -16,6 +16,7 @@ import { routeWorkCalendarFeeds } from "./work-calendar-feeds.mjs";
 import { getWorkAiState } from "./work-ai-config.mjs";
 import { isWorkAiRoute, readAiWarnings, routeWorkAi } from "./work-ai-jobs.mjs";
 import { handlePublicToolsApi, isPublicToolsRoute } from "./work-public-tools.mjs";
+import { handleWorkDashboard } from "./work-dashboard.mjs";
 
 // 기존 시험·다른 모듈이 쓰던 이름을 그대로 내보낸다(감사 도우미는 work-audit.mjs로 옮김).
 export { withViewAudit, writeBatchWithAudit };
@@ -158,6 +159,11 @@ export async function handleWorkApi(request, env, options = {}) {
   const url = new URL(request.url);
   const route = url.pathname.slice(WORK_API_ROOT.length) || "/";
   const method = request.method.toUpperCase();
+
+  // 대시보드(/admin/)는 칸마다 단계 2·단계 P 켜기 값을 따로 보므로 두 문보다 먼저 받는다(work-dashboard.mjs, 2026-11-23 A안).
+  if (route === "/dashboard") {
+    return handleWorkDashboard(request, env, { db, actor, requestId, now, auditLog, method });
+  }
 
   // 단계 P(공개 자료 도구)는 단계 2 켜기 값과 따로 켠다. Access 재검증은 admin-api.mjs에서 이미 끝났다(설계서 22.2절).
   if (isPublicToolsRoute(route)) {

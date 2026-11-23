@@ -255,6 +255,42 @@ async function summary(ctx) {
   }, () => auditBase(ctx, "ledger.view"));
 }
 
+// 대시보드 '이번 달 돈' 칸(work-dashboard.mjs): 잔금일 기준 그 달의 미입금 줄 수와 미입금 큰 줄 3개. 이름이 빈 줄은 거래 제목을 같이 읽는다.
+const DASHBOARD_UNPAID_COUNT_SQL = ENTRY_BASE + "SELECT count(*) AS n FROM b WHERE substr(basis_on, 1, 7) = ? AND unpaid_won > 0";
+const DASHBOARD_UNPAID_ITEMS_SQL =
+  ENTRY_BASE + "SELECT b.id, b.kind, b.label, b.payer_role, b.basis_on, b.unpaid_won, dd.title AS deal_title FROM b LEFT JOIN deals dd ON dd.id = b.deal_id"
+  + " WHERE substr(b.basis_on, 1, 7) = ? AND b.unpaid_won > 0 ORDER BY b.unpaid_won DESC, b.id DESC LIMIT ?";
+export const DASHBOARD_UNPAID_ITEMS_MAX = 3;
+
+// 합계는 매출장부 합계(summaryByMonth·summaryLine)를 그대로 써서 장부 화면의 달 줄과 같은 값이 나오게 한다(서로 빼서 만들지 않음).
+// 감사는 부르는 쪽(대시보드)이 한 번에 남긴다. month: 'YYYY-MM'.
+export async function loadLedgerMonthForDashboard(db, month) {
+  const basis = "balance";
+  const [year, monthOnly] = month.split("-");
+  const rows = await all(db.prepare(SQL.summaryByMonth).bind(basis, year));
+  const line = summaryLine(rows.find((row) => row.month === monthOnly));
+  const unpaidCount = Number((await db.prepare(DASHBOARD_UNPAID_COUNT_SQL).bind(basis, month).first())?.n ?? 0);
+  const items = await all(db.prepare(DASHBOARD_UNPAID_ITEMS_SQL).bind(basis, month, DASHBOARD_UNPAID_ITEMS_MAX));
+  const undatedCount = Number((await db.prepare(SQL.summaryUndated).bind(basis).first())?.n ?? 0);
+  return {
+    month,
+    basis,
+    receivableWon: line.receivableWon,
+    receivedWon: line.receivedWon,
+    unpaidWon: line.unpaidWon,
+    unpaidCount,
+    undatedCount,
+    items: items.map((row) => ({
+      id: row.id,
+      kind: row.kind,
+      label: row.label === null || row.label === "" ? (row.deal_title ?? "") : row.label,
+      payerRole: row.payer_role,
+      basisOn: row.basis_on,
+      unpaidWon: Number(row.unpaid_won),
+    })),
+  };
+}
+
 async function createEntry(ctx) {
   const { entry, rrnMasked } = parseLedgerCreate(ctx.body);
   const deal = entry.dealId ? await loadDeal(ctx.db, entry.dealId) : null;
