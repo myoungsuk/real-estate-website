@@ -252,7 +252,8 @@ const SCHEDULE_KIND_TO_EVENT = Object.freeze({
 // keptReason: "manual"(직접 고침) | "done"(완료한 자동 일정) | null — 서버 kept[].reason과 같은 뜻.
 // 둘째부터의 중도금은 금액 없는 따로 넣는 일정(서버 custom·ai_confirmed, 화면 이름 'AI로 넣음')이고, 같은 차를 이미 완료로 표시했으면 넣지 않는다(서버와 같은 규칙).
 // previous: 앞 AI 결과로 넣은 일정이 이번에 어떻게 되는지(aiPreviousMiddles).
-/** @returns {{ ok: true, events: { kind: string, date: string, title: string, source: string, kept: string | null, keptReason: "manual" | "done" | null }[], previous: { date: string, title: string, status: "changed" | "removed" | "done" | "kept", next: string | null }[] } | { ok: false, events?: undefined, previous?: undefined }} */
+// twins: 끝나지 않은 직접 일정 가운데 이번에 넣을 AI 중도금과 같은 차인 것(aiManualTwins). 서버는 그대로 두고 AI 일정을 또 넣어 두 줄이 된다.
+/** @returns {{ ok: true, events: { kind: string, date: string, title: string, source: string, kept: string | null, keptReason: "manual" | "done" | null }[], previous: { date: string, title: string, status: "changed" | "removed" | "done" | "kept", next: string | null }[], twins: { date: string, title: string, aiDate: string }[] } | { ok: false, events?: undefined, previous?: undefined, twins?: undefined }} */
 export function aiSchedulePreview(deal, body, events, legalRules) {
   const next = { ...deal };
   for (const [field, value] of Object.entries(body.apply)) {
@@ -280,7 +281,24 @@ export function aiSchedulePreview(deal, body, events, legalRules) {
     list.push({ kind: "custom", date, title: next.propertyLabel ? `${label}(${next.propertyLabel})` : label, source: "ai", kept: null, keptReason: null });
   });
   list.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
-  return { ok: true, events: list, previous: aiPreviousMiddles(body, events, list) };
+  return { ok: true, events: list, previous: aiPreviousMiddles(body, events, list), twins: aiManualTwins(events, list) };
+}
+
+// 끝나지 않은 직접 일정(custom, ai_confirmed 아님) 가운데 제목이 이번에 넣을 AI 중도금과 같은 'n차 중도금'으로 시작하는 것.
+// 서버는 직접 일정을 지우지 않고(AI_MIDDLE_DELETE_SQL은 ai_confirmed만), 완료한 같은 차만 건너뛰므로 끝나지 않은 것은 AI 일정과 두 줄이 된다.
+/** @returns {{ date: string, title: string, aiDate: string }[]} */
+function aiManualTwins(events, list) {
+  const twins = [];
+  for (const fresh of list.filter((item) => item.source === "ai")) {
+    const label = /^(\d+차 중도금)/u.exec(fresh.title)?.[1];
+    if (!label) continue;
+    for (const item of events) {
+      if (item.kind === "custom" && item.source !== "ai_confirmed" && item.source !== "calculated" && item.doneAt === null && item.title.startsWith(label)) {
+        twins.push({ date: item.dueOn, title: item.title, aiDate: fresh.date });
+      }
+    }
+  }
+  return twins.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 }
 
 // 앞 확정이 넣은 둘째 이후 중도금(custom·ai_confirmed)이 이번 확정에서 어떻게 되는지(서버 AI_MIDDLE_DELETE_SQL과 같은 판정).
