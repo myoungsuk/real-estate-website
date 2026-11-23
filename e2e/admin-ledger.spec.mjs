@@ -1209,14 +1209,49 @@ test("넓은 PC 표 위 한 줄: 1221px 이상 + 마우스에서만 연도·기�
       barToHead: box(".lg-table thead").top - box("[data-lg-bar]").bottom,
       line: box("[data-lg-line]").height,
       tools: getComputedStyle(document.querySelector(".lg-tools")).display,
+      ...lineShape(),
     };
+    function lineShape() {
+      const lineNode = document.querySelector("[data-lg-line]");
+      const shown = [...lineNode.children].filter((child) => child.getBoundingClientRect().height > 0);
+      const centers = shown.map((child) => { const r = child.getBoundingClientRect(); return (r.top + r.bottom) / 2; }).sort((a, b) => a - b);
+      const rows = centers.filter((center, i) => i === 0 || center - centers[i - 1] > 4).length;
+      const tallest = Math.max(...shown.map((child) => child.getBoundingClientRect().height));
+      const rowGap = parseFloat(getComputedStyle(lineNode).rowGap) || 0;
+      return { lineRows: rows, lineTallest: tallest, lineRowGap: rowGap };
+    }
   });
-  const expectTight = async (label) => {
+  // 안내 줄(참고용 · 기준일 없는 줄 알림 · CSV 알림)은 maxRows줄까지. 높이는 가장 높은 알림 × 줄 수 + 줄 사이 + 2px까지(B10처럼 상자·세로 쌓기면 넘음)
+  const expectTight = async (label, maxRows = 1) => {
     const now = await layout();
+    expect(now.lineRows, `${label}: 안내는 ${maxRows}줄까지`).toBeLessThanOrEqual(maxRows);
+    expect(now.line, `${label}: 안내 줄 높이`).toBeLessThanOrEqual(now.lineTallest * maxRows + now.lineRowGap * (maxRows - 1) + 2);
     expect(now.lineToBar, `${label}: 안내 줄 바로 아래 한 줄 칸`).toBeLessThanOrEqual(12);
     expect(now.barToHead, `${label}: 한 줄 칸 바로 아래 표(빈 칸이 끼지 않음)`).toBeLessThanOrEqual(43);
-    expect(now.line, `${label}: 안내는 얇은 한 줄`).toBeLessThanOrEqual(44);
     expect(now.tools, `${label}: 빈 단추 칸은 자리도 차지하지 않음`).toBe("none");
+  };
+  // CI(리눅스 글꼴)에서 여유를 숫자로 알려고, 모양 검사 전에 한 줄 칸·안내 줄의 필요한 폭과 줄 폭을 남긴다
+  const logWidths = async (label) => {
+    const now = await page.evaluate(() => {
+      const rect = (node) => node.getBoundingClientRect();
+      const round = (value) => Math.round(value * 10) / 10;
+      const barNode = document.querySelector("[data-lg-bar]");
+      const lineNode = document.querySelector("[data-lg-line]");
+      const barGap = parseFloat(getComputedStyle(barNode).columnGap) || 0;
+      const lineGap = parseFloat(getComputedStyle(lineNode).columnGap) || 0;
+      const notes = [...lineNode.children].filter((child) => rect(child).height > 0);
+      return {
+        barNeed: round(rect(document.querySelector(".lg-bar__left")).width + barGap + rect(document.querySelector(".lg-bar__right")).width),
+        barAvail: round(rect(barNode).width),
+        lineNeed: round(notes.reduce((sum, child) => sum + rect(child).width, 0) + lineGap * Math.max(0, notes.length - 1)),
+        lineAvail: round(rect(lineNode).width),
+        notes: notes.length,
+        font: getComputedStyle(document.querySelector("[data-lg-new]")).fontFamily,
+      };
+    });
+    const spare = (avail, need) => Math.round((avail - need) * 10) / 10;
+    console.log(`[lg-bar] ${label} need=${now.barNeed} avail=${now.barAvail} spare=${spare(now.barAvail, now.barNeed)} font=${now.font}`);
+    console.log(`[lg-line] ${label} need=${now.lineNeed} avail=${now.lineAvail} spare=${spare(now.lineAvail, now.lineNeed)} notes=${now.notes}`);
   };
   // 한 줄 칸 모양: 한 줄이거나, 오른쪽 묶음(되돌리기 ~ 장부 줄 만들기)이 통째로 둘째 줄 오른쪽 끝. 묶음 안은 꺾이지 않는다
   const barShape = () => page.evaluate(() => {
@@ -1241,8 +1276,6 @@ test("넓은 PC 표 위 한 줄: 1221px 이상 + 마우스에서만 연도·기�
   });
   const expectShape = async (label, allowed) => {
     const now = await barShape();
-    // CI(리눅스 글꼴)에서 여유를 숫자로 알려고 남긴다: 필요한 폭(왼쪽 + 사이 + 오른쪽)과 줄 폭
-    console.log(`[lg-bar] ${label} need=${now.need} avail=${now.avail} spare=${Math.round((now.avail - now.need) * 10) / 10} shape=${now.shape} font=${now.font}`);
     expect(allowed, `${label}: ${now.shape}`).toContain(now.shape);
     expect([now.leftRows, now.rightRows], `${label}: 묶음 안은 꺾이지 않음`).toEqual([1, 1]);
     expect(await overflowOf(page), `${label}: 가로 넘침 없음`).toBeLessThanOrEqual(0);
@@ -1270,12 +1303,19 @@ test("넓은 PC 표 위 한 줄: 1221px 이상 + 마우스에서만 연도·기�
   };
   const barHidden = () => bar.evaluate((node) => node.hidden);
 
-  // 1221px(가장 좁은 넓은 PC): 한 줄, 또는 글꼴이 넓으면 오른쪽 묶음이 통째로 둘째 줄. 가로 넘침 없음
+  // 모양 검사 전에 1280px·1221px 폭을 먼저 남긴다(앞 검사가 떨어져도 두 숫자를 다 얻게)
   await expect(bar).toBeVisible();
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect.poll(() => page.evaluate(() => document.documentElement.clientWidth)).toBe(1280);
+  await logWidths("1280px");
+  await page.setViewportSize({ width: 1221, height: 900 });
+  await expect.poll(() => page.evaluate(() => document.documentElement.clientWidth)).toBe(1221);
+  await logWidths("1221px");
+  // 1221px(가장 좁은 넓은 PC): 한 줄, 또는 글꼴이 넓으면 오른쪽 묶음이 통째로 둘째 줄. 가로 넘침 없음
   expect(await placed(inBar)).toEqual(allTrue);
   await expectShape("1221px", ["한 줄", "오른쪽 묶음 둘째 줄"]);
   await expect(page.locator(".lg-tools")).toBeHidden();
-  await expectTight("1221px");
+  await expectTight("1221px", 2);
   await expect(page.locator(".lg-line .lg-notice")).toHaveText("참고용 집계입니다. 세무 장부가 아닙니다.");
   expect(await page.locator(".lg-line").evaluate((node) => [...node.children].map((child) => child.dataset.lgNotice !== undefined ? "참고용" : child.dataset.lgUndated !== undefined ? "기준일 없음" : child.dataset.lgCsvNote !== undefined ? "CSV" : "?").join(",")), "참고용 글 → 기준일 없는 줄 알림 → CSV 알림").toBe("참고용,기준일 없음,CSV");
   // 누르는 곳은 36px까지(연도 화살표·기준일·거르기·되돌리기·CSV), 주 단추(만들기)는 44px, 연도·만들기 글자는 그대로
@@ -1301,7 +1341,7 @@ test("넓은 PC 표 위 한 줄: 1221px 이상 + 마우스에서만 연도·기�
   // 글꼴이 넓어 꺾이는 경우를 어느 글꼴에서나 보이도록 왼쪽 묶음을 시험으로만 넓혀 본다: 오른쪽 묶음만 통째로 내려가고, 거리·Tab 차례는 그대로
   const wider = await page.addStyleTag({ content: ".lg-bar__left { padding-right: 300px; }" });
   expect(await expectShape("왼쪽이 넓을 때", ["오른쪽 묶음 둘째 줄"])).toBe("오른쪽 묶음 둘째 줄");
-  await expectTight("둘째 줄로 꺾였을 때");
+  await expectTight("둘째 줄로 꺾였을 때", 2);
   await expectTabOrder("둘째 줄로 꺾였을 때");
   await wider.evaluate((node) => node.remove());
 
