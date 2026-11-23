@@ -51,6 +51,21 @@ export const BLOG_RETENTION_DAYS = 30; // DEC-WT-24
 const DAY_MS = 24 * 60 * 60 * 1000;
 const OPEN_STATUSES = new Set(["queued", "in_progress"]);
 const SOURCES = listBlogSources({ naverListings, listings, complexes, rules: disclosureRules });
+// 시험만 쓰는 자리: context.blogNaverListings(naver-listings.json과 같은 꼴 { items })가 있으면 그 네이버 매물로 고를 자료를 만든다
+// (손님 매물·단지는 번들 그대로). 매일 동기화로 바뀌는 공개 매물에 시험이 기대지 않게 하려는 것이다. 요청으로는 바꿀 수 없고
+// 운영(worker/index.mjs)은 이 값을 넘기지 않으므로 늘 SOURCES다.
+const injectedSources = new WeakMap();
+export function blogSourcesFor(naverListingsOverride) {
+  if (naverListingsOverride === undefined || naverListingsOverride === null) return SOURCES;
+  if (typeof naverListingsOverride !== "object") throw new TypeError("blogNaverListings must be an object");
+  let built = injectedSources.get(naverListingsOverride);
+  if (!built) {
+    built = listBlogSources({ naverListings: naverListingsOverride, listings, complexes, rules: disclosureRules });
+    injectedSources.set(naverListingsOverride, built);
+  }
+  return built;
+}
+const sourcesOf = (context) => blogSourcesFor(context.blogNaverListings);
 const OFFICE_PHONE = office.mobile;
 
 const iso = (ms) => new Date(ms).toISOString();
@@ -66,12 +81,12 @@ export function blogSources() {
 }
 
 // GET /work/blog/sources?type=&q=
-export function listSourcesView(params) {
+export function listSourcesView(params, sources = SOURCES) {
   const type = params.get("type");
   if (type !== null && type !== "" && !BLOG_SOURCE_TYPES.includes(type)) throw invalid(["type"]);
   const q = (params.get("q") ?? "").normalize("NFKC").trim();
   if (q.length > BLOG_SOURCE_QUERY_MAX || /[\u0000-\u001f\u007f]/u.test(q)) throw invalid(["q"]);
-  const items = SOURCES.filter((source) => (!type || source.type === type) && matchesBlogSourceQuery(source, q));
+  const items = sources.filter((source) => (!type || source.type === type) && matchesBlogSourceQuery(source, q));
   return { items, styles: BLOG_STYLES.map(({ id, label, note }) => ({ id, label, note })) };
 }
 
@@ -199,9 +214,9 @@ const parseJson = (text) => {
   }
 };
 
-export function draftView(row) {
+export function draftView(row, sources = SOURCES) {
   const stored = parseJson(row.disclosure_json) ?? {};
-  const source = findBlogSource(SOURCES, row.source_type, row.source_id);
+  const source = findBlogSource(sources, row.source_type, row.source_id);
   return {
     id: row.id,
     source: { type: row.source_type, id: row.source_id, title: row.source_title },
@@ -266,8 +281,8 @@ export function parseDraftCreate(body) {
 }
 
 // 공개 자료 확인 → 성격 → 명시사항. 돌려주는 값: { source, disclosure }.
-export function checkDraftReady({ ref, style, inputs }) {
-  const source = findBlogSource(SOURCES, ref.type, ref.id);
+export function checkDraftReady({ ref, style, inputs }, sources = SOURCES) {
+  const source = findBlogSource(sources, ref.type, ref.id);
   if (!source) throw new WorkApiError("SOURCE_NOT_PUBLIC", "고른 매물·단지가 지금 공개 자료에 없습니다.", 409);
   if (source.blockedReason) throw invalid(["source"]);
   if (!allowedStyles(source).includes(style)) throw invalid(["style"]);
@@ -305,7 +320,7 @@ function logOpenAi(auditLog, entry) {
 export async function createBlogDraft(context, body) {
   const { db, env, actor, requestId, now, auditLog, randomUUID, openaiFetch } = context;
   const parsed = parseDraftCreate(body);
-  const { source } = checkDraftReady(parsed);
+  const { source } = checkDraftReady(parsed, sourcesOf(context));
   const config = readOpenAiTaskConfig(env, "blog");
   if (!config) throw configMissing();
 
@@ -360,7 +375,7 @@ export async function createBlogDraft(context, body) {
   await runBatch(db, [
     db.prepare("UPDATE blog_drafts SET openai_response_id = ?2, status = ?3, updated_at = ?4 WHERE id = ?1 AND status = 'queued'").bind(id, created.id, status, iso(now)),
   ]);
-  return { status: 201, data: { draft: draftView(await readDraftRow(db, id)) } };
+  return { status: 201, data: { draft: draftView(await readDraftRow(db, id), sourcesOf(context)) } };
 }
 
 // ── 결과 받기 ──
@@ -417,7 +432,7 @@ async function pollDraft(context, row) {
     const parsed = output.refusal ? null : parseResultText(output.text);
     const checked = parsed ? validateBlogResult(parsed) : { ok: false };
     if (!checked.ok) return stmtsFor("failed", { errorCode: "AI_RESULT_INVALID", tokens });
-    const source = findBlogSource(SOURCES, row.source_type, row.source_id);
+    const source = findBlogSource(sourcesOf(context), row.source_type, row.source_id);
     const stored = parseJson(row.disclosure_json) ?? {};
     const checks = source ? checkBlogDraft(checked.result, { source, inputs: stored.inputs ?? {}, emphasis: stored.emphasisNumbers ?? "" }) : null;
     const checkJson = checks ? JSON.stringify({ blocks: checks.blocks.slice(0, 50), warnings: checks.warnings.slice(0, 50) }).slice(0, 8000) : null;
@@ -434,9 +449,9 @@ export async function getBlogDraft(context, id) {
   if (OPEN_STATUSES.has(row.status) && row.closed === null) {
     const statements = await pollDraft(context, row);
     if (statements.length > 0) await runBatch(db, statements);
-    return { data: { draft: draftView(await readDraftRow(db, id)) } };
+    return { data: { draft: draftView(await readDraftRow(db, id), sourcesOf(context)) } };
   }
-  return { data: { draft: draftView(row) } };
+  return { data: { draft: draftView(row, sourcesOf(context)) } };
 }
 
 export async function listBlogDrafts(context) {
@@ -475,7 +490,7 @@ export async function closeBlogDraft(context, id, action, body) {
     if (latest && (latest.closed !== null || latest.status !== row.status)) throw draftConflict();
     throw error;
   }
-  return { data: { draft: draftView(await readDraftRow(db, id)) } };
+  return { data: { draft: draftView(await readDraftRow(db, id), sourcesOf(context)) } };
 }
 
 // ── 한도(DEC-WT-35) ──
@@ -514,12 +529,12 @@ export async function saveBlogLimits(context, body) {
 
 // ── 경로 ──
 
-// context: { db, env, actor, requestId, now, auditLog, method, route, url, body, randomUUID, openaiFetch }
+// context: { db, env, actor, requestId, now, auditLog, method, route, url, body, randomUUID, openaiFetch, blogNaverListings(시험만) }
 export async function routeBlog(context) {
   const { method, route, url, body, db, now } = context;
   if (route === "/blog/sources") {
     if (method !== "GET") throw methodNotAllowed("GET");
-    return { data: listSourcesView(url.searchParams) };
+    return { data: listSourcesView(url.searchParams, sourcesOf(context)) };
   }
   if (route === "/blog/limits") {
     if (method === "GET") return { data: await limitsView(db, now) };

@@ -9,8 +9,15 @@ import { DatabaseSync } from "node:sqlite";
 import { BLOG_STYLES, EMPHASIS_MAX, checkBlogDraft } from "../src/lib/work/blog-checks.mjs";
 import { findBlogSource } from "../src/lib/work/blog-sources.mjs";
 import { formatKoreanWon } from "../src/lib/work/work-format.mjs";
-import { blogSources, buildBlogPromptPayload, buildOpenAiRequest, emphasisNumbersOf, estimateInputTokens } from "../worker/work-blog.mjs";
+import complexes from "../src/data/complexes.json" with { type: "json" };
+import listings from "../src/data/listings.json" with { type: "json" };
+import bundledNaverListings from "../src/data/naver-listings.json" with { type: "json" };
+import rules from "../src/data/work/ad-disclosure-rules.json" with { type: "json" };
+import { listBlogSources } from "../src/lib/work/blog-sources.mjs";
+import { blogSources, blogSourcesFor, buildOpenAiRequest, emphasisNumbersOf, estimateInputTokens } from "../worker/work-blog.mjs";
+import { handleAdminApi } from "../worker/admin-api.mjs";
 import { runRealpriceCron } from "../worker/work-scheduled.mjs";
+import { createWorkCsrfToken } from "../worker/work-security.mjs";
 import {
   FAKE_MAX_OUTPUT,
   FAKE_MODEL,
@@ -28,30 +35,30 @@ import {
   scriptedOpenAi,
   timeoutError,
 } from "./openai-fixtures.mjs";
-import { NOW, ORIGIN, SECRET, allMigrationSql, createD1, freshDb, migrationFiles, rows, signToken, work } from "./work-test-kit.mjs";
+import { NOW, ORIGIN, OWNER, SECRET, allMigrationSql, authenticate, createD1, freshDb, migrationFiles, rows, signToken, work as kitWork } from "./work-test-kit.mjs";
 
 const LOCATION = "대전 동구 ZZTEST-7F3A동 999-9";
 const OFFICE_PHONE = "010-2790-8675";
-// 네이버 매물은 매일 부동산뱅크 동기화로 바뀐다. 이 API는 번들 공개 자료(work-blog.mjs 모듈 상수)만 읽어 가상 매물을 넣을 수 없으므로,
-// 번호를 박지 않고 지금 공개 자료에서 조건(아파트 매매·고를 수 있음·가격·전용면적·숫자 층·총 층수·방향)으로 고르고 기대값도 그 매물에서 만든다.
-// 제목 끝에 동 번호가 있는 매물을 먼저 고른다(OpenAI 요청에서 동 번호를 빼는지 보려고). 아파트 매매는 사무소의 주된 매물이라
-// 못 찾으면 건너뛰지 않고 이 파일 전체를 실패로 멈춘다. 순수 함수 시험(work-blog-checks)은 가상 매물로 같은 읽기·잠금을 지킨다.
-const DONG_SUFFIX = /\s*(\d{1,4})\s*동$/u; // 서버 work-blog.mjs stripDong과 같은 꼴
-const LISTING_SOURCE = (() => {
-  const fit = blogSources().filter((item) => item.type === "naver_listing" && !item.blockedReason && item.facts.propertyType === "아파트" && item.facts.tradeType === "sale"
-    && item.facts.priceWon && item.facts.exclusiveM2 && Number.isInteger(item.facts.floor) && item.facts.totalFloors && item.facts.direction);
-  const picked = fit.find((item) => DONG_SUFFIX.test(item.title)) ?? fit[0];
-  if (!picked) throw new Error("공개 매물에 시험할 아파트 매매(가격·전용면적·숫자 층·총 층수·방향이 있는 것)가 없습니다. 고르는 조건을 다시 보세요.");
-  return picked;
-})();
+// 네이버 매물은 매일 부동산뱅크 동기화로 바뀌므로(내려간 매물 번호를 박으면 동기화의 npm test가 멈춤), 이 파일의 업무 API 호출은
+// 모두 가상 네이버 매물(NAVER_FIXTURE)을 넣어 부른다(work-test-kit naverListings → work-blog.mjs blogSourcesFor). 단지·손님 매물은 번들 그대로.
+// 넣지 않으면 운영과 같은 번들 자료라는 것은 "기본은 번들 자료" 시험이 kitWork로 따로 본다.
+const NAVER_FIXTURE = {
+  checkedAt: "2026-11-24",
+  items: [
+    { id: "9900000201", title: "가상단지 202동", propertyType: "아파트", tradeType: "sale", priceLabel: "2억 6,000", areaLabel: "111B㎡ · 전용 84.77B㎡", floorLabel: "2/22층", direction: "남향", summary: "선호동 남향으로 저층이지만 해 잘드는 집입니다", registeredAt: "2026-08-25", source: "네이버페이 부동산", url: "https://fin.land.naver.com/articles/9900000201" },
+    { id: "9900000202", title: "가상분양1단지", propertyType: "아파트분양권", tradeType: "sale", priceLabel: "4억 4,630", areaLabel: "85㎡ · 전용 59㎡", floorLabel: "8/29층", direction: "남서향", summary: "", registeredAt: "2026-10-22", source: "네이버페이 부동산", url: "https://fin.land.naver.com/articles/9900000202" },
+    { id: "9900000203", title: "가상단지 203동", propertyType: "아파트", tradeType: "monthly-rent", priceLabel: "10,000/140", areaLabel: "113㎡ · 전용 84㎡", floorLabel: "중/33층", direction: "남동향", summary: "", registeredAt: "2026-11-01", source: "네이버페이 부동산", url: "https://fin.land.naver.com/articles/9900000203" },
+  ],
+};
+const work = (env, path, options = {}) => kitWork(env, path, { naverListings: NAVER_FIXTURE, ...options });
+const FIXTURE_SOURCES = blogSourcesFor(NAVER_FIXTURE);
+const LISTING_SOURCE = findBlogSource(FIXTURE_SOURCES, "naver_listing", "9900000201"); // 가상단지 202동, 아파트 매매 2억 6,000, 전용 84.77㎡, 2/22층, 남향
 const LISTING = { type: "naver_listing", id: LISTING_SOURCE.id };
-const LISTING_NAME = LISTING_SOURCE.title.replace(DONG_SUFFIX, "").trim(); // OpenAI에 보내는 단지 이름(동 번호 뺌)
-const LISTING_DONG = DONG_SUFFIX.exec(LISTING_SOURCE.title)?.[1] ?? null; // 제목 끝 동 번호(없으면 null)
-const LISTING_PRICE = formatKoreanWon(LISTING_SOURCE.facts.priceWon); // 예: "2억 6,000만 원"
+const LISTING_NAME = "가상단지"; // OpenAI에 보내는 단지 이름(동 번호 뺌)
+const LISTING_PRICE = formatKoreanWon(LISTING_SOURCE.facts.priceWon); // "2억 6,000만 원"
 const { exclusiveM2: LISTING_M2, floor: LISTING_FLOOR, totalFloors: LISTING_TOTAL, direction: LISTING_DIRECTION } = LISTING_SOURCE.facts;
 const COMPLEX = { type: "complex", id: "leaders-city-5" };
-// 분양권 매물은 매일 부동산뱅크 동기화로 바뀌므로 번호를 박지 않고 지금 공개 자료에서 고른다(없으면 그 줄만 건너뜀).
-const PRESALE_ID = blogSources().find((item) => item.type === "naver_listing" && item.facts.propertyType === "아파트분양권")?.id;
+const PRESALE_ID = "9900000202"; // 가상 분양권(고를 수 없음)
 const FULL_FEE_ITEMS = { general: 50000, electricity: 30000, water: 10000, gas: 10000, heating: 20000, internet: 10000, tv: 10000, other: 10000 };
 const listingInputs = (extra = {}) => ({
   location: LOCATION,
@@ -314,9 +321,10 @@ test("TK-49·TK-67 운영자 결정 ②: 소재지는 명시사항이 다 찼는
   assert.equal(made.status, 201, JSON.stringify(made.json));
   const body = JSON.stringify(openai.calls[0].body);
   assert.doesNotMatch(body, /ZZTEST|999-9/u, "소재지 0");
-  if (LISTING_DONG) assert.doesNotMatch(body, new RegExp(`(?<!\\d)${LISTING_DONG}\\s*동`, "u"), "동 번호 0");
-  // 고른 공개 매물에 동 번호가 없어도 빼는 규칙은 가상 제목으로 늘 본다.
-  assert.equal(buildBlogPromptPayload({ source: { ...LISTING_SOURCE, title: "가상단지 101동" }, inputs: listingInputs(), emphasis: "", style: "plain" }).listing.title, "가상단지");
+  assert.doesNotMatch(body, /202동/u, "동 번호 0");
+  // 넣은 가상 매물이 만들기 응답의 지금 자료(currentSource)로도 쓰인다(번들 자료로 찾으면 sourcePublic false).
+  const viewOf = (result) => [result.status, result.json.data.draft.sourcePublic, result.json.data.draft.currentSource?.id];
+  assert.deepEqual(viewOf(made), [201, true, LISTING.id]);
   assert.doesNotMatch(body, /electricity|heating|"general"|(?<!\d)50000(?!\d)/u, "관리비 비목 0");
   const payload = JSON.parse(openai.calls[0].body.input[0].content[0].text);
   assert.deepEqual([payload.listing.title, payload.listing.priceWon, payload.listing.exclusiveM2, payload.listing.floor, payload.listing.totalFloors, payload.listing.managementFee],
@@ -334,6 +342,10 @@ test("TK-49·TK-67 운영자 결정 ②: 소재지는 명시사항이 다 찼는
   assert.doesNotMatch(dumpAll(database).replace(/"request_id":"[^"]*"/gu, ""), /ZZTEST|999-9/u, "D1 어디에도 소재지 0");
   assert.doesNotMatch(JSON.stringify(logs.map((entry) => ({ ...entry, requestId: undefined }))), /ZZTEST|999-9/u);
   assert.doesNotMatch(JSON.stringify(done.json), /ZZTEST/u);
+  // 조회(결과 받기)·다시 조회(끝난 초안)·다 씀 응답도 같은 가상 자료로 지금 자료를 붙인다.
+  assert.deepEqual(viewOf(done), [200, true, LISTING.id]);
+  assert.deepEqual(viewOf(await work(env, `/blog/drafts/${draft.id}`, { openaiFetch: openai.fetcher })), [200, true, LISTING.id]);
+  assert.deepEqual(viewOf(await work(env, `/blog/drafts/${draft.id}/confirm`, { method: "POST", body: {}, openaiFetch: openai.fetcher })), [200, true, LISTING.id]);
 });
 
 test("TK-48·TK-49 만들기 전에 막기: 명시사항 빈 칸은 400 DISCLOSURE_INCOMPLETE(빈 칸 이름), 개인정보 형식은 400 PERSONAL_DATA_PATTERN, 형식 밖은 400 — 모두 D1·감사·사용량·OpenAI 0", async (t) => {
@@ -370,7 +382,7 @@ test("TK-48·TK-49 만들기 전에 막기: 명시사항 빈 칸은 400 DISCLOSU
     [{ source: LISTING, style: "plain", inputs: listingInputs({ approvalDate: "2016-02-30" }) }, "approvalDate"],
     [{ source: LISTING, style: "plain", inputs: listingInputs({ unit: "101" }) }, "unit"],
     [{ source: LISTING, style: "plain", inputs: listingInputs(), emphasis: "가".repeat(501) }, "emphasis"], // 대표 현장 메모 500자 초과
-    ...(PRESALE_ID ? [[{ source: { type: "naver_listing", id: PRESALE_ID }, style: "plain" }, "source"]] : []), // 분양권
+    [{ source: { type: "naver_listing", id: PRESALE_ID }, style: "plain" }, "source"], // 분양권
     [{ source: { type: "customer", id: "x" }, style: "plain" }, "source"],
     [{ source: COMPLEX, style: "urgent" }, "style"], // 단지 소개 글에 급매
   ]) {
@@ -746,4 +758,66 @@ test("2026-11-23 대표 현장 메모: 500자까지 받고 숫자 표기만 남�
   assert.doesNotMatch(row.disclosure_json, /욕실|트인 전망/u, "메모 글은 저장하지 않음");
   assert.equal(JSON.parse(row.disclosure_json).emphasisNumbers, "", "날짜·금액·면적·층 표기가 없으면 빈 글자('2024년'만은 날짜 표기가 아님)");
   assert.equal(emphasisNumbersOf(`${"2억 6,000만 원 ".repeat(60)}`).length, EMPHASIS_MAX, "숫자 표기 모음도 500자까지");
+});
+
+test("기본은 번들 자료: 가상 매물을 넣지 않으면 /blog/sources·만들기는 운영과 같은 번들 공개 자료를 쓰고, 넣은 가상 매물은 그 호출에만 쓰인다", async (t) => {
+  installNetworkTrap(t);
+  assert.strictEqual(blogSourcesFor(undefined), blogSources(), "옵션이 없으면 모듈 상수 그대로");
+  assert.strictEqual(blogSourcesFor(null), blogSources());
+  assert.strictEqual(blogSourcesFor(NAVER_FIXTURE), FIXTURE_SOURCES, "같은 가상 자료는 한 번만 만듦");
+  assert.throws(() => blogSourcesFor("naver"), TypeError);
+  assert.deepEqual(blogSources(), listBlogSources({ naverListings: bundledNaverListings, listings, complexes, rules }), "번들 자료 = naver-listings.json·listings·complexes 그대로");
+
+  const { database, env } = blogDb();
+  const bundled = await kitWork(env, "/blog/sources");
+  assert.equal(bundled.status, 200);
+  assert.deepEqual(bundled.json.data.items, JSON.parse(JSON.stringify(blogSources())), "옵션 없는 API = 번들 자료 전부");
+  const injected = await work(env, "/blog/sources");
+  assert.deepEqual(injected.json.data.items.filter((item) => item.type === "naver_listing").map((item) => item.id), NAVER_FIXTURE.items.map((item) => item.id), "넣으면 네이버 매물만 가상 자료로");
+  assert.deepEqual(injected.json.data.items.filter((item) => item.type !== "naver_listing"), bundled.json.data.items.filter((item) => item.type !== "naver_listing"), "단지·손님 매물은 번들 그대로");
+
+  // 가상 매물을 넣은 호출이 끝난 뒤에도 옵션 없는 만들기는 번들 자료만 본다(가상 매물 번호는 409, D1 쓰기 0).
+  await setLimits(env);
+  const before = dumpAll(database);
+  const missing = await kitWork(env, "/blog/drafts", { method: "POST", body: { source: LISTING, style: "plain", inputs: listingInputs() } });
+  assert.deepEqual([missing.status, missing.json.error.code], [409, "SOURCE_NOT_PUBLIC"]);
+  assert.equal(dumpAll(database), before);
+});
+
+// 운영과 같은 꼴의 호출(worker/index.mjs처럼 options.work 없음, 시험 인증만 바꿈). 가상 매물은 시험 도구 옵션으로만 들어오고
+// 요청(주소 쿼리·헤더·본문)이나 env로는 들어올 수 없는지 실제로 불러 본다(날개-2 증명 시험, 2026-11-24 대장 요청).
+const FAKE_JSON = JSON.stringify(NAVER_FIXTURE);
+const EVIL_HEADERS = Object.fromEntries(["X-Blog-Naver-Listings", "Blog-Naver-Listings", "X-Naver-Listings"].map((name) => [name, encodeURIComponent(FAKE_JSON)]));
+const evilEnv = (db) => blogEnv(db, { blogNaverListings: NAVER_FIXTURE, BLOG_NAVER_LISTINGS: FAKE_JSON, naverListings: NAVER_FIXTURE, NAVER_LISTINGS: FAKE_JSON });
+async function prodShape(env, path, { method = "GET", body } = {}) {
+  const now = Date.now(); // options.work가 없으면 서버 시각은 Date.now()라 CSRF도 지금 시각으로 만든다.
+  const headers = { "Cf-Access-Jwt-Assertion": await signToken({ email: OWNER }), ...EVIL_HEADERS };
+  if (method !== "GET") Object.assign(headers, { Origin: ORIGIN, "Content-Type": "application/json", "X-Admin-CSRF": await createWorkCsrfToken(OWNER, SECRET, now) });
+  const request = new Request(`${ORIGIN}/api/admin/v1/work${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+  const response = await handleAdminApi(request, env, { authenticate });
+  return { status: response.status, json: await response.json() };
+}
+
+test("운영 꼴 호출: 주소 쿼리·헤더·env에 가상 매물을 실어도 /blog/sources는 번들 자료 그대로", async (t) => {
+  installNetworkTrap(t);
+  const { db } = freshDb();
+  const env = evilEnv(db);
+  const q = encodeURIComponent(FAKE_JSON);
+  const result = await prodShape(env, `/blog/sources?blogNaverListings=${q}&naverListings=${q}`);
+  assert.equal(result.status, 200, JSON.stringify(result.json));
+  assert.deepEqual(result.json.data.items, JSON.parse(JSON.stringify(blogSources())));
+  assert.doesNotMatch(JSON.stringify(result.json), /99000002\d\d/u, "가상 매물 번호 0");
+});
+
+test("운영 꼴 호출: 본문에 옵션 이름을 섞은 만들기는 400, 섞지 않아도 헤더·env에 실린 가상 번호는 409 SOURCE_NOT_PUBLIC — 글 초안 0행", async (t) => {
+  installNetworkTrap(t);
+  const { database, db } = freshDb();
+  const env = evilEnv(db);
+  await setLimits(env);
+  const base = { source: LISTING, style: "plain", inputs: listingInputs() };
+  const withBody = await prodShape(env, "/blog/drafts", { method: "POST", body: { ...base, blogNaverListings: NAVER_FIXTURE, naverListings: NAVER_FIXTURE } });
+  assert.deepEqual([withBody.status, withBody.json.error?.code, withBody.json.error?.details], [400, "VALIDATION_FAILED", ["body"]], JSON.stringify(withBody.json));
+  const plain = await prodShape(env, "/blog/drafts", { method: "POST", body: base });
+  assert.deepEqual([plain.status, plain.json.error?.code], [409, "SOURCE_NOT_PUBLIC"], JSON.stringify(plain.json));
+  assert.equal(rows(database, "SELECT count(*) AS n FROM blog_drafts")[0].n, 0);
 });
