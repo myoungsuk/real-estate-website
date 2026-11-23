@@ -60,6 +60,8 @@ interface CopySectionOptions {
   enabled: () => boolean;
   // 손님 카드 전체를 다시 읽는다(거래 칸을 다시 그림). 끝나면 block()이 다시 불린다.
   reload: () => Promise<unknown>;
+  // 펼친 칸 맨 끝에 붙일 자리(계약서 AI 일정 뽑기 상자, work-ai-section.ts). 칸을 펼칠 때 opened(dealId)를 부른다.
+  addon?: { slot: (dealId: string) => HTMLElement; opened: (dealId: string) => void };
 }
 
 // closed: 창 닫힘 · preparing: 사진 읽는 중 · mask: 칠하기 · ask: 가린 곳 0개 확인 · check: 확대 확인 · view: 올린 사본 보기
@@ -517,6 +519,7 @@ export function mountContractCopies(root: HTMLElement, options: CopySectionOptio
     blockStatus.setAttribute("aria-live", "polite");
     blockStatus.tabIndex = -1;
     panel.append(head, list, note, off, full, actions, blockStatus);
+    if (options.addon) panel.append(options.addon.slot(dealId));
     box.append(toggle, panel);
 
     let files: CustomerFile[] = [];
@@ -624,6 +627,7 @@ export function mountContractCopies(root: HTMLElement, options: CopySectionOptio
     toggle.addEventListener("click", () => {
       open = !open;
       render();
+      if (open) options.addon?.opened(dealId);
     });
     shoot.addEventListener("click", () => openPicker(dealId, "camera", shoot));
     album.addEventListener("click", () => openPicker(dealId, "album", album));

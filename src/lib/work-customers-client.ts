@@ -11,6 +11,8 @@ const WORK_API_ROOT = "/api/admin/v1/work";
 export interface CustomerSession {
   enabled: boolean;
   filesEnabled: boolean;
+  // 계약서 AI 일정 뽑기가 켜졌는지(WORK_AI_ENABLED와 AI 설정). 옛 응답에는 없을 수 있다.
+  aiEnabled?: boolean;
   administrator: string;
   csrfToken: string | null;
   schemaVersion: number | null;

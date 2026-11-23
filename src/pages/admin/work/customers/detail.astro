@@ -336,6 +336,7 @@ import { TRASH_MOVE_NOTICE } from "../../../../lib/work/trash-view.mjs";
     import { element, fillFields, noteItem, readFields, setStatus, showFieldErrors, statusBadge } from "../../../../lib/work-customers-dom";
     import { createLedgerEntry, listLedger, readDeal, type DealSummary, type LedgerEntry } from "../../../../lib/work-ledger-client";
     import { mountContractCopies } from "../../../../lib/work-contract-copy-section";
+    import { mountAiSection } from "../../../../lib/work-ai-section";
     import { mountPhotoSection } from "../../../../lib/work-photo-section";
     import { dealLedgerItem } from "../../../../lib/work-ledger-dom";
     import legalRules from "../../../../data/work/legal-rules.json";
@@ -477,6 +478,7 @@ import { TRASH_MOVE_NOTICE } from "../../../../lib/work/trash-view.mjs";
           }
           article.append(ledgerBlock(deal.id, deal.title));
           article.append(copies.block(deal));
+          aiBoxes.update(deal);
           return article;
         }));
         pick("[data-cu-deals-count]").textContent = `${deals.size}건`;
@@ -727,8 +729,11 @@ import { TRASH_MOVE_NOTICE } from "../../../../lib/work/trash-view.mjs";
       }
 
       let filesEnabled = false;
+      let aiEnabled = false;
+      // 사본 칸 맨 끝의 'AI로 일정 뽑기' 상자(단계 4). AI·파일 저장소가 모두 켜졌을 때만 보이고, 칸을 펼쳤을 때만 서버를 부른다.
+      const aiBoxes = mountAiSection({ enabled: () => filesEnabled && aiEnabled, customerId: () => id });
       // 거래 칸의 계약서 사본 칸(단계 4 K-b). 손님 카드를 다시 읽으면 목록만 새로 채우고, 칠하던 사진·못 올린 사본은 그대로 둔다.
-      const copies = mountContractCopies(pick("[data-kc-root]"), { enabled: () => filesEnabled, reload: () => load() });
+      const copies = mountContractCopies(pick("[data-kc-root]"), { enabled: () => filesEnabled, reload: () => load(), addon: { slot: aiBoxes.slot, opened: aiBoxes.opened } });
       async function load() {
         if (!id) return;
         detail = await readCustomer(id);
@@ -929,6 +934,7 @@ import { TRASH_MOVE_NOTICE } from "../../../../lib/work/trash-view.mjs";
             return;
           }
           filesEnabled = session.filesEnabled;
+          aiEnabled = session.aiEnabled === true;
           await load();
         } catch (error) {
           showLoadError(error);
@@ -951,6 +957,7 @@ import { TRASH_MOVE_NOTICE } from "../../../../lib/work/trash-view.mjs";
         openDelete(false);
         photos.reset();
         copies.reset();
+        aiBoxes.reset();
         barCamera.hidden = true;
         nameHeading.textContent = "손님 카드";
         headStatus.replaceChildren();

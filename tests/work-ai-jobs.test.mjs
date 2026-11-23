@@ -509,7 +509,7 @@ test("조회: 진행 중이면 running이고 결과·열람 감사가 없으며,
 
   const ready = await getGroup(ctx, groupId, ai, { now: NOW + MINUTE });
   assert.equal(ready.json.data.group.status, "ready");
-  assert.deepEqual(ready.json.data.group, { id: groupId, kind: "contract_schedule", dealId: ctx.dealId, status: "ready", pairMode: "cross", createdAt: new Date(NOW).toISOString(), confirmedAt: null });
+  assert.deepEqual(ready.json.data.group, { id: groupId, kind: "contract_schedule", dealId: ctx.dealId, status: "ready", pairMode: "cross", createdAt: new Date(NOW).toISOString(), confirmedAt: null, fileIds: ctx.fileIds });
   assert.deepEqual(ready.json.data.jobs.map((job) => [job.runIndex, job.model, job.reasoningEffort, job.status, job.errorCode, job.maskedCount]), [
     [1, MODEL_A, "max", "completed", null, 0],
     [2, MODEL_B, "max", "completed", null, 0],

@@ -1,0 +1,62 @@
+---
+import AdminIcon from "../../../../components/admin/AdminIcon.astro";
+import AdminPageHelp from "../../../../components/admin/AdminPageHelp.astro";
+import AdminLayout from "../../../../layouts/AdminLayout.astro";
+
+// 계약서 AI 결과 고르기(단계 4, 사용자 선택 2026-11-23 "B안 별도 화면"·"다섯 다 추천대로"). 손님 카드 거래 칸의 '결과 보고 고르기'로 들어온다.
+// - 주소의 ?id=는 AI 묶음 ID, ?from=은 돌아갈 손님 카드 ID(둘 다 무작위 UUID만). 계약서 글·금액·날짜는 주소·제목·브라우저 저장소에 넣지 않는다.
+// - 서버 요청: 업무 세션 → 묶음 한 번(결과가 실려 열람 감사 ai.view가 남음) → 거래 한 번(열람 감사 deal.view). 화면을 여는 동안 다시 부르지 않는다.
+// - 차례: 비교표(같음은 넣을 값으로, 다름·한쪽만은 사람이 고름) → '거래에 넣기 전 확인'(지금 값 → 넣을 값, 일정 미리 보기) → '거래에 넣기'(POST confirm 한 번).
+// - 사진은 980px 이상에서 왼쪽에 바로 보이고, 그 아래 폭에서는 '사진 펼치기'를 눌러야 불러온다(사본 원본 읽기마다 감사 file.download).
+// - 설계 경로 표대로 /admin/work/ai/review/에 둔다. 위 알약 줄의 아래 단계 알약은 어느 것도 켜지지 않는다(업무 도구 구역만). 서버를 부르므로 탭 미리 그리기 prerender 목록에 넣지 않는다.
+---
+
+<AdminLayout
+  title="AI 결과 고르기 | 행복한부동산 관리자"
+  description="계약서 사본에서 AI로 뽑은 날짜·금액을 사진과 견줘 고른 뒤 거래에 넣는 관리자 업무 도구입니다."
+>
+  <div class="work-ui work-doc cu-doc cu-doc--wide axr" data-axr-page>
+    <p class="cu-back"><a class="admin-text-link" href="/admin/work/customers/" data-axr-back><span aria-hidden="true">←</span> <span data-axr-back-text>손님 목록</span></a></p>
+    <header class="work-doc__header cu-detail__header">
+      <span class="work-round-icon work-round-icon--title" data-tone="navy">
+        <AdminIcon name="person" size={22} />
+      </span>
+      <h1 data-axr-title tabindex="-1">AI로 뽑은 값 맞춰 보기</h1>
+    </header>
+    <AdminPageHelp page="/admin/work/ai/review/" />
+    <p class="ax-soft axr-sub" data-axr-sub hidden></p>
+
+    <p class="rt-boot cu-boot" role="status" data-axr-boot>AI 결과를 불러오고 있습니다…</p>
+    <section class="admin-panel rt-state cu-state" aria-labelledby="axr-state-title" data-axr-state hidden>
+      <div class="admin-empty-state">
+        <span aria-hidden="true">!</span>
+        <div>
+          <h2 id="axr-state-title" data-axr-state-title></h2>
+          <p data-axr-state-body></p>
+          <button class="work-secondary-button cu-state__go" type="button" data-axr-state-retry hidden>다시 불러오기</button>
+          <a class="work-secondary-button cu-state__go" href="/admin/work/customers/" data-axr-state-back>손님 카드로 돌아가기</a>
+        </div>
+      </div>
+    </section>
+
+    <div class="axr-grid" data-axr-main hidden>
+      <div class="axr-photo" data-axr-photo></div>
+      <div class="axr-list">
+        <div data-axr-body></div>
+        <div class="axr-foot" data-axr-foot>
+          <p data-axr-foot-text></p>
+          <button class="work-secondary-button" type="button" data-axr-back-step hidden>비교표로 돌아가기</button>
+          <button class="work-primary-button" type="button" data-axr-next>확인으로 넘어가기</button>
+        </div>
+        <p class="admin-form-status axr-status" role="status" aria-live="polite" tabindex="-1" data-axr-status></p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    import { mountAiReview } from "../../../../lib/work-ai-review";
+
+    const page = document.querySelector<HTMLElement>("[data-axr-page]");
+    if (page) mountAiReview(page);
+  </script>
+</AdminLayout>
