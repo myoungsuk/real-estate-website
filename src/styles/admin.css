@@ -2185,3 +2185,10 @@ nav.tr-homelinks { display: flex; flex-wrap: wrap; gap: 0 24px; margin: 0 0 14px
 @media (min-width: 640px) {
   .cf-make, .cf-retry { width: auto; padding: 0 22px; }
 }
+/* 구독 칸 '다른 휴대폰에 넘기기' QR(단계 3). 그림은 canvas에만 그리고, 화면 색과 상관없이 흰 바탕·검은 칸이라 색은 여기서 정하지 않는다 */
+.cf-qr { margin: 12px 0; padding: 12px; border: 1px solid var(--ds-edge); }
+.cf-qr__title { margin: 0 0 4px; font-size: 1rem; font-weight: 800; }
+.cf-qr__box { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; justify-items: start; margin-top: 12px; }
+.cf-qr__box p { margin: 0; }
+.cf-qr__canvas { display: block; box-sizing: content-box; max-width: 100%; height: auto; border: 1px solid var(--ds-edge); image-rendering: pixelated; }
+.cf-qr__how { font-weight: 700; }

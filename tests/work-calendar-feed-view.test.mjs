@@ -1,7 +1,7 @@
 // '계약 일정' 화면 휴대폰 캘린더 구독 칸(단계 3 C-b)의 순수 함수 시험. 주소는 가상 값이다.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { currentFeed, feedErrorText, feedUsedText, googleCalendarUrl, webcalUrl } from "../src/lib/work/calendar-feed-view.mjs";
+import { currentFeed, feedErrorText, feedQrHowText, feedUsedText, googleCalendarUrl, webcalUrl } from "../src/lib/work/calendar-feed-view.mjs";
 
 const URL_A = "https://leaderscityhappy.com/api/calendar/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA.ics";
 
@@ -26,4 +26,10 @@ test("해시 키 없음(503 WORK_CONFIG_MISSING)은 구독 설정 누락으로 �
   assert.match(feedErrorText("WORK_CONFIG_MISSING"), /구독 주소 설정 누락/u);
   assert.match(feedErrorText("CSRF_INVALID"), /보안 확인이 만료/u);
   assert.match(feedErrorText(null), /요청을 처리하지 못했습니다/u);
+});
+
+test("QR 안내 한 줄: iPhone용·Android용이 다르고, 어느 쪽도 주소나 '반드시 된다'는 말을 담지 않는다", () => {
+  assert.equal(feedQrHowText("ios"), "iPhone 카메라로 이 QR을 비추고, 화면에 뜨는 안내를 눌러 구독을 더하세요.");
+  assert.match(feedQrHowText("google"), /^Android 휴대폰 카메라로 이 QR을 비추면 브라우저에서 Google 캘린더 사이트가 열립니다\./u);
+  for (const kind of ["ios", "google"]) assert.doesNotMatch(feedQrHowText(kind), /https?:|webcal:|반드시|자동으로/u);
 });

@@ -244,6 +244,20 @@ const ruleIds = [...legalRules.deadlineRules.map((rule) => rule.id), legalRules.
             <a class="work-secondary-button" href="#cf-title" target="_blank" rel="noopener noreferrer" data-cf-google>Google 캘린더에 넣기</a>
           </div>
         </div>
+        <div class="cf-qr">
+          <h3 class="cf-qr__title">다른 휴대폰에 넘기기</h3>
+          <p>이 화면을 보는 기기가 아닌 휴대폰에는 QR을 띄워 그 휴대폰 카메라로 비추세요. 주소를 카톡·문자로 보내지 않아도 됩니다.</p>
+          <div class="cf-row">
+            <button class="work-secondary-button" type="button" aria-expanded="false" aria-controls="cf-qr-box" data-cf-qr-show="ios">iPhone용 QR 보기</button>
+            <button class="work-secondary-button" type="button" aria-expanded="false" aria-controls="cf-qr-box" data-cf-qr-show="google">Android용 QR 보기</button>
+          </div>
+          <div class="cf-qr__box" id="cf-qr-box" data-cf-qr-box hidden>
+            <canvas class="cf-qr__canvas" role="img" aria-label="구독 주소 QR 그림" data-cf-qr-canvas></canvas>
+            <p class="cf-qr__how" data-cf-qr-how></p>
+            <p class="cu-soft">이 그림에는 구독 주소가 들어 있습니다. 화면을 찍어 두거나 남에게 보내지 마세요.</p>
+            <button class="work-secondary-button cf-qr__hide" type="button" data-cf-qr-hide>QR 숨기기</button>
+          </div>
+        </div>
         <p class="cu-soft">Android는 휴대폰의 Google 캘린더 앱에서 주소로 더하지 못할 수 있어, 'Google 캘린더에 넣기'는 브라우저로 Google 캘린더 사이트를 엽니다.</p>
         <p class="cu-soft">알림은 일정 전날 오후 6시로 넣어 보냅니다. 캘린더 앱에 따라 구독한 캘린더의 알림이 꺼져 있을 수 있으니, 알림이 오지 않으면 그 캘린더의 알림 설정을 켜 주세요.</p>
       </div>
@@ -606,7 +620,8 @@ const ruleIds = [...legalRules.deadlineRules.map((rule) => rule.id), legalRules.
     // - 구독 주소는 '막 만듦' 상태의 입력칸에만 둔다. 떠날 때(pagehide) 지우고, 뒤로 가기 캐시로 돌아오면 다시 불러온다(주소는 다시 보이지 않음).
     import { WorkApiError, createCalendarFeed, getFeedSession, listCalendarFeeds, revokeCalendarFeed, type CalendarFeed } from "../../../lib/work-calendar-feeds-client";
     import { setStatus } from "../../../lib/work-customers-dom";
-    import { currentFeed, feedCreatedText, feedErrorText, feedUsedText, googleCalendarUrl, webcalUrl } from "../../../lib/work/calendar-feed-view.mjs";
+    import { clearQr, drawQr } from "../../../lib/work-qr-canvas";
+    import { currentFeed, feedCreatedText, feedErrorText, feedQrHowText, feedUsedText, googleCalendarUrl, webcalUrl } from "../../../lib/work/calendar-feed-view.mjs";
 
     const panel = document.querySelector<HTMLElement>("[data-cf-panel]");
     if (panel) {
@@ -637,6 +652,11 @@ const ruleIds = [...legalRules.deadlineRules.map((rule) => rule.id), legalRules.
       const confirmCancel = pick<HTMLButtonElement>("[data-cf-confirm-cancel]");
       const status = pick("[data-cf-status]");
       const heading = pick("#cf-title");
+      const qrButtons = [...panel.querySelectorAll<HTMLButtonElement>("[data-cf-qr-show]")];
+      const qrBox = pick("[data-cf-qr-box]");
+      const qrCanvas = pick<HTMLCanvasElement>("[data-cf-qr-canvas]");
+      const qrHow = pick("[data-cf-qr-how]");
+      const qrHide = pick<HTMLButtonElement>("[data-cf-qr-hide]");
 
       let feed: CalendarFeed | null = null;
       let asking: "replace" | "revoke" | null = null;
@@ -644,7 +664,29 @@ const ruleIds = [...legalRules.deadlineRules.map((rule) => rule.id), legalRules.
       let loadSequence = 0;
       const codeOf = (error: unknown) => (error instanceof WorkApiError ? error.code : null);
 
+      // QR은 단추를 눌렀을 때만 canvas에 그린다. 주소가 없어지거나(다른 상태·떠날 때) 숨기면 픽셀째 지운다.
+      let qrKind: "ios" | "google" | null = null;
+      const showQr = (kind: "ios" | "google" | null) => {
+        const url = urlInput.value;
+        qrKind = kind && url ? kind : null;
+        if (qrKind) {
+          try {
+            // 칸을 먼저 보이게 해야 폭을 잴 수 있다. 테두리 2px을 빼고 그 안에 들어가는 크기로 그린다.
+            qrBox.hidden = false;
+            drawQr(qrCanvas, qrKind === "ios" ? webcalUrl(url) : googleCalendarUrl(url), qrBox.clientWidth - 2);
+          } catch {
+            qrKind = null;
+            setStatus(status, "QR을 그리지 못했습니다. '주소 복사'로 넣어 주세요.", "error");
+          }
+        }
+        if (!qrKind) clearQr(qrCanvas);
+        qrBox.hidden = qrKind === null;
+        qrHow.textContent = qrKind ? feedQrHowText(qrKind) : "";
+        qrCanvas.setAttribute("aria-label", qrKind === "google" ? "Android용 구독 주소 QR 그림" : "iPhone용 구독 주소 QR 그림");
+        for (const button of qrButtons) button.setAttribute("aria-expanded", String(button.dataset.cfQrShow === qrKind));
+      };
       const clearUrl = () => {
+        showQr(null);
         urlInput.value = "";
         iosLink.href = "#cf-title";
         googleLink.href = "#cf-title";
@@ -785,6 +827,18 @@ const ruleIds = [...legalRules.deadlineRules.map((rule) => rule.id), legalRules.
           if (!urlInput.value) event.preventDefault();
         });
       }
+
+      for (const button of qrButtons) {
+        button.addEventListener("click", () => {
+          const kind = button.dataset.cfQrShow === "google" ? "google" : "ios";
+          showQr(qrKind === kind ? null : kind);
+        });
+      }
+      qrHide.addEventListener("click", () => {
+        const back = qrButtons.find((button) => button.dataset.cfQrShow === qrKind);
+        showQr(null);
+        back?.focus();
+      });
 
       window.addEventListener("pagehide", () => {
         loadSequence += 1;
