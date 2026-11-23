@@ -168,6 +168,38 @@ for (const width of [360, 390, 430, 768, 1280]) {
   });
 }
 
+for (const width of [360, 1280]) {
+  test(`계약서 사본·사진 묶음 ${width}px: 종류 표시는 '계약서 사본'·'사진'으로 가려 쓰고, 거르기 '사진·계약서 사본'은 둘 다 보이며 가로로 넘치지 않는다`, async ({ page }) => {
+    const assertNoErrors = collectErrors(page);
+    const batches = [
+      batch(11, "file", "계약서 사본 · 11월 17일 10:40 올림", "2026-11-18T01:12:00.000Z", "2026-11-25T01:12:00.000Z", 7, { files: 1 }),
+      batch(12, "file", "거실 창 쪽 누수 자국", "2026-11-17T07:40:00.000Z", "2026-11-24T07:40:00.000Z", 6, { files: 1 }),
+      batch(13, "customer", "가상 손님 9", "2026-11-16T07:40:00.000Z", "2026-11-23T07:40:00.000Z", 5, { customers: 1, deals: 1, parties: 1, files: 3 }),
+    ];
+    await setup(page, { width, batches });
+    await page.goto("/admin/work/trash/");
+    await expect(page.locator("[data-tr-count]")).toHaveText("지운 묶음 3개 · 지운 때 최근 순");
+    await expect(page.locator(".tr-kind")).toHaveText(["계약서 사본", "사진", "손님"]);
+    await expect(row(page, "가상 손님 9")).toContainText("함께: 거래 1건 · 사진·계약서 사본 3장");
+    const chip = page.locator('[data-tr-filter="file"]');
+    await expect(chip).toHaveText("사진·계약서 사본");
+    for (const tag of await page.locator(".tr-kind").all()) expect((await tag.boundingBox()).height, "종류 표시는 한 줄").toBeLessThan(40);
+    expect((await chip.boundingBox()).height, "거르기 단추 높이").toBeGreaterThanOrEqual(44);
+    expect(await chip.evaluate((node) => node.scrollWidth <= node.clientWidth + 1), "거르기 단추 글자가 잘리지 않음").toBe(true);
+    expect(await overflowOf(page)).toBeLessThanOrEqual(0);
+    await page.screenshot({ path: test.info().outputPath(`trash-copy-${width}.png`), fullPage: true });
+
+    await chip.click();
+    await expect(page.locator("[data-tr-count]")).toHaveText("사진·계약서 사본 묶음 2개 · 지운 때 최근 순");
+    await expect(page.locator(".tr-kind")).toHaveText(["계약서 사본", "사진"]);
+    await page.getByRole("button", { name: "영구 삭제: 계약서 사본 · 11월 17일 10:40 올림" }).click();
+    await expect(page.locator("[data-tr-purge-what]")).toContainText("계약서 사본 1장");
+    await expect(page.locator("[data-tr-purge-what]")).not.toContainText("사진");
+    expect(await overflowOf(page)).toBeLessThanOrEqual(0);
+    assertNoErrors();
+  });
+}
+
 test("T2-134 종류 거르기는 받은 목록에서만(서버에 다시 묻지 않음), 0건이어도 더 받을 것이 있으면 '50개 더 보기'", async ({ page }) => {
   const assertNoErrors = collectErrors(page);
   const many = [...makeBatches().slice(1), ...Array.from({ length: 50 }, (_, index) => batch(100 + index, "note", `가상 메모 ${index + 1}`, "2026-11-11T00:00:00.000Z", "2026-11-18T00:00:00.000Z", 0, { notes: 1 })), makeBatches()[0]];

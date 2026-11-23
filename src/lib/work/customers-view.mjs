@@ -156,13 +156,13 @@ export function checkNoteBody(body) {
 
 // 손님 지우기 결과 문장. 남긴 메모가 있으면 그 메모에 지운 손님 정보가 남아 있을 수 있음을 알린다.
 // 지운 거래에 이은 장부 줄은 지우지 않고 거래 연결만 끊어 남긴다(2026-11-21 사용자 결정 "나").
-// 그 거래에 붙은 할 일은 함께 지운다(2026-11-21 사용자 결정 11:15:11 U-4). 0개면 말하지 않는다. 손님 사진도 함께 휴지통으로 간다(바로 찍기, 0장이면 말하지 않음).
+// 그 거래에 붙은 할 일은 함께 지운다(2026-11-21 사용자 결정 11:15:11 U-4). 0개면 말하지 않는다. 손님 사진과 이 손님만의 거래에 붙은 계약서 사본도 함께 휴지통으로 간다(서버가 둘을 합쳐 세어 보냄, 0장이면 말하지 않음).
 // 지운 것은 휴지통으로 가고, 응답의 trash.purgeAfter로 되살릴 수 있는 마지막 날을 알린다(시안 2026-11-22 14:42:41).
 export function deleteResultText(result) {
   const { deals = 0, notes = 0, tasks = 0, files = 0 } = result?.deleted ?? {};
   const kept = result?.kept?.notes ?? 0;
   const ledger = result?.kept?.ledger ?? 0;
-  const parts = [`함께 옮긴 것: 이 손님만의 거래 ${deals}건, 메모 ${notes}개${files > 0 ? `, 사진 ${files}장` : ""}${tasks > 0 ? `, 할 일 ${tasks}개` : ""}.`];
+  const parts = [`함께 옮긴 것: 이 손님만의 거래 ${deals}건, 메모 ${notes}개${files > 0 ? `, 사진·계약서 사본 ${files}장` : ""}${tasks > 0 ? `, 할 일 ${tasks}개` : ""}.`];
   if (kept > 0) parts.push(`다른 손님과 함께인 거래의 메모 ${kept}개는 그 거래 기록이라 남겼습니다. 그 메모 글에 지운 손님 이름·전화가 있으면 직접 고쳐 주세요.`);
   if (ledger > 0) parts.push(`장부 줄 ${ledger}개는 매출장부에 남습니다(거래 연결만 끊김, 되살리면 그 줄을 고치지 않았을 때 다시 이음). 그 줄의 물건 표시·메모에 손님 이름이 있으면 매출장부에서 고쳐 주세요.`);
   const until = trashUntilText(result?.trash);
@@ -182,7 +182,7 @@ export function customerErrorText(code) {
     NOT_FOUND: "찾지 못했습니다. 다른 화면에서 지웠을 수 있습니다.",
     VERSION_CONFLICT: "다른 화면에서 먼저 고쳐서 이번 변경은 저장하지 않았습니다. '다시 불러오기'로 새 내용을 본 뒤 다시 고쳐 주세요.",
     CONFIRMATION_MISMATCH: "넣은 이름이 손님 이름과 다릅니다. 띄어쓰기까지 똑같이 넣어 주세요.",
-    FILES_REQUIRE_STORAGE: "올린 사진이 있어, 파일 저장소가 연결된 뒤에 지울 수 있습니다.",
+    FILES_REQUIRE_STORAGE: "올린 사진이나 계약서 사본이 있어, 파일 저장소가 연결된 뒤에 지울 수 있습니다.",
     CSRF_INVALID: "보안 확인이 만료되었습니다. 화면을 새로고침한 뒤 다시 해 주세요.",
     ORIGIN_DENIED: "허용되지 않은 주소에서 저장하려고 했습니다. 운영 주소에서 다시 해 주세요.",
     AUTH_REQUIRED: "관리자 로그인이 만료되었습니다. 화면을 새로고침해 다시 로그인해 주세요.",

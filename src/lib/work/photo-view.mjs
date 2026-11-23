@@ -39,6 +39,11 @@ export function photoTimeText(iso) {
   const at = koreaParts(iso);
   return at ? `${two(at.hour)}:${two(at.minute)}` : "";
 }
+/** 요일 없이 "11월 22일 14:05"(계약서 사본 줄. 휴지통 묶음 이름과 같은 꼴) @param {string} iso */
+export function photoShortAtText(iso) {
+  const at = koreaParts(iso);
+  return at ? `${at.month}월 ${at.day}일 ${two(at.hour)}:${two(at.minute)}` : "";
+}
 /** "11월 22일(일) 14:05" @param {string} iso */
 export function photoAtText(iso) {
   const at = koreaParts(iso);

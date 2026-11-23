@@ -166,6 +166,15 @@ test("마스크 고르기: mask를 주지 않으면 여덟 가지 중 벌점이 
   assert.throws(() => encodeQr("A", { mask: 8 }), RangeError);
 });
 
+test("마스크 고르기: 벌점이 가장 낮은 마스크가 둘이면 번호가 작은 쪽을 고른다(가상 주소 2개, 큰 쪽을 고르면 실패)", () => {
+  for (const [text, tied] of [["https://example.test/36", [1, 6]], ["https://example.test/203", [4, 6]]]) {
+    const penalties = [0, 1, 2, 3, 4, 5, 6, 7].map((mask) => qrPenalty(encodeQr(text, { mask }).modules));
+    const lowest = Math.min(...penalties);
+    assert.deepEqual(penalties.flatMap((penalty, mask) => (penalty === lowest ? [mask] : [])), tied, `${text}: 벌점이 같은 마스크 둘`);
+    assert.equal(encodeQr(text).mask, tied[0], text);
+  }
+});
+
 test("표본 대조 ①: 규격서 본보기('01234567', 버전 1-M, 마스크 010)의 모든 칸", () => {
   const symbol = qrMatrix(qrCodewords(ISO_DATA, 1), 1, 2);
   assert.deepEqual(hexRows(symbol.modules), SAMPLES.iso.rows);

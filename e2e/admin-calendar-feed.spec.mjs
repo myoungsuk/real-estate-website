@@ -218,6 +218,39 @@ test("다른 휴대폰에 넘기기: QR은 단추를 눌러야 canvas에만 그�
   assertNoErrors();
 });
 
+test("화면을 떠날 때(pagehide) 구독 주소 입력칸·넣기 고리·QR 그림을 지우고, 뒤로 가기 캐시로 돌아오면(pageshow) '주소 있음'으로 다시 읽는다", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const { calls } = await setup(page);
+  await page.goto(PAGE);
+  const panel = page.locator("[data-cf-panel]");
+  await panel.getByRole("button", { name: "구독 주소 만들기" }).click();
+  const urlInput = panel.getByLabel("구독 주소", { exact: true });
+  await expect(urlInput).toHaveValue(SUBSCRIBE);
+  const canvas = panel.locator("[data-cf-qr-canvas]");
+  await panel.getByRole("button", { name: "iPhone용 QR 보기" }).click();
+  await expect(panel.locator("[data-cf-qr-box]")).toBeVisible();
+  expect((await canvas.evaluate((node) => node.width)) > 0, "떠나기 전에는 QR이 그려져 있음").toBe(true);
+  expect(await panel.locator(`a[href*="${TOKEN}"]`).count(), "떠나기 전에는 넣기 고리에 주소가 있음").toBeGreaterThan(0);
+
+  // 떠날 때: 뒤로 가기 캐시에 화면이 남아도 주소·QR은 남지 않는다.
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true })));
+  expect(await urlInput.inputValue(), "입력칸을 비움").toBe("");
+  expect(await canvas.evaluate((node) => [node.width, node.height]), "QR 그림을 픽셀째 지움").toEqual([0, 0]);
+  await expect(panel.locator("[data-cf-qr-box]")).toBeHidden();
+  expect(await panel.locator(`a[href*="${TOKEN}"]`).count(), "넣기 고리에서 주소를 뺌").toBe(0);
+  expect(await page.content()).not.toContain(TOKEN);
+  expect(await tokenLeaks(page)).toEqual([]);
+
+  // 돌아올 때: 목록을 다시 읽어 '주소 있음'으로 바꾼다(주소는 다시 보이지 않음).
+  const callsBefore = calls.all.length;
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })));
+  await expect(panel.locator("[data-cf-existing]")).toBeVisible();
+  await expect(panel.getByRole("button", { name: /QR/u })).toHaveCount(0);
+  expect(calls.all.slice(callsBefore).length, "돌아오면 서버에 다시 물음").toBeGreaterThan(0);
+  expect(await page.content()).not.toContain(TOKEN);
+  assertNoErrors();
+});
+
 test("주소 있음: '새 주소 만들기'·'구독 주소 취소'는 칸 안에서 한 번 더 묻고, 그만두면 아무것도 보내지 않으며, 취소하면 주소 없음으로 돌아간다", async ({ page }) => {
   const assertNoErrors = collectErrors(page);
   const { calls } = await setup(page, { feeds: [feedRow(1, "2026-11-22T01:00:00.000Z", "2026-11-22T15:10:00.000Z")] });

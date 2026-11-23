@@ -43,6 +43,15 @@ async function sendBytes<T>(path: string, method: "POST" | "PUT", body: Blob, he
 // 원본 올리기(POST /work/files) → 201 { file }. 설명은 받지 않으므로 201 뒤에 updateFileCaption으로 넣는다.
 export const uploadPhoto = (blob: Blob, input: { kind: PhotoKind; customerId: string; sha256: string }) =>
   sendBytes<{ file: UploadedFile }>("/files", "POST", blob, { "X-Work-File-Kind": input.kind, "X-Work-File-Sha256": input.sha256, "X-Work-Owner": `customer:${input.customerId}` });
+// 계약서 사본 올리기(단계 4 K-b): 거래에 붙이고(X-Work-Owner deal:{uuid}), 사람이 가림을 확인한 표시(X-Work-Masked: rrn=1 = "가렸거나 번호가 없음")를 함께 보낸다.
+// 본문은 화면이 주민등록번호를 검게 칠한 뒤 다시 저장한 JPEG뿐이다(가리기 전 사진은 보내지 않음). 미리보기는 서버가 받지 않으므로 보내지 않는다.
+export const uploadContractCopy = (blob: Blob, input: { dealId: string; sha256: string }) =>
+  sendBytes<{ file: UploadedFile }>("/files", "POST", blob, {
+    "X-Work-File-Kind": "contract_copy",
+    "X-Work-File-Sha256": input.sha256,
+    "X-Work-Owner": `deal:${input.dealId}`,
+    "X-Work-Masked": "rrn=1",
+  });
 // 미리보기 올리기(PUT /work/files/:id/thumb, 원본 201 뒤, 이미 있으면 덮어씀)
 export const uploadThumb = (id: string, blob: Blob, sha256: string) =>
   sendBytes<{ file: UploadedFile }>(`/files/${idPath(id)}/thumb`, "PUT", blob, { "X-Work-File-Sha256": sha256 });

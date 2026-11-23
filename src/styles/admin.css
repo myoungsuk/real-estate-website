@@ -2048,7 +2048,7 @@ html:has(.rt-pick-bar:not([hidden])) { scroll-padding-bottom: calc(var(--rt-pick
 .tr-actions .tr-restore { width: auto; min-height: 44px; padding: 0 16px; }
 .tr-actions .cu-danger { min-height: 44px; white-space: nowrap; }
 @media (min-width: 980px) {
-  .tr-row { grid-template-columns: 5.5rem minmax(0, 1fr) 13rem auto; align-items: center; }
+  .tr-row { grid-template-columns: 6.75rem minmax(0, 1fr) 13rem auto; align-items: center; }
   .tr-kind { justify-self: start; }
   .tr-left { grid-column: auto; display: grid; gap: 0; }
   .tr-actions { grid-column: auto; justify-content: flex-end; flex-wrap: nowrap; }
@@ -2156,6 +2156,21 @@ nav.tr-homelinks { display: flex; flex-wrap: wrap; gap: 0 24px; margin: 0 0 14px
 @media (min-width: 900px) {
   .ph-mask { padding: 24px 15%; }
 }
+/* 손님 카드 거래 칸 '계약서 사본'(단계 4 K-b): 접어 둔 칸의 목록은 글자 줄 + '보기'·'지우기'(좁으면 단추가 아래 줄로), 가림 창은 위 얼굴 가리기 창(.ph-mask)을 그대로 쓴다.
+   확대 확인·보기의 사진 자리(.kc-zoom)는 사진을 사진 자리보다 크게 두고 끌거나 화살표 키로 옮겨 본다. 한 번 더 묻는 칸(.kc-ask)은 흰 테두리 상자다. */
+.kc-copies > div > ul { margin: 0 0 8px; }
+.kc-copies > div > ul > li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; border-top: 0; border-bottom: 1px solid var(--ds-edge); }
+.kc-copies > div > ul > li > span:last-child { justify-self: auto; }
+.kc-row__act { display: flex; gap: 8px; }
+.kc-row__act .work-secondary-button { flex: 0 0 auto; width: auto; min-width: 64px; padding: 0 16px; white-space: nowrap; }
+.kc-copies .kc-del { flex: 1 1 100%; margin-top: 0; }
+.kc-zoom { place-self: stretch; min-width: 0; min-height: 0; overflow: auto; overscroll-behavior: contain; cursor: grab; }
+.kc-zoom.is-dragging { cursor: grabbing; }
+.ph-mask__stage .kc-zoom canvas,
+.kc-zoom img { display: block; max-width: none; max-height: none; height: auto; margin: 0 auto; touch-action: auto; cursor: inherit; user-select: none; }
+.kc-zoom img.is-fit { width: auto; max-width: 100%; max-height: 100%; }
+.kc-ask { display: grid; gap: 8px; padding: 12px; border: 2px solid var(--ds-paper); }
+.kc-ask h4 { margin: 0; font-size: 1.0625rem; }
 /* 휴대폰 하단 막대: '메모 추가' + '사진 찍기' 반반(파일 저장소가 켜졌을 때만 '사진 찍기') */
 .cu-bar:has(.cu-bar__camera:not([hidden])) { display: flex; gap: 8px; }
 .cu-bar:has(.cu-bar__camera:not([hidden])) > * { flex: 1 1 0; }

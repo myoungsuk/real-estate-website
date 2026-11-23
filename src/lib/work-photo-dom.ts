@@ -78,6 +78,17 @@ async function encodeThumb(canvas: HTMLCanvasElement) {
   return null;
 }
 
+// 계약서 사본(단계 4 K-b): 찍거나 고른 사진을 방향을 반영해 긴 변 4096px 안쪽 canvas로만 만든다(JPEG로 다시 저장하는 것은 주민등록번호를 가린 뒤).
+// 돌려준 canvas는 다 쓰면 width·height를 0으로 해 메모리를 푼다. 원래 파일과 파일 이름은 서버로 보내지 않는다.
+export async function decodeScaled(file: Blob): Promise<HTMLCanvasElement> {
+  const bitmap = await decode(file);
+  try {
+    return drawScaled(bitmap, bitmap.width, bitmap.height, PHOTO_MAX_EDGE);
+  } finally {
+    bitmap.close();
+  }
+}
+
 export async function preparePhoto(file: Blob): Promise<PreparedPhoto> {
   const bitmap = await decode(file);
   let canvas: HTMLCanvasElement | null = null;

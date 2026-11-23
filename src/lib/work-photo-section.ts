@@ -519,7 +519,8 @@ export function mountPhotoSection(root: HTMLElement, options: PhotoSectionOption
     renderMask({ boxes: [], redo: [] });
     mask.showModal();
     try {
-      const next = await openMaskEditor(maskCanvas, viewImage, { onChange: renderMask });
+      // 준비하는 동안 창을 닫았거나 다른 사진을 열었으면 편집기가 함께 쓰는 canvas를 건드리지 않고 끝낸다.
+      const next = await openMaskEditor(maskCanvas, viewImage, { onChange: renderMask, cancelled: () => sequence !== maskSequence });
       if (sequence !== maskSequence) {
         next.destroy();
         return;
