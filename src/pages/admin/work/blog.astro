@@ -1,12 +1,16 @@
 ---
 import AdminIcon from "../../../components/admin/AdminIcon.astro";
 import AdminPageHelp from "../../../components/admin/AdminPageHelp.astro";
+import complexes from "../../../data/complexes.json";
 import AdminLayout from "../../../layouts/AdminLayout.astro";
+import { complexCardData } from "../../../lib/work/blog-cards.mjs";
 
 // 글 초안(P3): 공개 매물·단지 하나 → 명시사항 빈 칸 채우기 → 글 성격 → AI 초안 → 사람이 고치고 복사(운영자 결정 2026-11-20 15:51:54 B안 단계 접기).
 // - 명시사항은 AI가 아니라 코드(ad-disclosure.mjs)가 붙인다. 빈 칸이 있으면 만들기부터 막는다(같은 결정).
 // - 소재지는 매번 직접 넣고 어디에도 저장하지 않는다(브라우저·D1·OpenAI 모두). 다시 열면 다시 넣어야 복사가 풀린다.
 // - 입력값·글 본문은 브라우저 저장소·주소에 넣지 않는다. 글을 고친 것은 서버에 저장하지 않으므로 떠날 때 경고한다.
+// - 카드 그림(2026-11-23 사용자 선택 "B 큰 숫자 인포그래픽"·"3장 한 벌"): 단지 숫자는 빌드 때 공개 단지 자료에서만 줄여 싣고, AI 글에서 가져오지 않는다.
+const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).replace(/</gu, "\\u003c");
 ---
 
 <AdminLayout
@@ -14,6 +18,7 @@ import AdminLayout from "../../../layouts/AdminLayout.astro";
   description="공개 매물·단지 하나로 블로그 글과 SNS 짧은 글 초안을 만드는 관리자 업무 도구입니다."
 >
   <div class="work-ui work-doc bl-doc" data-bl-tool>
+    <script type="application/json" data-bl-card-data set:html={cardData}></script>
     <header class="work-doc__header">
       <span class="work-round-icon work-round-icon--title" data-tone="navy">
         <AdminIcon name="page" size={22} />
@@ -194,6 +199,13 @@ import AdminLayout from "../../../layouts/AdminLayout.astro";
               <button class="bl-text-button" type="button" data-bl-discard>이 초안 버리기</button>
             </div>
           </div>
+          <section class="bl-disc bl-cardset" aria-labelledby="bl-cardset-title" data-bl-cardset hidden>
+            <h3 id="bl-cardset-title">카드 그림 <small>공개 자료로 그림 · AI가 그리지 않음</small></h3>
+            <p class="bl-cardset__status" role="status" data-bl-cardset-status></p>
+            <ul class="bl-cardset__list" data-bl-cardset-list></ul>
+            <button class="work-secondary-button" type="button" data-bl-cardset-save hidden></button>
+            <p class="bl-soft">사무소 명시사항 5항목이 카드마다 붙습니다. 하나라도 비면 만들지 않습니다.</p>
+          </section>
           <section class="bl-disc" aria-labelledby="bl-disc-title">
             <h3 id="bl-disc-title">명시사항 <small>코드가 붙임 · AI가 쓰지 않음</small></h3>
             <div data-bl-disclosure></div>
@@ -251,7 +263,10 @@ import AdminLayout from "../../../layouts/AdminLayout.astro";
     import disclosureRules from "../../../data/work/ad-disclosure-rules.json";
     import { DISCLOSURE_FIELD_LABELS, buildDisclosure, formatArea, formatPrice } from "../../../lib/work/ad-disclosure.mjs";
     import { EMPHASIS_MAX, allowedStyles, checkBlogDraft, validateBlogInputs, validateEmphasis } from "../../../lib/work/blog-checks.mjs";
+    import { blogCardFileName, buildComplexCards, buildListingCover } from "../../../lib/work/blog-cards.mjs";
     import { matchesBlogSourceQuery } from "../../../lib/work/blog-sources.mjs";
+    import { todayInKorea } from "../../../lib/work/legal-dates.mjs";
+    import { renderBlogCards, type BlogCard } from "../../../lib/work-blog-card";
     import { createDisclosureFields, keepHeight, releaseHeight, type FieldState } from "../../../lib/work-disclosure-fields";
     import {
       BLOG_SOURCE_PAGE_SIZE,
@@ -348,6 +363,10 @@ import AdminLayout from "../../../layouts/AdminLayout.astro";
         const disclosureBox = pick("[data-bl-disclosure]");
         const previewFold = pick<HTMLDetailsElement>("[data-bl-preview-fold]");
         const preview = pick<HTMLTextAreaElement>("[data-bl-preview]");
+        const cardsetPanel = pick("[data-bl-cardset]");
+        const cardsetStatus = pick("[data-bl-cardset-status]");
+        const cardsetList = pick<HTMLUListElement>("[data-bl-cardset-list]");
+        const cardsetSave = pick<HTMLButtonElement>("[data-bl-cardset-save]");
         const draftsFold = pick<HTMLDetailsElement>("[data-bl-drafts-fold]");
         const draftsStatus = pick("[data-bl-drafts-status]");
         const draftsList = pick<HTMLUListElement>("[data-bl-drafts]");
@@ -382,6 +401,8 @@ import AdminLayout from "../../../layouts/AdminLayout.astro";
         let busy = false;
         let edited = false;
         let copyReady = false;
+        let cardsetKey = "";
+        let cardsetSeq = 0;
 
         const sourceKey = (source: { type: string; id: string } | null) => (source ? `${source.type}:${source.id}` : "");
         const errorOf = (error: unknown) => (error instanceof WorkApiError ? { code: error.code, details: error.details } : { code: null, details: [] as string[] });
@@ -761,6 +782,12 @@ import AdminLayout from "../../../layouts/AdminLayout.astro";
           waitPanel.hidden = next !== "wait";
           resultPanel.hidden = next !== "result";
           failPanel.hidden = next !== "fail";
+          // 결과 화면을 떠나면 카드 그림(data 주소)을 지운다. 다시 열면 그때 다시 그린다.
+          if (next !== "result") {
+            cardsetKey = "";
+            cardsetSeq += 1;
+            showCardsetMessage("");
+          }
           pickedBar.hidden = next === "compose" || !draft;
           bar.hidden = next !== "result";
           if (next !== "wait") {
@@ -957,6 +984,7 @@ import AdminLayout from "../../../layouts/AdminLayout.astro";
           delete copyStatus.dataset.state;
           previewFold.open = false;
           edited = false;
+          cardsetKey = "";
           recheck();
         }
 
@@ -1059,7 +1087,87 @@ import AdminLayout from "../../../layouts/AdminLayout.astro";
           barText.textContent = copyReady ? "✓ 복사할 수 있음" : `고칠 곳 ${blockItems.length}곳 · 복사 막힘`;
           if (!copyStatus.dataset.state) copyStatus.textContent = copyReady ? "" : "고칠 곳을 고치면 복사할 수 있습니다.";
           preview.value = copyReady && made ? copyText("blog", made.disclosure.text as string) : "";
+          void updateCardset(made, locationIssue);
         }
+
+        // ── 카드 그림: 단지는 빌드 때 실은 공개 단지 자료로 3장, 매물은 명시사항이 다 찼을 때 사진 없는 표지 1장 ──
+        // 서버를 부르지 않고, 그림은 data 주소로만 보인다(blob 주소·브라우저 저장소 없음). 같은 내용이면 다시 그리지 않는다.
+        const cardDataList = JSON.parse(root.querySelector("[data-bl-card-data]")?.textContent ?? "[]") as { slug: string }[];
+        const cardCanvas = document.createElement("canvas");
+        function showCardsetMessage(message: string) {
+          cardsetList.replaceChildren();
+          cardsetSave.hidden = true;
+          cardsetStatus.textContent = message;
+        }
+        async function updateCardset(made: ReturnType<typeof currentDisclosure>, locationIssue: boolean) {
+          const current = draft;
+          const source = current?.result && current.sourcePublic ? current.currentSource : null;
+          if (!source) {
+            cardsetPanel.hidden = true;
+            cardsetKey = "";
+            cardsetSeq += 1;
+            return;
+          }
+          cardsetPanel.hidden = false;
+          let view: { ok: boolean; error?: string; cards?: unknown[] };
+          if (source.type === "complex") view = buildComplexCards(cardDataList.find((item) => item.slug === source.id) ?? null, office);
+          else if (!made) view = { ok: false, error: "고른 자료가 지금 공개 자료에 없어 표지를 만들 수 없습니다." };
+          else if (locationIssue) view = { ok: false, error: "소재지를 고치면 표지를 만듭니다." };
+          else view = buildListingCover(source, made.disclosure, office);
+          const key = view.ok ? JSON.stringify(view.cards) : `error:${view.error}`;
+          if (key === cardsetKey) return;
+          cardsetKey = key;
+          const seq = ++cardsetSeq;
+          if (!view.ok || !view.cards) {
+            showCardsetMessage(view.error ?? "");
+            return;
+          }
+          showCardsetMessage("카드를 그리는 중입니다…");
+          try {
+            const result = await renderBlogCards(cardCanvas, view.cards as BlogCard[]);
+            if (seq !== cardsetSeq) return;
+            if (result.overflow) {
+              showCardsetMessage("내용이 길어 카드에 다 들어가지 않아 만들지 않았습니다.");
+              return;
+            }
+            const today = todayInKorea();
+            const many = result.images.length > 1;
+            cardsetList.replaceChildren(...result.images.map((image, index) => {
+              const item = el("li");
+              const figure = el("figure");
+              const picture = el("img");
+              picture.src = image.dataUrl;
+              picture.width = 270;
+              picture.height = 338;
+              picture.alt = image.alt;
+              const caption = el("figcaption");
+              caption.append(el("span", "", image.label));
+              const link = el("a", "bl-text-button bl-cardset__link", many ? `${index + 1}장 저장` : "저장");
+              link.href = image.dataUrl;
+              link.download = blogCardFileName(today, { name: source.title, index, listing: source.type !== "complex" });
+              link.dataset.blCardsetLink = "";
+              link.hidden = !many;
+              caption.append(link);
+              figure.append(picture, caption);
+              item.append(figure);
+              return item;
+            }));
+            cardsetSave.textContent = many ? `카드 ${result.images.length}장 저장` : "표지 저장";
+            cardsetSave.hidden = false;
+            cardsetStatus.textContent = "";
+          } catch {
+            if (seq !== cardsetSeq) return;
+            cardsetKey = "";
+            showCardsetMessage("카드를 그리지 못했습니다. 화면을 다시 열어 주세요.");
+          }
+        }
+        cardsetSave.addEventListener("click", () => {
+          const links = [...cardsetList.querySelectorAll<HTMLAnchorElement>("[data-bl-cardset-link]")];
+          for (const link of links) link.click();
+          cardsetStatus.textContent = links.length > 1
+            ? `✓ 카드 ${links.length}장을 내려받았습니다. 브라우저가 여러 파일 내려받기를 물으면 허용해 주세요.`
+            : "✓ 표지를 내려받았습니다.";
+        });
 
         function copyText(which: "blog" | "sns", disclosureText: string) {
           const hashtags = normalizeHashtags(tagsInput.value);
