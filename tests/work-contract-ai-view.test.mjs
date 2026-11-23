@@ -291,6 +291,7 @@ test("일정 미리 보기 = 확정 서버 결과: 완료한 자동 일정·사�
   assert.equal(preview.ok, true);
   assert.deepEqual(preview.events.filter((event) => event.source === "ai").map((event) => event.title), ["3차 중도금(가상단지)"], "완료한 2차는 미리 보기에도 없음");
   assert.deepEqual(preview.previous, [], "직접 넣은 일정(manual)은 앞 AI 결과 줄에 넣지 않음");
+  assert.deepEqual(preview.twins, [], "완료한 직접 2차는 서버가 AI 2차를 건너뛰므로 두 줄 경고도 없음");
   assert.ok(data.notices.includes("2차 중도금은 이미 완료 표시돼 새로 넣지 않았습니다."));
   assert.deepEqual(previewRows(preview).filter((row) => row[0] !== "custom"), serverRows(data).filter((row) => row[0] !== "custom"));
   assert.deepEqual(previewRows(preview).filter((row) => row[0] === "custom"), data.events.filter((event) => event.source === "ai_confirmed").map((event) => ["custom", event.dueOn, event.title]));
@@ -358,6 +359,43 @@ test("다시 확정 = 확정 서버 결과: 새 결과의 중도금을 '지금 �
   });
   assert.deepEqual(preview.previous.map((item) => [item.date, item.status]), [["2026-12-01", "kept"], ["2026-12-10", "kept"]]);
   assert.deepEqual(aiRows(data), [["2026-12-01", "2차 중도금(가상단지)", false], ["2026-12-10", "3차 중도금(가상단지)", false]]);
+  assert.deepEqual(predictedAiRows(preview), aiRows(data));
+});
+
+test("다시 확정 = 확정 서버 결과: 앞 2·3차 → 새 결과도 2·3차면 둘 다 '바뀜'이고 새 날짜가 서버에 들어간 날짜와 짝이 맞는다", async (t) => {
+  const middles = ["2026-11-20", "2026-12-03", "2026-12-12"];
+  const { preview, data } = await serverCase(t, { deal: reconfirmDeal, results: [result({ middles }), result({ middles })], events: confirmFirst() });
+  assert.deepEqual(preview.previous.map((item) => [item.title, item.date, item.status, item.next]), [
+    ["2차 중도금(가상단지)", "2026-12-01", "changed", "2026-12-03"],
+    ["3차 중도금(가상단지)", "2026-12-10", "changed", "2026-12-12"],
+  ]);
+  assert.deepEqual(aiRows(data), [["2026-12-03", "2차 중도금(가상단지)", false], ["2026-12-12", "3차 중도금(가상단지)", false]]);
+  // 바뀜 줄의 새 날짜 = 서버가 같은 차 제목으로 넣은 날짜(차 수끼리 짝).
+  for (const item of preview.previous) {
+    assert.equal(data.events.find((event) => event.source === "ai_confirmed" && event.title === item.title)?.dueOn, item.next);
+  }
+  assert.deepEqual(predictedAiRows(preview), aiRows(data));
+  assert.deepEqual(preview.twins, []);
+});
+
+test("일정 미리 보기 = 확정 서버 결과: 끝나지 않은 직접 '2차 중도금'이 있으면 '그대로 둠'(twins)이고 서버도 남겨 같은 차가 두 줄이 된다", async (t) => {
+  const middles = ["2026-11-20", "2026-12-05", "2026-12-10"];
+  const { preview, data } = await serverCase(t, {
+    deal: reconfirmDeal,
+    results: [result({ middles }), result({ middles })],
+    events: async (env, dealId) => {
+      for (const [dueOn, title] of [["2026-12-01", "2차 중도금(가상단지)"], ["2026-12-15", "가상 점검 일정"]]) {
+        const made = await work(env, `/deals/${dealId}/events`, { method: "POST", body: { kind: "custom", dueOn, title, alarmOffsets: [] } });
+        assert.equal(made.status, 201, JSON.stringify(made.json));
+      }
+    },
+  });
+  assert.deepEqual(preview.twins, [{ date: "2026-12-01", title: "2차 중도금(가상단지)", aiDate: "2026-12-05" }], "같은 차 직접 일정만, 다른 직접 일정은 아님");
+  assert.deepEqual(preview.previous, []);
+  const second = data.events.filter((event) => event.kind === "custom" && event.title.startsWith("2차 중도금")).map((event) => [event.dueOn, event.source]).sort();
+  assert.deepEqual(second, [["2026-12-01", "manual"], ["2026-12-05", "ai_confirmed"]], "서버도 직접 2차를 남기고 AI 2차를 넣어 두 줄");
+  // 서버의 2차 줄 = 미리 보기의 twins(직접) + 새 AI 2차
+  assert.deepEqual(second, [...preview.twins.map((item) => [item.date, "manual"]), ...preview.events.filter((event) => event.source === "ai" && event.title.startsWith("2차 중도금")).map((event) => [event.date, "ai_confirmed"])].sort());
   assert.deepEqual(predictedAiRows(preview), aiRows(data));
 });
 

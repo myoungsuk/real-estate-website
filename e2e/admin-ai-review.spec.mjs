@@ -470,13 +470,14 @@ test("S-05·S-13·S-17 모두 같음(1280px 표): 넣을 값이 다 정해져 �
   done();
 });
 
-test("다시 확정 미리 보기(390px): 앞 AI 결과로 넣은 2·3차 중도금이 '바뀜'·'그대로, 완료'로 보이고, 새 2차는 'AI로 넣음', 넣은 뒤 목록도 'AI로 넣음'이다", async ({ page }) => {
+test("다시 확정 미리 보기(390px): 앞 AI 결과로 넣은 2·3차 중도금이 '바뀜'·'그대로, 완료'로 보이고, 새 2차는 'AI로 넣음', 끝나지 않은 직접 2차는 두 줄 경고와 '그대로 둠', 넣은 뒤 목록도 'AI로 넣음'이다", async ({ page }) => {
   const done = collectErrors(page);
   const event = (n, kind, dueOn, title, source, doneAt = null) => ({ id: uuid(950 + n), dealId: DEAL_A, kind, dueOn, title, alarmOffsets: [], source, doneAt, version: 1, createdAt: "", updatedAt: "" });
   const before = [
     event(1, "custom", "2026-12-01", "2차 중도금(가상단지)", "ai_confirmed"),
     event(2, "custom", "2026-12-10", "3차 중도금(가상단지)", "ai_confirmed", "2026-12-10T01:00:00.000Z"),
     event(3, "custom", "2026-12-15", "가상 점검 일정", "manual"),
+    event(5, "custom", "2026-11-28", "2차 중도금(직접)", "manual"),
   ];
   const middles = ["2026-11-20", "2026-12-05"];
   const ready = groupView({ jobs: [job(1, { value: result({ middles }) }), job(2, { value: result({ middles }) })] });
@@ -494,7 +495,7 @@ test("다시 확정 미리 보기(390px): 앞 AI 결과로 넣은 2·3차 중도
   await openReview(page);
   await foot(page).next.click();
   await expect(page.locator("[data-axr-title]")).toHaveText("거래에 넣기 전 확인");
-  const fresh = page.locator(".ax-evts:not([data-axr-prev]) li", { hasText: "2차 중도금" });
+  const fresh = page.locator(".ax-evts:not([data-axr-prev]):not([data-axr-twin]) li", { hasText: "2차 중도금" });
   await expect(fresh).toContainText("12월 5일");
   await expect(fresh.locator(".ax-tag")).toHaveText("AI로 넣음");
   await expect(page.locator(".ax-sub", { hasText: "앞 AI 결과로 넣은 일정" })).toBeVisible();
@@ -507,7 +508,15 @@ test("다시 확정 미리 보기(390px): 앞 AI 결과로 넣은 2·3차 중도
   await expect(page.locator("[data-axr-prev]"), "직접 넣은 일정은 앞 AI 결과 줄에 없음").not.toContainText("가상 점검 일정");
   await expect(page.locator(".ax-out")).toContainText("이 거래에 직접 넣거나 고친 일정(계산·AI로 넣은 일정을 손으로 고친 것 포함)은 그대로 둡니다.");
   await expect(page.getByText("직접 일정", { exact: false })).toHaveCount(0);
-  await page.locator("[data-axr-prev]").evaluate((node) => node.scrollIntoView({ block: "center", behavior: "instant" }));
+  // 끝나지 않은 직접 2차는 같은 차 AI 일정과 두 줄이 된다고 경고와 함께 보인다(서버는 둘 다 남김).
+  const twin = page.locator("[data-axr-twin] li");
+  await expect(twin).toHaveCount(1);
+  await expect(twin).toContainText("2차 중도금(직접)");
+  await expect(twin).toContainText("같은 차 AI 일정: 12월 5일 (토)");
+  await expect(twin.locator(".ax-tag")).toHaveText("그대로 둠");
+  await expect(page.locator(".ax-note--warn", { hasText: "같은 차수 AI 일정과 두 줄이 됩니다." })).toBeVisible();
+  await expect(page.locator("[data-axr-twin]"), "다른 직접 일정은 두 줄 경고에 없음").not.toContainText("가상 점검 일정");
+  await page.locator("[data-axr-twin]").evaluate((node) => node.scrollIntoView({ block: "center", behavior: "instant" }));
   await shot(page, "reconfirm-preview-390.png");
   await foot(page).next.click();
   await expect(page.locator("[data-axr-title]")).toHaveText("거래에 넣었습니다");

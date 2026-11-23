@@ -606,6 +606,25 @@ export function mountAiReview(page: HTMLElement) {
         }
         nodes.push(prev);
       }
+      // 끝나지 않은 직접 일정이 이번 AI 중도금과 같은 차이면 서버는 둘 다 남긴다: 두 줄이 된다고 미리 알린다(서버 판정은 그대로).
+      if (preview.twins.length > 0) {
+        nodes.push(element("p", "ax-sub", "직접 넣은 같은 차 중도금"));
+        const warn = element("p", "ax-note ax-note--warn");
+        const text = element("span");
+        text.append(element("b", "", "같은 차수 AI 일정과 두 줄이 됩니다."), " 직접 넣은 일정은 그대로 둡니다. 하나만 남기려면 넣은 뒤 손님 카드에서 필요 없는 줄을 지워 주세요.");
+        warn.append(element("span", "", "⚠"), text);
+        nodes.push(warn);
+        const twins = element("ul", "ax-evts");
+        twins.dataset.axrTwin = "";
+        for (const item of preview.twins) {
+          const name = element("span", "", item.title);
+          name.append(" ", element("small", "ax-soft", `(같은 차 AI 일정: ${aiShortDate(item.aiDate)})`));
+          const li = element("li");
+          li.append(element("span", "", aiShortDate(item.date)), name, element("span", "ax-tag ax-tag--warn", "그대로 둠"));
+          twins.append(li);
+        }
+        nodes.push(twins);
+      }
     }
     nodes.push(element("p", "ax-sub", "넣지 않는 것"));
     const out = element("ul", "ax-out");
