@@ -227,6 +227,11 @@ test("글 초안 사용 안내 숫자는 서버·화면 상수와 맞다", async
   assert.equal(facts.blogRetentionDays, view.BLOG_RETENTION_DAYS, "화면 문구의 보관 기간");
 });
 
+test("매출장부 사용 안내 숫자는 화면 코드의 같은 값과 맞다", async () => {
+  const grid = await import("../src/lib/work/ledger-grid.mjs");
+  assert.equal(ADMIN_HELP_FACTS.ledgerUndoSteps, grid.LEDGER_UNDO_LIMIT, "되돌리기 단계");
+});
+
 test("작은따옴표 이름은 따옴표 없이 굵은 글자로 나누고, 큰따옴표 말은 그대로 둔다", () => {
   assert.deepEqual(splitHelpText("그 줄의 '확인 완료'를 누릅니다."), [
     { text: "그 줄의 ", label: false },

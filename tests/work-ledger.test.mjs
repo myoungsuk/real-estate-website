@@ -46,7 +46,7 @@ async function workWithRules(env, path, { method = "GET", body, now = NOW, rules
   return { status: response.status, json: await response.json() };
 }
 
-const zeroLine = { feeWon: 0, vatWon: 0, feeWithVatWon: 0, receivedWon: 0, unpaidWon: 0, expenseWon: 0, otherIncomeWon: 0, netWon: 0 };
+const zeroLine = { feeWon: 0, vatWon: 0, feeWithVatWon: 0, receivedWon: 0, unpaidWon: 0, expenseWon: 0, otherIncomeWon: 0, netWon: 0, receivableWon: 0 };
 
 test("0005는 0001 ~ 0004 위에 ledger_entries 하나만 더하고 구조 번호를 5로 올리며, 날짜 없는 줄은 막지 않고 종류·거래 칸끼리만 묶는다", () => {
   assert.equal(migrationFiles[4], "0005_ledger.sql");
@@ -142,16 +142,17 @@ test("T2-94 쌍방 보수 2줄 + 지출 + 기타 수입 → 달별 합계가 손
   assert.deepEqual(Object.keys(data), ["year", "months", "total", "undatedCount"]);
   assert.equal(data.months.length, 12);
   assert.deepEqual(data.months.map((line) => line.month), Array.from({ length: 12 }, (_, index) => `2026-${String(index + 1).padStart(2, "0")}`));
-  assert.deepEqual(data.months[10], { month: "2026-11", feeWon: 3_300_000, vatWon: 330_000, feeWithVatWon: 3_630_000, receivedWon: 2_980_000, unpaidWon: 650_000, expenseWon: 300_000, otherIncomeWon: 0, netWon: 3_000_000 });
-  assert.deepEqual(data.months[1], { month: "2026-02", ...zeroLine, receivedWon: 220_000, otherIncomeWon: 200_000, netWon: 200_000 });
+  assert.deepEqual(data.months[10], { month: "2026-11", feeWon: 3_300_000, vatWon: 330_000, feeWithVatWon: 3_630_000, receivedWon: 2_980_000, unpaidWon: 650_000, expenseWon: 300_000, otherIncomeWon: 0, netWon: 3_000_000, receivableWon: 3_630_000 });
+  // 받을 금액은 기타 수입의 부가세도 넣는다(기타 수입 칸·순수익은 부가세 제외). 지출은 넣지 않는다.
+  assert.deepEqual(data.months[1], { month: "2026-02", ...zeroLine, receivedWon: 220_000, otherIncomeWon: 200_000, netWon: 200_000, receivableWon: 220_000 });
   for (const index of [0, 2, 3, 4, 5, 6, 7, 8, 9, 11]) assert.deepEqual(data.months[index], { month: data.months[index].month, ...zeroLine });
-  assert.deepEqual(data.total, { feeWon: 3_300_000, vatWon: 330_000, feeWithVatWon: 3_630_000, receivedWon: 3_200_000, unpaidWon: 650_000, expenseWon: 300_000, otherIncomeWon: 200_000, netWon: 3_200_000 });
+  assert.deepEqual(data.total, { feeWon: 3_300_000, vatWon: 330_000, feeWithVatWon: 3_630_000, receivedWon: 3_200_000, unpaidWon: 650_000, expenseWon: 300_000, otherIncomeWon: 200_000, netWon: 3_200_000, receivableWon: 3_850_000 });
   assert.equal(data.undatedCount, 0);
 
   const received = (await work(env, "/ledger/summary?year=2026&basis=received")).json.data;
   // 입금일 기준: 보수·기타 수입은 입금일, 지출은 잔금일 기준과 같은 날짜(거래 없는 지출이면 그 줄의 날짜 11-03)로 들어간다.
-  assert.deepEqual(received.months[10], { month: "2026-11", ...zeroLine, feeWon: 1_800_000, vatWon: 180_000, feeWithVatWon: 1_980_000, receivedWon: 1_980_000, expenseWon: 300_000, netWon: 1_500_000 });
-  assert.deepEqual(received.months[11], { month: "2026-12", ...zeroLine, feeWon: 1_500_000, vatWon: 150_000, feeWithVatWon: 1_650_000, receivedWon: 1_000_000, unpaidWon: 650_000, netWon: 1_500_000 });
+  assert.deepEqual(received.months[10], { month: "2026-11", ...zeroLine, feeWon: 1_800_000, vatWon: 180_000, feeWithVatWon: 1_980_000, receivedWon: 1_980_000, expenseWon: 300_000, netWon: 1_500_000, receivableWon: 1_980_000 });
+  assert.deepEqual(received.months[11], { month: "2026-12", ...zeroLine, feeWon: 1_500_000, vatWon: 150_000, feeWithVatWon: 1_650_000, receivedWon: 1_000_000, unpaidWon: 650_000, netWon: 1_500_000, receivableWon: 1_650_000 });
   assert.equal(received.undatedCount, 0, "지출도 기준일이 있음");
   assert.equal(received.total.netWon, data.total.netWon, "입금일 기준 순수익도 같은 해 안이면 잔금일 기준과 같음");
   const contract = (await work(env, "/ledger/summary?year=2026&basis=contract")).json.data;

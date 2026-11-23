@@ -59,7 +59,7 @@ const SQL = Object.freeze({
     + " AND (? IS NULL OR unpaid_won < ? OR (unpaid_won = ? AND id < ?)) ORDER BY unpaid_won DESC, id DESC LIMIT ?",
   // 기간에서 빠진 줄(기준일 없음) 수. 같은 거르기 조건.
   undatedCount: ENTRY_BASE + "SELECT count(*) AS n FROM b WHERE " + ENTRY_FILTER + " AND basis_on IS NULL",
-  // 달별 합계(6.12절). 보수(부가세 제외)·보수 부가세·입금(보수·기타 수입)·미입금(보수·기타 수입)·지출·기타 수입(부가세 제외).
+  // 달별 합계(6.12절). 보수(부가세 제외)·보수 부가세·입금(보수·기타 수입)·미입금(보수·기타 수입)·지출·기타 수입(부가세 제외)·받을 금액(보수·기타 수입, 부가세 포함).
   summaryByMonth:
     ENTRY_BASE + "SELECT substr(basis_on, 6, 2) AS month,"
     + " sum(CASE WHEN kind = 'fee' THEN amount_won ELSE 0 END) AS fee_won,"
@@ -67,7 +67,8 @@ const SQL = Object.freeze({
     + " sum(CASE WHEN kind <> 'expense' THEN received_won ELSE 0 END) AS received_won,"
     + " sum(unpaid_won) AS unpaid_won,"
     + " sum(CASE WHEN kind = 'expense' THEN amount_won ELSE 0 END) AS expense_won,"
-    + " sum(CASE WHEN kind = 'other_income' THEN amount_won ELSE 0 END) AS other_income_won"
+    + " sum(CASE WHEN kind = 'other_income' THEN amount_won ELSE 0 END) AS other_income_won,"
+    + " sum(CASE WHEN kind <> 'expense' THEN amount_won + vat_won ELSE 0 END) AS receivable_won"
     + " FROM b WHERE substr(basis_on, 1, 4) = ? GROUP BY substr(basis_on, 6, 2)",
   summaryUndated: ENTRY_BASE + "SELECT count(*) AS n FROM b WHERE basis_on IS NULL",
   // batch 첫 문장(guard): 조건이 깨졌으면 json('guard')(잘못된 JSON)로 batch 전체를 되돌린다(설계서 8.5절).
@@ -217,7 +218,7 @@ async function listEntries(ctx) {
   }, (data) => auditBase(ctx, "ledger.list", { reason: `result_count=${data.items.length}` }));
 }
 
-const SUMMARY_FIELDS = Object.freeze(["feeWon", "vatWon", "feeWithVatWon", "receivedWon", "unpaidWon", "expenseWon", "otherIncomeWon", "netWon"]);
+const SUMMARY_FIELDS = Object.freeze(["feeWon", "vatWon", "feeWithVatWon", "receivedWon", "unpaidWon", "expenseWon", "otherIncomeWon", "netWon", "receivableWon"]);
 
 function summaryLine(row) {
   const feeWon = Number(row?.fee_won ?? 0);
@@ -234,6 +235,8 @@ function summaryLine(row) {
     expenseWon,
     otherIncomeWon,
     netWon: feeWon + otherIncomeWon - expenseWon,
+    // 받을 금액 = 보수·기타 수입의 공급가액 + 부가세(줄의 받을 금액과 같은 뜻, 미입금과 같은 범위). 화면 합계 줄·달 줄이 이 값을 그대로 쓴다.
+    receivableWon: Number(row?.receivable_won ?? 0),
   };
 }
 
