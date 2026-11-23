@@ -6,9 +6,20 @@ export const TRASH_KEEP_DAYS = 7; // 서버 TRASH_KEEP_DAYS와 같음
 export const TRASH_PAGE_SIZE = 50; // 서버 기본·최대
 export const TRASH_SCHEMA_VERSION = 7; // 휴지통 구조(migrations/work/0007_trash.sql)
 export const TRASH_PURGE_WORD = "영구 삭제"; // DELETE /work/trash/:batchId 의 confirm 글자
-// 사진(file)은 바로 찍기 PR(F-a·F-b)에서 더했다. 서버 묶음 kind 이름은 file, 화면 이름은 "사진".
+// 사진(file)은 바로 찍기 PR(F-a·F-b)에서 더했다. 서버 묶음 kind 이름은 file 하나이고 손님 사진과 계약서 사본(단계 4)이 함께 든다.
+// 그래서 종류 거르기·여러 가지가 섞인 수는 "사진·계약서 사본"으로 쓰고, 파일 한 개 묶음은 묶음 이름으로 둘 중 어느 것인지 가려 쓴다(trashKindTag).
 export const TRASH_KINDS = Object.freeze(["customer", "deal", "note", "event", "ledger", "task", "file"]);
-export const TRASH_KIND_LABELS = Object.freeze({ customer: "손님", deal: "거래", note: "메모", event: "일정", ledger: "장부 줄", task: "할 일", file: "사진" });
+const FILES_NAME = "사진·계약서 사본";
+export const TRASH_KIND_LABELS = Object.freeze({ customer: "손님", deal: "거래", note: "메모", event: "일정", ledger: "장부 줄", task: "할 일", file: FILES_NAME });
+// worker/work-trash.mjs BATCH_SOURCES.file이 계약서 사본 묶음 이름 앞에 붙이는 말(손님 사진은 설명 글이나 "사진 · …"으로 시작)
+const COPY_LABEL_PREFIX = "계약서 사본 · ";
+const fileWord = (label) => (String(label ?? "").startsWith(COPY_LABEL_PREFIX) ? "계약서 사본" : "사진");
+/** 목록 줄의 종류 표시. 파일 한 개 묶음은 "사진"·"계약서 사본" 가운데 하나 @param {{ kind: string, label?: string }} item */
+export function trashKindTag(item) {
+  return item?.kind === "file" ? fileWord(item.label) : TRASH_KIND_LABELS[item?.kind] ?? "자료";
+}
+// 파일 수의 이름: 파일 한 개 묶음이면 그 종류, 손님·거래 묶음이면 둘이 섞일 수 있어 "사진·계약서 사본"
+const unitFor = (item) => (unit) => (unit[0] === "files" && item?.kind === "file" ? ["files", fileWord(item.label), unit[2]] : unit);
 
 // 지우기 확인 칸 첫 문장(지시서 4.1). 화면 4곳이 같은 글을 쓴다.
 export const TRASH_MOVE_NOTICE = "휴지통으로 옮깁니다. 7일 안에 되살릴 수 있고, 그 뒤 자동으로 영구 삭제됩니다.";
@@ -72,7 +83,7 @@ const kindSubject = (kind) => {
 // 묶음 안 수 → 글. 순서는 되살리는 순서와 같다(손님 → 거래 → 참여자 → 일정 → 메모 → 할 일 → 장부 줄).
 const COUNT_UNITS = Object.freeze([
   ["customers", "손님", "명"], ["deals", "거래", "건"], ["parties", "참여자", "줄"], ["events", "일정", "개"],
-  ["notes", "메모", "개"], ["tasks", "할 일", "개"], ["ledger", "장부 줄", "개"], ["files", "사진", "장"],
+  ["notes", "메모", "개"], ["tasks", "할 일", "개"], ["ledger", "장부 줄", "개"], ["files", FILES_NAME, "장"],
 ]);
 const MAIN_COUNT = Object.freeze({ customer: "customers", deal: "deals" });
 const countPart = ([key, name, unit], count) => `${name} ${count.toLocaleString("ko-KR")}${unit}`;
@@ -80,19 +91,19 @@ const countPart = ([key, name, unit], count) => `${name} ${count.toLocaleString(
 /**
  * 줄의 '함께:' 글. 손님·거래 묶음은 그 손님·거래 자신과 참여자 줄을 빼고 센다(참여자 줄만 남았으면 그것만).
  * 메모·일정·장부 줄·할 일 묶음은 그 한 개를 센다(시안 그대로). 셀 것이 없으면 "".
- * @param {{ kind: string, counts: TrashCountsView }} item
+ * @param {{ kind: string, label?: string, counts: TrashCountsView }} item
  */
 export function trashCountsText(item) {
   const counts = item?.counts ?? {};
   const main = MAIN_COUNT[item?.kind];
-  const parts = COUNT_UNITS.filter(([key]) => key !== main && key !== "parties" && (counts[key] ?? 0) > 0).map((unit) => countPart(unit, counts[unit[0]]));
+  const parts = COUNT_UNITS.filter(([key]) => key !== main && key !== "parties" && (counts[key] ?? 0) > 0).map(unitFor(item)).map((unit) => countPart(unit, counts[unit[0]]));
   if (parts.length === 0 && (counts.parties ?? 0) > 0 && (counts[main] ?? 0) === 0) parts.push(countPart(COUNT_UNITS[2], counts.parties));
   return parts.join(" · ");
 }
-/** 영구 삭제 칸의 '모두 지워지는 것' 글(묶음 자신을 넣어 모두 셈, 참여자 줄은 연결이라 뺌) @param {{ counts: TrashCountsView }} item */
+/** 영구 삭제 칸의 '모두 지워지는 것' 글(묶음 자신을 넣어 모두 셈, 참여자 줄은 연결이라 뺌) @param {{ kind?: string, label?: string, counts: TrashCountsView }} item */
 export function trashPurgeWhatText(item) {
   const counts = item?.counts ?? {};
-  const parts = COUNT_UNITS.filter(([key]) => key !== "parties" && (counts[key] ?? 0) > 0).map((unit) => countPart(unit, counts[unit[0]]));
+  const parts = COUNT_UNITS.filter(([key]) => key !== "parties" && (counts[key] ?? 0) > 0).map(unitFor(item)).map((unit) => countPart(unit, counts[unit[0]]));
   if (parts.length === 0 && (counts.parties ?? 0) > 0) parts.push(countPart(COUNT_UNITS[2], counts.parties));
   return parts.join(", ");
 }
@@ -129,11 +140,11 @@ export function trashEmptyText(kind) {
 
 // ── 되살리기 결과 ──
 const RESTORED_UNITS = Object.freeze([
-  ["customers", "손님", "명"], ["deals", "거래", "건"], ["events", "일정", "개"], ["notes", "메모", "개"], ["tasks", "할 일", "개"], ["ledger", "장부 줄", "개"], ["files", "사진", "장"],
+  ["customers", "손님", "명"], ["deals", "거래", "건"], ["events", "일정", "개"], ["notes", "메모", "개"], ["tasks", "할 일", "개"], ["ledger", "장부 줄", "개"], ["files", FILES_NAME, "장"],
 ]);
 // 건너뛴 줄의 대상(응답 skipped[].table)
 const SKIP_SUBJECTS = Object.freeze({
-  customers: ["손님", "명"], deals: ["거래", "건"], parties: ["참여자", "줄"], events: ["일정", "개"], notes: ["메모", "개"], tasks: ["할 일", "개"], ledger: ["장부 줄", "개"], files: ["사진", "장"],
+  customers: ["손님", "명"], deals: ["거래", "건"], parties: ["참여자", "줄"], events: ["일정", "개"], notes: ["메모", "개"], tasks: ["할 일", "개"], ledger: ["장부 줄", "개"], files: [FILES_NAME, "장"],
   noteCustomer: ["메모", "개"], noteDeal: ["메모", "개"], ledgerDeal: ["장부 줄", "개"],
   // 서버가 표 이름 그대로 보내도 같은 말로(2026-11-22 대장 안내와 worker/work-trash.mjs VIEW_KEY가 달라 둘 다 받음)
   deal_parties: ["참여자", "줄"], deal_events: ["일정", "개"], ledger_entries: ["장부 줄", "개"],
@@ -157,13 +168,16 @@ function skipReasonText({ table, reason }) {
  * 되살리기 응답 → 알림 글. lead(첫 문장), lines(건너뛴 까닭·연결 없이 되살린 메모, 대상은 굵게), state(일부면 warn).
  * @param {string} label 묶음 이름
  * @param {{ restored?: Record<string, number>, skipped?: { table: string, reason: string, count: number }[], remaining?: number }} result
+ * @param {string} [kind] 묶음 종류. file이면 묶음 이름으로 "사진"·"계약서 사본"을 가려 쓴다
  */
-export function restoreResultText(label, result) {
+export function restoreResultText(label, result, kind = "") {
   const restored = result?.restored ?? {};
-  const back = RESTORED_UNITS.filter(([key]) => (restored[key] ?? 0) > 0).map((unit) => countPart(unit, restored[unit[0]]));
+  const item = { kind, label };
+  const back = RESTORED_UNITS.filter(([key]) => (restored[key] ?? 0) > 0).map(unitFor(item)).map((unit) => countPart(unit, restored[unit[0]]));
   const links = restored.links ?? 0;
   const lines = (result?.skipped ?? []).filter((skip) => (skip?.count ?? 0) > 0).map((skip) => {
-    const [name, unit] = SKIP_SUBJECTS[skip.table] ?? ["자료", "개"];
+    const subject = SKIP_SUBJECTS[skip.table] ?? ["자료", "개"];
+    const [name, unit] = skip.table === "files" && kind === "file" ? [fileWord(label), subject[1]] : subject;
     return { subject: `${name} ${skip.count.toLocaleString("ko-KR")}${unit}`, text: skipReasonText(skip) };
   });
   const unlinked = restored.notesUnlinked ?? 0;
@@ -186,7 +200,7 @@ const RESTORED_LINKS = Object.freeze({
   event: ["손님 목록 열기", "/admin/work/customers/"],
   ledger: ["매출장부 열기", "/admin/work/ledger/"],
   task: ["할 일 열기", "/admin/work/tasks/"],
-  // 사진은 손님 카드에 있지만 되살리기 응답에 손님 id가 없어 손님 목록으로(지시서 4.1, 대장 판단)
+  // 사진·계약서 사본은 손님 카드에 있지만 되살리기 응답에 손님 id가 없어 손님 목록으로(지시서 4.1, 대장 판단)
   file: ["손님 목록 열기", "/admin/work/customers/"],
 });
 /** @param {string} kind @returns {{ text: string, href: string } | null} */

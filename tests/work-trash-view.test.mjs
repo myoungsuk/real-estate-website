@@ -23,6 +23,7 @@ import {
   trashDeletedText,
   trashEmptyText,
   trashErrorText,
+  trashKindTag,
   trashLeftText,
   trashLinksText,
   trashListQuery,
@@ -38,21 +39,41 @@ const counts = (values = {}) => ({ customers: 0, deals: 0, parties: 0, events: 0
 
 test("종류 7가지와 화면 이름(지시서 3.6 kind, 사진 file은 바로 찍기 PR에서 더함)", () => {
   assert.deepEqual(TRASH_KINDS, ["customer", "deal", "note", "event", "ledger", "task", "file"]);
-  assert.deepEqual(TRASH_KINDS.map((kind) => TRASH_KIND_LABELS[kind]), ["손님", "거래", "메모", "일정", "장부 줄", "할 일", "사진"]);
+  assert.deepEqual(TRASH_KINDS.map((kind) => TRASH_KIND_LABELS[kind]), ["손님", "거래", "메모", "일정", "장부 줄", "할 일", "사진·계약서 사본"], "file 묶음에는 손님 사진과 계약서 사본이 함께 든다");
 });
 
 test("사진 묶음: 함께 수·되살림 글·건너뜀·되살린 뒤 고리(바로 찍기 F-b)", () => {
   assert.equal(trashCountsText({ kind: "file", counts: { files: 1 } }), "사진 1장");
-  assert.equal(trashCountsText({ kind: "customer", counts: { customers: 1, deals: 1, notes: 3, files: 4 } }), "거래 1건 · 메모 3개 · 사진 4장");
-  assert.equal(trashPurgeWhatText({ counts: { customers: 1, files: 2 } }), "손님 1명, 사진 2장");
-  assert.equal(trashEmptyText("file").title, "지운 사진이 없습니다");
-  assert.equal(trashStripText(2, { kind: "file" }), "사진 묶음 2개 · 지운 때 최근 순");
+  assert.equal(trashCountsText({ kind: "customer", counts: { customers: 1, deals: 1, notes: 3, files: 4 } }), "거래 1건 · 메모 3개 · 사진·계약서 사본 4장", "손님 묶음의 파일은 둘이 섞일 수 있음");
+  assert.equal(trashPurgeWhatText({ counts: { customers: 1, files: 2 } }), "손님 1명, 사진·계약서 사본 2장");
+  assert.equal(trashPurgeWhatText({ kind: "file", label: "사진 · 11월 22일 14:05 올림", counts: { files: 1 } }), "사진 1장");
+  assert.equal(trashEmptyText("file").title, "지운 사진·계약서 사본이 없습니다");
+  assert.equal(trashStripText(2, { kind: "file" }), "사진·계약서 사본 묶음 2개 · 지운 때 최근 순");
   assert.deepEqual(restoredLink("file"), { text: "손님 목록 열기", href: "/admin/work/customers/" }, "응답에 손님 id가 없어 손님 목록으로");
-  const done = restoreResultText("사진 · 11월 22일 14:05 올림", { restored: { files: 1 }, skipped: [], remaining: 0 });
-  assert.match(done.lead, /사진 1장/u);
-  const skipped = restoreResultText("거실 창 쪽 누수 자국", { restored: {}, skipped: [{ table: "files", reason: "customer_missing", count: 1 }], remaining: 1 });
+  const done = restoreResultText("사진 · 11월 22일 14:05 올림", { restored: { files: 1 }, skipped: [], remaining: 0 }, "file");
+  assert.match(done.lead, /사진 1장이 돌아왔습니다/u);
+  const skipped = restoreResultText("거실 창 쪽 누수 자국", { restored: {}, skipped: [{ table: "files", reason: "customer_missing", count: 1 }], remaining: 1 }, "file");
   assert.equal(skipped.state, "warn");
   assert.ok(skipped.lines.some((line) => line.subject === "사진 1장" && /함께였던 손님이 지금 없어/u.test(line.text)), JSON.stringify(skipped.lines));
+});
+
+test("계약서 사본 묶음(단계 4 K-b): 줄의 종류 표시·수·되살림 글은 묶음 이름으로 '계약서 사본'을 가려 쓴다", () => {
+  const copy = { kind: "file", label: "계약서 사본 · 11월 23일 10:40 올림", counts: { files: 1 } };
+  assert.equal(trashKindTag(copy), "계약서 사본");
+  assert.equal(trashKindTag({ kind: "file", label: "사진 · 11월 22일 14:05 올림" }), "사진");
+  assert.equal(trashKindTag({ kind: "file", label: "거실 창 쪽 누수 자국" }), "사진", "설명이 있는 손님 사진");
+  assert.equal(trashKindTag({ kind: "file", label: "계약서 사본 · 특약 쪽" }), "계약서 사본", "설명이 있어도 서버가 앞에 붙임");
+  assert.equal(trashKindTag({ kind: "deal", label: "계약서 사본 · 가상" }), "거래", "파일 묶음이 아니면 이름을 보지 않음");
+  assert.equal(trashKindTag({ kind: "unknown" }), "자료");
+  assert.equal(trashCountsText(copy), "계약서 사본 1장");
+  assert.equal(trashPurgeWhatText(copy), "계약서 사본 1장");
+  assert.equal(trashCountsText({ kind: "deal", label: "가상숲 5블록 매매", counts: { deals: 1, events: 2, files: 3 } }), "일정 2개 · 사진·계약서 사본 3장");
+  const done = restoreResultText(copy.label, { restored: { files: 1 }, skipped: [], remaining: 0 }, "file");
+  assert.match(done.lead, /계약서 사본 1장이 돌아왔습니다/u);
+  const skipped = restoreResultText(copy.label, { restored: {}, skipped: [{ table: "files", reason: "deal_missing", count: 1 }], remaining: 1 }, "file");
+  assert.ok(skipped.lines.some((line) => line.subject === "계약서 사본 1장" && /함께였던 거래가 지금 없어/u.test(line.text)), JSON.stringify(skipped.lines));
+  const mixed = restoreResultText("가상 손님 1", { restored: { customers: 1, files: 2 }, skipped: [], remaining: 0 }, "customer");
+  assert.match(mixed.lead, /손님 1명, 사진·계약서 사본 2장이 돌아왔습니다/u);
 });
 
 test("지운 때·날짜는 한국 시각으로 쓴다(UTC 15시 이후는 다음 날)", () => {

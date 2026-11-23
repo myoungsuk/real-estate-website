@@ -4,7 +4,7 @@ import AdminPageHelp from "../../../components/admin/AdminPageHelp.astro";
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 import { TRASH_BACKUP_NOTICE, TRASH_KINDS, TRASH_KIND_LABELS, TRASH_PURGE_WORD } from "../../../lib/work/trash-view.mjs";
 
-// 휴지통(단계 2, WT-2-13): 지운 손님·거래·메모·일정·장부 줄·할 일·사진 묶음을 7일 동안 두었다가 되살리거나 영구 삭제한다.
+// 휴지통(단계 2, WT-2-13): 지운 손님·거래·메모·일정·장부 줄·할 일·사진·계약서 사본 묶음을 7일 동안 두었다가 되살리거나 영구 삭제한다.
 // 사용자 선택 2026-11-22 14:31:26 "손님 화면 고리 + 처음 화면 바로가기"라 메뉴에는 넣지 않는다(메모 창고와 같음). 시안 2026-11-22 14:42:41 "이 시안대로".
 // - 서버 요청은 work-trash-client.ts 한 곳. 업무 세션이 꺼져 있으면 휴지통을 부르지 않는다.
 // - 서버를 부르므로 탭 미리 그리기 prerender 목록에 넣지 않는다.
@@ -15,7 +15,7 @@ const kindLabels = TRASH_KIND_LABELS as Record<string, string>;
 
 <AdminLayout
   title="휴지통 | 행복한부동산 관리자"
-  description="지운 손님·거래·메모·일정·장부 줄·할 일·사진을 7일 동안 두었다가 되살리거나 영구 삭제하는 관리자 업무 도구입니다."
+  description="지운 손님·거래·메모·일정·장부 줄·할 일·사진·계약서 사본을 7일 동안 두었다가 되살리거나 영구 삭제하는 관리자 업무 도구입니다."
 >
   <div class="work-ui work-doc cu-doc cu-doc--wide tr-doc" data-tr-page>
     <p class="cu-back"><a class="admin-text-link" href="/admin/work/customers/"><span aria-hidden="true">←</span> 손님 목록</a></p>
@@ -97,7 +97,7 @@ const kindLabels = TRASH_KIND_LABELS as Record<string, string>;
     import { element, setStatus } from "../../../lib/work-customers-dom";
     import { customerErrorText, isRetryable } from "../../../lib/work/customers-view.mjs";
     import {
-      TRASH_KIND_LABELS,
+      trashKindTag,
       TRASH_PARTIAL_TEXT,
       isPurgeWord,
       isTrashPartial,
@@ -247,7 +247,7 @@ const kindLabels = TRASH_KIND_LABELS as Record<string, string>;
           purgeButton.setAttribute("aria-label", `영구 삭제: ${item.label}`);
           purgeButton.addEventListener("click", () => openPurge(item, row, purgeButton));
           actions.append(purgeButton);
-          row.append(element("span", "tr-kind", TRASH_KIND_LABELS[item.kind] ?? "자료"), body, leftLine, actions);
+          row.append(element("span", "tr-kind", trashKindTag(item)), body, leftLine, actions);
           return row;
         }
 
@@ -260,7 +260,7 @@ const kindLabels = TRASH_KIND_LABELS as Record<string, string>;
           button.textContent = "되살리는 중…";
           try {
             const result = await restoreTrash(item.batchId);
-            const text = restoreResultText(item.label, result);
+            const text = restoreResultText(item.label, result, item.kind);
             if (text.remaining) partial.add(item.batchId);
             else partial.delete(item.batchId);
             showNotice(text.lead, { lines: text.lines, state: text.state, link: restoredLink(item.kind) });

@@ -51,6 +51,8 @@ export interface CustomerDeal {
   version: number;
   updatedAt: string;
   events: DealEvent[];
+  // 거래에 붙은 파일(계약서 사본, 단계 4). 옛 응답에는 없을 수 있다.
+  files?: CustomerFile[];
 }
 
 export interface Note {

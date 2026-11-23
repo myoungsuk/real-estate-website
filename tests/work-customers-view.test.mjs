@@ -105,7 +105,7 @@ test("손님 지우기 결과 문장은 휴지통으로 함께 옮긴 것과, �
   assert.equal(deleteResultText({ deleted: { deals: 1, notes: 3, tasks: 2 }, kept: { notes: 0 } }), "함께 옮긴 것: 이 손님만의 거래 1건, 메모 3개, 할 일 2개.");
   assert.doesNotMatch(deleteResultText({ deleted: { deals: 1, notes: 0, tasks: 0 }, kept: { notes: 0 } }), /할 일/u);
   // 손님 사진도 함께 휴지통으로(바로 찍기 F-b). 0장이면 말하지 않음
-  assert.equal(deleteResultText({ deleted: { deals: 1, notes: 2, files: 3, tasks: 1 }, kept: { notes: 0 } }), "함께 옮긴 것: 이 손님만의 거래 1건, 메모 2개, 사진 3장, 할 일 1개.");
+  assert.equal(deleteResultText({ deleted: { deals: 1, notes: 2, files: 3, tasks: 1 }, kept: { notes: 0 } }), "함께 옮긴 것: 이 손님만의 거래 1건, 메모 2개, 사진·계약서 사본 3장, 할 일 1개.");
   assert.doesNotMatch(deleteResultText({ deleted: { deals: 1, notes: 0, files: 0 }, kept: { notes: 0 } }), /사진/u);
   // 휴지통(단계 2, 시안 2026-11-22 14:42:41): 응답의 trash.purgeAfter(한국 날짜)까지 되살릴 수 있다고 알린다. 값이 없으면 말하지 않는다.
   assert.equal(
