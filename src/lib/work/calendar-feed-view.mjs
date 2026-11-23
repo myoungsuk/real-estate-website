@@ -36,6 +36,17 @@ export function feedUsedText(iso) {
   return iso ? photoDayText(iso) : "아직 받아 가지 않음";
 }
 
+/**
+ * QR 아래 안내 한 줄. iPhone용 QR에는 webcal:// 주소가, Android용 QR에는 Google 캘린더 사이트 주소가 들어 있다.
+ * **추정**: 카메라가 QR을 읽은 뒤 뜨는 화면은 기기·앱마다 달라 단정하지 않는다(실기기 확인 T3-11 전).
+ * @param {"ios" | "google"} kind
+ */
+export function feedQrHowText(kind) {
+  return kind === "google"
+    ? "Android 휴대폰 카메라로 이 QR을 비추면 브라우저에서 Google 캘린더 사이트가 열립니다. Google 계정으로 들어가 구독을 더하세요."
+    : "iPhone 카메라로 이 QR을 비추고, 화면에 뜨는 안내를 눌러 구독을 더하세요.";
+}
+
 /** 오류 문장. 해시 키(WORK_FEED_TOKEN_PEPPER)가 없으면 503 WORK_CONFIG_MISSING이다. @param {string | null} code */
 export function feedErrorText(code) {
   if (code === "WORK_CONFIG_MISSING") return "구독 주소 설정이 아직 끝나지 않았습니다. 개발 담당에게 '구독 주소 설정 누락'이라고 알려 주세요.";

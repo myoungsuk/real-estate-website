@@ -1,6 +1,8 @@
 // '계약 일정' 화면의 휴대폰 캘린더 구독 칸(단계 3 C-b, 사용자 결정 2026-11-23 08:55:04 "가안: 맨 아래 칸 하나 (Recommended)")을 가짜 업무 API로 본다.
 // 구독 주소·토큰은 가상 값이다. 실제 서버·D1은 부르지 않는다.
 import { expect, test } from "@playwright/test";
+import { googleCalendarUrl, webcalUrl } from "../src/lib/work/calendar-feed-view.mjs";
+import { encodeQr } from "../src/lib/work/qr.mjs";
 
 const NOW = new Date("2026-11-23T01:00:00Z"); // 한국 11월 23일(월) 10:00
 const PAGE = "/admin/work/schedule/";
@@ -83,6 +85,30 @@ const tokenLeaks = (page) => page.evaluate((token) => {
   const stores = [localStorage, sessionStorage].flatMap((store) => Object.keys(store).map((key) => `${key}=${store.getItem(key)}`));
   return [location.href, document.title, ...stores].filter((text) => text.includes(token));
 }, TOKEN);
+// canvas에 그려진 QR을 칸마다(가운데 픽셀) 읽어 0·1 줄로. 둘레 조용한 띠 4칸 포함. 한 칸은 화면 픽셀 정수 배(3 ~ 6px)여야 한다.
+const QR_QUIET = 4;
+const canvasModules = (canvas, count) => canvas.evaluate((node, count) => {
+  const context = node.getContext("2d");
+  const pixels = node.width / count;
+  if (!Number.isInteger(pixels) || pixels < 3 || pixels > 6 || node.width !== node.height) return { pixels, size: [node.width, node.height], rows: [] };
+  const rows = [];
+  for (let y = 0; y < count; y += 1) {
+    let row = "";
+    for (let x = 0; x < count; x += 1) {
+      const [r, g, b, a] = context.getImageData(x * pixels + pixels / 2, y * pixels + pixels / 2, 1, 1).data;
+      row += r === 0 && g === 0 && b === 0 && a === 255 ? "1" : r === 255 && g === 255 && b === 255 && a === 255 ? "0" : "?";
+    }
+    rows.push(row);
+  }
+  return { rows };
+}, count);
+const expectedModules = (text) => {
+  const { size, modules } = encodeQr(text);
+  const side = size + QR_QUIET * 2;
+  const blank = "0".repeat(side);
+  const rows = modules.map((row) => "0".repeat(QR_QUIET) + row.map((dark) => (dark ? "1" : "0")).join("") + "0".repeat(QR_QUIET));
+  return { rows: [...new Array(QR_QUIET).fill(blank), ...rows, ...new Array(QR_QUIET).fill(blank)] };
+};
 
 test("구독 칸: 주소가 없으면 '구독 주소 만들기', 만들면 그 한 번만 주소·복사·iPhone(webcal)·Google 넣기가 보이고, 다시 열면 '주소 있음'으로 바뀌어 주소가 다시 보이지 않는다", async ({ page, context }) => {
   const assertNoErrors = collectErrors(page);
@@ -121,6 +147,74 @@ test("구독 칸: 주소가 없으면 '구독 주소 만들기', 만들면 그 �
   expect(await panel.locator("[data-cf-url]").inputValue()).toBe("");
   expect(await page.content()).not.toContain(TOKEN);
   expect(await tokenLeaks(page)).toEqual([]);
+  assertNoErrors();
+});
+test("다른 휴대폰에 넘기기: QR은 단추를 눌러야 canvas에만 그려지고(iPhone용 = webcal 주소, Android용 = Google 캘린더 주소), 숨기거나 화면을 다시 열면 지워지며 서버·밖으로 아무것도 보내지 않는다", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const { calls } = await setup(page);
+  await page.goto(PAGE);
+  const panel = page.locator("[data-cf-panel]");
+  await expect(panel.getByRole("button", { name: "구독 주소 만들기" })).toBeVisible();
+  await expect(panel.getByRole("button", { name: /QR/u })).toHaveCount(0); // 주소가 없을 때는 QR 단추가 없음
+  await panel.getByRole("button", { name: "구독 주소 만들기" }).click();
+  await expect(panel.getByLabel("구독 주소", { exact: true })).toHaveValue(SUBSCRIBE);
+
+  const ios = panel.getByRole("button", { name: "iPhone용 QR 보기" });
+  const android = panel.getByRole("button", { name: "Android용 QR 보기" });
+  const canvas = panel.locator("[data-cf-qr-canvas]");
+  const qrBox = panel.locator("[data-cf-qr-box]");
+  await expect(panel.getByRole("heading", { name: "다른 휴대폰에 넘기기" })).toBeVisible();
+  await expect(qrBox, "처음에는 펼쳐 두지 않음").toBeHidden();
+  expect(await canvas.evaluate((node) => [node.width, node.height])).toEqual([0, 0]);
+  await expect(ios).toHaveAttribute("aria-expanded", "false");
+
+  const requests = [];
+  page.on("request", (request) => requests.push(request.url()));
+  const callsBefore = calls.all.length;
+
+  await ios.click();
+  await expect(qrBox).toBeVisible();
+  await expect(ios).toHaveAttribute("aria-expanded", "true");
+  await expect(android).toHaveAttribute("aria-expanded", "false");
+  await expect(canvas).toHaveAttribute("aria-label", "iPhone용 구독 주소 QR 그림");
+  await expect(panel.locator("[data-cf-qr-how]")).toHaveText("iPhone 카메라로 이 QR을 비추고, 화면에 뜨는 안내를 눌러 구독을 더하세요.");
+  await expect(qrBox).toContainText("화면을 찍어 두거나 남에게 보내지 마세요.");
+  const iosWant = expectedModules(webcalUrl(SUBSCRIBE));
+  expect(await canvasModules(canvas, iosWant.rows.length), "iPhone용 QR = webcal 주소").toEqual(iosWant);
+
+  await android.click();
+  await expect(android).toHaveAttribute("aria-expanded", "true");
+  await expect(ios).toHaveAttribute("aria-expanded", "false");
+  await expect(canvas).toHaveAttribute("aria-label", "Android용 구독 주소 QR 그림");
+  await expect(panel.locator("[data-cf-qr-how]")).toContainText("Google 캘린더 사이트가 열립니다.");
+  const androidWant = expectedModules(googleCalendarUrl(SUBSCRIBE));
+  expect(await canvasModules(canvas, androidWant.rows.length), "Android용 QR = Google 캘린더 주소").toEqual(androidWant);
+
+  // 같은 단추를 다시 누르면 숨기고 픽셀째 지운다.
+  await android.click();
+  await expect(qrBox).toBeHidden();
+  expect(await canvas.evaluate((node) => [node.width, node.height])).toEqual([0, 0]);
+  await expect(android).toHaveAttribute("aria-expanded", "false");
+  // 'QR 숨기기'는 열었던 단추로 초점을 돌려준다.
+  await ios.click();
+  await panel.getByRole("button", { name: "QR 숨기기" }).click();
+  await expect(qrBox).toBeHidden();
+  await expect(ios).toBeFocused();
+  expect(await canvas.evaluate((node) => [node.width, node.height])).toEqual([0, 0]);
+
+  // 그림은 canvas에만: img·링크·주소·저장소에 주소가 들어가지 않고, QR을 띄우는 동안 어떤 요청도 나가지 않는다.
+  await ios.click();
+  expect(await panel.locator("img, [src^='data:'], [src^='blob:'], [href^='data:'], [href^='blob:']").count()).toBe(0);
+  expect(await tokenLeaks(page)).toEqual([]);
+  expect(requests, "QR을 띄우는 동안 나간 요청").toEqual([]);
+  expect(calls.all.slice(callsBefore)).toEqual([]);
+
+  // 화면을 다시 열면 주소도 QR도 다시 보이지 않는다.
+  await page.reload();
+  await expect(panel.locator("[data-cf-existing]")).toBeVisible();
+  await expect(panel.getByRole("button", { name: /QR/u })).toHaveCount(0);
+  expect(await canvas.evaluate((node) => [node.width, node.height])).toEqual([0, 0]);
+  expect(await page.content()).not.toContain(TOKEN);
   assertNoErrors();
 });
 
@@ -201,6 +295,19 @@ for (const width of [360, 390, 430, 768, 1280]) {
     await expectControls(panel, "막 만듦");
     const url = await panel.getByLabel("구독 주소", { exact: true }).evaluate((node) => parseFloat(getComputedStyle(node).fontSize));
     expect(url, "주소 칸 16px 이상(iPhone 확대 방지)").toBeGreaterThanOrEqual(16);
+    // QR을 띄운 모습: 그림이 칸 밖으로 나가지 않고, CSS로 늘이거나 줄이지 않으며(그린 크기 = 보이는 크기), 한 칸이 화면 픽셀 정수 배로 4px 이상
+    for (const [name, text] of [["iPhone용 QR 보기", webcalUrl(SUBSCRIBE)], ["Android용 QR 보기", googleCalendarUrl(SUBSCRIBE)]]) {
+      await panel.getByRole("button", { name }).click();
+      const canvas = panel.locator("[data-cf-qr-canvas]");
+      const inner = await panel.locator("[data-cf-qr-box]").boundingBox();
+      const shown = await canvas.evaluate((node) => ({ drawn: node.width, width: node.clientWidth, height: node.clientHeight, left: node.getBoundingClientRect().left, right: node.getBoundingClientRect().right }));
+      const side = expectedModules(text).rows.length;
+      expect([shown.width, shown.height], `${name} 그린 크기 그대로·정사각형`).toEqual([shown.drawn, shown.drawn]);
+      expect(shown.right, `${name} 칸 안`).toBeLessThanOrEqual(inner.x + inner.width + 0.5);
+      expect(Number.isInteger(shown.drawn / side), `${name} 한 칸은 정수 픽셀`).toBe(true);
+      expect(shown.drawn / side, `${name} 한 칸 크기`).toBeGreaterThanOrEqual(4);
+      await expectControls(panel, `${name} 띄움`);
+    }
     expect(await overflowOf(page)).toBeLessThanOrEqual(0);
     assertNoErrors();
   });
