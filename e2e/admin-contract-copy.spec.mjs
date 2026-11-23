@@ -143,7 +143,9 @@ const firesLeaveWarning = (page) => page.evaluate(() => {
   return event.defaultPrevented;
 });
 const fileWrites = (calls) => calls.writes.filter((item) => item.path.startsWith("/files"));
-// 보이는 단추가 모두 44×44px 이상이고 글자가 한 줄인지
+// 보이는 단추가 모두 44×44px 이상(마우스 PC는 높이 36px)이고 글자가 한 줄인지
+// 누르는 곳: 휴대폰·태블릿은 44px, 마우스를 쓰는 1221px 이상 PC는 36px(사용자 승인 2026-11-23 11:34:13).
+const tapMin = (page) => (page.viewportSize().width >= 1221 ? 36 : 44);
 async function expectButtons(scope, label) {
   const boxes = await scope.locator("button").evaluateAll((nodes) => nodes.filter((node) => node.getClientRects().length > 0).map((node) => {
     const tops = [];
@@ -159,7 +161,7 @@ async function expectButtons(scope, label) {
   expect(boxes.length, `${label}: 보이는 단추가 있어야 함`).toBeGreaterThan(0);
   for (const [text, width, height, lines] of boxes) {
     expect(width, `${label} '${text}' 너비`).toBeGreaterThanOrEqual(44);
-    expect(height, `${label} '${text}' 높이`).toBeGreaterThanOrEqual(44);
+    expect(height, `${label} '${text}' 높이`).toBeGreaterThanOrEqual(tapMin(scope.page()));
     expect(lines, `${label} '${text}' 글자 줄 수`).toBe(1);
   }
 }
@@ -285,7 +287,7 @@ async function startMask(page, { deal = DEAL_A, size = [1200, 1600], camera = fa
 }
 
 for (const width of [360, 1280]) {
-  test(`계약서 사본 칸 ${width}px: 접어 두었다가 펼치면 글자 줄 목록, 창의 모든 단추가 44px 이상·한 줄이고 가로 넘침·미리보기 요청·저장소 흔적이 없다`, async ({ page }) => {
+  test(`계약서 사본 칸 ${width}px: 접어 두었다가 펼치면 글자 줄 목록, 창의 모든 단추 44px(마우스 PC는 36px) 이상·한 줄이고 가로 넘침·미리보기 요청·저장소 흔적이 없다`, async ({ page }) => {
     const assertNoErrors = collectErrors(page);
     const calls = await setup(page, { width, failUploads: ["FILE_STORAGE_FAILED"] });
     await openDetail(page);

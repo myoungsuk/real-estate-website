@@ -1,0 +1,118 @@
+---
+// 위 알약 메뉴의 그림 기호: 색 동그라미 안 흰 선 그림(사용자 승인 2026-11-23 11:34:13 시안). 이 사무소용으로 새로 그린 것이다(외부 아이콘 세트·다른 서비스 그림을 쓰지 않음).
+// 동그라미 색은 admin.css가 그림 이름(data-pill)으로 정하고, 지금 화면의 알약에서는 흰 동그라미 + 색 선으로 뒤집는다. 뜻은 옆의 글자가 전하므로 그림은 읽지 않는다(aria-hidden).
+export type AdminPillName =
+  | "work-home"
+  | "tasks"
+  | "customers"
+  | "ledger"
+  | "fee"
+  | "messages"
+  | "schedule"
+  | "realprice"
+  | "blog"
+  | "paper"
+  | "listing-paper"
+  | "listing-list"
+  | "listing-editor"
+  | "dashboard"
+  | "work"
+  | "listings"
+  | "content"
+  | "external-links"
+  | "complexes"
+  | "deployment"
+  | "history"
+  | "help";
+
+interface Props {
+  name: AdminPillName;
+}
+
+const { name } = Astro.props;
+---
+
+<svg class="admin-pill-icon" data-pill={name} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+  <circle class="admin-pill-icon__disc" cx="12" cy="12" r="12" />
+  <g class="admin-pill-icon__line" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    {name === "work-home" && <path d="M7 12.2 12 7.6l5 4.6v4.6h-3.4v-3h-3.2v3H7z" />}
+    {name === "tasks" && <path d="m7.6 12.4 3 3 5.8-6.4" />}
+    {name === "customers" && (
+      <>
+        <circle cx="12" cy="9.6" r="2.5" />
+        <path d="M7.2 17.2c.6-2.4 2.5-3.6 4.8-3.6s4.2 1.2 4.8 3.6" />
+      </>
+    )}
+    {name === "ledger" && (
+      <>
+        <rect x="7.6" y="6.6" width="8.8" height="10.8" rx="1.2" />
+        <path d="M10 10h4M10 12.6h4M10 15.2h2.4" />
+      </>
+    )}
+    {name === "fee" && (
+      <>
+        <rect x="7.8" y="6.4" width="8.4" height="11.2" rx="1.4" />
+        <path d="M10 9.4h4M10.2 13h.1M13.8 13h.1M10.2 15.4h.1M13.8 15.4h.1" />
+      </>
+    )}
+    {name === "messages" && <path d="M7 8.2h10v6.6h-5.2L9 17v-2.2H7z" />}
+    {name === "schedule" && (
+      <>
+        <rect x="7" y="7.6" width="10" height="9.4" rx="1.2" />
+        <path d="M7 10.6h10M9.8 6.4v2.2M14.2 6.4v2.2" />
+      </>
+    )}
+    {name === "realprice" && <path d="m7 15.4 3.2-3.6 2.6 2 4.2-5" />}
+    {name === "blog" && <path d="m8 16 .6-2.8 6-6 2.2 2.2-6 6z" />}
+    {name === "paper" && (
+      <>
+        <path d="M8.4 6.6h5l2.4 2.4v8.4H8.4z" />
+        <path d="M10.4 12h3.4M10.4 14.4h3.4" />
+      </>
+    )}
+    {name === "listing-paper" && (
+      <>
+        <rect x="7" y="7" width="10" height="10" rx="1.2" />
+        <path d="M7 11h10M11 7v10" />
+      </>
+    )}
+    {name === "listing-list" && <path d="M10 9h6.4M10 12h6.4M10 15h6.4M7.6 9h.1M7.6 12h.1M7.6 15h.1" />}
+    {name === "listing-editor" && <path d="M12 8v8M8 12h8" />}
+    {name === "dashboard" && (
+      <>
+        <rect x="7.2" y="7.2" width="4" height="4" rx=".8" />
+        <rect x="12.8" y="7.2" width="4" height="4" rx=".8" />
+        <rect x="7.2" y="12.8" width="4" height="4" rx=".8" />
+        <rect x="12.8" y="12.8" width="4" height="4" rx=".8" />
+      </>
+    )}
+    {name === "work" && (
+      <>
+        <rect x="7" y="9.4" width="10" height="7.4" rx="1.2" />
+        <path d="M10 9.4V7.6h4v1.8M7 12.6h10" />
+      </>
+    )}
+    {name === "listings" && <path d="M8.4 17V7.4h7.2V17M7 17h10M10.6 10h.1M13.4 10h.1M10.6 12.6h.1M13.4 12.6h.1" />}
+    {name === "content" && (
+      <>
+        <rect x="7" y="7.4" width="10" height="9.2" rx="1.2" />
+        <path d="M7 10.4h10M9.4 13.4h3.2" />
+      </>
+    )}
+    {name === "external-links" && <path d="M10 8.4v7.2l6-3.6z" />}
+    {name === "complexes" && (
+      <>
+        <path d="M12 17.4s-3.8-3.4-3.8-6.3a3.8 3.8 0 0 1 7.6 0c0 2.9-3.8 6.3-3.8 6.3z" />
+        <path d="M12 11h.1" />
+      </>
+    )}
+    {name === "deployment" && <path d="M12 15.4V8.2M9 11l3-3 3 3M8 17.2h8" />}
+    {name === "history" && (
+      <>
+        <circle cx="12" cy="12" r="4.9" />
+        <path d="M12 9.4V12l1.8 1.2" />
+      </>
+    )}
+    {name === "help" && <path d="M10.1 10.2a1.9 1.9 0 1 1 2.9 1.6c-.6.4-1 .8-1 1.5M12 16h.1" />}
+  </g>
+</svg>

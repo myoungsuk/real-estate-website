@@ -411,7 +411,7 @@ test("관리 화면 사용법 상자는 접혀 있다가 열리고, 자세한 �
   }));
   for (const text of texts) {
     expect(text.size, "글자 16px 이상").toBeGreaterThanOrEqual(16);
-    expect(["rgb(20, 20, 20)", "rgb(19, 42, 62)"], "회색이 아닌 본문색·남색").toContain(text.color);
+    expect(["rgb(31, 35, 41)", "rgb(35, 42, 51)"], "회색이 아닌 본문색·제목색(관리자 새 겉모양 2026-11-23)").toContain(text.color);
   }
   const more = box.locator(".admin-page-help__more");
   await expect(more).toHaveAttribute("href", "/admin/help/#work-fee");

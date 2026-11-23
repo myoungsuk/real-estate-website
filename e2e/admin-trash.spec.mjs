@@ -136,7 +136,7 @@ test("T2-134 0건: '지운 자료가 없습니다'와 7일 보관 안내", async
 });
 
 for (const width of [360, 390, 430, 768, 1280]) {
-  test(`T2-133 휴지통 ${width}px: 종류·남은 날을 글자로, 단추 44px, 가로 넘침 없음, 주소·브라우저 저장소에 이름 없음`, async ({ page }) => {
+  test(`T2-133 휴지통 ${width}px: 종류·남은 날을 글자로, 단추 44px(마우스 PC는 36px), 가로 넘침 없음, 주소·브라우저 저장소에 이름 없음`, async ({ page }) => {
     const assertNoErrors = collectErrors(page);
     const { calls } = await setup(page, { width });
     await page.goto("/admin/work/trash/");
@@ -154,7 +154,7 @@ for (const width of [360, 390, 430, 768, 1280]) {
     // 거르기 단추는 눌린 것에 ✓가 붙어 이름이 바뀌므로 data 칸으로 찾는다
     for (const button of [page.getByRole("button", { name: "되살리기: 가상 손님 7" }), page.getByRole("button", { name: "영구 삭제: 가상 손님 7" }), page.locator('[data-tr-filter=""]'), page.locator('[data-tr-filter="ledger"]')]) {
       const box = await button.boundingBox();
-      expect(Math.round(box.height), `${await button.textContent()} 높이`).toBeGreaterThanOrEqual(44);
+      expect(Math.round(box.height), `${await button.textContent()} 높이`).toBeGreaterThanOrEqual(width >= 1221 ? 36 : 44);
     }
     for (const name of ["손님 목록"]) {
       const box = await page.getByRole("link", { name }).boundingBox();
@@ -184,7 +184,7 @@ for (const width of [360, 1280]) {
     const chip = page.locator('[data-tr-filter="file"]');
     await expect(chip).toHaveText("사진·계약서 사본");
     for (const tag of await page.locator(".tr-kind").all()) expect((await tag.boundingBox()).height, "종류 표시는 한 줄").toBeLessThan(40);
-    expect((await chip.boundingBox()).height, "거르기 단추 높이").toBeGreaterThanOrEqual(44);
+    expect((await chip.boundingBox()).height, "거르기 단추 높이").toBeGreaterThanOrEqual(width >= 1221 ? 36 : 44);
     expect(await chip.evaluate((node) => node.scrollWidth <= node.clientWidth + 1), "거르기 단추 글자가 잘리지 않음").toBe(true);
     expect(await overflowOf(page)).toBeLessThanOrEqual(0);
     await page.screenshot({ path: test.info().outputPath(`trash-copy-${width}.png`), fullPage: true });

@@ -456,11 +456,13 @@ test("장부 줄이 하나도 없으면 합계 칸 대신 0건 안내와 '장부
 });
 
 for (const width of [360, 1280]) {
-  test(`메뉴 B안 ${width}px: 업무 도구 아래 단계는 묶음마다 role=group(보이는 제목·aria-labelledby), 순서·Tab 차례가 같고 매출장부가 지금 화면`, async ({ page }) => {
+  test(`메뉴 B안 ${width}px: 업무 도구 아래 단계(위 알약 줄)는 묶음마다 role=group(aria-labelledby), 순서·Tab 차례가 같고 매출장부가 지금 화면`, async ({ page }) => {
     const assertNoErrors = collectErrors(page);
     await setup(page, { width });
     await page.goto("/admin/work/ledger/");
-    const menu = width < 980 ? page.locator(".admin-subtabs") : page.locator(".admin-side");
+    const menu = page.locator(".admin-subtabs");
+    await expect(menu, "PC도 위 알약 줄(왼쪽 목록 없음)").toBeVisible();
+    await expect(page.locator(".admin-side")).toHaveCount(0);
     for (const [name, links] of [["손님·돈", ["손님", "매출장부"]], ["상담 도구", ["중개보수 계산", "안내 문자", "계약 일정", "실거래가"]], ["홍보 만들기", ["글 초안", "홍보 종이", "매물 안내지"]]]) {
       const group = menu.getByRole("group", { name });
       await expect(group).toHaveCount(1);
@@ -487,7 +489,17 @@ for (const width of [360, 1280]) {
       // 묶음 제목은 화면 읽기 프로그램에만(작은 탭)
       await expect(page.locator(".admin-subtabs__group > .sr-only").first()).toHaveText("손님·돈");
     } else {
-      await expect(page.locator(".admin-side .admin-menu__subhead").first()).toBeVisible();
+      // PC 위 줄: 로고 · 알약 · 전체 메뉴가 한 줄이고, 묶음 제목은 화면 읽기 프로그램에만(전체 메뉴 창에서는 보이는 제목)
+      await expect(page.locator(".admin-subtabs__group > .sr-only").first()).toHaveText("손님·돈");
+      const bar = await page.locator(".admin-bar").boundingBox();
+      expect(Math.round(bar.height), "위 한 줄").toBeLessThanOrEqual(61);
+      await expect(page.locator(".admin-tabbar")).toBeHidden();
+      await page.getByRole("button", { name: "전체 메뉴" }).click();
+      const sheet = page.getByRole("dialog", { name: "전체 메뉴" });
+      await expect(sheet.locator(".admin-menu__subhead").first()).toBeVisible();
+      await expect(sheet.getByRole("link", { name: "매출장부" })).toHaveAttribute("aria-current", "page");
+      await page.keyboard.press("Escape");
+      await expect(sheet).toBeHidden();
     }
     expect(await overflowOf(page)).toBeLessThanOrEqual(0);
     assertNoErrors();

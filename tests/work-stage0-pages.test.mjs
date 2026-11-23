@@ -81,7 +81,7 @@ test("TU-15 관리자 메뉴의 대시보드 다음에 업무 도구(짧은 이�
   );
 });
 
-test("업무 도구 네 화면은 관리자 공용 틀의 아래 단계 메뉴(PC 왼쪽 목록·휴대폰 작은 탭)로 오가고 화면 안에 따로 메뉴를 두지 않는다(사용자 선택 2026-11-18 C+D 17:24:07·CD1 17:55:44)", async () => {
+test("업무 도구 네 화면은 관리자 공용 틀의 아래 단계 메뉴(위 알약 줄)로 오가고 화면 안에 따로 메뉴를 두지 않는다(사용자 선택 2026-11-18 C+D 17:24:07·CD1 17:55:44, 2026-11-23 11:34:13 위 알약 메뉴)", async () => {
   const [layout, index, ...toolPages] = await Promise.all([
     readSource("src/layouts/AdminLayout.astro"),
     readSource("src/pages/admin/work/index.astro"),
@@ -102,7 +102,7 @@ test("업무 도구 네 화면은 관리자 공용 틀의 아래 단계 메뉴(P
   assert.doesNotMatch(layout, /type="search"/u, "왼쪽 목록 찾기 칸은 없앰(사용자 결정 2026-11-18 19:47:29)");
 });
 
-test("관리자 메뉴는 모든 메뉴를 묶음에 한 번씩 넣고, 지금 화면(page)과 지금 구역(true)을 색만이 아니라 막대·굵기로 구분한다", async () => {
+test("관리자 메뉴는 모든 메뉴를 묶음에 한 번씩 넣고, 지금 화면(page)과 지금 구역(true)을 색만이 아니라 막대·채움·굵기로 구분한다", async () => {
   const [styles, layout, menu] = await Promise.all([
     readSource("src/styles/admin.css"),
     readSource("src/layouts/AdminLayout.astro"),
@@ -113,13 +113,20 @@ test("관리자 메뉴는 모든 메뉴를 묶음에 한 번씩 넣고, 지금 �
   assert.equal(navigationHrefs.length, 9, "관리자 메뉴 9개(2026-11-19 사용 안내 추가)");
   assert.deepEqual([...groupHrefs].sort(), [...navigationHrefs].sort(), "메뉴 묶음에 빠지거나 두 번 들어간 메뉴가 없음");
   assert.match(layout, /const currentState = \(href: string\): "page" \| "true" \| undefined => \(currentPath === href \? "page" : isCurrentPath\(href\) \? "true" : undefined\);/u);
-  assert.match(layout, /<a href=\{item\.href\} aria-current=\{currentState\(item\.href\)\}>/u, "아래 탭은 지금 화면·지금 구역");
+  assert.equal(layout.split("<a href={item.href} aria-current={currentState(item.href)}>").length - 1, 2, "아래 탭과 PC 구역 알약 줄(nav.admin-topnav) 두 곳 모두 지금 화면·지금 구역");
+  assert.match(layout, /<nav class="admin-topnav"[^>]*>[\s\S]*?<a href=\{item\.href\} aria-current=\{currentState\(item\.href\)\}>[\s\S]*?<\/nav>/u, "PC 구역 알약 줄");
+  assert.match(layout, /<nav class="admin-tabbar"[^>]*>[\s\S]*?<a href=\{item\.href\} aria-current=\{currentState\(item\.href\)\}>[\s\S]*?<\/nav>/u, "휴대폰 아래 탭");
   assert.match(layout, /<a href=\{item\.href\} aria-current=\{subCurrentState\(currentSection\.href, item\.href\)\}>/u, "작은 탭은 지금 화면, 그 아래 화면(실거래가 설정)에서는 지금 구역");
   assert.match(menu, /aria-current=\{item\.current\}/u);
   assert.match(menu, /aria-current=\{sub\.current\}/u);
-  assert.match(styles, /\.admin-menu \[aria-current="page"\] \{[^}]*box-shadow: inset 4px 0 0 var\(--ds-navy\);[^}]*font-weight: 800;/u, "왼쪽 목록·전체 메뉴: 왼쪽 막대 4px + 굵기");
+  assert.match(styles, /\.admin-menu \[aria-current="page"\] \{[^}]*box-shadow: inset 4px 0 0 var\(--ds-navy\);[^}]*font-weight: 800;/u, "전체 메뉴 창: 왼쪽 막대 4px + 굵기");
   assert.match(styles, /\.admin-menu__item\[aria-current="true"\] \{[^}]*font-weight: 800;/u, "지금 구역: 굵기");
-  assert.match(styles, /\.admin-subtabs a\[aria-current="page"\] \{[^}]*font-weight: 800;[^}]*box-shadow: inset 0 -3px 0/u, "작은 탭: 아래 막대 3px");
+  // 위 알약 줄(2026-11-23 11:34:13): 지금 화면은 파란 채움 + 흰 글자 + 굵기, 지금 구역은 파란 테두리 + 굵기. 누르는 곳은 줄 높이 48px 그대로.
+  assert.match(styles, /\.admin-subtabs a\[aria-current="page"\] \{[^}]*color: #fff;[^}]*font-weight: 800;/u, "알약: 흰 글자 + 굵기");
+  assert.match(styles, /\.admin-subtabs a\[aria-current="page"\]::before \{[^}]*background: var\(--ad-blue\);/u, "알약: 파란 채움");
+  assert.match(styles, /\.admin-subtabs a\[aria-current="true"\]::before \{ border-color: var\(--ad-blue\); box-shadow: inset 0 0 0 1px var\(--ad-blue\); \}/u, "지금 구역 알약: 파란 테두리 1px + 안쪽 파란 줄 1px");
+  assert.match(styles, /\.admin-subtabs a,\r?\n\.admin-topnav a \{[^}]*min-height: 48px;/u, "알약을 누르는 곳 48px");
+  assert.match(styles, /\.admin-subtabs a::before,\r?\n\.admin-topnav a::before \{[^}]*inset: 4px 0;/u, "알약 모양은 안쪽 40px(줄 높이를 늘리지 않음)");
   assert.match(styles, /\.admin-tabbar a\[aria-current\] \{[^}]*font-weight: 800;[^}]*box-shadow: inset 0 3px 0/u, "아래 탭: 위 막대 3px");
 });
 
@@ -132,7 +139,31 @@ test("휴대폰 아래 탭은 화면 아래에 고정되고 본문 끝·키보�
     styles,
     /@media \(max-width: 979px\) \{[^@]*html \{ scroll-padding-bottom: calc\(64px \+ env\(safe-area-inset-bottom\)\); \}[^@]*\.admin-main \{ padding-bottom: calc\(80px \+ env\(safe-area-inset-bottom\)\); \}[^@]*\.admin-editor__actions \{ bottom: calc\(66px \+ env\(safe-area-inset-bottom\)\); \}/u,
   );
-  assert.match(styles, /@media \(min-width: 980px\) \{[^@]*\.admin-top,\r?\n\s*\.admin-subtabs,\r?\n\s*\.admin-tabbar \{ display: none; \}/u, "PC는 왼쪽 목록만");
+  assert.match(styles, /@media \(min-width: 980px\) \{[^@]*\.admin-top__title,\r?\n\s*\.admin-top__public,\r?\n\s*\.admin-tabbar \{ display: none; \}/u, "PC는 위 한 줄(로고·알약·전체 메뉴)만(2026-11-23 11:34:13)");
+  assert.match(styles, /^\.admin-bar__step,\r?\n\.admin-bar__tools,\r?\n\.admin-topnav \{ display: none; \}/mu, "휴대폰에는 PC 위 줄의 단추·구역 알약 줄이 없음");
+  // 줄 밀기 단추: 마우스를 쓸 때만 보이고(손가락 화면은 줄을 직접 밂) 누르는 곳 44px, 숨겨도 자리를 지킨다. 키보드·화면 읽기 프로그램은 알약 줄을 바로 가므로 단추는 건너뛴다.
+  const stepRules = styles.split("@media (min-width: 980px) and (hover: hover) and (pointer: fine) {");
+  assert.equal(stepRules.length, 2, "줄 밀기 단추 덩어리는 하나, 조건은 980px 이상 + 마우스");
+  assert.match(stepRules[1].slice(0, stepRules[1].indexOf("\n}")), /\.admin-bar__step \{ display: grid;[^}]*width: 44px; height: 44px;[^}]*\}[\s\S]*\.admin-bar__step\[hidden\] \{ display: grid; visibility: hidden; \}/u, "44px, 숨겨도 자리 지킴");
+  assert.equal(stepRules[0].split(".admin-bar__step {").length - 1, 0, "마우스 조건 밖에서는 줄 밀기 단추를 보이게 하지 않음");
+  const stepButtons = [...layout.matchAll(/<button class="admin-bar__step"[^>]*>/gu)].map((match) => match[0]);
+  assert.equal(stepButtons.length, 2, "줄 밀기 단추 2개(‹ ›)");
+  for (const tag of stepButtons) assert.match(tag, / tabindex="-1" aria-hidden="true" /u, "줄 밀기 단추는 Tab 차례·화면 읽기 프로그램에서 뺌");
+  // 알약 그림은 꾸밈이다(이름은 옆의 글자). 화면 읽기 프로그램에 이름 없는 그림으로 잡히지 않게 한다.
+  const pillIcon = await readSource("src/components/admin/AdminPillIcon.astro");
+  assert.equal(pillIcon.split("<svg").length - 1, 1, "알약 그림은 svg 하나");
+  assert.match(pillIcon, /<svg class="admin-pill-icon" data-pill=\{name\} viewBox="0 0 24 24" aria-hidden="true" focusable="false">/u, "알약 그림: aria-hidden·focusable=false");
+  // 조밀한 PC(표 13px·누르는 곳 36px)는 "1221px 이상 + 마우스"일 때만이다(사용자 승인 2026-11-23 11:34:13). 손가락으로 쓰는 넓은 화면은 16px·44px 그대로.
+  const skinAt = styles.indexOf("/* ── 새 겉모양(");
+  const denseAt = styles.indexOf("@media (min-width: 1221px) and (hover: hover) and (pointer: fine) {");
+  assert.ok(skinAt > 0 && denseAt > skinAt, "조밀한 PC 덩어리의 조건: 1221px 이상 + (hover: hover) + (pointer: fine)");
+  assert.doesNotMatch(styles.slice(skinAt, denseAt), /(?:min-)?height: 36px|font-size: 0\.8125rem/u, "36px·13px 규칙은 조밀한 PC 덩어리 안에만");
+  const dense = styles.slice(denseAt);
+  for (const rule of [".admin-bar__menu { min-height: 36px;", ".admin-bar__step { width: 36px; height: 36px; }", ".work-secondary-button { min-height: 36px;", ".lg-table td { height: 36px;", ".admin-table th,\n  .admin-table td,\n  .lg-table th,\n  .lg-table td,\n  .lg-months th,\n  .lg-months td { font-size: 0.8125rem; }"]) {
+    assert.ok(dense.replaceAll("\r\n", "\n").includes(rule), `조밀한 PC 덩어리 안: ${rule}`);
+  }
+  assert.doesNotMatch(styles, /\.admin-bar \{[^}]*position: (?:sticky|fixed)/u, "PC 위 줄도 고정하지 않음");
+  assert.doesNotMatch(layout, /admin-side/u, "왼쪽 고정 목록은 없앰");
   assert.doesNotMatch(styles, /\.admin-top \{[^}]*position: (?:sticky|fixed)/u, "위 제목 줄은 고정하지 않음");
   assert.doesNotMatch(styles, /^html \{[^}]*scroll-padding-top/mu, "문서 전체 위 여백은 쓰지 않음(회귀 1회차 S2)");
   assert.match(styles, /:root \{ --admin-sticky-height: 0px;/u, "위에 고정되는 줄이 없어 0");
@@ -142,6 +173,8 @@ test("휴대폰 아래 탭은 화면 아래에 고정되고 본문 끝·키보�
   assert.doesNotMatch(layout, /window\.scrollBy|attempts >= 3|const header =/u, "고정 머리글 포커스 보정 스크립트는 없앰(위에 고정되는 줄 없음)");
   assert.match(layout, /<dialog class="admin-sheet" aria-labelledby="admin-sheet-title" data-admin-menu-sheet>/u);
   assert.match(layout, /<button type="button" aria-haspopup="dialog" data-admin-menu-open>/u);
+  assert.match(layout, /<button class="admin-bar__menu" type="button" aria-haspopup="dialog" data-admin-menu-open>전체 메뉴<\/button>/u, "PC 위 줄의 단추도 같은 전체 메뉴 창을 엶");
+  assert.match(layout, /for \(const openButton of openButtons\) openButton\.addEventListener/u, "두 단추 모두");
   assert.match(layout, /openButton\.addEventListener\("click", \(\) => sheet\.showModal\(\)\);/u);
   assert.match(layout, /window\.addEventListener\("pagehide", \(\) => sheet\.close\(\)\);/u, "뒤로 가기로 돌아왔을 때 전체 메뉴 창이 열린 채 남지 않게");
   assert.match(layout, /sheet\.addEventListener\("click", \(event\) => \{\r?\n\s*if \(event\.target !== sheet\) return;[^}]*event\.clientX < box\.left[^}]*\) sheet\.close\(\);/u, "창 바깥 바탕을 누르면 닫고 창 안 여백은 그대로");
@@ -193,13 +226,23 @@ test("업무 도구 결과 막대는 979px 이하에서 아래 탭 바로 위에
   assert.match(messages, /preview\.addEventListener\("focus", \(\) => preview\.scrollIntoView\(\{ block: "nearest" \}\)\);/u, "Tab으로 간 미리보기가 화면 위로 잘리지 않게(날개-2 TU-23)");
 });
 
-test("관리자 화면의 공개 색 이름(--ds-*)은 공개 화면(global.css)과 같은 이름·값이다", async () => {
+test("관리자 화면의 색 이름(--ds-*)은 공개 화면(global.css)과 이름이 같고, 값은 관리자 화면만의 새 겉모양 값이다(사용자 승인 2026-11-23 11:34:13)", async () => {
   const [globalStyles, adminStyles] = await Promise.all([readSource("src/styles/global.css"), readSource("src/styles/admin.css")]);
   const tokens = (block) => Object.fromEntries([...block.matchAll(/(--ds-[a-z0-9-]+):\s*([^;]+);/gu)].map(([, name, value]) => [name, value.trim().toLowerCase()]));
   const publicBlock = globalStyles.match(/:where\(body:not\(\.admin-body\)\) \{([^}]*)\}/u)?.[1] ?? "";
   const adminBlock = adminStyles.match(/^\.admin-body \{([^}]*--ds-[^}]*)\}/mu)?.[1] ?? "";
   assert.equal(Object.keys(tokens(publicBlock)).length, 8, "공개 화면 색 이름 8개");
-  assert.deepEqual(tokens(adminBlock), tokens(publicBlock), "한쪽만 바꾸면 관리자·공개 화면 색이 어긋남");
+  assert.deepEqual(Object.keys(tokens(adminBlock)).sort(), Object.keys(tokens(publicBlock)).sort(), "이름이 어긋나면 한쪽 화면에서 색이 빠짐");
+  // 공개 화면 값은 관리자 새 겉모양과 상관없이 그대로다.
+  assert.deepEqual(tokens(publicBlock), {
+    "--ds-paper": "#ffffff", "--ds-paper-2": "#f1f3f5", "--ds-edge": "#e1e4e8", "--ds-ink": "#141414",
+    "--ds-navy": "#132a3e", "--ds-ink-soft": "#46494f", "--ds-stamp": "#b3261e", "--ds-field-edge": "#858a91",
+  });
+  assert.deepEqual(tokens(adminBlock), {
+    "--ds-paper": "#ffffff", "--ds-paper-2": "#f3f4f6", "--ds-edge": "#e3e6ea", "--ds-ink": "#1f2329",
+    "--ds-navy": "#232a33", "--ds-ink-soft": "#5b6472", "--ds-stamp": "#c62828", "--ds-field-edge": "#858a91",
+  });
+  assert.match(globalStyles, /:where\(body:not\(\.admin-body\)\) \{/u, "공개 화면 값은 관리자 화면에 닿지 않음");
 });
 
 test("관리자 탭 미리 그리기는 업무 도구 4화면만 prerender, 나머지 관리자는 prefetch하고 저장·인증·내려받기 링크와 공개 화면은 뺀다", async () => {
@@ -274,9 +317,9 @@ test("안내 문자 화면은 받는 사람 없는 sms 주소와 복사 실패 �
   assert.match(styles, /\[data-message-preview\] \{ scroll-margin-top: calc\(var\(--admin-sticky-height\) \+ 8px\); \}/u, "위 고정 줄 아래 8px");
 });
 
-test("휴대폰 폭 가로로 미는 줄(업무 도구·네이버 매물 작은 탭)은 키보드로 간 링크만 그 줄 안에서 가로로 밀고 문서는 세로로 움직이지 않는다(보드 34번)", async () => {
+test("가로로 미는 알약 줄(업무 도구·네이버 매물 아래 단계, PC 구역 줄)은 키보드로 간 링크만 그 줄 안에서 가로로 밀고 문서는 세로로 움직이지 않는다(보드 34번)", async () => {
   const layout = await readSource("src/layouts/AdminLayout.astro");
-  assert.match(layout, /const strips = "\.admin-subtabs";/u);
+  assert.match(layout, /const strips = "\.admin-subtabs, \.admin-topnav";/u);
   assert.match(layout, /!target\.matches\(":focus-visible"\) \|\| performance\.now\(\) - stripPointerAt < 600\) return;/u, "마우스·손가락으로 누를 때는 밀지 않음");
   assert.match(layout, /strip\.scrollBy\(\{ left: delta, behavior: stripMotion\.matches \? "auto" : "smooth" \}\)/u, "줄의 가로 위치만 바꿈");
   const stripBlock = layout.slice(layout.indexOf("const strips ="), layout.indexOf("</script>", layout.indexOf("const strips =")));
