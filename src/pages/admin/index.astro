@@ -107,6 +107,7 @@ const reviewText = reviewQueue.enabled ? `재확인 필요 ${reviewQueue.needsRe
       eventKindText,
       eventPartyText,
       eventWhen,
+      highListTitle,
       kpiItems,
       loadFailedState,
       moneyFigures,
@@ -213,7 +214,7 @@ const reviewText = reviewQueue.enabled ? `재확인 필요 ${reviewQueue.needsRe
     }
 
     function renderRealprice(section: DashboardRealprice) {
-      const nodes: HTMLElement[] = [el("h3", "dsh-sub", "최근 30일 신고가")];
+      const nodes: HTMLElement[] = [el("h3", "dsh-sub", highListTitle(section))];
       if (section.partial) nodes.push(el("p", "dsh-note", "거래가 많아 일부 기간만 판정했습니다. 실거래가 화면에서 전부 볼 수 있습니다."));
       if (section.items.length === 0) {
         nodes.push(el("p", "dsh-empty", emptyText("realprice", section)));

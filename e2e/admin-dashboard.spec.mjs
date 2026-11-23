@@ -87,6 +87,8 @@ test("대시보드 1280px: 숫자 띠 4칸, '14일 안 계약 일정'은 total �
   await expect(panel(page, "money").locator(".dsh-row")).toHaveCount(2);
   await expect(panel(page, "money").locator(".dsh-note")).toHaveCount(1);
   await expect(panel(page, "realprice").locator(".dsh-chip--high")).toHaveCount(1);
+  await expect(panel(page, "realprice").locator(".dsh-sub").first(), "다 보이면 제목에 개수를 붙이지 않음").toHaveText("최근 30일 신고가");
+  await expect(kpi(3).locator(".dsh-kpi__sub"), "신고가 수는 30일 기준").toHaveText("관심 단지 1 · 30일 신고가 1");
   await expect(panel(page, "realprice").locator(".dsh-listing")).toHaveAttribute("href", "/admin/listings/");
 
   expect(calls).toEqual(["GET "]);

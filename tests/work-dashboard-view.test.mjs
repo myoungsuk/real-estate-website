@@ -9,6 +9,7 @@ import {
   eventKindText,
   eventPartyText,
   eventWhen,
+  highListTitle,
   kpiItems,
   loadFailedState,
   moneyFigures,
@@ -111,6 +112,20 @@ test("칸 제목 옆 숫자와 빈 칸 글", () => {
   assert.equal(sectionCount("tasks", { ok: false, code: "X" }), "");
   assert.match(emptyText("realprice", { newHighCount: null }), /과거 자료/u);
   assert.equal(emptyText("realprice", { newHighCount: 0 }), "최근 30일 신고가가 없습니다.");
+});
+
+test("실거래 신고가 수는 30일 기준이라 숫자 띠에 '30일'을 붙이고, 목록 제목은 보이는 줄보다 많을 때만 '(n건 중 m건)'", () => {
+  const item = (n) => ({ tradeKey: `sale:202611:${String(n).padStart(20, "0")}:1`, dealDate: "2026-11-10", aptName: `가상숲${n}단지`, areaM2: 84.97, priceWon: 400_000_000 });
+  const realprice = (newHighCount, count) => ({ ok: true, newCount: 12, watchNewCount: 3, newHighCount, partial: false, items: Array.from({ length: count }, (_, index) => item(index + 1)) });
+  const sub = (section) => kpiItems({ ...okData(), realprice: section })[3].sub;
+  assert.equal(sub(realprice(5, 3)), "관심 단지 3 · 30일 신고가 5");
+  assert.equal(sub(realprice(0, 0)), "관심 단지 3 · 30일 신고가 0");
+  assert.equal(sub(realprice(null, 0)), "관심 단지 3 · 신고가 판정 준비 중", "판정 준비 중 글은 그대로");
+  assert.equal(highListTitle(realprice(5, 3)), "최근 30일 신고가(5건 중 3건)");
+  assert.equal(highListTitle(realprice(3, 3)), "최근 30일 신고가", "다 보이면 붙이지 않음");
+  assert.equal(highListTitle(realprice(1, 1)), "최근 30일 신고가");
+  assert.equal(highListTitle(realprice(0, 0)), "최근 30일 신고가");
+  assert.equal(highListTitle(realprice(null, 0)), "최근 30일 신고가");
 });
 
 test("이번 달 돈: 미입금이 있으면 '!'와 표시, 잔금일 없는 줄은 따로 알림", () => {
