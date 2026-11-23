@@ -2130,3 +2130,22 @@ nav.tr-homelinks { display: flex; flex-wrap: wrap; gap: 0 24px; margin: 0 0 14px
   .ph-go { flex: 0 1 auto; width: auto; padding: 0 22px; }
   .ph-go-line .work-secondary-button { flex: 0 1 auto; padding: 0 22px; }
 }
+/* 계약 일정 '휴대폰 캘린더 구독' 칸(단계 3 C-b). 계산기 아래 한 칸. 주소 칸은 16px 이상(iPhone 확대 방지)·고정폭 글꼴 */
+.cf-panel { margin-top: 24px; }
+.cf-panel [hidden] { display: none !important; }
+.cf-panel h2 { margin: 0 0 8px; font-size: 1.15rem; font-weight: 800; }
+.cf-panel h2:focus { outline: none; }
+.cf-panel p { margin: 8px 0; }
+.cf-box { display: grid; gap: 8px; margin: 12px 0; padding: 12px; border: 1px solid var(--ds-edge); background: var(--ds-paper-2); }
+.cf-url { box-sizing: border-box; width: 100%; min-height: 44px; padding: 8px 10px; border: 1px solid var(--ds-edge); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 16px; }
+.cf-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.cf-row > * { flex: 1 1 auto; }
+.cf-warn { padding: 10px 12px; border-left: 4px solid var(--ds-stamp); background: var(--ds-paper-2); }
+.cf-meta { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 8px 0; }
+.cf-meta dt { color: var(--ds-ink-soft); }
+.cf-meta dd { margin: 0; }
+.cf-confirm { margin-top: 12px; }
+.cf-panel .admin-form-status { margin-top: 8px; font-size: 1rem; }
+@media (min-width: 640px) {
+  .cf-make, .cf-retry { width: auto; padding: 0 22px; }
+}
