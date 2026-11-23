@@ -36,7 +36,7 @@ const repeatLabels = TASK_REPEAT_LABELS as Record<string, string>;
           <h2 id="tk-state-title" data-tk-state-title></h2>
           <p data-tk-state-body></p>
           <button class="work-secondary-button cu-state__go" type="button" data-tk-state-retry hidden>다시 불러오기</button>
-          <a class="admin-text-link" href="/admin/work/" data-tk-state-home hidden>업무 도구 처음으로</a>
+          <a class="admin-text-link" href="/admin/work/" data-tk-state-home hidden>도구 모음으로</a>
         </div>
       </div>
     </section>
@@ -329,7 +329,7 @@ const repeatLabels = TASK_REPEAT_LABELS as Record<string, string>;
             ? "할 일을 끝내면 여기에 끝낸 때 최근 순으로 모입니다."
             : dealFilter
               ? "끝낸 할 일은 '끝낸 할 일 보기'에 있습니다."
-              : "아래에 첫 할 일을 적어 보세요. 날짜를 넣으면 업무 도구 처음의 '오늘 할 일'에도 보입니다.";
+              : "아래에 첫 할 일을 적어 보세요. 날짜를 넣으면 도구 모음의 '오늘 할 일'에도 보입니다.";
           emptyNew.hidden = !(opened && dealFilter);
           // 열린 할 일이 하나도 없으면 만들기 칸을 열어 둔다(눈에 띄게, 포커스는 옮기지 않음).
           if (opened && !dealFilter && form.hidden) openForm(null, { focus: false });

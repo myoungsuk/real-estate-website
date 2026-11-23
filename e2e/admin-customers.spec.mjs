@@ -184,7 +184,7 @@ test("업무 세션이 꺼져 있으면 손님·손님 카드·메모 창고 모
   for (const path of ["/admin/work/customers/", `/admin/work/customers/detail/?id=${uuid(1)}`, "/admin/work/notes/"]) {
     await page.goto(path);
     await expect(page.getByRole("heading", { name: "손님 자료 저장이 아직 켜지지 않았습니다" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "업무 도구 처음으로" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "도구 모음으로" })).toBeVisible();
   }
   expect(calls.all).toEqual(["GET /session", "GET /session", "GET /session"]);
   expect(await overflowOf(page)).toBeLessThanOrEqual(0);

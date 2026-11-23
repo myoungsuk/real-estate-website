@@ -155,7 +155,7 @@ test("업무 세션이 꺼져 있으면 할 일이 켜지지 않았다고 알리
   const { calls } = await setup(page, { width: 360, enabled: false });
   await page.goto("/admin/work/tasks/");
   await expect(page.getByRole("heading", { name: "업무 도구가 켜지지 않았습니다" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "업무 도구 처음으로" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "도구 모음으로" })).toBeVisible();
   expect(calls.all).toEqual(["GET /session"]);
   expect(await overflowOf(page)).toBeLessThanOrEqual(0);
   assertNoErrors();

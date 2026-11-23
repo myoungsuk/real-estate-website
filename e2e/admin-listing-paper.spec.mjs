@@ -291,6 +291,57 @@ test("PC 위 알약 줄 1280px: 줄 밖에 있던 지금 화면 알약 '매물 �
   expect(await overflowOf(page)).toBeLessThanOrEqual(0);
 });
 
+// 2026-11-23 사용자 선택 16:36:32 "알약 줄 맨 앞에 '대시보드' 고정": 아래 단계 줄(업무 도구·네이버 매물) 화면에서도 대시보드로 바로 돌아간다.
+// 미는 줄 밖에 있어 줄을 밀어도 제자리이고, 휴대폰(979px 이하)은 아래 탭 '홈'이 있어 숨기며, 구역 9개 줄에는 두지 않는다.
+const homePill = (page) => page.evaluate(() => {
+  const home = document.querySelector(".admin-bar__home");
+  const strip = document.querySelector(".admin-subtabs");
+  if (!home) return null;
+  const box = home.getBoundingClientRect();
+  return { shown: box.width > 0 && getComputedStyle(home).display !== "none", left: Math.round(box.left), right: Math.round(box.right), height: Math.round(box.height), text: home.textContent.trim(), href: home.getAttribute("href"), current: home.getAttribute("aria-current"), stripLeft: strip ? Math.round(strip.getBoundingClientRect().left) : null };
+});
+
+test("PC 위 알약 줄의 '대시보드' 고정 알약: 1280·980px 아래 단계 줄 맨 앞에 있고 줄을 밀어도 제자리, 360px은 숨고, 구역 9개 줄에는 없으며, Tab은 로고 → 대시보드 → 첫 알약", async ({ page }) => {
+  await setup(page, 1280);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto(PAGE);
+  const first = await homePill(page);
+  expect(first, "1280px 대시보드 알약").toMatchObject({ shown: true, text: "대시보드", href: "/admin/", current: null });
+  expect(first.height, "누르는 곳 44px 이상").toBeGreaterThanOrEqual(44);
+  expect(first.right, "알약 줄과 겹치지 않음").toBeLessThanOrEqual(first.stripLeft);
+  // 지금 화면 '매물 안내지'를 보이려고 줄이 밀려 있고, '‹'로 되돌려도 대시보드 알약은 제자리
+  expect((await pillGaps(page, '[aria-current="page"]')).scrollLeft, "줄이 밀려 있음").toBeGreaterThan(0);
+  await page.locator('[data-admin-strip-step="-1"]').click();
+  await expect.poll(async () => (await pillGaps(page, "li:first-child a")).scrollLeft, "줄을 처음 자리로").toBe(0);
+  expect((await homePill(page)).left, "줄을 밀어도 제자리").toBe(first.left);
+  // Tab 차례: 건너뛰기 → 로고 → 대시보드 → 아래 단계 첫 알약(줄 밀기 단추는 Tab에서 빠짐)
+  await page.goto(PAGE);
+  const order = [];
+  for (let step = 0; step < 4; step += 1) {
+    await page.keyboard.press("Tab");
+    order.push(await page.evaluate(() => { const node = document.activeElement; return node.matches(".admin-top__home") ? "로고" : node.matches(".admin-bar__home") ? "대시보드" : node.closest(".admin-subtabs") ? `알약 ${node.textContent.trim()}` : node.textContent.trim().slice(0, 12); }));
+  }
+  expect(order.slice(1), "로고 → 대시보드 → 첫 알약").toEqual(["로고", "대시보드", `알약 ${(await page.locator(".admin-subtabs a").first().textContent()).trim()}`]);
+  // 980px(마우스): 아직 보임
+  await page.setViewportSize({ width: 980, height: 900 });
+  await expect.poll(async () => (await homePill(page)).shown, "980px 보임").toBe(true);
+  expect((await homePill(page)).height).toBeGreaterThanOrEqual(44);
+  expect(await overflowOf(page)).toBeLessThanOrEqual(0);
+  // 979·360px: 숨음(아래 탭 '홈'이 있음)
+  for (const width of [979, 360]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect.poll(async () => (await homePill(page)).shown, `${width}px 숨음`).toBe(false);
+    expect(await overflowOf(page)).toBeLessThanOrEqual(0);
+  }
+  // 구역 9개 줄(대시보드·배포 같은 화면)에는 두지 않는다
+  await page.setViewportSize({ width: 1280, height: 900 });
+  for (const path of ["/admin/", "/admin/deployment/"]) {
+    await page.goto(path);
+    await expect(page.locator(".admin-topnav")).toBeVisible();
+    expect(await page.locator(".admin-bar__home").count(), `${path}에는 없음`).toBe(0);
+  }
+});
+
 test("PC '전체 메뉴' 창 1280×720: 창이 화면 안에 있고 메뉴 고리는 내리지 않아도 다 보이며, 넘치는 아래쪽은 창 안에서 내려 보고, 닫으면 '전체 메뉴' 단추로 돌아온다", async ({ page }) => {
   await setup(page, 1280);
   await page.setViewportSize({ width: 1280, height: 720 });

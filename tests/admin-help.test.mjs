@@ -280,3 +280,9 @@ test("사용 안내는 없어진 '왼쪽 메뉴'·'왼쪽 목록'·'작은 탭'�
   assert.match(layout, /data-admin-strip-step="1"/u, "줄 끝의 화살표 단추");
   assert.match(layout, /<div class="admin-sheet__foot">[\s\S]*?<a class="admin-public-link" href="\/">\s*공개 홈페이지/u, "'전체 메뉴' 창 아래의 '공개 홈페이지'");
 });
+
+test("사용 안내는 업무 도구 아래 단계 맨 위를 옛 이름 '업무 도구 처음'이 아니라 '도구 모음'으로 부른다", async () => {
+  const help = await readSource("src/lib/admin-help.mjs");
+  assert.equal(help.split("업무 도구 처음").length - 1, 0, "옛 이름(2026-11-23 '도구 모음'으로 바꿈)");
+  assert.ok(help.split("도구 모음").length - 1 >= 3, "할 일·휴지통 안내 3곳");
+});

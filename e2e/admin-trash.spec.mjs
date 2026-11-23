@@ -102,7 +102,7 @@ test("T2-134 꺼짐: 업무 세션이 꺼져 있으면 켜지지 않았다고 �
   await page.goto("/admin/work/trash/");
   await expect(page.getByRole("heading", { name: "업무 도구가 켜지지 않았습니다" })).toBeVisible();
   await expect(page.locator("[data-tr-state-body]")).toContainText("꺼져 있는 동안에도 7일이 지난 묶음은 새벽에 저절로 영구 삭제됩니다.");
-  await expect(page.getByRole("link", { name: "업무 도구 처음으로" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "도구 모음으로" })).toBeVisible();
   expect(calls.all).toEqual(["GET /session"]);
   expect(await overflowOf(page)).toBeLessThanOrEqual(0);
   assertNoErrors();
