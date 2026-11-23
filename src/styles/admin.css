@@ -2560,8 +2560,9 @@ nav.tr-homelinks { display: flex; flex-wrap: wrap; gap: 0 24px; margin: 0 0 14px
   /* 칸 단추는 칸을 꽉 채운다(칸 여백만큼 밖으로 밀고 같은 여백을 안에 둠). 누르는 높이는 44px, 마우스 PC는 아래에서 36px. */
   .lg-table { --lg-cell-y: 10px; --lg-cell-x: 8px; --lg-cell-min: 44px; }
   .lg-table td { position: relative; }
-  /* 날짜 칸은 좁아져도 두 줄로 꺾지 않는다("11." / "20."처럼 갈라지지 않게) */
+  /* 날짜 칸은 좁아져도 두 줄로 꺾지 않는다("11." / "20."처럼 갈라지지 않게). 낸 쪽(매수인 등 짧은 이름)도 "매수" / "인"으로 갈라지지 않게(D-2b: 새 줄을 열면 날짜 칸이 넓어져 다른 칸이 좁아짐) */
   .lg-table td[data-lg-col="basisOn"],
+  .lg-table td[data-lg-col="payerRole"],
   .lg-table td[data-lg-col="receivedOn"] { white-space: nowrap; }
   .lg-cell { display: block; box-sizing: content-box; width: 100%; min-height: calc(var(--lg-cell-min) - 2 * var(--lg-cell-y)); margin: calc(-1 * var(--lg-cell-y)) calc(-1 * var(--lg-cell-x)); padding: var(--lg-cell-y) var(--lg-cell-x); border: 0; border-radius: 0; color: inherit; background: none; font: inherit; font-variant-numeric: tabular-nums; text-align: inherit; overflow-wrap: anywhere; cursor: text; }
   /* 고치는 동안 단추는 자리를 지킨 채 숨긴다(줄 높이·칸 폭이 흔들리지 않게). */
@@ -2599,6 +2600,28 @@ nav.tr-homelinks { display: flex; flex-wrap: wrap; gap: 0 24px; margin: 0 0 14px
   .lg-noterow.is-bad p { font-weight: 800; }
   .lg-noterow__actions { display: inline-flex; gap: 8px; vertical-align: middle; }
   .lg-noterow .work-secondary-button { flex: 0 0 auto; width: auto; padding: 0 14px; background: var(--ds-paper); }
+
+  /* 빈 새 줄(D-2b): 합계 줄 바로 아래. 처음에는 흐린 '+ · 종류 ▾ · 새 장부 줄', 누르면 그 줄 칸이 입력칸이 된다. */
+  .lg-newrow td { color: var(--ds-ink-soft); }
+  .lg-newrow:not(.is-active) { cursor: pointer; }
+  .lg-newsign { display: block; font-weight: 800; text-align: center; }
+  .lg-newstart { color: var(--ds-ink-soft); cursor: pointer; }
+  .lg-newrow.is-active td { color: var(--ds-ink); }
+  .lg-newinput { display: block; box-sizing: border-box; width: calc(100% + 2 * var(--lg-cell-x)); min-height: var(--lg-cell-min); margin: calc(-1 * var(--lg-cell-y)) calc(-1 * var(--lg-cell-x)); padding: 0 calc(var(--lg-cell-x) - 2px); border: 2px solid var(--ds-field-edge); border-radius: 0; color: var(--ds-ink); background: var(--ds-paper); font: inherit; font-variant-numeric: tabular-nums; text-align: inherit; }
+  .lg-newinput:focus-visible { border-color: var(--ad-blue); outline-offset: -3px; }
+  /* 날짜·고르는 칸은 글자에 맞는 폭(브라우저가 정함)만 차지하고 칸을 채운다 — 큰 최소 폭을 주면 열 때 다른 칸이 좁아져 글이 꺾인다 */
+  .lg-newinput[type="date"],
+  select.lg-newinput { width: auto; min-width: calc(100% + 2 * var(--lg-cell-x)); }
+  .lg-newinput[aria-invalid="true"] { border-color: var(--ds-stamp); background: var(--ad-bad-soft); }
+  .lg-newrow.is-locked .lg-newinput { color: var(--ds-ink-soft); background: var(--ds-paper-2); }
+
+  /* 줄 끝 지우기 단추(그림만, 이름은 읽기 프로그램용). 누르는 곳은 칸 높이와 같다(44px, 마우스 PC 36px). */
+  .lg-trash { display: inline-flex; align-items: center; justify-content: center; width: var(--lg-cell-min); height: var(--lg-cell-min); margin: calc(-1 * var(--lg-cell-y)) 0 calc(-1 * var(--lg-cell-y)) 4px; padding: 0; border: 0; border-radius: var(--ad-radius); color: var(--ds-ink-soft); background: none; vertical-align: middle; cursor: pointer; }
+  .lg-trash:hover:not(:disabled) { color: var(--ds-stamp); background: var(--ad-bad-soft); }
+  .lg-trash:disabled { color: var(--ds-edge); cursor: default; }
+  /* 지우기 전에 줄 아래에 묻는 줄: 빨간 띠 + 글(색만으로 알리지 않음) */
+  .lg-confirmrow td { box-shadow: inset 4px 0 0 var(--ds-stamp); }
+  .lg-confirmrow .lg-trash-go { border-color: var(--ds-stamp); color: var(--ds-stamp); font-weight: 800; }
 
   .lg-keys:not([hidden]) { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 10px 0 0; color: var(--ds-ink-soft); }
   .lg-keys kbd { display: inline-block; min-width: 1.7em; margin-right: 3px; padding: 1px 6px; border: 1px solid var(--ds-field-edge); border-radius: 6px; color: var(--ds-ink); background: var(--ds-paper); font: inherit; font-weight: 700; text-align: center; }
