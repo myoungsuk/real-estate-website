@@ -25,7 +25,8 @@ import {
 import { photoShortAtText } from "../src/lib/work/photo-view.mjs";
 import { FILE_CONTRACT_COPY_MAX_PER_DEAL, FILE_KINDS_DEAL_OWNED, FILE_MASK_CONFIRMED } from "../worker/work-input.mjs";
 
-const readSource = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
+// Windows에서 받은 원본은 줄 끝이 CRLF라, 줄바꿈을 보는 정규식이 같게 돌도록 LF로 맞춘다.
+const readSource = async (path) => (await readFile(new URL(`../${path}`, import.meta.url), "utf8")).replace(/\r\n/gu, "\n");
 const fallback = (code) => `손님 화면 문장(${code})`;
 
 test("종류·장수 한도·가림 확인 표시는 서버 값과 같다", async () => {
