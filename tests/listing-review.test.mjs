@@ -179,12 +179,15 @@ test("바꾼 재확인 함수는 우리집부동산 매물이 없으면 저장�
     readFile(new URL("../.github/bank-listing-sync-state.json", import.meta.url), "utf8"),
     readFile(new URL("../.github/listing-review-state.json", import.meta.url), "utf8"),
   ]);
-  const listings = JSON.parse(rawListings).items;
+  // 우리집부동산 매물이 들어온 뒤에도(2026-11-24 첫 받기부터) 견줄 수 있게, 실제 상태에서 우리집부동산 매물을 빼고 "우리집부동산 매물이 없을 때"를 만든다.
+  const rawReview = JSON.parse(rawReviewState);
+  const wooriIds = new Set(Object.entries(rawReview.items).filter(([, item]) => item.source === "woori").map(([id]) => id));
+  const listings = JSON.parse(rawListings).items.filter((item) => !wooriIds.has(item.id));
   const listingIds = new Set(listings.map((item) => item.id));
   // 밤 받기에서는 받은 목록이 늘 공개 목록 안에 있다. 저장소 기준선에는 관리자가 내린 매물이 남아 있을 수 있어 공개 목록 안의 것만 쓴다.
   const rawBank = JSON.parse(rawBankState);
   const bankState = { ...rawBank, items: rawBank.items.filter((item) => listingIds.has(item.naverId)) };
-  const reviewState = JSON.parse(rawReviewState);
+  const reviewState = { ...rawReview, items: Object.fromEntries(Object.entries(rawReview.items).filter(([id]) => !wooriIds.has(id))) };
   // 예전(우리집부동산 전) 함수를 그대로 옮긴 기준. 다음 날 받기에서 목록이 그대로일 때의 결과를 견준다.
   const legacy = ({ listings: nextListings, bankState: state, currentState, checkedAt }) => {
     const bankIds = new Set(state.items.map((item) => item.naverId));
@@ -203,7 +206,6 @@ test("바꾼 재확인 함수는 우리집부동산 매물이 없으면 저장�
           }])),
     };
   };
-  assert.equal(Object.values(reviewState.items).some((item) => item.source === "woori"), false);
   for (const checkedAt of [reviewState.updatedAt, "2099-12-31"]) {
     const input = { listings, bankState, currentState: reviewState, checkedAt };
     assert.deepEqual(reconcileListingReviewState(input), legacy(input));
