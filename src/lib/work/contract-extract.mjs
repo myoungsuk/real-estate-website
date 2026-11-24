@@ -1,6 +1,7 @@
 // 계약서 사진 → 날짜·금액 읽기(단계 4, 설계서 14.3·14.4절)의 순수 부품. 서버(worker/work-ai-jobs.mjs)가 쓰고, 비교·확정(다음 PR)과 화면이 같이 쓴다.
-// - contractResultSchema(runIndex): OpenAI 구조화 출력(strict)에 보내는 스키마. 공식 문서(2026-11-23 확인)의 지원 목록에 있는 것만 쓴다
-//   ($defs·$ref, null 합집합, anyOf, pattern, minimum·maximum, minItems·maxItems). 목록에 없는 maxLength는 보내지 않고 아래 재검사에서만 본다.
+// - contractResultSchema(runIndex): OpenAI 구조화 출력(strict)에 보내는 스키마. 모양만 정한다($defs·$ref, 글·정수의 null 합집합, anyOf).
+//   2026-11-24 운영에서 OpenAI가 invalid_json_schema(text.format.schema)로 거절해, 값 조건(pattern·minimum·maximum·minItems·maxItems·maxLength)은
+//   보내지 않고 아래 재검사에서만 보며, null이 될 수 있는 배열(box)은 type 배열 대신 anyOf로 쓴다.
 // - 두 번 읽기의 2회째(runIndex 2)는 칸 순서를 바꾼 스키마·지시문을 쓴다(같은 식으로 같이 틀릴 가능성을 줄이려는 것, DEC-WT-17).
 // - validateContractResult(value): OpenAI strict에만 기대지 않고 14.4절 전체(글자 수·실제 날짜·금액 범위 포함)를 다시 검사한다.
 //   통과하지 못하면 { ok: false }(부르는 쪽이 AI_RESULT_INVALID로 적고 원문은 저장하지 않는다).
@@ -28,7 +29,6 @@ export function contractFieldOrder(runIndex) {
   return runIndex === 2 ? SECOND_FIELD_ORDER : CONTRACT_FIELD_ORDER;
 }
 
-const DATE_PATTERN = "^\\d{4}-\\d{2}-\\d{2}$";
 const field = (value) => ({
   type: "object",
   additionalProperties: false,
@@ -41,13 +41,13 @@ const SCHEMA_DEFS = Object.freeze({
     additionalProperties: false,
     required: ["page", "quote", "box"],
     properties: {
-      page: { type: "integer", minimum: 1 },
+      page: { type: "integer" },
       quote: { type: "string" },
-      box: { type: ["array", "null"], items: { type: "number", minimum: 0, maximum: 1 }, minItems: 4, maxItems: 4 },
+      box: { anyOf: [{ type: "array", items: { type: "number" } }, { type: "null" }] },
     },
   },
-  dateField: field({ type: ["string", "null"], pattern: DATE_PATTERN }),
-  moneyField: field({ type: ["integer", "null"], minimum: 0 }),
+  dateField: field({ type: ["string", "null"] }),
+  moneyField: field({ type: ["integer", "null"] }),
   textField: field({ type: ["string", "null"] }),
   payment: {
     type: "object",
@@ -65,10 +65,10 @@ const SCHEMA_PROPERTIES = Object.freeze({
   deposit_won: { $ref: "#/$defs/moneyField" },
   monthly_rent_won: { $ref: "#/$defs/moneyField" },
   down_payment: { $ref: "#/$defs/payment" },
-  middle_payments: { type: "array", maxItems: CONTRACT_MIDDLE_PAYMENTS_MAX, items: { $ref: "#/$defs/payment" } },
+  middle_payments: { type: "array", items: { $ref: "#/$defs/payment" } },
   balance: { $ref: "#/$defs/payment" },
   property_text: { $ref: "#/$defs/textField" },
-  warnings: { type: "array", maxItems: CONTRACT_WARNINGS_MAX_ITEMS, items: { type: "string" } },
+  warnings: { type: "array", items: { type: "string" } },
 });
 
 // 구조화 출력은 스키마의 키 순서대로 만들어지므로(공식 문서) 2회째는 properties 순서도 바꾼다.
