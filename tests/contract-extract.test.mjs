@@ -52,7 +52,7 @@ test("지시문(2026-11-24 줄임): 4줄 이하, 이름·주민번호 금지·nu
   const first = contractInstructions(1);
   assert.equal(contractInstructions(2), first, "칸 안내를 뺐으므로 2회째도 같은 글(순서 차이는 스키마에만)");
   assert.ok(first.split("\n").length <= 4, "4줄 이하");
-  for (const phrase of ["사람 이름·주민등록번호·전화번호·계좌번호는 어디에도 쓰지 않는다", "추측하거나 계산하지 말고 value를 null", "YYYY-MM-DD", "원 단위 정수", "page", "box", "한글 금액", "warnings"]) {
+  for (const phrase of ["사람 이름·주민등록번호·전화번호·계좌번호는 어디에도 쓰지 않는다", "추측하거나 계산하지 말고 value를 null", "YYYY-MM-DD", "원 단위 정수", "page", "box", "한글 금액", "warnings", "날짜·금액 칸의 흐림·가림", "사무소가 미리 가린 것이니 warnings에 적지 않는다"]) {
     assert.ok(first.includes(phrase), phrase);
   }
   for (const phrase of ["120자", "200자", "최대 4개", "최대 10개", "contract_date:", "balance:"]) assert.equal(first.includes(phrase), false, `지시문에 '${phrase}' 없음`);
