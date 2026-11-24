@@ -5,6 +5,7 @@ import AdminPageHelp from "../../components/admin/AdminPageHelp.astro";
 import AdminLayout from "../../layouts/AdminLayout.astro";
 import { naverListings } from "../../lib/naver-listings";
 import { buildListingReviewQueue } from "../../lib/listing-review.mjs";
+import { bankLastSeenOn, shortDate } from "../../lib/work/dashboard-view.mjs";
 import reviewPolicy from "../../../.github/listing-review-policy.json";
 import reviewState from "../../../.github/listing-review-state.json";
 
@@ -29,6 +30,8 @@ const reviewQueue = buildListingReviewQueue(
   `${todayParts.year}-${todayParts.month}-${todayParts.day}`,
 );
 const reviewText = reviewQueue.enabled ? `재확인 필요 ${reviewQueue.needsReview}건` : "재확인 경고 기준 미설정";
+// 부동산뱅크 자동 받기가 멈췄는지는 화면을 연 때 아래 스크립트가 잰다(빌드 때는 받은 날만 실음).
+const bankSeenOn = bankLastSeenOn(reviewState);
 ---
 
 <AdminLayout
@@ -91,6 +94,7 @@ const reviewText = reviewQueue.enabled ? `재확인 필요 ${reviewQueue.needsRe
         <a class="dsh-listing" href="/admin/listings/">
           <span>네이버 공개 매물 <b>{counts.total.toLocaleString("ko-KR")}건</b> · 매매 {counts.sale.toLocaleString("ko-KR")} · 전세·월세 {counts.lease.toLocaleString("ko-KR")}</span>
           <span class="dsh-meta">{reviewText}</span>
+          {bankSeenOn && <span class="dsh-meta dsh-sync" data-dsh-bank-sync={bankSeenOn}>부동산뱅크 자동 받기 {shortDate(bankSeenOn)}</span>}
         </a>
       </section>
     </div>
@@ -100,6 +104,7 @@ const reviewText = reviewQueue.enabled ? `재확인 필요 ${reviewQueue.needsRe
     import { getDashboard, WorkApiError, type Dashboard, type DashboardEvents, type DashboardMoney, type DashboardRealprice, type DashboardTasks } from "../../lib/work-dashboard-client";
     import { todayInKorea } from "../../lib/work/legal-dates.mjs";
     import {
+      bankSyncState,
       DASHBOARD_LINKS,
       dateTitle,
       emptyText,
@@ -278,6 +283,22 @@ const reviewText = reviewQueue.enabled ? `재확인 필요 ${reviewQueue.needsRe
         KEYS.forEach((key) => renderSection(key, null, code));
       }
     }
+
+    // 부동산뱅크 자동 받기 줄: 서버를 부르지 않고 빌드 때 실은 받은 날과 지금 시각만 본다.
+    // 미리 그린 뒤·뒤로 가기 캐시·오래 켜 둔 탭에서도 낡지 않게 화면이 보일 때마다 다시 잰다.
+    const bankSync = root?.querySelector<HTMLElement>("[data-dsh-bank-sync]");
+    const renderBankSync = () => {
+      if (!bankSync?.dataset.dshBankSync) return;
+      const sync = bankSyncState(bankSync.dataset.dshBankSync, todayInKorea(), Date.now());
+      bankSync.textContent = sync.text;
+      bankSync.classList.toggle("is-late", sync.stale);
+    };
+    renderBankSync();
+    document.addEventListener("prerenderingchange", renderBankSync);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") renderBankSync();
+    });
+    window.addEventListener("pageshow", renderBankSync);
 
     if (root && boot && strip && dateLine) {
       dateLine.textContent = dateTitle(todayInKorea());

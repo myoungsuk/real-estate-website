@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  BANK_SYNC_STALE_HOURS,
+  bankLastSeenOn,
+  bankSyncState,
   DASHBOARD_LINKS,
   dateTitle,
   emptyText,
@@ -143,4 +146,36 @@ test("이번 달 돈: 미입금이 있으면 '!'와 표시, 잔금일 없는 줄
 test("실거래 면적은 정수로 내린다", () => {
   assert.equal(tradeAreaText(84.97), "84㎡");
   assert.equal(tradeAreaText(59), "59㎡");
+});
+
+test("부동산뱅크 받은 날은 부동산뱅크 매물 가운데 가장 늦은 lastSeenAt이고, 없으면 null", () => {
+  assert.equal(bankLastSeenOn({
+    items: {
+      a: { source: "bank", lastSeenAt: "2026-11-20" },
+      b: { source: "bank", lastSeenAt: "2026-11-21" },
+      c: { source: "manual", lastSeenAt: null, lastReviewedAt: "2026-11-24" },
+    },
+  }), "2026-11-21");
+  assert.equal(bankLastSeenOn({ items: { c: { source: "manual", lastSeenAt: null } } }), null);
+  assert.equal(bankLastSeenOn({ items: { a: { source: "bank", lastSeenAt: "어제" } } }), null);
+  assert.equal(bankLastSeenOn({}), null);
+  assert.equal(bankLastSeenOn(null), null);
+});
+
+test("부동산뱅크 자동 받기는 받은 날 0시(한국 시각)부터 36시간이 넘으면 '!'와 '멈춤'으로 알린다", () => {
+  assert.equal(BANK_SYNC_STALE_HOURS, 36);
+  const at = (kst) => Date.parse(`${kst}+09:00`);
+  // 오늘 받음
+  assert.deepEqual(bankSyncState("2026-11-24", "2026-11-24", at("2026-11-24T09:00:00")), { stale: false, text: "부동산뱅크 자동 받기 오늘 · 11.24(화)" });
+  // 다음 날 00:10 실행 전·늦은 배포까지는 정상(어제)
+  assert.deepEqual(bankSyncState("2026-11-24", "2026-11-25", at("2026-11-25T11:59:59")), { stale: false, text: "부동산뱅크 자동 받기 어제 · 11.24(화)" });
+  // 경계: 36시간 정각은 정상, 1밀리초 넘으면 멈춤
+  assert.equal(bankSyncState("2026-11-24", "2026-11-25", at("2026-11-25T12:00:00")).stale, false);
+  assert.deepEqual(bankSyncState("2026-11-24", "2026-11-25", at("2026-11-25T12:00:00") + 1), { stale: true, text: "! 부동산뱅크 자동 받기 멈춤 · 마지막 11.24(화)(어제)" });
+  // 이번처럼 사흘 받지 못함
+  assert.deepEqual(bankSyncState("2026-11-21", "2026-11-24", at("2026-11-24T09:00:00")), { stale: true, text: "! 부동산뱅크 자동 받기 멈춤 · 마지막 11.21(토)(3일 전)" });
+  // 받은 날이 화면 시계보다 앞서도(시계 차이) 음수 날짜를 쓰지 않는다
+  assert.deepEqual(bankSyncState("2026-11-25", "2026-11-24", at("2026-11-24T23:00:00")), { stale: false, text: "부동산뱅크 자동 받기 오늘 · 11.25(수)" });
+  // 색만으로 알리지 않음: 멈춤 글에는 늘 '!'와 '멈춤'이 있다
+  for (const state of [bankSyncState("2026-11-20", "2026-11-24", at("2026-11-24T00:00:00"))]) assert.match(state.text, /^! .*멈춤/u);
 });

@@ -170,3 +170,27 @@ test("대시보드: 미리 그리는 동안에는 요청 0번, 화면이 보이�
   await page.waitForTimeout(200);
   expect(calls.length).toBe(2);
 });
+
+test("대시보드: '부동산뱅크 자동 받기' 줄은 받은 날 0시(한국 시각)부터 36시간이 넘으면 '! … 멈춤'과 경고 칸, 그 전에는 보통 글", async ({ page }) => {
+  await setup(page);
+  const line = panel(page, "realprice").locator("[data-dsh-bank-sync]");
+  // 받은 날은 빌드 때 실제 .github/listing-review-state.json에서 오므로 날짜를 박지 않고 화면에서 읽는다(부동산뱅크 매물이 없으면 줄이 없음).
+  test.skip((await line.count()) === 0, "부동산뱅크 매물이 없어 줄이 없음");
+  const seenOn = await line.getAttribute("data-dsh-bank-sync");
+  expect(seenOn).toMatch(/^\d{4}-\d{2}-\d{2}$/u);
+  const kst = (hours) => new Date(Date.parse(`${seenOn}T00:00:00+09:00`) + hours * 3_600_000);
+
+  await page.clock.setSystemTime(kst(35));
+  await page.reload();
+  await expect(line).toHaveText(/^부동산뱅크 자동 받기 어제 · \d+\.\d+\(.\)$/u);
+  await expect(line).not.toHaveClass(/is-late/u);
+
+  await page.clock.setSystemTime(kst(24 * 3 + 9));
+  await page.reload();
+  await expect(line).toHaveText(/^! 부동산뱅크 자동 받기 멈춤 · 마지막 \d+\.\d+\(.\)\(3일 전\)$/u);
+  await expect(line).toHaveClass(/is-late/u);
+  for (const width of [360, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await overflowOf(page), String(width)).toBe(0);
+  }
+});

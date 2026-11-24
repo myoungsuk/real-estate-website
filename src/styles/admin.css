@@ -2567,6 +2567,7 @@ nav.tr-homelinks { display: flex; flex-wrap: wrap; gap: 0 24px; margin: 0 0 14px
 .dsh-listing { display: grid; gap: 2px; min-height: 44px; margin-top: 6px; padding: 10px 0 4px; border-top: 2px solid var(--ds-edge); color: var(--ds-ink); font-weight: 600; text-decoration: none; }
 .dsh-listing:hover > span:first-child { text-decoration: underline; text-underline-offset: 3px; }
 .dsh-listing b { font-weight: 800; }
+.dsh-listing .dsh-sync.is-late { justify-self: start; padding: 1px 6px; border-radius: 4px; color: var(--ad-warn-ink); background: var(--ad-warn); font-weight: 800; }
 .dsh-state { display: grid; gap: 8px; justify-items: start; margin: 12px 0 6px; padding: 12px; border-radius: 6px; }
 .dsh-state p { margin: 0; font-weight: 700; }
 .dsh-state.is-off { border-left: 4px solid var(--ds-navy); background: var(--ds-paper-2); }
