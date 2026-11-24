@@ -956,7 +956,7 @@
     },
     "bank-import": {
       "route": "/admin/listings/editor/",
-      "sources": "ca5a40ac3f2477b6454249df977a14cacaf90e79a477aa12bb3954fecc9cc86b",
+      "sources": "3c87501c29e84d15985788829fd813d56a2d1442cae77a30ce6fad6204c8f8d7",
       "shots": {
         "bank-phone-1-file": {
           "width": 680,
@@ -981,8 +981,8 @@
         "bank-phone-2-preview": {
           "width": 780,
           "height": 2028,
-          "bytes": 46742,
-          "sha256": "edf1e0661a1efbb65e19c7794a0acf6597935a13adbf9197a1dfa388a1415f48",
+          "bytes": 46728,
+          "sha256": "5b837b705cc231c804a4e81dfa0da0d536547437c1b1a4ba39dbe8f55236e6b9",
           "marks": [
             [
               0.0949,
@@ -1041,8 +1041,8 @@
         "bank-wide-2-preview": {
           "width": 1520,
           "height": 1023,
-          "bytes": 29380,
-          "sha256": "fd2de92cccf3aae693cbdbfff90dfef020703e26e6067930cfbbfb81efe80087",
+          "bytes": 29374,
+          "sha256": "286b94d1a0d5b9074f67c232438395e0d4c8c250fea0257daa93b9f23960acc3",
           "marks": [
             [
               0.0101,

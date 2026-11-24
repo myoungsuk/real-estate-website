@@ -1,5 +1,6 @@
 // 우리집부동산(woori-house.co.kr) 매물 목록 엑셀을 브라우저에서만 읽어 공개 네이버 매물 카드로 바꾼다.
-// 원본은 서버로 보내지 않는다. 상세주소의 정확한 호수·지번·중개사 메모는 버리고 공개 동 번호와 괄호 안 광고 층만 쓴다.
+// 원본은 서버로 보내지 않는다. 상세주소의 정확한 호수·지번·중개사 메모는 버리고 공개 동 번호와 광고 층만 쓴다.
+// 2026-11-24 사용자 지시 "상가 토지도 해"·"그 밖도 다 해"로 아파트·분양권 밖의 종류도 받는다(종류 이름은 아래 표, 처음 보는 이름이면 저장을 막음).
 // 부동산뱅크 가져오기(bank-listing-import.mjs)와 달리 지난번 우리집부동산 기준선(재확인 상태 source "woori")에서
 // 이번 파일에 없는 매물만 지운다. 부동산뱅크 자동 받기 매물(source "bank")은 건너뛰고 건드리지 않는다.
 import { formatBankPriceLabel, normalizeBankListingText } from "./bank-listing-import.mjs";
@@ -35,11 +36,55 @@ const tradeTypeMap = new Map([
   ["월세", "monthly-rent"],
 ]);
 
+// 우리집부동산 매물종류 → 사이트 매물 종류(부동산뱅크·직접 등록과 같은 이름). 2026-11-24 공개 목록에 실제로 온 이름은
+// 아파트·아파트 분양권·상가점포뿐이고, 나머지는 네이버 부동산 종류 이름을 보고 넣은 것이다(추정). 표에 없는 이름이 오면
+// 형식 오류로 그날 반영 전체를 막는다(모르는 종류 때문에 매물을 지우거나 엉뚱한 종류로 싣지 않게).
 const propertyTypeMap = new Map([
+  ["아파트", "아파트"],
   ["아파트 분양권", "아파트분양권"],
+  ["아파트분양권", "아파트분양권"],
+  ["상가점포", "상가점포"],
+  ["상가", "상가점포"],
+  ["빌라/연립", "빌라/연립"],
+  ["빌라", "빌라/연립"],
+  ["연립", "빌라/연립"],
+  ["다세대", "빌라/연립"],
+  ["다세대/연립", "빌라/연립"],
+  ["단독/다가구", "단독/다가구"],
+  ["단독", "단독/다가구"],
+  ["다가구", "단독/다가구"],
+  ["토지", "토지"],
+  ["오피스텔", "오피스텔"],
+  ["오피스텔 분양권", "오피스텔분양권"],
+  ["오피스텔분양권", "오피스텔분양권"],
+  ["사무실", "사무실"],
+  ["원룸", "원룸"],
+  ["상가주택", "상가주택"],
+  ["전원주택", "전원주택"],
+  ["한옥주택", "한옥주택"],
+  ["공장/창고", "공장/창고"],
+  ["지식산업센터", "지식산업센터"],
+  ["건물", "건물"],
+  ["상가건물", "건물"],
+  ["재건축", "재건축"],
+  ["재개발", "재개발"],
 ]);
 
+export const WOORI_PROPERTY_TYPE_NAMES = Object.freeze([...propertyTypeMap.keys()]);
+
+// 우리집부동산 매물종류 이름 → 사이트 매물 종류(표에 없으면 null).
+export function wooriSitePropertyType(name) {
+  return propertyTypeMap.get(normalizeBankListingText(name)) ?? null;
+}
+
 const titledPropertyTypes = new Set(["아파트", "아파트분양권"]);
+// 매물명이 없을 때 "{동네} {말}" 제목에 쓰는 말. 표에 없으면 사이트 종류 이름 그대로.
+const titleWords = new Map([
+  ["상가점포", "상가"],
+  ["빌라/연립", "빌라"],
+  ["단독/다가구", "단독주택"],
+  ["공장/창고", "공장·창고"],
+]);
 
 const comparedFields = [
   "title",
@@ -73,8 +118,31 @@ export function parseWooriDetailAddress(value) {
   const paren = /\(\s*([^()]*?)\s*\)\s*$/u.exec(text)?.[1] ?? "";
   const withTotal = /^(고|중|저|\d{1,3})\s*\/\s*(\d{1,3})\s*층$/u.exec(paren);
   if (withTotal) return { building, floor: withTotal[1], totalFloors: withTotal[2] };
-  const floor = /^(고|중|저)$/u.exec(paren)?.[1] ?? /^(\d{1,3})\s*층$/u.exec(paren)?.[1] ?? null;
-  return { building, floor, totalFloors: null };
+  // 상가처럼 동 번호가 없는 엑셀 줄은 "123-4 1층 101호"처럼 지번·층·호수를 적는다. 그때는 따로 떨어진 "1층"의 층 숫자만 쓴다.
+  const loose = building ? null : /(?:^|\s)(\d{1,3})\s*층(?=\s|$)/u.exec(text.replace(/\([^()]*\)\s*$/u, ""))?.[1] ?? null;
+  const floor = /^(고|중|저)$/u.exec(paren)?.[1] ?? /^(\d{1,3})\s*층$/u.exec(paren)?.[1] ?? loose;
+  return { building, floor: floor !== null && /^\d+$/u.test(floor) && Number(floor) === 0 ? null : floor, totalFloors: null };
+}
+
+// 소재지 "대전광역시 동구 천동 123-4" → "천동". 동·가·리·읍·면으로 끝나는 마지막 낱말만 쓰고 지번은 버린다.
+export function parseWooriNeighborhood(value) {
+  const words = normalizeBankListingText(value).split(" ").filter((word) => /^[가-힣]{1,8}\d{0,2}[가-힣]{0,3}(?:동|가|리|읍|면)$/u.test(word));
+  return words.at(-1) ?? null;
+}
+
+// 공개 매물명이 지번·호수·전화번호처럼 보이면 쓰지 않는다(그때는 "{동네} {말}").
+function isSafeListingName(value) {
+  if (!value || value.length > 40) return false;
+  if (/\d\s*-\s*\d|번지|\d\s*호|\d{3,}/u.test(value)) return false;
+  return getNaverListingPublicTextErrors({ title: value }).length === 0;
+}
+
+// 아파트·분양권이 아닌 매물의 처음 제목: 공개 매물명 → "{동네} {종류 말}" → "{종류 말} 매물".
+export function buildWooriOtherTitle({ name, neighborhood, propertyType }) {
+  const cleanName = normalizeBankListingText(name);
+  if (isSafeListingName(cleanName)) return cleanName;
+  const word = titleWords.get(propertyType) ?? propertyType;
+  return neighborhood ? `${neighborhood} ${word}` : `${word} 매물`;
 }
 
 // 엑셀에는 광고 층 하나만 있다. 총층이 없으므로 "7층"·"고층" 꼴로 적는다. 이미 같은 층으로 시작하는 "7/22층" 꼴이 있으면 그 값을 둔다.
@@ -87,6 +155,7 @@ export function formatWooriFloorLabel(floor, existingFloorLabel = null, totalFlo
 }
 
 function cleanDecimal(value) {
+  value = String(value ?? "").replace(/,/gu, "");
   if (!/^\d+(?:\.\d+)?$/u.test(value)) return null;
   const number = Number(value);
   if (!Number.isFinite(number) || number <= 0) return null;
@@ -94,16 +163,25 @@ function cleanDecimal(value) {
 }
 
 // 면적1 "[공급] 99.99" 또는 "[계약] 99.99", 면적2 "[전용] 99.99" → 지금 공개 카드와 같은 꼴.
+// 단독·다가구는 "[대지] …"·"[연면적] …"(부동산뱅크와 같은 "대지 …㎡ · 연면적 …㎡"), 토지는 "[토지] …" 하나("토지 …㎡").
+// 아파트·분양권 밖의 종류는 둘째 칸이 비었거나 0이면 첫 칸만 적는다. 첫 칸을 못 읽거나 짝이 맞지 않으면 null(저장을 막음).
 export function formatWooriAreaLabel(firstValue, secondValue, propertyType) {
-  const first = /^\[(공급|계약)\]\s*(\S+)$/u.exec(normalizeBankListingText(firstValue));
-  const second = /^\[전용\]\s*(\S+)$/u.exec(normalizeBankListingText(secondValue));
-  if (!first || !second) return null;
+  const first = /^\[(공급|계약|대지|토지)\]\s*(\S+)$/u.exec(normalizeBankListingText(firstValue));
+  const secondText = normalizeBankListingText(secondValue);
+  const second = /^\[(전용|연면적)\]\s*(\S*)$/u.exec(secondText);
+  if (!first || (secondText && !second)) return null;
+  const kind = first[1];
   const firstArea = cleanDecimal(first[2]);
-  const exclusive = cleanDecimal(second[1]);
-  if (!firstArea || !exclusive) return null;
-  if (first[1] === "계약") return `계약 ${firstArea}㎡ · 전용 ${exclusive}㎡`;
-  if (titledPropertyTypes.has(propertyType)) return `${Math.trunc(Number(firstArea))}㎡ · 전용 ${exclusive}㎡`;
-  return `공급 ${firstArea}㎡ · 전용 ${exclusive}㎡`;
+  const secondArea = second ? cleanDecimal(second[2]) : null;
+  const secondKind = second?.[1] ?? null;
+  if (!firstArea) return null;
+  if (kind === "토지") return secondArea ? null : `토지 ${firstArea}㎡`;
+  if (!secondArea) return titledPropertyTypes.has(propertyType) ? null : `${kind} ${firstArea}㎡`;
+  if ((kind === "대지") !== (secondKind === "연면적")) return null;
+  if (kind === "대지") return `대지 ${firstArea}㎡ · 연면적 ${secondArea}㎡`;
+  if (kind === "계약") return `계약 ${firstArea}㎡ · 전용 ${secondArea}㎡`;
+  if (titledPropertyTypes.has(propertyType)) return `${Math.trunc(Number(firstArea))}㎡ · 전용 ${secondArea}㎡`;
+  return `공급 ${firstArea}㎡ · 전용 ${secondArea}㎡`;
 }
 
 // 매물가(만원): 매매·전세는 "9,999", 월세는 "보증금/월세".
@@ -156,8 +234,9 @@ function normalizeWooriRow(row, existing, reviewSource, checkedAt) {
   const tradeType = tradeTypeMap.get(row["거래종류"]);
   if (!tradeType) errors.push("지원하지 않는 거래 종류입니다.");
   const rawType = row["매물종류"];
-  const propertyType = propertyTypeMap.get(rawType) ?? rawType;
-  if (!propertyType) errors.push("매물종류가 비어 있습니다.");
+  const propertyType = wooriSitePropertyType(rawType);
+  if (!rawType) errors.push("매물종류가 비어 있습니다.");
+  else if (!propertyType) errors.push("처음 보는 매물종류입니다. 종류 이름 표(woori-listing-import.mjs)에 넣은 뒤 다시 받아 주세요.");
   const priceLabel = tradeType ? formatWooriPriceLabel(row["매물가"], tradeType) : null;
   if (tradeType && !priceLabel) errors.push("매물가를 공개 가격 형식으로 바꿀 수 없습니다.");
   const areaLabel = formatWooriAreaLabel(row["면적1(㎡)"], row["면적2(㎡)"], propertyType);
@@ -168,10 +247,16 @@ function normalizeWooriRow(row, existing, reviewSource, checkedAt) {
   if (errors.length > 0) return { naverId, errors };
 
   const address = parseWooriDetailAddress(row["상세주소"]);
-  const complexName = normalizeComplexName(row["매물명"]);
-  const builtTitle = titledPropertyTypes.has(propertyType) && complexName && address.building ? `${complexName} ${address.building}동` : null;
-  const title = builtTitle ?? existing?.title ?? null;
-  if (!title) return { naverId, skip: "동 번호가 없어 안전한 공개 제목을 만들 수 없습니다. 직접 등록으로 넣어 주세요." };
+  let title;
+  if (titledPropertyTypes.has(propertyType)) {
+    // 아파트·분양권은 지금 그대로 "{단지} {동}동"(동 번호가 없으면 이미 있는 제목, 그것도 없으면 건너뜀).
+    const complexName = normalizeComplexName(row["매물명"]);
+    title = (complexName && address.building ? `${complexName} ${address.building}동` : null) ?? existing?.title ?? null;
+    if (!title) return { naverId, skip: "동 번호가 없어 안전한 공개 제목을 만들 수 없습니다. 직접 등록으로 넣어 주세요." };
+  } else {
+    // 그 밖의 종류는 이미 있는 제목(직접 등록에서 넘어온 매물 포함)을 두고, 처음이면 공개 매물명 또는 "{동네} {종류 말}".
+    title = existing?.title ?? buildWooriOtherTitle({ name: row["매물명"], neighborhood: parseWooriNeighborhood(row["소재지"]), propertyType });
+  }
 
   const listing = {
     id: naverId,

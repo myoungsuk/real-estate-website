@@ -45,14 +45,16 @@ for (const width of [360, 1280]) {
     await expect(panel.locator("[data-woori-summary]")).toBeVisible();
     await expect(panel.locator("[data-woori-stat='errors']")).toHaveText("0");
     await expect(panel.locator("[data-woori-stat='total']")).toHaveText("4");
-    await expect(panel.locator("[data-woori-stat='new']")).toHaveText("2");
+    await expect(panel.locator("[data-woori-stat='new']")).toHaveText("3");
     await expect(panel.locator("[data-woori-stat='removed']")).toHaveText("1");
-    await expect(panel.locator("[data-woori-stat='skipped']")).toHaveText("2");
+    await expect(panel.locator("[data-woori-stat='skipped']")).toHaveText("1");
     const preview = panel.locator("[data-woori-preview]");
     await expect(preview).toContainText("가상마을1BL 901동");
     await expect(preview).toContainText("가상 지난번 매물 1동");
     await expect(preview).toContainText("부동산뱅크 자동 받기 매물이라 건너뜁니다");
-    await expect(preview).toContainText("동 번호가 없어");
+    // 2026-11-24 모든 종류 받기: 동 번호 없는 상가도 공개 매물명으로 새 매물이 된다.
+    await expect(preview).toContainText("가상상가");
+    await expect(preview).not.toContainText("동 번호가 없어");
     await expect(preview).not.toContainText("1203호");
     // 부동산뱅크 칸은 그대로 숨어 있다.
     await expect(page.locator("[data-bank-summary]")).toBeHidden();
@@ -65,12 +67,13 @@ for (const width of [360, 1280]) {
     await expect(panel.locator("[data-woori-status]")).toContainText("우리집부동산 매물을 GitHub에 저장했습니다");
     expect(calls.writes).toHaveLength(1);
     const sent = JSON.stringify(calls.writes[0]);
-    for (const banned of ["1203호", "2101호", "101호", "가상 내부 메모", "010-0000-0000", "7000001", "가상홍보", "woori-export"]) expect(sent.includes(banned), banned).toBe(false);
+    for (const banned of ["1203호", "2101호", "101호", "123-4", "가상 내부 메모", "010-0000-0000", "7000001", "가상홍보", "woori-export"]) expect(sent.includes(banned), banned).toBe(false);
     const changes = Object.fromEntries(calls.writes[0].changes.map((change) => [change.resource, change.data]));
-    expect(changes["naver-listings"].items.map((item) => item.id)).toEqual(["9900000030", "9900000040", "9900000001", "9900000060"]);
+    expect(changes["naver-listings"].items.map((item) => item.id)).toEqual(["9900000030", "9900000040", "9900000001", "9900000050", "9900000060"]);
     expect(changes["naver-listings"].items.find((item) => item.id === "9900000001")).toMatchObject({ title: "가상마을1BL 901동", floorLabel: "고층", summary: "네이버에 공개된 광고 매물입니다. 자세한 조건은 상세 화면에서 확인해 주세요." });
+    expect(changes["naver-listings"].items.find((item) => item.id === "9900000050")).toMatchObject({ title: "가상상가", propertyType: "상가점포", floorLabel: "1층", areaLabel: "계약 66.1㎡ · 전용 84.91㎡" });
     expect(Object.fromEntries(Object.entries(changes["listing-review-state"].items).map(([id, item]) => [id, item.source]))).toEqual({
-      "9900000030": "bank", "9900000040": "manual", "9900000001": "woori", "9900000060": "woori",
+      "9900000030": "bank", "9900000040": "manual", "9900000001": "woori", "9900000050": "woori", "9900000060": "woori",
     });
     expect(errors).toEqual([]);
   });
