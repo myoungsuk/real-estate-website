@@ -67,6 +67,8 @@ interface Slot {
   note: { text: string; state: "idle" | "success" | "error" } | null;
   // 잘못 끝난 요청이 늦게 돌아와 새 상태를 덮지 않게 세는 번호
   seq: number;
+  // 사본 칸을 펼친 적이 있음(그때 사본이 0장이었으면 첫 사본이 올라온 뒤 update에서 읽는다)
+  wanted: boolean;
 }
 
 const CLOSED_TEXT: Record<string, string> = { completed: "끝난 거래라 일정을 뽑지 않습니다.", cancelled: "취소한 거래라 일정을 뽑지 않습니다." };
@@ -82,7 +84,7 @@ export function mountAiSection(options: AiSectionOptions) {
     root.dataset.axDeal = dealId;
     root.setAttribute("aria-labelledby", `ax-title-${dealId}`);
     root.hidden = true;
-    return { dealId, root, deal: null, phase: "idle", group: null, view: null, picked: null, estimates: new Map(), timer: null, watchStart: 0, busy: false, askDiscard: false, note: null, seq: 0 };
+    return { dealId, root, deal: null, phase: "idle", group: null, view: null, picked: null, estimates: new Map(), timer: null, watchStart: 0, busy: false, askDiscard: false, note: null, seq: 0, wanted: false };
   }
   const slotOf = (dealId: string) => {
     let slot = slots.get(dealId);
@@ -539,6 +541,13 @@ export function mountAiSection(options: AiSectionOptions) {
     else root.querySelector<HTMLElement>("[data-ax-status]")?.focus?.();
   }
 
+  // 펼친 적이 있고, 켜져 있고, 끝나지 않은 거래이고, 사본이 있고, 아직 읽지 않았을 때만 최근 묶음을 읽는다.
+  function loadIfWanted(slot: Slot) {
+    if (!slot.wanted || !options.enabled() || !slot.deal || isClosed(slot) || slot.phase !== "idle") return;
+    if (copiesOf(slot).length === 0) return;
+    void loadLatest(slot);
+  }
+
   const stopAll = () => {
     for (const slot of slots.values()) {
       stop(slot);
@@ -555,9 +564,8 @@ export function mountAiSection(options: AiSectionOptions) {
     // 사본 칸을 펼쳤을 때: 처음이면 그 거래의 최근 묶음을 읽는다.
     opened(dealId: string) {
       const slot = slotOf(dealId);
-      if (!options.enabled() || !slot.deal || isClosed(slot) || slot.phase !== "idle") return;
-      if (copiesOf(slot).length === 0) return;
-      void loadLatest(slot);
+      slot.wanted = true;
+      loadIfWanted(slot);
     },
     // 손님 카드를 다시 그릴 때(거래 상태·사본 목록이 바뀜)
     update(deal: Pick<CustomerDeal, "id" | "status" | "dealType" | "files">) {
@@ -568,6 +576,8 @@ export function mountAiSection(options: AiSectionOptions) {
         for (const id of [...slot.picked]) if (!copies.some((file) => file.id === id)) slot.picked.delete(id);
       }
       render(slot);
+      // 사본 0장에서 펼친 뒤 첫 사본을 올리면 여기서 읽는다(전에는 '불러오는 중…'에 멈췄다)
+      loadIfWanted(slot);
     },
     reset() {
       stopAll();
