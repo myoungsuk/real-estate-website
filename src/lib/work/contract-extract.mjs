@@ -182,7 +182,7 @@ function middlePayments(list) {
 // 합계 검사(2026-11-24 사용자 결정 "1번, 합계 검사 넣어"): AI가 한글·숫자 금액 차이를 놓치고 한쪽 금액을 잘못 읽어도 늘 알리도록,
 // 받은 뒤 코드가 계약금 + 중도금 + 잔금을 매매대금(매매) 또는 보증금(전세·월세)과 맞춰 보고 다르면 경고 한 문장을 만든다.
 // 칸이 하나라도 못 읽은 값(null)이거나, 거래 종류를 모르거나 교환이면 따지지 않는다(null). 지시문은 늘리지 않는다.
-// 매매에서 대출·임대보증금을 넘겨받으면 잔금이 그만큼 줄어 합계가 달라도 맞는 계약이라 그 말을 함께 적는다.
+// 매매에서 대출·임대보증금을 넘겨받으면 잔금이 그만큼 줄어 합계가 달라도 맞는 계약이라, 차액을 함께 적어 계약서의 넘겨받은 금액과 바로 맞춰 보게 한다.
 export function contractSumWarning(result) {
   const target = result.deal_type === "sale" ? { label: "매매대금", value: result.price_won.value }
     : result.deal_type === "jeonse" || result.deal_type === "monthly_rent" ? { label: "보증금", value: result.deposit_won.value }
@@ -193,8 +193,9 @@ export function contractSumWarning(result) {
   const sum = parts.reduce((total, value) => total + value, 0);
   if (sum === target.value) return null;
   const names = result.middle_payments.length > 0 ? "계약금·중도금·잔금" : "계약금·잔금";
-  const loan = result.deal_type === "sale" ? "(대출·보증금을 넘겨받는 계약이면 다를 수 있습니다)" : "";
-  return `${names}을 더하면 ${formatKoreanWon(sum)}인데 ${target.label}은 ${formatKoreanWon(target.value)}입니다. 사진에서 금액을 다시 확인해 주세요${loan}.`;
+  const gap = formatKoreanWon(Math.abs(target.value - sum));
+  const loan = result.deal_type === "sale" ? " 대출·보증금을 넘겨받은 계약이면 그 금액이 차이와 같은지 보세요." : "";
+  return `${names}을 더하면 ${formatKoreanWon(sum)}인데 ${target.label}은 ${formatKoreanWon(target.value)}입니다(${gap} 차이). 사진에서 금액을 다시 확인해 주세요.${loan}`;
 }
 
 // 코드가 만든 경고(중도금 넘침·합계 다름)를 AI가 쓴 경고와 가린다(2026-11-24 사용자 결정 "같이 넣어").
@@ -217,7 +218,8 @@ export function validateContractResult(value) {
     if (value.deal_type !== null && !CONTRACT_DEAL_TYPES.includes(value.deal_type)) fail();
     if (!Array.isArray(value.middle_payments) || !Array.isArray(value.warnings)) fail();
     const middles = middlePayments(value.middle_payments);
-    const warnings = value.warnings.map((item) => text(item, CONTRACT_WARNING_MAX)).filter(Boolean);
+    // 저장된 결과를 다시 검사할 때(확정 경로) 합계 경고가 겹치지 않도록, 들어온 경고 속 합계 경고는 버리고 아래에서 새로 계산한다.
+    const warnings = value.warnings.map((item) => text(item, CONTRACT_WARNING_MAX)).filter((item) => item && contractCodeWarningKind(item) !== "sum");
     const result = {
       document_kind: value.document_kind,
       deal_type: value.deal_type,

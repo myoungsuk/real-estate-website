@@ -800,7 +800,7 @@ test("코드 경고(합계 다름)는 'AI가 남긴 말'에 섞지 않고 '⚠ �
   const check = page.locator("[data-axr-check='sum']");
   await expect(check).toHaveCount(1);
   await expect(check).toHaveClass(/ax-note--warn/u);
-  await expect(check).toContainText("금액 확인: 계약금·잔금을 더하면 3억 5,000만 원인데 매매대금은 4억 8,500만 원입니다.");
+  await expect(check).toContainText("금액 확인: 계약금·잔금을 더하면 3억 5,000만 원인데 매매대금은 4억 8,500만 원입니다(1억 3,500만 원 차이).");
   const said = page.locator(".ax-note", { hasText: "AI가 남긴 말" });
   await expect(said).toContainText("“가상 경고 한 줄”");
   await expect(said, "코드 경고는 AI 말에 없음").not.toContainText("더하면");

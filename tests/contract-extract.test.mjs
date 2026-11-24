@@ -68,15 +68,18 @@ test("합계 검사(2026-11-24 \"합계 검사 넣어\"): 계약금 + 중도금 
   const checked = validateContractResult(wrong);
   assert.equal(checked.ok, true, "거절하지 않음");
   assert.equal(checked.result.warnings.length, 2);
-  assert.equal(checked.result.warnings[0], "계약금·중도금·잔금을 더하면 4억 4,000만 원인데 매매대금은 4억 8,500만 원입니다. 사진에서 금액을 다시 확인해 주세요(대출·보증금을 넘겨받는 계약이면 다를 수 있습니다).");
+  assert.equal(checked.result.warnings[0], "계약금·중도금·잔금을 더하면 4억 4,000만 원인데 매매대금은 4억 8,500만 원입니다(4,500만 원 차이). 사진에서 금액을 다시 확인해 주세요. 대출·보증금을 넘겨받은 계약이면 그 금액이 차이와 같은지 보세요.");
   assert.equal(checked.result.warnings[1], "AI 경고", "AI 경고는 코드 경고 뒤");
   assert.equal(checked.result.middle_payments[1].amount.value, 105_000_000, "값은 고치지 않음(사람이 사진을 보고 고름)");
+  assert.deepEqual(validateContractResult(checked.result).result, checked.result, "저장된 결과를 다시 검사해도 합계 경고가 겹치지 않음(멱등)");
+  const fixed = validateContractResult({ ...checked.result, middle_payments: [pay(100_000_000, "2026-12-10"), pay(150_000_000, "2027-01-15")] }).result;
+  assert.deepEqual(fixed.warnings, ["AI 경고"], "합계가 맞게 바뀌면 옛 합계 경고는 남지 않음");
   const right = { ...wrong, middle_payments: [pay(100_000_000, "2026-12-10"), pay(150_000_000, "2027-01-15")] };
   assert.equal(contractSumWarning(validateContractResult(right).result), null, "맞으면 경고 없음");
   assert.equal(contractSumWarning(validateContractResult(sampleContract()).result), null, "중도금 없는 매매(계약금 + 잔금)도 맞으면 없음");
   // 전세·월세는 보증금과 맞추고 승계 문장은 붙이지 않는다. 중도금이 없으면 계약금·잔금이라고 쓴다.
   const lease = sampleContract({ deal_type: "monthly_rent", document_kind: "lease_contract", price_won: money(null), deposit_won: money(20_000_000), monthly_rent_won: money(700_000), down_payment: pay(2_000_000, "2026-11-21"), balance: pay(17_000_000, "2026-12-20") });
-  assert.equal(validateContractResult(lease).result.warnings[0], "계약금·잔금을 더하면 1,900만 원인데 보증금은 2,000만 원입니다. 사진에서 금액을 다시 확인해 주세요.");
+  assert.equal(validateContractResult(lease).result.warnings[0], "계약금·잔금을 더하면 1,900만 원인데 보증금은 2,000만 원입니다(100만 원 차이). 사진에서 금액을 다시 확인해 주세요.");
   // 따지지 않는 경우
   assert.equal(contractSumWarning(validateContractResult({ ...wrong, balance: pay(null, "2027-02-26") }).result), null, "못 읽은 칸이 있으면 따지지 않음");
   assert.equal(contractSumWarning(validateContractResult({ ...wrong, price_won: money(null) }).result), null, "매매대금을 못 읽으면 따지지 않음");
