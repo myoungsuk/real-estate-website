@@ -1,18 +1,20 @@
-// 업무 도구 단계 4 AI 작업 API (가): 계약서 사본 → 날짜·금액 두 번 읽기 작업 만들기·조회·취소·목록(설계서 14.3 ~ 14.5절).
+// 업무 도구 단계 4 AI 작업 API (가): 계약서 사본 → 날짜·금액 읽기 작업 만들기·조회·취소·목록(설계서 14.3 ~ 14.5절).
+// 2026-11-24 운영자 결정으로 두 번 읽기에서 한 번 읽기로 바꿨다(가상 계약서 5건 × 2회 측정에서 경고 칸을 뺀 날짜·금액·소재지 68칸이 모두 맞고 두 결과가 한 번도 다르지 않음).
+// 새 묶음은 작업 행 1개(run_index 1, pair_mode NULL)다. 그 전에 만든 옛 묶음(행 2개, pair_mode 있음)도 조회·목록·취소·확정·30일 정리가 그대로 된다.
 // work-api.mjs가 업무 도구·구조 번호·AI 켜기 값(WORK_AI_ENABLED + 파일 기능 + OpenAI 설정)·(쓰기면) Origin·CSRF·본문 읽기를 끝낸 뒤 routeWorkAi()를 부른다.
 // 확정(/confirm, 거래·일정 쓰기)과 예상 비용 미리 보기(/ai/estimate)는 2026-11-23 확정 서버 PR에서 넣었다(이 파일 아래 '확정'·'미리 보기'). 비교 규칙은
 // 화면과 같은 src/lib/work/contract-compare.mjs 하나를 쓴다.
 // - 읽을 사진은 거래에 붙인 계약서 사본뿐이다(files.kind = contract_copy, rrn_masked = 1, 2026-11-23 사용자 결정 "거래에 붙임").
 //   조건에 맞지 않는 파일·다른 거래·휴지통에 간 파일·없는 거래는 모두 같은 404다(어느 조건인지 알려 주지 않음).
-// - 한 번에 5장·합계 12MB까지(Worker 메모리 128MB, 넘으면 413 AI_INPUT_TOO_LARGE). 사진의 base64 글은 한 번만 만들어 두 요청이 함께 쓰고,
-//   두 요청은 차례로 보낸다(1회째 요청 본문 글은 openaiRequest() 안에서만 살아 있어 2회째를 만들기 전에 놓인다).
-// - 한도: 글 초안과 같은 ai_usage_daily·settings 행을 쓴다(2026-11-23 사용자 결정 "같은 프로젝트·한도 하나"). 2회 몫을 한 문장으로 미리 더하고,
+// - 한 번에 5장·합계 12MB까지(Worker 메모리 128MB, 넘으면 413 AI_INPUT_TOO_LARGE). 사진의 base64 글은 한 번만 만들어 생성 요청 1번에 싣는다
+//   (요청 본문 글은 openaiRequest() 안에서만 살아 있다).
+// - 한도: 글 초안과 같은 ai_usage_daily·settings 행을 쓴다(2026-11-23 사용자 결정 "같은 프로젝트·한도 하나"). 1회 몫을 미리 더하고,
 //   결과를 받으면 실제 값으로 한 번만 바로잡는다.
 // - 같은 거래에 진행 중 묶음이 있으면 409 AI_JOB_ACTIVE(details에 그 묶음 ID). 작업 행을 넣는 문장 자체가 조건부라, 동시에 두 요청이 와도
 //   한쪽만 행이 들어가고 다른 쪽은 미리 더한 한도를 되돌린 뒤 409다(OpenAI 0회).
 // - OpenAI: background + store:false, 생성 재시도 0회. 4xx는 만들어지지 않은 것(failed + 그 몫 되돌림), 5xx·시간 초과·응답 없음은
 //   만들어졌는지 모르는 것(unknown, 되돌리지 않음)이다. 글 초안과 같다.
-// - 키·요청 본문·응답 본문·계약서 내용·거래 제목·R2 키는 로그·감사·오류에 넣지 않는다. 감사 reason은 종류·장수·pair_mode 같은 고정 꼴만 쓴다.
+// - 키·요청 본문·응답 본문·계약서 내용·거래 제목·R2 키는 로그·감사·오류에 넣지 않는다. 감사 reason은 종류·장수·읽은 횟수 같은 고정 꼴만 쓴다.
 //
 // ai_jobs.input_tokens·output_tokens 칸의 뜻(0008 없이 예약 비용을 다루려고 한 칸을 두 뜻으로 쓴다. 이 칸을 읽는 곳은 이 파일의 pollJob()뿐이다):
 // - 열린 행(queued·in_progress): **예약값**이다(입력 토큰 추정·출력 상한). 예약 비용 = 이 값 × 그 모델 단가.
@@ -21,7 +23,7 @@
 // 행을 닫는 문장은 모두 이 칸을 함께 바꾸고, 정산·되돌리기 문장(work-ai-budget.mjs)은 "아직 열린 행일 때만" 바뀌는 guard를 건다.
 // 응답 jobs[]에는 토큰 수를 내보내지 않는다.
 import { contractInstructions, contractResultSchema, maskContractResult, validateContractResult } from "../src/lib/work/contract-extract.mjs";
-import { CONFIRM_AMOUNT_FIELDS, CONFIRM_FIELDS, CONFIRM_MIDDLE_PAYMENTS_MAX, compareContractResults, confirmFieldsFor, missingDecisions } from "../src/lib/work/contract-compare.mjs";
+import { CONFIRM_AMOUNT_FIELDS, CONFIRM_FIELDS, CONFIRM_MIDDLE_PAYMENTS_MAX, compareGroupResults, confirmFieldsFor, missingDecisions } from "../src/lib/work/contract-compare.mjs";
 import { MAX_AMOUNT_WON_EXCLUSIVE, cleanSingleLine } from "../src/lib/work/work-format.mjs";
 import { WorkAiError, cancelResponse, createBackgroundResponse, readResponseOutput, retrieveResponse } from "./openai-client.mjs";
 import { IMAGE_TOKENS_MAX, estimateCostMicroUsd, readContractAiConfig, readModelPrices } from "./work-ai-config.mjs";
@@ -40,7 +42,8 @@ export const AI_RESULT_KEEP_MS = 10 * 60 * 1000; // OpenAI background 결과 임
 export const AI_LEASE_MS = 60 * 60 * 1000; // 만든 뒤 이 시간이 지나도 끝나지 않은 작업은 unknown으로 닫는다(끝없는 조회 방지)
 export const AI_CREATE_TIMEOUT_MS = 120_000; // 사진을 실어 보내는 생성 요청 1번의 시간 제한
 export const AI_JOB_LIST_GROUPS = 5;
-export const AI_CROSS_REQUIRED_KEY = "contract_cross_model_required";
+// 새 묶음이 읽는 횟수(한 번 읽기, 2026-11-24 운영자 결정). 한도 예약·되돌리기·비용 미리 보기가 같은 값을 쓴다.
+export const AI_CONTRACT_READS = 1;
 const IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/webp"]);
 const OPEN_STATUSES = new Set(["queued", "in_progress"]);
 const BASE64_CHUNK_BYTES = 24_576; // 3의 배수(조각마다 따로 바꿔 이어 붙여도 같은 base64)
@@ -83,24 +86,12 @@ export function isWorkAiRoute(route) {
   return route === "/ai" || route.startsWith("/ai/");
 }
 
-// ── 교차 모델 설정(14.2절) ──
+// ── 설정 경고(14.2절) ──
 
-// settings.contract_cross_model_required가 정확히 false일 때만 "운영자가 같은 모델 두 번을 골랐다"로 본다(행 없음·다른 값은 true).
-export async function readCrossModelRequired(db) {
-  const row = await db.prepare("SELECT value_json FROM settings WHERE key = ?1").bind(AI_CROSS_REQUIRED_KEY).first();
-  if (!row) return true;
-  try {
-    return JSON.parse(row.value_json) !== false;
-  } catch {
-    return true;
-  }
-}
-
-// GET /work/session의 aiWarnings. 두 번 읽기의 모델이 같은데 운영자가 그렇게 고른 것이 아니면 CONTRACT_CROSS_MODEL_UNSET.
-export async function readAiWarnings(db, env) {
-  const config = readContractAiConfig(env);
-  if (config.error || !config.sameModel) return [];
-  return (await readCrossModelRequired(db)) ? ["CONTRACT_CROSS_MODEL_UNSET"] : [];
+// GET /work/session의 aiWarnings. 두 번 읽기 때는 두 모델이 같으면 CONTRACT_CROSS_MODEL_UNSET을 넣었지만, 한 번 읽기(2026-11-24)부터는
+// 견줄 둘째 모델이 없어 늘 빈 배열이다(settings.contract_cross_model_required도 읽지 않음). 세션 응답의 칸 모양은 그대로 둔다.
+export async function readAiWarnings() {
+  return [];
 }
 
 // ── OpenAI로 보내는 것 ──
@@ -113,7 +104,7 @@ function toBase64(bytes) {
   return parts.join("");
 }
 
-// images: data URL 글 배열(쪽 순서). 두 요청이 같은 글을 함께 쓴다(복사하지 않음).
+// images: data URL 글 배열(쪽 순서, 복사하지 않음). 새 묶음은 runIndex 1만 쓴다(2회째의 칸 순서를 바꾼 스키마·지시문은 옛 두 번 읽기 몫).
 export function buildContractRequest(model, detail, runIndex, images) {
   const content = [];
   images.forEach((imageUrl, index) => {
@@ -136,12 +127,10 @@ export function estimateContractInputTokens(runIndex, pages, detail) {
   return contractInstructions(runIndex).length + JSON.stringify(contractResultSchema(runIndex)).length + pages * (IMAGE_TOKENS_MAX[detail] + 10) + 200;
 }
 
-// 두 번 읽기의 예약값(입력 토큰 추정·예약 비용). 만들기와 예상 비용 미리 보기가 같은 함수를 쓴다(두 값이 어긋나지 않게).
+// 한 번 읽기의 예약값(입력 토큰 추정·예약 비용). 만들기와 예상 비용 미리 보기가 같은 함수를 쓴다(두 값이 어긋나지 않게).
 export function contractReservation(config, pages) {
-  const models = [config.a, config.b];
-  const inputTokens = [1, 2].map((runIndex) => estimateContractInputTokens(runIndex, pages, config.detail));
-  const reserved = models.map((model, index) => estimateCostMicroUsd(model.prices, inputTokens[index], model.maxOutputTokens));
-  return { inputTokens, reserved, reservedTotal: reserved[0] + reserved[1] };
+  const inputTokens = estimateContractInputTokens(1, pages, config.detail);
+  return { inputTokens, reservedTotal: estimateCostMicroUsd(config.a.prices, inputTokens, config.a.maxOutputTokens) };
 }
 
 // ── 작업 행 ──
@@ -153,6 +142,7 @@ const GROUP_SQL = `SELECT ${JOB_COLUMNS} FROM ai_jobs WHERE group_id = ?1 AND ki
 export const OPEN_JOBS_SQL = `SELECT ${JOB_COLUMNS} FROM ai_jobs WHERE status IN ('queued','in_progress') AND kind = 'contract_schedule'
   ORDER BY updated_at, id LIMIT ?1`;
 // ai_jobs에는 거래 칸이 없어 input_file_ids(파일 ID 배열)와 files.deal_id로 거래를 찾는다(표가 작아 전체를 훑는다).
+// 목록은 묶음 5개를 만들려고 행을 5 × 2개까지 읽는다(옛 두 번 읽기 묶음은 행이 2개, 한 번 읽기 묶음은 1개).
 const DEAL_OF_JOB = "EXISTS (SELECT 1 FROM json_each(j.input_file_ids) e JOIN files f ON f.id = e.value WHERE f.deal_id = ";
 const ACTIVE_GROUP_SQL = `SELECT j.group_id FROM ai_jobs j WHERE j.kind = 'contract_schedule' AND j.status IN ('queued','in_progress')
   AND ${DEAL_OF_JOB}?1) LIMIT 1`;
@@ -171,9 +161,9 @@ WHERE NOT EXISTS (SELECT 1 FROM ai_jobs j WHERE j.kind = 'contract_schedule' AND
     AND ${DEAL_OF_JOB}?12))
   AND (SELECT count(*) FROM files f WHERE f.deal_id = ?12 AND f.kind = 'contract_copy' AND f.rrn_masked = 1
     AND f.id IN (SELECT value FROM json_each(?8))) = ?13`;
-// 두 행이 실제로 들어갔을 때만 감사가 남는다(OpenAI를 부르기 전).
+// 작업 행이 실제로 들어갔을 때만 감사가 남는다(OpenAI를 부르기 전).
 const CREATE_AUDIT_SQL = `INSERT INTO audit_events (at, actor_email, action, target_type, target_id, request_id, outcome, reason)
-SELECT ?1, ?2, 'ai.create', 'ai_job_group', ?3, ?4, 'ok', ?5 WHERE (SELECT count(*) FROM ai_jobs WHERE group_id = ?3) = 2`;
+SELECT ?1, ?2, 'ai.create', 'ai_job_group', ?3, ?4, 'ok', ?5 WHERE (SELECT count(*) FROM ai_jobs WHERE group_id = ?3) = ${AI_CONTRACT_READS}`;
 const CREATED_SQL = "UPDATE ai_jobs SET openai_response_id = ?2, status = ?3, updated_at = ?4 WHERE id = ?1 AND status = 'queued'";
 const PROGRESS_SQL = "UPDATE ai_jobs SET status = ?2, updated_at = ?3 WHERE id = ?1 AND status IN ('queued','in_progress')";
 // 결과를 받아 닫는다: 토큰 칸을 실제 사용량(모르면 NULL)으로 바꾼다.
@@ -209,6 +199,7 @@ async function readGroup(db, groupId) {
 }
 
 // 묶음 상태: running(열린 행 있음) → cancelled → confirmed·ready(결과가 하나라도 있음) → failed.
+// 한 번 읽기 묶음(행 1개)은 그 작업이 끝나면 ready, 실패하면 failed다. 옛 두 번 읽기 묶음(행 2개)도 같은 규칙이다.
 export function groupStatusOf(rows) {
   if (rows.some((row) => OPEN_STATUSES.has(row.status))) return "running";
   if (rows.some((row) => row.status === "cancelled")) return "cancelled";
@@ -345,56 +336,51 @@ async function createJobs(ctx) {
   // 미리 확인(R2·한도에 손대기 전에 흔한 경우를 거른다). 경합은 아래 조건부 INSERT가 막는다.
   const active = await db.prepare(ACTIVE_GROUP_SQL).bind(dealId).first();
   if (active) throw jobActive(active.group_id);
-  const pairMode = !config.sameModel ? "cross" : (await readCrossModelRequired(db)) ? "same_unset" : "same_chosen";
 
   const images = await readImages(ctx, fileRows);
 
-  const models = [config.a, config.b];
-  const { inputTokens, reserved, reservedTotal } = contractReservation(config, images.length);
-  const { day } = await reserveAiBudgetMany(db, { nowMs: now, count: 2, reservedCostMicroUsd: reservedTotal });
+  const model = config.a;
+  const { inputTokens, reservedTotal } = contractReservation(config, images.length);
+  const { day } = await reserveAiBudgetMany(db, { nowMs: now, count: AI_CONTRACT_READS, reservedCostMicroUsd: reservedTotal });
   const refundAll = async () => {
     try {
-      await refundManyStatement(db, { day, count: 2, reservedCostMicroUsd: reservedTotal }).run();
+      await refundManyStatement(db, { day, count: AI_CONTRACT_READS, reservedCostMicroUsd: reservedTotal }).run();
     } catch {
       // 되돌리기 실패는 한도를 실제보다 많이 센 쪽이라 그대로 둔다.
     }
   };
 
   const groupId = randomUUID();
-  const jobIds = [randomUUID(), randomUUID()];
+  const jobId = randomUUID();
   const at = iso(now);
-  const insert = (index) => db.prepare(JOB_INSERT_SQL).bind(jobIds[index], groupId, index + 1, pairMode, iso(now + AI_LEASE_MS), models[index].model, models[index].effort,
-    fileIdsJson, inputTokens[index], models[index].maxOutputTokens, at, dealId, fileIds.length);
   let inserted;
   try {
     const batch = await runBatch(db, [
-      insert(0),
-      insert(1),
+      // 한 번 읽기 묶음: run_index 1, pair_mode NULL(두 번 읽기의 짝 방식이 없음. 0001의 CHECK가 NULL을 받는다).
+      db.prepare(JOB_INSERT_SQL).bind(jobId, groupId, 1, null, iso(now + AI_LEASE_MS), model.model, model.effort,
+        fileIdsJson, inputTokens, model.maxOutputTokens, at, dealId, fileIds.length),
       // reason은 고정 꼴만(거래·파일 번호 없음).
-      db.prepare(CREATE_AUDIT_SQL).bind(at, actor.email.toLowerCase(), groupId, requestId, `kind=${AI_JOB_KIND};files=${fileIds.length};pair=${pairMode}`),
+      db.prepare(CREATE_AUDIT_SQL).bind(at, actor.email.toLowerCase(), groupId, requestId, `kind=${AI_JOB_KIND};files=${fileIds.length};reads=${AI_CONTRACT_READS}`),
     ]);
-    inserted = changesOf(batch[0]) + changesOf(batch[1]);
+    inserted = changesOf(batch[0]);
   } catch (error) {
     await refundAll();
     throw error;
   }
-  if (inserted !== 2) {
+  if (inserted !== 1) {
     // 미리 확인한 뒤 다른 요청이 먼저 넣었거나(409) 그 사이 파일이 지워졌다(404). OpenAI는 부르지 않는다.
     await refundAll();
     const other = await db.prepare(ACTIVE_GROUP_SQL).bind(dealId).first();
     throw other ? jobActive(other.group_id) : notFound();
   }
 
-  const outcomes = [];
-  for (const index of [0, 1]) {
-    outcomes.push(await sendCreate(ctx, { id: jobIds[index], runIndex: index + 1, model: models[index], detail: config.detail, day, reservedCostMicroUsd: reserved[index] }, images));
-  }
-  if (!outcomes.some((outcome) => outcome.created)) {
-    // 둘 다 만들어지지 않았을 때만 오류로 답한다. 하나라도 "모름"이면 AI_STATE_UNKNOWN(행은 unknown으로 남아 목록에서 보인다).
-    throw aiErrorResponse(outcomes.some((outcome) => outcome.unknown) ? "AI_STATE_UNKNOWN" : outcomes[0].code);
+  const outcome = await sendCreate(ctx, { id: jobId, runIndex: 1, model, detail: config.detail, day, reservedCostMicroUsd: reservedTotal }, images);
+  if (!outcome.created) {
+    // 만들어지지 않았으면 오류로 답한다. "모름"이면 AI_STATE_UNKNOWN(행은 unknown으로 남아 목록에서 보인다).
+    throw aiErrorResponse(outcome.unknown ? "AI_STATE_UNKNOWN" : outcome.code);
   }
   const rows = await readGroup(db, groupId);
-  return { status: 201, data: { groupId, pairMode, jobs: rows.map(jobSummary) } };
+  return { status: 201, data: { groupId, pairMode: null, jobs: rows.map(jobSummary) } };
 }
 
 // ── 결과 받기(조회 API와 1분 예약이 같이 쓴다) ──
@@ -551,7 +537,7 @@ async function estimateCreate(ctx) {
   const config = readContractAiConfig(env);
   if (config.error) throw aiUnavailable(config.error);
   const { reservedTotal } = contractReservation(config, pages);
-  const requests = 2;
+  const requests = AI_CONTRACT_READS;
   const limits = await readAiLimits(db);
   const usage = await readAiUsage(db, now);
   const limitsSet = limits.dailyCreateLimit !== null && limits.monthlyCostLimitMicroUsd !== null;
@@ -579,7 +565,8 @@ async function estimateCreate(ctx) {
 // ── 확정 ──
 // POST /work/ai/jobs/:groupId/confirm  { dealVersion, apply: { 칸: 값 }, keep: [칸 이름] }(2026-11-23 대장 결정 G18 ~ G21, 사용자 선택 "다섯 다 추천대로")
 // - 두 결과가 다르거나 한쪽만 있는 칸은 apply(넣음)·keep(지금 거래 값 그대로) 가운데 정확히 한 곳에 있어야 한다. 같은 칸은 apply에 있을 때만 쓴다.
-//   서버가 화면과 같은 비교 함수(contract-compare.mjs)로 다시 견줘 확인한다.
+//   한 번 읽기 묶음(행 1개)은 AI가 읽은 칸(read) 모두가 apply·keep 가운데 한 곳에 있어야 하고, 못 읽은 칸(unread)은 apply에 있을 때만 쓴다.
+//   서버가 화면과 같은 비교 함수(contract-compare.mjs compareGroupResults)로 다시 견줘 확인한다.
 // - 거래에는 계약일·중도금 날짜·잔금일·거래 종류에 맞는 금액만 쓴다(계약금·중도금·잔금 금액, 물건 표시, 거래 종류는 보기만).
 //   첫 중도금은 deals.middle_payment_on, 둘째부터는 직접 일정(kind custom, source ai_confirmed, 금액 없음)으로 넣는다. 다시 확정하면
 //   그 거래의 custom·ai_confirmed·끝나지 않은 일정만 바꾼다(사람이 날짜·제목을 고친 것은 manual이라 남음).
@@ -680,9 +667,10 @@ async function confirmGroup(ctx, groupId) {
   const allowed = confirmFieldsFor(deal.deal_type);
   const offType = [...Object.keys(input.apply), ...input.keep].filter((field) => !allowed.includes(field));
   if (offType.length > 0) throw invalid(offType);
-  const results = [1, 2].map((runIndex) => storedResult(rows.find((row) => row.run_index === runIndex)));
+  // 행은 run_index 순서다(GROUP_SQL). 한 번 읽기 묶음은 결과 1개, 옛 두 번 읽기 묶음은 2개(결과가 없는 작업은 null).
+  const results = rows.map(storedResult);
   if (results.every((result) => result === null)) throw jobConflict();
-  const missing = missingDecisions(compareContractResults(results[0], results[1], deal.deal_type), input.apply, input.keep);
+  const missing = missingDecisions(compareGroupResults(results, deal.deal_type), input.apply, input.keep);
   if (missing.length > 0) throw invalid(missing);
 
   // 새 거래 값(고른 칸만 바꿈).

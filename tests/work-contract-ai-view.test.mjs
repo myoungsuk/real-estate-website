@@ -12,12 +12,15 @@ import {
   AI_DISABLED_TEXT,
   AI_POLL_FAST_MS,
   AI_POLL_SLOW_MS,
+  AI_STATUS_TEXT,
   aiCanApply,
+  aiCompareJobs,
   aiConfirmBody,
   aiConfirmErrorText,
   aiCreateErrorText,
   aiDollarText,
   aiElapsedText,
+  aiEmptyStatus,
   aiEstimateLines,
   aiEvidenceOf,
   aiHalfText,
@@ -30,6 +33,7 @@ import {
   aiReviewHref,
   aiReviewParams,
   aiSchedulePreview,
+  aiSingleRead,
   aiSummary,
   aiValueText,
   compareContractResults,
@@ -76,6 +80,10 @@ test("S-01 비용 미리 보기: 막힌 까닭(한도 없음·하루·월)마다
   assert.equal(aiEstimateLines({ ...base, remainingCostMicroUsd: null, blockedBy: "limits_missing" }).limit, "한도를 아직 정하지 않았습니다");
   assert.match(aiEstimateLines({ ...base, remainingCreates: 1, allowed: false, blockedBy: "daily" }).blocked, /남은 1회, 이번에 2회 필요/u);
   assert.match(aiEstimateLines({ ...base, remainingCostMicroUsd: 1_000_000, allowed: false, blockedBy: "monthly" }).blocked, /남은 1\.00달러/u);
+  // 한 번 읽기(2026-11-24부터): 서버 미리 보기가 requests 1을 주면 '1회'로 적는다.
+  const single = { ...base, requests: 1, estimatedCostMicroUsd: 700_000 };
+  assert.deepEqual(aiEstimateLines(single), { cost: "최대 약 0.70달러", limit: "이번 달 10.00달러 · 오늘 9회(이번에 1회 씀)", blocked: null });
+  assert.match(aiEstimateLines({ ...single, remainingCreates: 0, allowed: false, blockedBy: "daily" }).blocked, /남은 0회, 이번에 1회 필요/u);
 });
 
 test("S-01·S-12 오류 글: AI 꺼짐은 정해진 한 줄, 모르는 코드는 손님 화면 공통 문장, 결과를 못 받은 실패는 새 비용을 밝힌다", () => {
@@ -143,6 +151,38 @@ test("S-07 한쪽만: 한쪽만 읽은 중도금도, 한 작업이 실패해 모
   assert.deepEqual(aiPendingFields(half, aiInitialChoices(half)), ["contractDate", "middlePayments", "balanceDate", "priceWon"], "한쪽 결과만 있으면 빈 중도금도 한쪽만");
   assert.equal(aiHalfText([{ runIndex: 1, result: {} }, { runIndex: 2, result: null }]), "2회째가 실패해 1회째 결과만 있습니다. 모든 칸을 직접 골라 주세요.");
   assert.equal(aiHalfText([{ runIndex: 1, result: {} }, { runIndex: 2, result: {} }]), null);
+});
+
+test("한 번 읽기 묶음: 칸마다 AI 값 하나이고, 읽은 칸은 처음에 골라 두지 않아 모두 사람이 골라야 하며, 못 읽은 칸은 고르지 않아도 된다", () => {
+  const jobs = [{ runIndex: 1, result: result({ price: null, middles: ["2026-11-20"] }) }];
+  assert.equal(aiSingleRead(jobs), true);
+  assert.equal(aiSingleRead([...jobs, { runIndex: 2, result: null }]), false, "작업 2개는 옛 두 번 읽기 묶음");
+  const comparison = aiCompareJobs(jobs, "sale");
+  assert.deepEqual(comparison.fields.map((item) => [item.field, item.status]), [["contractDate", "read"], ["middlePayments", "read"], ["balanceDate", "read"], ["priceWon", "unread"]]);
+  assert.ok(comparison.fields.every((item) => item.second === null), "견줄 둘째 값 없음");
+  const choices = aiInitialChoices(comparison);
+  assert.deepEqual(choices, {}, "AI 값도 미리 넣지 않음");
+  assert.deepEqual(aiPendingFields(comparison, choices), ["contractDate", "middlePayments", "balanceDate"]);
+  assert.deepEqual(aiSummary(comparison), { same: 0, different: 0, oneSide: 0, read: 3, unread: 1, reference: 7 }, "보기만: 계약서 종류·거래 종류·계약금일·계약금·중도금 금액·잔금 금액·물건 표시(못 읽은 보증금·월세는 세지 않음)");
+  assert.equal(aiHalfText(jobs), null, "한쪽만 알림은 옛 묶음에만");
+  assert.deepEqual([AI_STATUS_TEXT.read, AI_STATUS_TEXT.unread], ["확인할 칸", "– 못 읽음"]);
+  assert.deepEqual([aiEmptyStatus("unread"), aiEmptyStatus("both_empty"), aiEmptyStatus("read")], [true, true, false]);
+
+  const picked = {
+    contractDate: { kind: "first", value: "2026-11-02" },
+    middlePayments: { kind: "keep", value: null },
+    balanceDate: { kind: "manual", value: "2026-12-29" },
+  };
+  assert.deepEqual(aiPendingFields(comparison, picked), []);
+  assert.deepEqual(aiConfirmBody(comparison, picked, 4), { dealVersion: 4, apply: { contractDate: "2026-11-02", balanceDate: "2026-12-29" }, keep: ["middlePayments"] });
+  const withPrice = { ...picked, priceWon: { kind: "manual", value: 410_000_000 } };
+  assert.equal(aiConfirmBody(comparison, withPrice, 4).apply.priceWon, 410_000_000, "못 읽은 칸도 직접 넣으면 본문에 들어감");
+
+  // 옛 두 번 읽기 묶음은 runIndex 순서로 견준다(응답 순서가 달라도).
+  const pair = [{ runIndex: 2, result: result({ balance: "2026-12-31" }) }, { runIndex: 1, result: result({ balance: "2026-12-30" }) }];
+  const old = aiCompareJobs(pair, "sale");
+  assert.deepEqual(old, compareContractResults(pair[1].result, pair[0].result, "sale"));
+  assert.equal(old.fields.find((item) => item.field === "balanceDate").first, "2026-12-30");
 });
 
 test("고르기 규칙: 못 읽은 차가 있는 중도금은 그대로 넣을 수 없고, 직접 넣기 값은 날짜·원 단위 정수·1 ~ 4차만 받는다", () => {

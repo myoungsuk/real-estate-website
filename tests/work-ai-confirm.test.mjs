@@ -1,10 +1,13 @@
 // 단계 4 계약서 AI 확정(/confirm)·예상 비용 미리 보기(/ai/estimate) 시험(설계서 14.3절, 대장 결정 G18 ~ G21, 확정 서버 시험 기준 C-01 ~ C-24).
+// 2026-11-24부터 새 묶음은 한 번 읽기(작업 1개)다. 아래 시험 대부분은 옛 두 번 읽기 묶음(작업 2개)으로 확정이 그대로 되는지 보고, '한 번 읽기' 시험이 새 묶음을 본다.
 // 가짜 D1(node:sqlite)·가짜 R2·가짜 OpenAI만 쓴다. 전역 fetch는 덫으로 바꾸고, 확정·미리 보기는 OpenAI fetcher를 넘기지 않아(부르면 예외) 0번을 확인한다.
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
   CONFIRM_AMOUNT_FIELDS_BY_TYPE,
   compareContractResults,
+  compareGroupResults,
+  compareSingleResult,
   confirmFieldsFor,
   contractValues,
   missingDecisions,
@@ -55,21 +58,22 @@ async function makeDeal(env, body = {}) {
   return result.json.data.deal;
 }
 
-// 묶음 행을 직접 넣는다(만들기·조회는 work-ai-jobs 시험이 본다). jobs: [{ status, result }] 두 개(1·2회째).
+// 묶음 행을 직접 넣는다(만들기·조회는 work-ai-jobs 시험이 본다). jobs: [{ status, result }] 1개(한 번 읽기 묶음, pair_mode 없음)
+// 또는 2개(옛 두 번 읽기 묶음, 1·2회째, pair_mode cross).
 function seedGroup(database, fileIds, jobs, { kind = "contract_schedule", groupId = nextUuid() } = {}) {
   jobs.forEach((job, index) => {
     const checked = job.result ? validateContractResult(job.result) : null;
     if (job.result) assert.equal(checked.ok, true, "시험 결과는 검사를 통과하는 꼴");
     database.prepare(`INSERT INTO ai_jobs (id, group_id, run_index, pair_mode, kind, status, model, reasoning_effort, input_file_ids, result_json, error_code, confirmed_at, created_at, updated_at)
-      VALUES (?, ?, ?, 'cross', ?, ?, ?, 'max', ?, ?, ?, ?, ?, ?)`).run(
-      nextUuid(), groupId, index + 1, kind, job.status ?? "completed", index === 0 ? MODEL_A : MODEL_B, JSON.stringify(fileIds),
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'max', ?, ?, ?, ?, ?, ?)`).run(
+      nextUuid(), groupId, index + 1, jobs.length === 1 ? null : "cross", kind, job.status ?? "completed", index === 0 ? MODEL_A : MODEL_B, JSON.stringify(fileIds),
       checked ? JSON.stringify({ maskedCount: 0, result: checked.result }) : null, job.status === "failed" ? "AI_RESULT_INVALID" : null, job.confirmedAt ?? null, AT, AT,
     );
   });
   return groupId;
 }
 
-// 흔한 준비: 켜진 env + 한도 + 거래(API로 만듦) + 계약서 사본 2장 + 묶음(두 결과).
+// 흔한 준비: 켜진 env + 한도 + 거래(API로 만듦) + 계약서 사본 2장 + 묶음(기본은 옛 두 번 읽기의 두 결과, statuses를 1개로 주면 한 번 읽기 묶음).
 async function setup({ deal = {}, results = [contract(), contract()], statuses = ["completed", "completed"], limits = true } = {}) {
   const { database, db } = freshDb();
   const r2 = createR2();
@@ -107,6 +111,50 @@ test("비교 함수: 같음·다름·한쪽만·둘 다 없음을 가리고, 중
   assert.equal(compareContractResults(contract({ middles: [] }), contract({ middles: [] }), "sale").fields[1].status, "both_empty");
   assert.deepEqual(confirmFieldsFor("monthly_rent"), ["contractDate", "middlePayments", "balanceDate", "depositWon", "monthlyRentWon"]);
   assert.equal(contractValues(null), null);
+});
+
+test("비교 함수(한 번 읽기): AI가 읽은 칸은 read(사람이 골라야 함), 못 읽은 칸은 unread(고르지 않아도 됨)이고, compareGroupResults는 결과 수로 갈래를 고른다", () => {
+  const a = validateContractResult(contract({ middles: ["2026-11-20"], price: null })).result;
+  const single = compareSingleResult(a, "sale");
+  assert.deepEqual(single.fields.map((item) => [item.field, item.status, item.second]), [
+    ["contractDate", "read", null], ["middlePayments", "read", null], ["balanceDate", "read", null], ["priceWon", "unread", null],
+  ]);
+  assert.deepEqual(single.fields[1].first, ["2026-11-20"]);
+  assert.ok(single.reference.some((item) => item.field === "balanceWon" && item.status === "read"), "잔금 금액은 보기만(읽었으면 read)");
+  assert.ok(single.reference.some((item) => item.field === "depositWon" && item.status === "unread"), "매매에 맞지 않는 금액은 보기만");
+  assert.deepEqual(missingDecisions(single, {}, []), ["contractDate", "middlePayments", "balanceDate"], "읽은 칸은 모두 사람이 골라야 함");
+  assert.deepEqual(missingDecisions(single, { contractDate: "2026-11-02", balanceDate: "2026-12-30" }, ["middlePayments"]), [], "못 읽은 칸(거래금액)은 고르지 않아도 됨");
+  assert.deepEqual(compareSingleResult(null, "sale").fields.map((item) => item.status), ["unread", "unread", "unread", "unread"]);
+  assert.deepEqual(compareGroupResults([a], "sale"), single, "결과 1개 = 한 번 읽기");
+  const b = validateContractResult(contract()).result;
+  assert.deepEqual(compareGroupResults([a, b], "sale"), compareContractResults(a, b, "sale"), "결과 2개 = 옛 두 번 읽기 비교");
+  assert.deepEqual(compareGroupResults([null, b], "sale"), compareContractResults(null, b, "sale"), "옛 묶음 한쪽 실패도 그대로");
+});
+
+test("한 번 읽기 묶음 확정: 읽은 칸이 apply·keep 어디에도 없으면 400(details에 그 칸)이고, 다 고르면 200으로 고른 칸만 쓰며 못 읽은 칸은 apply에 넣을 때만 쓴다", async (t) => {
+  installNetworkTrap(t);
+  const ctx = await setup({ deal: { priceWon: 300_000_000 }, results: [contract({ price: null, balance: "2026-12-30" })], statuses: ["completed"] });
+  assert.deepEqual(rows(ctx.database, "SELECT run_index, pair_mode FROM ai_jobs WHERE group_id = ?", ctx.groupId), [{ run_index: 1, pair_mode: null }]);
+  const before = snapshot(ctx.database);
+  const refused = await confirm(ctx, body(ctx));
+  assert.deepEqual([refused.status, refused.json.error.code, refused.json.error.details], [400, "VALIDATION_FAILED", ["contractDate", "balanceDate"]], "AI 값도 사람이 골라야 함(미리 넣지 않음)");
+  const half = await confirm(ctx, body(ctx, { contractDate: "2026-11-02" }));
+  assert.deepEqual([half.status, half.json.error.details], [400, ["balanceDate"]]);
+  assert.equal(snapshot(ctx.database), before, "거절은 쓰기 0");
+
+  // 계약일은 AI 값, 잔금일은 지금 값 그대로, 못 읽은 거래금액은 고르지 않음 → 계약일만 바뀐다.
+  const result = await confirm(ctx, body(ctx, { contractDate: "2026-11-02" }, ["balanceDate"]));
+  assert.equal(result.status, 200, JSON.stringify(result.json));
+  const after = dealRow(ctx.database, ctx.deal.id);
+  assert.deepEqual([after.contract_on, after.balance_on, after.price_won], ["2026-11-02", null, 300_000_000]);
+  assert.ok(jobRows(ctx.database, ctx.groupId).every((row) => row.confirmed_at !== null), "작업 1행이 확정됨");
+  assert.equal(audits(ctx.database, "ai.confirm").length, 1);
+
+  // 못 읽은 칸도 직접 넣으면(apply) 쓴다.
+  const manual = await setup({ results: [contract({ price: null })], statuses: ["completed"] });
+  const written = await confirm(manual, body(manual, { contractDate: "2026-11-02", balanceDate: "2026-12-30", priceWon: 410_000_000 }));
+  assert.equal(written.status, 200, JSON.stringify(written.json));
+  assert.equal(dealRow(manual.database, manual.deal.id).price_won, 410_000_000);
 });
 
 test("비교 함수의 거래 종류별 금액 칸은 거래 입력 규칙(work-input.mjs)과 같다(원본 대조)", () => {
@@ -612,7 +660,7 @@ test("C-23·C-24 외부·응답: OpenAI 0번·R2 0번·사용량·result_json �
   for (const leaked of ["2026-11-02", "2026-12-30", "350000000", MARK.title]) assert.equal(logText.includes(leaked), false, leaked);
 });
 
-test("만들기 → 조회(ready) → 확정이 이어진다(가짜 OpenAI 두 번 읽기, 확정 자체는 OpenAI를 부르지 않음)", async (t) => {
+test("만들기 → 조회(ready) → 확정이 이어진다(가짜 OpenAI 한 번 읽기, 확정 자체는 OpenAI를 부르지 않음)", async (t) => {
   installNetworkTrap(t);
   const { database, db } = freshDb();
   const r2 = createR2();
@@ -622,17 +670,15 @@ test("만들기 → 조회(ready) → 확정이 이어진다(가짜 OpenAI 두 �
   const fileIds = [await seedCopy(database, r2, { dealId: deal.id })];
   const ai = scriptedOpenAi([
     { kind: "create", respond: created("resp_a1", "in_progress") },
-    { kind: "create", respond: created("resp_b1", "in_progress") },
     { kind: "retrieve", respond: completed("resp_a1", contract({ balance: "2026-12-30" })) },
-    { kind: "retrieve", respond: completed("resp_b1", contract({ balance: "2026-12-31" })) },
   ]);
   const made = await work(env, "/ai/jobs", { method: "POST", body: { kind: "contract_schedule", fileIds, dealId: deal.id }, openaiFetch: ai.fetcher });
   assert.equal(made.status, 201);
   const ready = await work(env, `/ai/jobs/${made.json.data.groupId}`, { openaiFetch: ai.fetcher });
   assert.equal(ready.json.data.group.status, "ready");
-  const [first, second] = ready.json.data.jobs.map((job) => job.result);
-  const compared = compareContractResults(first, second, "sale");
-  assert.deepEqual(missingDecisions(compared, {}, []), ["balanceDate"], "화면이 조회 결과로 같은 판정을 냄");
+  assert.equal(ready.json.data.group.pairMode, null);
+  const compared = compareGroupResults(ready.json.data.jobs.map((job) => job.result), "sale");
+  assert.deepEqual(missingDecisions(compared, {}, []), ["contractDate", "balanceDate", "priceWon"], "화면이 조회 결과로 같은 판정을 냄(읽은 칸 모두)");
   const done = await work(env, `/ai/jobs/${made.json.data.groupId}/confirm`, { method: "POST", body: { dealVersion: deal.version, apply: { contractDate: "2026-11-02", balanceDate: "2026-12-31", priceWon: 350_000_000 }, keep: [] } });
   assert.equal(done.status, 200, JSON.stringify(done.json));
   assert.equal(ai.remaining(), 0);
@@ -647,12 +693,13 @@ test("미리 보기: 장수별 예상 비용이 만들기가 미리 더하는 �
   const r2 = createR2();
   const env = aiEnv(db, r2);
   setLimits(database, { daily: 10, monthly: 50_000_000 });
-  const expected = (pages) => [1, 2].reduce((sum, runIndex, index) => sum + estimateCostMicroUsd(AI_PRICES[[MODEL_A, MODEL_B][index]], estimateContractInputTokens(runIndex, pages, "high"), AI_MAX_OUTPUT), 0);
+  // 한 번 읽기: 모델 A로 1회째 지시문·스키마 1번 몫.
+  const expected = (pages) => estimateCostMicroUsd(AI_PRICES[MODEL_A], estimateContractInputTokens(1, pages, "high"), AI_MAX_OUTPUT);
   for (const pages of [1, 2, 5]) {
     const result = await work(env, `/ai/estimate?pages=${pages}`);
     assert.equal(result.status, 200, JSON.stringify(result.json));
     assert.deepEqual(result.json.data, {
-      pages, requests: 2, estimatedCostMicroUsd: expected(pages), dailyCreateLimit: 10, todayCreates: 0, remainingCreates: 10,
+      pages, requests: 1, estimatedCostMicroUsd: expected(pages), dailyCreateLimit: 10, todayCreates: 0, remainingCreates: 10,
       monthlyCostLimitMicroUsd: 50_000_000, monthCostMicroUsd: 0, remainingCostMicroUsd: 50_000_000, allowed: true, blockedBy: null,
     });
     assert.equal(/token|price|input|output/iu.test(JSON.stringify(result.json.data)), false, "단가·토큰 수를 싣지 않음");
@@ -664,11 +711,11 @@ test("미리 보기: 장수별 예상 비용이 만들기가 미리 더하는 �
   const deal = await makeDeal(env);
   const fileIds = [await seedCopy(database, r2, { dealId: deal.id }), await seedCopy(database, r2, { dealId: deal.id })];
   const preview = (await work(env, "/ai/estimate?pages=2")).json.data;
-  const ai = scriptedOpenAi([{ kind: "create", respond: created("resp_a1", "in_progress") }, { kind: "create", respond: created("resp_b1", "in_progress") }]);
+  const ai = scriptedOpenAi([{ kind: "create", respond: created("resp_a1", "in_progress") }]);
   assert.equal((await work(env, "/ai/jobs", { method: "POST", body: { kind: "contract_schedule", fileIds, dealId: deal.id }, openaiFetch: ai.fetcher })).status, 201);
   assert.equal(usageRows(database)[0].estimated_cost_micro_usd, preview.estimatedCostMicroUsd);
   const after = (await work(env, "/ai/estimate?pages=2")).json.data;
-  assert.deepEqual([after.todayCreates, after.remainingCreates, after.monthCostMicroUsd], [2, 8, preview.estimatedCostMicroUsd]);
+  assert.deepEqual([after.todayCreates, after.remainingCreates, after.monthCostMicroUsd], [1, 9, preview.estimatedCostMicroUsd]);
 });
 
 test("미리 보기: 한도 없음·하루 한도·월 한도는 만들기와 같은 순서로 blockedBy에 알리고, 장수 꼴이 틀리면 400·POST는 405·AI가 꺼지면 503이다", async (t) => {
@@ -679,7 +726,9 @@ test("미리 보기: 한도 없음·하루 한도·월 한도는 만들기와 �
   assert.deepEqual([missing.allowed, missing.blockedBy, missing.remainingCreates, missing.remainingCostMicroUsd], [false, "limits_missing", null, null]);
   setLimits(database, { daily: 3, monthly: 50_000_000 });
   database.prepare("INSERT INTO ai_usage_daily (day, create_requests, estimated_cost_micro_usd) VALUES ('2026-11-17', 2, 0)").run();
-  assert.equal((await work(env, "/ai/estimate?pages=1")).json.data.blockedBy, "daily", "2 + 2 > 3");
+  assert.equal((await work(env, "/ai/estimate?pages=1")).json.data.blockedBy, null, "2 + 1 = 3이면 통과(한 번 읽기)");
+  database.prepare("UPDATE ai_usage_daily SET create_requests = 3 WHERE day = '2026-11-17'").run();
+  assert.equal((await work(env, "/ai/estimate?pages=1")).json.data.blockedBy, "daily", "3 + 1 > 3");
   setLimits(database, { daily: 10, monthly: 100_000 });
   assert.equal((await work(env, "/ai/estimate?pages=1")).json.data.blockedBy, "monthly");
   // 경계: 남은 비용이 예상 비용과 같으면 만들기처럼 받는다(만들기는 합계 <= 한도면 통과).
@@ -689,7 +738,7 @@ test("미리 보기: 한도 없음·하루 한도·월 한도는 만들기와 �
   assert.deepEqual([edge.allowed, edge.blockedBy, edge.remainingCostMicroUsd], [true, null, cost], "남은 비용 = 예상 비용");
   setLimits(database, { daily: 10, monthly: cost - 1 });
   assert.equal((await work(env, "/ai/estimate?pages=1")).json.data.blockedBy, "monthly", "1마이크로달러 모자라면 막힘");
-  // 한도를 오늘 쓴 횟수(2)보다 낮추면 남은 횟수는 0이다(음수 아님).
+  // 한도를 오늘 쓴 횟수(3)보다 낮추면 남은 횟수는 0이다(음수 아님).
   setLimits(database, { daily: 1, monthly: 50_000_000 });
   const lowered = (await work(env, "/ai/estimate?pages=1")).json.data;
   assert.deepEqual([lowered.remainingCreates, lowered.blockedBy], [0, "daily"]);

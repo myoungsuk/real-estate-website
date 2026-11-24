@@ -72,7 +72,7 @@ async function setup(page, { width = 390, filesEnabled = true, store = makeStore
     if (aiEnabled && path === "/ai/jobs" && method === "GET") return route.fulfill(envelope({ items: [] }));
     if (aiEnabled && path === "/ai/estimate") {
       const pages = Number(url.searchParams.get("pages"));
-      return route.fulfill(envelope({ pages, requests: 2, estimatedCostMicroUsd: 560_000 * pages, dailyCreateLimit: 20, todayCreates: 0, remainingCreates: 20, monthlyCostLimitMicroUsd: 10_000_000, monthCostMicroUsd: 0, remainingCostMicroUsd: 10_000_000, allowed: true, blockedBy: null }));
+      return route.fulfill(envelope({ pages, requests: 1, estimatedCostMicroUsd: 280_000 * pages, dailyCreateLimit: 20, todayCreates: 0, remainingCreates: 20, monthlyCostLimitMicroUsd: 10_000_000, monthCostMicroUsd: 0, remainingCostMicroUsd: 10_000_000, allowed: true, blockedBy: null }));
     }
     if (path === `/customers/${CUSTOMER_ID}` && method === "GET") return route.fulfill(envelope({ customer: store.customer, deals: dealsOf(store), notes: [], files: [] }));
     if (path === "/files" && method === "POST") {

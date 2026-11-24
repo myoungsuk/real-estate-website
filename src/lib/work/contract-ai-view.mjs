@@ -5,7 +5,7 @@
 //   거래 칸 → 계산 입력 옮기기(dealScheduleInput)는 서버 scheduleInput과 같아야 한다(시험이 대조한다).
 // - 계약서 글·금액·날짜는 화면 메모리에만 두고 주소·브라우저 저장소·제목에 넣지 않는다(부르는 쪽 몫).
 import { buildContractSchedule, describeCalendarDate } from "./legal-dates.mjs";
-import { CONFIRM_MIDDLE_PAYMENTS_MAX, NEEDS_DECISION, compareContractResults } from "./contract-compare.mjs";
+import { CONFIRM_MIDDLE_PAYMENTS_MAX, NEEDS_DECISION, compareContractResults, compareGroupResults } from "./contract-compare.mjs";
 import { formatWon } from "./work-format.mjs";
 
 export const AI_PICK_MAX = 5;
@@ -86,8 +86,18 @@ export const AI_JOB_STATUS_LABELS = Object.freeze({
   queued: "기다리는 중", in_progress: "읽는 중", completed: "끝남", failed: "실패", cancelled: "그만둠", incomplete: "다 받지 못함", unknown: "확인 못 함",
 });
 
-// 묶음의 작업이 하나만 결과가 있을 때 위 알림(S-07).
+// 한 번 읽기 묶음(작업 1개, 2026-11-24부터 만든 것)인지. 아니면 옛 두 번 읽기 묶음이다.
+export const aiSingleRead = (jobs) => jobs.length === 1;
+
+// 묶음 조회 응답의 작업들(runIndex 순서) → 비교 결과. 한 번 읽기면 칸마다 read·unread, 옛 묶음이면 같음·다름·한쪽만·둘 다 없음.
+export function aiCompareJobs(jobs, dealType) {
+  const sorted = [...jobs].sort((a, b) => a.runIndex - b.runIndex);
+  return compareGroupResults(sorted.map((job) => job.result ?? null), dealType);
+}
+
+// 옛 두 번 읽기 묶음의 작업이 하나만 결과가 있을 때 위 알림(S-07). 한 번 읽기 묶음에는 없다.
 export function aiHalfText(jobs) {
+  if (aiSingleRead(jobs)) return null;
   const done = jobs.filter((job) => job.result);
   if (done.length !== 1) return null;
   const missing = jobs.find((job) => !job.result);
@@ -106,7 +116,10 @@ const DATE_FIELDS = new Set(["contractDate", "balanceDate", "downPaymentDate"]);
 const MONEY_FIELDS = new Set(["priceWon", "depositWon", "monthlyRentWon", "downPaymentWon", "balanceWon"]);
 const DOCUMENT_KIND_LABELS = Object.freeze({ sale_contract: "매매 계약서", lease_contract: "임대차 계약서", unknown: "알 수 없음" });
 const DEAL_TYPE_TEXT = Object.freeze({ sale: "매매", exchange: "교환", jeonse: "전세", monthly_rent: "월세" });
-export const AI_STATUS_TEXT = Object.freeze({ same: "✓ 같음", different: "≠ 다름", one_side: "◐ 한쪽만", both_empty: "– 둘 다 없음" });
+// read·unread는 한 번 읽기 묶음의 칸 상태다(read는 사람이 사진과 견줘 골라야 함).
+export const AI_STATUS_TEXT = Object.freeze({ same: "✓ 같음", different: "≠ 다름", one_side: "◐ 한쪽만", both_empty: "– 둘 다 없음", read: "확인할 칸", unread: "– 못 읽음" });
+// 칸 상태 가운데 값이 없어 화면에서 접어 두는 것(보기만 하는 칸 목록에서도 뺌).
+export const aiEmptyStatus = (status) => status === "both_empty" || status === "unread";
 
 // "2026-11-20" → "2026-11-20 (금)"
 export const aiDateText = (value) => {
@@ -140,13 +153,17 @@ export function aiEvidenceOf(result, field) {
   return pick.evidence?.quote ? pick.evidence : null;
 }
 
-// 비교 결과 → 개수 요약(같음·다름·한쪽만·보기만). both_empty는 세지 않는다.
+// 비교 결과 → 개수 요약(같음·다름·한쪽만, 한 번 읽기면 확인할 칸·못 읽음, 그리고 보기만). both_empty는 세지 않는다.
 export function aiSummary(comparison) {
   const count = (status) => comparison.fields.filter((item) => item.status === status).length;
-  return { same: count("same"), different: count("different"), oneSide: count("one_side"), reference: comparison.reference.filter((item) => item.status !== "both_empty").length };
+  return {
+    same: count("same"), different: count("different"), oneSide: count("one_side"), read: count("read"), unread: count("unread"),
+    reference: comparison.reference.filter((item) => !aiEmptyStatus(item.status)).length,
+  };
 }
 
 // 비교를 처음 열 때의 고르기: 같음 칸은 그 값을 넣고(apply), 둘 다 없는 칸은 건드리지 않고, 다름·한쪽만 칸은 비워 둔다(사람이 골라야 함).
+// 한 번 읽기 묶음은 같음 칸이 없어 처음에는 아무것도 골라 두지 않는다(AI 값도 사람이 사진과 견준 뒤 고름).
 // 고르기 하나: { kind: "first" | "second" | "keep" | "manual" | "same", value }
 // AI 값을 그대로 거래에 넣을 수 있는지: 값이 있고, 중도금이면 모든 차의 날짜를 읽었을 때만(못 읽은 차가 있으면 직접 넣기).
 export function aiCanApply(field, value) {
@@ -359,4 +376,4 @@ export function aiReviewParams(search) {
   return { id: UUID_PATTERN.test(id) ? id : null, from: UUID_PATTERN.test(from) ? from : null };
 }
 
-export { compareContractResults };
+export { compareContractResults, compareGroupResults };

@@ -5,6 +5,7 @@
 //   진행 중이면 이어서 조회하고(처음 1분 5초, 그 뒤 15초), 묶음이 끝나면 조회를 멈춘다(그 뒤 다시 부르지 않음, G17). 화면을 떠나면 타이머를 푼다.
 // - 시작 칸: 사본 고르기(1 ~ 5장) → 예상 비용·남은 한도(GET ai/estimate, 읽기만) → '사본 N장으로 일정 뽑기'(POST ai/jobs 한 번). 409 AI_JOB_ACTIVE면 그 묶음을 이어서 본다.
 // - 결과가 나오면 개수만 보이고 '결과 보고 고르기'로 결과 고르기 화면(/admin/work/ai/review/?id=)에 간다. 비교·확정은 그 화면에서만 한다.
+// - 2026-11-24부터 새 묶음은 AI가 한 번만 읽는다(작업 1개, 비용 1회 몫). 그 전에 만든 두 번 읽기 묶음(작업 2개)은 'n회' 줄을 그대로 보인다.
 // - 계약서 글·금액·날짜는 화면 메모리에만 둔다(주소·브라우저 저장소·제목 없음). 고르기 화면 주소에는 묶음 ID와 손님 카드 ID(UUID)만 싣는다.
 import type { CustomerDeal, CustomerFile } from "./work-customers-client";
 import { WorkApiError } from "./work-customers-client";
@@ -25,6 +26,7 @@ import { copyFilesOf, copyRowText } from "./work/contract-copy-view.mjs";
 import {
   AI_JOB_STATUS_LABELS,
   AI_PICK_MAX,
+  aiCompareJobs,
   aiCreateErrorText,
   aiElapsedText,
   aiEstimateLines,
@@ -34,8 +36,8 @@ import {
   aiPendingFields,
   aiPollDelay,
   aiReviewHref,
+  aiSingleRead,
   aiSummary,
-  compareContractResults,
 } from "./work/contract-ai-view.mjs";
 import { customerErrorText } from "./work/customers-view.mjs";
 import { photoShortAtText, photoSizeText } from "./work/photo-view.mjs";
@@ -221,7 +223,7 @@ export function mountAiSection(options: AiSectionOptions) {
       const active = detailsOf(error)[0];
       if (code === "AI_JOB_ACTIVE" && active) {
         // 이미 읽고 있는 묶음을 이어서 본다(새로 만들지 않음).
-        slot.group = { id: active, status: "running", pairMode: "cross", createdAt: new Date().toISOString(), confirmedAt: null, jobs: [] };
+        slot.group = { id: active, status: "running", pairMode: null, createdAt: new Date().toISOString(), confirmedAt: null, jobs: [] };
         slot.view = null;
         watch(slot, false);
         return;
@@ -292,7 +294,8 @@ export function mountAiSection(options: AiSectionOptions) {
     if (slot.note) setStatus(line, slot.note.text, slot.note.state);
     return line;
   }
-  const jobLine = (job: AiJobSummary) => {
+  // single이면(한 번 읽기 묶음) 'n회' 없이 모델 이름만 보인다.
+  const jobLine = (job: AiJobSummary, single: boolean) => {
     const row = element("li");
     const done = job.status === "completed";
     const failed = !done && !["queued", "in_progress"].includes(job.status);
@@ -300,7 +303,8 @@ export function mountAiSection(options: AiSectionOptions) {
       done ? tag("✓", "ok") : failed ? tag("✕", "bad") : tag("…", "wait"),
       (() => {
         const name = element("span");
-        name.append(element("b", "", `${job.runIndex}회`), " ", element("code", "", job.model));
+        if (single) name.append(element("b", "", "AI"), " ", element("code", "", job.model));
+        else name.append(element("b", "", `${job.runIndex}회`), " ", element("code", "", job.model));
         return name;
       })(),
       element("span", "ax-soft", AI_JOB_STATUS_LABELS[job.status as keyof typeof AI_JOB_STATUS_LABELS] ?? job.status),
@@ -312,7 +316,7 @@ export function mountAiSection(options: AiSectionOptions) {
     const nodes: HTMLElement[] = [];
     const copies = copiesOf(slot);
     const picked = slot.picked ?? new Set<string>();
-    nodes.push(element("p", "ax-soft", `읽을 사본을 고르세요(1 ~ ${AI_PICK_MAX}장). 같은 사진을 두 번 읽어 맞춰 보고, 거래에 넣기 전에 직접 확인합니다.`));
+    nodes.push(element("p", "ax-soft", `읽을 사본을 고르세요(1 ~ ${AI_PICK_MAX}장). AI가 한 번 읽고, 거래에 넣기 전에 칸마다 사진과 견줘 직접 확인합니다.`));
     const list = element("ul", "ax-pick");
     for (const file of copies) {
       const row = element("li");
@@ -350,7 +354,7 @@ export function mountAiSection(options: AiSectionOptions) {
     };
     fact("읽는 방법", (() => {
       const text = document.createDocumentFragment();
-      text.append(element("b", "", "두 번 읽고 맞춰 봄"));
+      text.append(element("b", "", "한 번 읽고 사람이 확인"));
       return text;
     })(), "어느 모델이 읽었는지는 결과에 나옵니다.");
     let blocked: string | null = null;
@@ -434,7 +438,7 @@ export function mountAiSection(options: AiSectionOptions) {
         nodes.push(time);
         if (group && group.jobs.length > 0) {
           const runs = element("ul", "ax-run");
-          runs.append(...group.jobs.map(jobLine));
+          runs.append(...group.jobs.map((job) => jobLine(job, aiSingleRead(group.jobs))));
           nodes.push(runs);
         }
         nodes.push(element("p", "ax-soft", "화면을 닫거나 휴대폰이 꺼져도 서버가 1분마다 결과를 받아 둡니다. 다시 열면 여기서 이어 봅니다."));
@@ -458,14 +462,17 @@ export function mountAiSection(options: AiSectionOptions) {
         nodes.push(heading(slot, "AI로 뽑은 값", tag("결과 나옴", "ai")));
         const at = photoShortAtText(group?.createdAt ?? "");
         if (slot.view && slot.deal) {
-          const first = slot.view.jobs.find((job) => job.runIndex === 1)?.result ?? null;
-          const second = slot.view.jobs.find((job) => job.runIndex === 2)?.result ?? null;
-          const comparison = compareContractResults(first, second, slot.deal.dealType);
+          const comparison = aiCompareJobs(slot.view.jobs, slot.deal.dealType);
           const sum = aiSummary(comparison);
           const chips = element("div", "ax-sum");
-          chips.append(element("span", "ax-same", `✓ 같음 ${sum.same}`));
-          if (sum.different) chips.append(tag(`≠ 다름 ${sum.different}`, "warn"));
-          if (sum.oneSide) chips.append(tag(`◐ 한쪽만 ${sum.oneSide}`, "warn"));
+          if (aiSingleRead(slot.view.jobs)) {
+            chips.append(tag(`읽은 칸 ${sum.read}`, "ai"));
+            if (sum.unread) chips.append(tag(`– 못 읽음 ${sum.unread}`, "wait"));
+          } else {
+            chips.append(element("span", "ax-same", `✓ 같음 ${sum.same}`));
+            if (sum.different) chips.append(tag(`≠ 다름 ${sum.different}`, "warn"));
+            if (sum.oneSide) chips.append(tag(`◐ 한쪽만 ${sum.oneSide}`, "warn"));
+          }
           chips.append(tag(`보기만 ${sum.reference}`, "wait"));
           nodes.push(chips);
           const pending = aiPendingFields(comparison, aiInitialChoices(comparison)).length;
@@ -473,10 +480,11 @@ export function mountAiSection(options: AiSectionOptions) {
           const half = aiHalfText(slot.view.jobs);
           if (half) nodes.push(element("p", "ax-soft", half));
         } else {
-          nodes.push(element("p", "ax-soft", `${at} 뽑음 · ${group?.jobs.map((job) => `${job.runIndex}회 ${AI_JOB_STATUS_LABELS[job.status as keyof typeof AI_JOB_STATUS_LABELS] ?? job.status}`).join(" · ") ?? ""}`));
+          const one = aiSingleRead(group?.jobs ?? []);
+          nodes.push(element("p", "ax-soft", `${at} 뽑음 · ${group?.jobs.map((job) => `${one ? "" : `${job.runIndex}회 `}${AI_JOB_STATUS_LABELS[job.status as keyof typeof AI_JOB_STATUS_LABELS] ?? job.status}`).join(" · ") ?? ""}`));
         }
         for (const job of group?.jobs ?? []) {
-          if (job.status !== "completed" && job.errorCode) nodes.push(element("p", "ax-soft", `${job.runIndex}회: ${aiJobErrorText(job.errorCode)}`));
+          if (job.status !== "completed" && job.errorCode) nodes.push(element("p", "ax-soft", `${aiSingleRead(group?.jobs ?? []) ? "" : `${job.runIndex}회: `}${aiJobErrorText(job.errorCode)}`));
         }
         if (slot.note) nodes.push(statusLine(slot));
         const act = element("div", "ax-act");
@@ -522,8 +530,9 @@ export function mountAiSection(options: AiSectionOptions) {
       case "failed": {
         nodes.push(heading(slot, "AI로 일정 뽑기", tag("✕ 실패", "bad")));
         const box = element("div", "ax-fail");
-        box.append(element("h5", "", "두 번 다 결과를 받지 못했습니다"));
-        for (const job of group?.jobs ?? []) box.append(element("p", "", `${job.runIndex}회: ${aiJobErrorText(job.errorCode)}`));
+        const one = aiSingleRead(group?.jobs ?? []);
+        box.append(element("h5", "", one ? "결과를 받지 못했습니다" : "두 번 다 결과를 받지 못했습니다"));
+        for (const job of group?.jobs ?? []) box.append(element("p", "", `${one ? "" : `${job.runIndex}회: `}${aiJobErrorText(job.errorCode)}`));
         box.append(button("다시 뽑기", false, "again", () => toStart(slot)));
         nodes.push(box);
         if (slot.note) nodes.push(statusLine(slot));

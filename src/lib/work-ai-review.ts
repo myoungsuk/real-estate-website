@@ -1,6 +1,8 @@
 // 계약서 AI 결과 고르기 화면(/admin/work/ai/review/?id=, 단계 4 B안). 서버 요청은 work-ai-client.ts 한 곳, 글·규칙은 work/contract-ai-view.mjs.
 // - 열 때 업무 세션 → 묶음(결과, 감사 ai.view) → 거래(감사 deal.view)를 한 번씩만 읽는다. 409 뒤 '다시 불러오기'를 누를 때만 다시 읽는다.
-// - 비교는 서버와 같은 함수(contract-compare.mjs)로 한다. 같은 칸은 넣을 값으로 두고, 다름·한쪽만 칸은 사람이 [1회 값]·[2회 값]·[지금 값 그대로]·[직접 넣기] 가운데 고른다.
+// - 비교는 서버와 같은 함수(contract-compare.mjs)로 한다.
+//   한 번 읽기 묶음(작업 1개, 2026-11-24부터): 칸마다 AI 값 하나를 보이고, AI가 읽은 칸은 사람이 사진과 견줘 [AI 값]·[지금 값 그대로]·[직접 넣기] 가운데 고른다(미리 골라 두지 않음).
+//   옛 두 번 읽기 묶음(작업 2개): 같은 칸은 넣을 값으로 두고, 다름·한쪽만 칸은 사람이 [1회 값]·[2회 값]·[지금 값 그대로]·[직접 넣기] 가운데 고른다.
 //   (시안의 '없음'은 '지금 값 그대로'로 바꿨다. 거래 칸을 실수로 비우지 않게.)
 // - '거래에 넣기 전 확인'은 지금 값 → 넣을 값과, 서버와 같은 계산 함수로 만든 일정 미리 보기를 보인다. '거래에 넣기'는 POST confirm 한 번이고 자동으로 다시 보내지 않는다.
 // - 근거는 원문 글(evidence.quote)이 먼저이고, 사진 위 상자는 참고다. 사진은 같은 출처 <img>(사본 원본, 감사 file.download)로만 보이고 blob: 주소를 쓰지 않는다.
@@ -20,9 +22,11 @@ import {
   AI_INTO_LABELS,
   AI_STATUS_TEXT,
   aiCanApply,
+  aiCompareJobs,
   aiConfirmBody,
   aiConfirmErrorText,
   aiDateText,
+  aiEmptyStatus,
   aiEvidenceOf,
   aiHalfText,
   aiInitialChoices,
@@ -33,9 +37,9 @@ import {
   aiReviewParams,
   aiSchedulePreview,
   aiShortDate,
+  aiSingleRead,
   aiSummary,
   aiValueText,
-  compareContractResults,
 } from "./work/contract-ai-view.mjs";
 import { CONFIRM_MIDDLE_PAYMENTS_MAX } from "./work/contract-compare.mjs";
 import { DEAL_TYPE_LABELS, customerErrorText, customerHref, customerSaveErrorText } from "./work/customers-view.mjs";
@@ -101,6 +105,8 @@ export function mountAiReview(page: HTMLElement) {
   const jobOf = (runIndex: number): AiJob | undefined => view?.jobs.find((job) => job.runIndex === runIndex);
   const resultOf = (runIndex: number) => jobOf(runIndex)?.result ?? null;
   const fileIds = () => view?.group.fileIds ?? [];
+  // 한 번 읽기 묶음(작업 1개)이면 참. 옛 두 번 읽기 묶음은 비교표 그대로 보인다.
+  const single = () => aiSingleRead(view?.jobs ?? []);
 
   // ── 불러오기 ──
 
@@ -122,14 +128,17 @@ export function mountAiReview(page: HTMLElement) {
     if (group.status === "confirmed") throw Object.assign(new Error("confirmed"), { state: ["이미 거래에 넣은 결과입니다", `${photoShortAtText(group.confirmedAt ?? "")}에 거래에 넣었습니다. 손님 카드에서 일정을 확인하세요.`] });
     if (group.status === "cancelled") throw Object.assign(new Error("cancelled"), { state: ["버린 결과입니다", "이 결과는 버렸습니다. 다시 뽑으려면 손님 카드의 계약서 사본 칸에서 시작하세요."] });
     if (group.status === "failed") {
-      throw Object.assign(new Error("failed"), { state: ["결과를 받지 못했습니다", nextView.jobs.map((job) => `${job.runIndex}회: ${aiJobErrorText(job.errorCode)}`).join(" ")] });
+      const reason = aiSingleRead(nextView.jobs)
+        ? aiJobErrorText(nextView.jobs[0].errorCode)
+        : nextView.jobs.map((job) => `${job.runIndex}회: ${aiJobErrorText(job.errorCode)}`).join(" ");
+      throw Object.assign(new Error("failed"), { state: ["결과를 받지 못했습니다", reason] });
     }
     if (!group.dealId) throw Object.assign(new Error("trashed"), { state: ["거래에 넣을 수 없습니다", AI_COPY_TRASHED_TEXT] });
     const nextDetail = await readAiDeal(group.dealId);
     if (["completed", "cancelled"].includes(nextDetail.deal.status)) throw Object.assign(new Error("closed"), { state: ["거래에 넣을 수 없습니다", AI_DEAL_CLOSED_TEXT] });
     view = nextView;
     detail = nextDetail;
-    comparison = compareContractResults(resultOf(1), resultOf(2), nextDetail.deal.dealType) as Comparison;
+    comparison = aiCompareJobs(nextView.jobs, nextDetail.deal.dealType) as Comparison;
     const initial = aiInitialChoices(comparison) as Record<string, Choice>;
     if (keepChoices) {
       const kept: Record<string, Choice> = {};
@@ -227,7 +236,7 @@ export function mountAiReview(page: HTMLElement) {
       return node;
     };
     const long = item.field === "middlePayments" ? " ax-chip--long" : "";
-    if (aiCanApply(item.field, item.first)) box.append(chip("first", `${chipText(item.field, item.first)} (1회)`, item.first, long));
+    if (aiCanApply(item.field, item.first)) box.append(chip("first", `${chipText(item.field, item.first)} (${single() ? "AI" : "1회"})`, item.first, long));
     if (aiCanApply(item.field, item.second)) box.append(chip("second", `${chipText(item.field, item.second)} (2회)`, item.second, long));
     box.append(chip("keep", `지금 값 그대로(${currentText(item.field)})`, null));
     box.append(chip("manual", "직접 넣기", null, " ax-chip--plain"));
@@ -338,7 +347,8 @@ export function mountAiReview(page: HTMLElement) {
     if (runs.length === 0) return null;
     const { runIndex, evidence } = runs[0];
     const line = element("span", "ax-quote");
-    line.append(`근거(${runIndex}회 · ${jobOf(runIndex)?.model ?? ""}): ${evidence!.page}쪽 “${evidence!.quote}”`);
+    const who = single() ? jobOf(runIndex)?.model ?? "" : `${runIndex}회 · ${jobOf(runIndex)?.model ?? ""}`;
+    line.append(`근거(${who}): ${evidence!.page}쪽 “${evidence!.quote}”`);
     if (filesEnabled && fileIds()[evidence!.page - 1]) {
       const see = element("button", "work-secondary-button axr-see", "사진에서 보기");
       see.type = "button";
@@ -357,7 +367,7 @@ export function mountAiReview(page: HTMLElement) {
 
   const statusTag = (status: string) => (status === "same"
     ? element("span", "ax-same", AI_STATUS_TEXT.same)
-    : element("span", `ax-tag ${status === "both_empty" ? "ax-tag--wait" : "ax-tag--warn"}`, AI_STATUS_TEXT[status as keyof typeof AI_STATUS_TEXT] ?? status));
+    : element("span", `ax-tag ${aiEmptyStatus(status) ? "ax-tag--wait" : "ax-tag--warn"}`, AI_STATUS_TEXT[status as keyof typeof AI_STATUS_TEXT] ?? status));
   const valueNode = (field: string, value: unknown) => {
     const text = aiValueText(field, value);
     return text === null ? element("em", "ax-miss", "— 못 읽음") : document.createTextNode(text);
@@ -366,7 +376,9 @@ export function mountAiReview(page: HTMLElement) {
     if (item.status === "same") return aiCanApply(item.field, item.first) ? element("span", "ax-same", chipText(item.field, item.first)) : element("span", "ax-miss", "넣지 않음(못 읽은 차가 있음)");
     return element("span", "ax-miss", "넣지 않음(지금 값 그대로)");
   }
-  const needs = (item: Item) => item.status === "different" || item.status === "one_side";
+  const needs = (item: Item) => item.status === "different" || item.status === "one_side" || item.status === "read";
+  // 표·카드에서 눈에 띄게 할 줄: 옛 묶음은 다름·한쪽만, 한 번 읽기는 아직 고르지 않은 칸만(다 노랗게 칠하지 않게).
+  const marked = (item: Item) => needs(item) && (!single() || !choices[item.field]);
 
   function compareTable(cmp: Comparison) {
     const table = element("table", "ax-cmp");
@@ -378,11 +390,13 @@ export function mountAiReview(page: HTMLElement) {
       if (small) cell.append(element("small", "", small));
       return cell;
     };
-    headRow.append(th("칸"), th("1회 읽음", jobOf(1)?.model), th("2회 읽음", jobOf(2)?.model), th("맞춰 봄"), th("거래에 넣을 값"));
+    const one = single();
+    if (one) headRow.append(th("칸"), th("AI 읽음", jobOf(1)?.model), th("거래에 넣을 값"));
+    else headRow.append(th("칸"), th("1회 읽음", jobOf(1)?.model), th("2회 읽음", jobOf(2)?.model), th("맞춰 봄"), th("거래에 넣을 값"));
     head.append(headRow);
     const saved = element("tbody");
     for (const item of cmp.fields) {
-      const row = element("tr", `${needs(item) ? "is-diff" : ""}${focusField === item.field ? " is-focus" : ""}`);
+      const row = element("tr", `${marked(item) ? "is-diff" : ""}${focusField === item.field ? " is-focus" : ""}`);
       row.dataset.axrRow = item.field;
       const name = element("th", "", AI_FIELD_LABELS[item.field as keyof typeof AI_FIELD_LABELS]);
       name.scope = "row";
@@ -396,16 +410,17 @@ export function mountAiReview(page: HTMLElement) {
       pickCell.append(needs(item) ? chooser(item) : decided(item));
       const quote = evidenceLine(item);
       if (quote) pickCell.append(quote);
-      row.append(name, a, b, st, pickCell);
+      if (one) row.append(name, a, pickCell);
+      else row.append(name, a, b, st, pickCell);
       saved.append(row);
     }
     table.append(head, saved);
-    const refs = cmp.reference.filter((item) => item.status !== "both_empty");
+    const refs = cmp.reference.filter((item) => !aiEmptyStatus(item.status));
     if (refs.length > 0) {
       const more = element("tbody");
       const capRow = element("tr");
       const cap = element("th", "axr-refcap", "보기만 하는 칸 — 금액은 거래에 넣을 칸이 없고 일정 제목에도 넣지 않습니다(캘린더 구독으로 나가지 않게)");
-      cap.colSpan = 5;
+      cap.colSpan = one ? 3 : 5;
       cap.scope = "rowgroup";
       capRow.append(cap);
       more.append(capRow);
@@ -419,7 +434,8 @@ export function mountAiReview(page: HTMLElement) {
         b.append(valueNode(item.field, item.second));
         const st = element("td");
         st.append(statusTag(item.status));
-        row.append(name, a, b, st, element("td", "ax-miss", "보기만(거래에 칸 없음)"));
+        if (one) row.append(name, a, element("td", "ax-miss", "보기만(거래에 칸 없음)"));
+        else row.append(name, a, b, st, element("td", "ax-miss", "보기만(거래에 칸 없음)"));
         more.append(row);
       }
       table.append(more);
@@ -430,14 +446,22 @@ export function mountAiReview(page: HTMLElement) {
   function compareCards(cmp: Comparison) {
     const nodes: HTMLElement[] = [];
     const short = (runIndex: number) => `${runIndex}회 · ${jobOf(runIndex)?.model ?? ""}`;
+    const one = single();
     const card = (item: Item, save: boolean) => {
-      const li = element("li", `ax-card${save && needs(item) ? " is-diff" : ""}${save ? "" : " is-nosave"}${save && focusField === item.field ? " is-focus" : ""}`);
+      const li = element("li", `ax-card${save && marked(item) ? " is-diff" : ""}${save ? "" : " is-nosave"}${save && focusField === item.field ? " is-focus" : ""}`);
       li.dataset.axrRow = item.field;
       const head = element("div", "ax-card__head");
       head.append(element("b", "", AI_FIELD_LABELS[item.field as keyof typeof AI_FIELD_LABELS]));
-      if (item.status !== "same") head.append(statusTag(item.status));
+      if (!one && item.status !== "same") head.append(statusTag(item.status));
       li.append(head);
-      if (item.status === "same") {
+      if (one) {
+        // 한 번 읽기: AI 값 하나(못 읽었으면 '못 읽음')와 읽은 모델
+        const line = element("p", "ax-card__one");
+        const value = element("span");
+        value.append(valueNode(item.field, item.first));
+        line.append(value, element("span", "ax-soft", `AI 읽음 · ${jobOf(1)?.model ?? ""}`));
+        li.append(line);
+      } else if (item.status === "same") {
         const one = element("p", "ax-card__one");
         one.append(element("span", "", aiValueText(item.field, item.first) ?? ""), element("span", "ax-same", "✓ 둘이 같음"));
         li.append(one);
@@ -454,7 +478,7 @@ export function mountAiReview(page: HTMLElement) {
       }
       if (save) {
         if (needs(item)) li.append(chooser(item));
-        else if (item.status === "both_empty") li.append(decided(item));
+        else if (aiEmptyStatus(item.status)) li.append(decided(item));
         const quote = evidenceLine(item);
         if (quote) li.append(quote);
       }
@@ -463,7 +487,7 @@ export function mountAiReview(page: HTMLElement) {
     const list = element("ul", "ax-cards");
     list.append(...cmp.fields.map((item) => card(item, true)));
     nodes.push(list);
-    const refs = cmp.reference.filter((item) => item.status !== "both_empty");
+    const refs = cmp.reference.filter((item) => !aiEmptyStatus(item.status));
     if (refs.length > 0) {
       const more = element("details", "ax-more");
       more.append(element("summary", "", `보기만 하는 칸 ${refs.length}개(금액·계약서 종류) — 거래에 넣지 않음`));
@@ -488,14 +512,16 @@ export function mountAiReview(page: HTMLElement) {
     };
     if (!view || !detail) return nodes;
     const model = jobOf(1)?.model ?? "";
-    if (view.group.pairMode === "same_unset") {
+    if (single()) {
+      note("info", "ⓘ", `AI(${model})가 계약서를 한 번 읽은 값입니다. 칸마다 사진과 견줘 보고 AI 값·직접 넣기·지금 값 그대로 가운데 골라 주세요.`).dataset.axrSingle = "";
+    } else if (view.group.pairMode === "same_unset") {
       note("warn", "⚠", element("b", "", "교차 아님"), ` — 같은 모델(${model})로 두 번 읽었습니다. 2회째 모델 설정이 비어 있어, 서로 다른 모델이 맞춰 본 결과가 아닙니다. 같은 칸을 둘 다 똑같이 틀렸을 수 있으니 '같음' 칸도 사진과 견줘 보세요.`).dataset.axrCross = "";
     } else if (view.group.pairMode === "same_chosen") {
       note("info", "ⓘ", `같은 모델(${model})로 두 번 읽었습니다(운영자가 고른 방식).`);
     }
     const half = aiHalfText(view.jobs);
     if (half) note("warn", "◐", half);
-    for (const job of view.jobs) if (!job.result && job.errorCode) note("info", "ⓘ", `${job.runIndex}회: ${aiJobErrorText(job.errorCode)}`);
+    if (!single()) for (const job of view.jobs) if (!job.result && job.errorCode) note("info", "ⓘ", `${job.runIndex}회: ${aiJobErrorText(job.errorCode)}`);
     const masked = view.jobs.reduce((sum, job) => sum + (job.maskedCount ?? 0), 0);
     const warnings = [...new Set(view.jobs.flatMap((job) => (job.result?.warnings as string[] | undefined) ?? []))].slice(0, 3);
     if (masked > 0 || warnings.length > 0) {
@@ -518,6 +544,12 @@ export function mountAiReview(page: HTMLElement) {
   function summaryChips(cmp: Comparison) {
     const sum = aiSummary(cmp);
     const box = element("div", "ax-sum");
+    if (single()) {
+      box.append(element("span", "ax-tag ax-tag--warn", `확인할 칸 ${sum.read}`));
+      if (sum.unread) box.append(element("span", "ax-tag ax-tag--wait", `– 못 읽음 ${sum.unread}`));
+      box.append(element("span", "ax-tag ax-tag--wait", `보기만 ${sum.reference}`));
+      return box;
+    }
     box.append(element("span", "ax-same", `✓ 같음 ${sum.same}`));
     if (sum.different) box.append(element("span", "ax-tag ax-tag--warn", `≠ 다름 ${sum.different}`));
     if (sum.oneSide) box.append(element("span", "ax-tag ax-tag--warn", `◐ 한쪽만 ${sum.oneSide}`));
@@ -772,6 +804,7 @@ export function mountAiReview(page: HTMLElement) {
       next.textContent = busy ? "넣는 중…" : confirmLabel();
       next.disabled = busy || blocked;
       backStep.hidden = false;
+      backStep.textContent = single() ? "값 고르기로 돌아가기" : "비교표로 돌아가기";
       backStep.disabled = busy;
     }
   }

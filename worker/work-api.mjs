@@ -264,7 +264,7 @@ export async function handleWorkApi(request, env, options = {}) {
     if (method !== "GET") {
       return workError(requestId, new WorkApiError("METHOD_NOT_ALLOWED", "허용되지 않은 요청 방식입니다.", 405), { Allow: "GET" });
     }
-    // aiWarnings: AI가 켜졌을 때만 설정(settings 1행)을 읽는다. 예: CONTRACT_CROSS_MODEL_UNSET(두 번 읽기가 같은 모델, 14.2절).
+    // aiWarnings: AI가 켜졌을 때만 채운다. 두 번 읽기 때의 CONTRACT_CROSS_MODEL_UNSET(같은 모델, 14.2절)은 한 번 읽기(2026-11-24)부터 나오지 않아 지금은 늘 빈 배열이다.
     let aiWarnings = [];
     if (aiState === "enabled") {
       try {

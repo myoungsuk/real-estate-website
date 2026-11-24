@@ -3,6 +3,7 @@
 //   2026-11-24 운영에서 OpenAI가 invalid_json_schema(text.format.schema)로 거절해, 값 조건(pattern·minimum·maximum·minItems·maxItems·maxLength)은
 //   보내지 않고 아래 재검사에서만 보며, null이 될 수 있는 배열(box)은 type 배열 대신 anyOf로 쓴다.
 // - 두 번 읽기의 2회째(runIndex 2)는 칸 순서를 바꾼 스키마·지시문을 쓴다(같은 식으로 같이 틀릴 가능성을 줄이려는 것, DEC-WT-17).
+//   2026-11-24부터 새 묶음은 한 번 읽기라 runIndex 1만 보낸다. 2회째 꼴은 옛 묶음 기록과 시험을 위해 순수 함수로만 남긴다.
 // - validateContractResult(value): OpenAI strict에만 기대지 않고 14.4절 전체(글자 수·실제 날짜·금액 범위 포함)를 다시 검사한다.
 //   통과하지 못하면 { ok: false }(부르는 쪽이 AI_RESULT_INVALID로 적고 원문은 저장하지 않는다).
 // - 사람 이름은 스키마에 없다(일정에 필요 없음).

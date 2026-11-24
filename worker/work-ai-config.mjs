@@ -5,7 +5,8 @@ import { isWorkFilesEnabled } from "./work-security.mjs";
 
 const MODEL_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/u;
 const EFFORT_PATTERN = /^[a-z]{2,16}$/u;
-const TASK_MODEL_KEYS = { blog: "OPENAI_MODEL_BLOG", contractA: "OPENAI_MODEL_CONTRACT_A", contractB: "OPENAI_MODEL_CONTRACT_B" };
+// 계약서는 2026-11-24부터 한 번 읽기라 OPENAI_MODEL_CONTRACT_A만 읽는다(OPENAI_MODEL_CONTRACT_B는 등록돼 있어도 읽지 않음).
+const TASK_MODEL_KEYS = { blog: "OPENAI_MODEL_BLOG", contractA: "OPENAI_MODEL_CONTRACT_A" };
 const MIN_KEY_LENGTH = 20;
 const MAX_OUTPUT_RANGE = [1_000, 200_000];
 const PRICE_MAX = 1_000_000_000; // 100만 토큰당 1,000달러(마이크로달러)보다 크면 잘못 넣은 값으로 본다
@@ -48,7 +49,7 @@ export function estimateCostMicroUsd(prices, inputTokens, outputTokens) {
   return Math.ceil((inputTokens * prices.input + outputTokens * prices.output) / 1_000_000);
 }
 
-// ── 단계 4: 계약서 두 번 읽기 설정(설계서 14.2절) ──
+// ── 단계 4: 계약서 읽기 설정(설계서 14.2절). 2026-11-24 운영자 결정으로 두 번 읽기에서 한 번 읽기로 바꿨다. ──
 
 // 사진 세부도. 코드에 기본값을 두지 않는다(켜는 사람이 비용을 보고 정함, 2026-11-23 대장 결정). high·original만 받는다.
 export const IMAGE_DETAILS = Object.freeze(["high", "original"]);
@@ -62,17 +63,17 @@ export function readImageDetail(env) {
   return IMAGE_DETAILS.includes(detail) ? detail : null;
 }
 
-// 돌려주는 값: { a, b, detail, sameModel } 또는 { error }.
+// 돌려주는 값: { a, detail } 또는 { error }.
 // - error "disabled": 키·기본 모델·추론·출력 상한·사진 세부도가 없거나 꼴이 틀림(AI를 켜지 않은 것과 같은 갈래).
 // - error "invalid": 설정된 모델이 단가표에 없음(비용을 계산하지 못한 채 보내지 않음, 14.2절).
-// a·b는 { model, effort, maxOutputTokens, prices }. OPENAI_MODEL_CONTRACT_B가 비면 b는 기본 모델이다. 두 모델 이름이 같으면 sameModel이 참이다(교차 아님).
+// a는 { model, effort, maxOutputTokens, prices }이고 모델은 OPENAI_MODEL_CONTRACT_A(비면 기본 모델)다. OPENAI_MODEL_CONTRACT_B는 보지 않는다
+// (값이 남아 있거나 단가표에 없어도 막지 않음).
 export function readContractAiConfig(env) {
   if (typeof env?.OPENAI_API_KEY !== "string" || env.OPENAI_API_KEY.trim().length < MIN_KEY_LENGTH) return { error: "disabled" };
   const read = (key) => (typeof env[key] === "string" ? env[key].trim() : "");
   const base = read("OPENAI_MODEL");
   const modelA = read(TASK_MODEL_KEYS.contractA) || base;
-  const modelB = read(TASK_MODEL_KEYS.contractB) || base;
-  if (!MODEL_PATTERN.test(base) || !MODEL_PATTERN.test(modelA) || !MODEL_PATTERN.test(modelB)) return { error: "disabled" };
+  if (!MODEL_PATTERN.test(base) || !MODEL_PATTERN.test(modelA)) return { error: "disabled" };
   const effort = read("OPENAI_REASONING_EFFORT");
   if (!EFFORT_PATTERN.test(effort)) return { error: "disabled" };
   const maxOutputTokens = Number(env.OPENAI_MAX_OUTPUT_TOKENS);
@@ -80,13 +81,10 @@ export function readContractAiConfig(env) {
   const detail = readImageDetail(env);
   if (!detail) return { error: "disabled" };
   const pricesA = readModelPrices(env, modelA);
-  const pricesB = readModelPrices(env, modelB);
-  if (!pricesA || !pricesB) return { error: "invalid" };
+  if (!pricesA) return { error: "invalid" };
   return {
     a: { model: modelA, effort, maxOutputTokens, prices: pricesA },
-    b: { model: modelB, effort, maxOutputTokens, prices: pricesB },
     detail,
-    sameModel: modelA === modelB,
   };
 }
 
