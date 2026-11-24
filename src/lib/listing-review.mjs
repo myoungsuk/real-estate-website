@@ -43,11 +43,15 @@ export function validateListingReviewState(state, { listingIds = null, bankIds =
   for (const [id, item] of Object.entries(state.items)) {
     if (!NAVER_ID_PATTERN.test(id) || seenIds.has(id)) throw new Error("매물 재확인 상태의 네이버 ID가 올바르지 않습니다.");
     assertExactKeys(item, ["source", "lastSeenAt", "lastReviewedAt"], `매물 재확인 상태 ${id}`);
-    if (!["bank", "manual"].includes(item.source)) throw new Error(`${id}: 매물 재확인 출처가 올바르지 않습니다.`);
+    // woori: 우리집부동산에서 온 매물(매일 자동 받기 scripts/sync-woori-listings.mjs 또는 관리자가 올린 엑셀). lastSeenAt은 마지막으로 받은 날이다.
+    if (!["bank", "manual", "woori"].includes(item.source)) throw new Error(`${id}: 매물 재확인 출처가 올바르지 않습니다.`);
     if (item.lastSeenAt !== null && !isIsoDate(item.lastSeenAt)) throw new Error(`${id}: 마지막 자동 확인일이 올바르지 않습니다.`);
     if (item.lastReviewedAt !== null && !isIsoDate(item.lastReviewedAt)) throw new Error(`${id}: 마지막 직접 확인일이 올바르지 않습니다.`);
     if (item.source === "bank" && (item.lastSeenAt === null || item.lastReviewedAt !== null)) {
       throw new Error(`${id}: Bank 매물의 확인일 구성이 올바르지 않습니다.`);
+    }
+    if (item.source === "woori" && (item.lastSeenAt === null || item.lastReviewedAt !== null)) {
+      throw new Error(`${id}: 우리집부동산 매물의 확인일 구성이 올바르지 않습니다.`);
     }
     if (item.source === "manual" && item.lastSeenAt !== null) {
       throw new Error(`${id}: 직접 등록 매물에는 자동 확인일을 기록할 수 없습니다.`);
@@ -85,6 +89,10 @@ export function reconcileListingReviewState({ listings, bankState, currentState,
   const items = Object.fromEntries([...listingIds].sort().map((id) => {
     const isBank = bankIds.has(id);
     const previous = previousItems[id];
+    // 우리집부동산에서 온 매물은 부동산뱅크 받기가 표시를 바꾸지 않는다(부동산뱅크 매물이 되면 bank가 이긴다).
+    if (!isBank && previous?.source === "woori" && isIsoDate(previous.lastSeenAt)) {
+      return [id, { source: "woori", lastSeenAt: previous.lastSeenAt, lastReviewedAt: null }];
+    }
     return [id, isBank
       ? { source: "bank", lastSeenAt: checkedAt, lastReviewedAt: null }
       : {
@@ -103,9 +111,10 @@ export function reconcileListingReviewState({ listings, bankState, currentState,
 /**
  * @param {{
  *   listings: Array<{id: string}>,
- *   currentState: {updatedAt?: string, items?: Record<string, {source: "bank" | "manual", lastSeenAt: string | null, lastReviewedAt: string | null}>},
+ *   currentState: {updatedAt?: string, items?: Record<string, {source: "bank" | "manual" | "woori", lastSeenAt: string | null, lastReviewedAt: string | null}>},
  *   updatedAt: string,
  *   bankIds?: Iterable<string> | null,
+ *   wooriIds?: Iterable<string> | null,
  *   reviewedManualIds?: Iterable<string>,
  * }} input
  */
@@ -114,11 +123,13 @@ export function updateListingReviewStateForAdmin({
   currentState,
   updatedAt,
   bankIds = null,
+  wooriIds = null,
   reviewedManualIds = [],
 }) {
   if (!isIsoDate(updatedAt)) throw new Error("관리자 재확인 날짜가 올바르지 않습니다.");
   const nextListings = Array.isArray(listings) ? listings : [];
   const approvedBankIds = bankIds === null ? null : new Set(bankIds);
+  const approvedWooriIds = wooriIds === null ? null : new Set(wooriIds);
   const reviewedIds = new Set(reviewedManualIds);
   const items = Object.fromEntries(nextListings.map((listing) => {
     const id = listing?.id;
@@ -126,6 +137,9 @@ export function updateListingReviewStateForAdmin({
     const current = currentState?.items?.[id] ?? null;
     if (approvedBankIds?.has(id)) {
       return [id, { source: "bank", lastSeenAt: updatedAt, lastReviewedAt: null }];
+    }
+    if (approvedWooriIds?.has(id)) {
+      return [id, { source: "woori", lastSeenAt: updatedAt, lastReviewedAt: null }];
     }
     if (current) {
       return [id, current.source === "manual" && reviewedIds.has(id)
@@ -160,7 +174,8 @@ export function buildListingReviewQueue(listings, state, policy, asOf) {
   const items = listings.map((listing) => {
     const review = state.items[listing.id];
     const warningDays = review.source === "bank" ? policy.bankWarningDays : policy.manualWarningDays;
-    const referenceDate = review.source === "bank" ? review.lastSeenAt : review.lastReviewedAt;
+    // 우리집부동산 매물은 직접 등록과 같은 경고 일수를 쓰고, 기준일은 마지막으로 받은 날(매일 자동 받기 또는 엑셀)이다.
+    const referenceDate = review.source === "manual" ? review.lastReviewedAt : review.lastSeenAt;
     const ageDays = referenceDate ? calendarDaysBetween(referenceDate, asOf) : null;
     const needsReview = warningDays === null
       ? false
@@ -182,6 +197,7 @@ export function buildListingReviewQueue(listings, state, policy, asOf) {
     needsReview: items.filter((item) => item.needsReview).length,
     bank: items.filter((item) => item.reviewSource === "bank").length,
     manual: items.filter((item) => item.reviewSource === "manual").length,
+    woori: items.filter((item) => item.reviewSource === "woori").length,
     items,
   };
 }

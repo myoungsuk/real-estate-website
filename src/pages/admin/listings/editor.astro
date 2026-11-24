@@ -8,13 +8,13 @@ import { office } from "../../../lib/site";
 
 <AdminLayout
   title="네이버 매물 등록·동기화 | 리더스시티행복한공인중개사사무소 관리자"
-  description="부동산뱅크 자동 동기화를 엑셀로 안전하게 보완하고 그 밖의 네이버 매물을 직접 등록·수정·종료합니다."
+  description="부동산뱅크 자동 동기화를 엑셀로 안전하게 보완하고, 우리집부동산 엑셀을 가져오고, 그 밖의 네이버 매물을 직접 등록·수정·종료합니다."
 >
   <div class="admin-page-header admin-page-header--compact">
     <div>
       <nav class="admin-breadcrumbs" aria-label="현재 위치"><a href="/admin/">대시보드</a><span>/</span><a href="/admin/listings/">네이버 매물</a><span>/</span><span aria-current="page">등록·동기화</span></nav>
       <h1>부동산뱅크 동기화 보완과 직접 등록</h1>
-      <p>부동산뱅크 공개 매물은 하루 1회 자동 반영하며, 엑셀은 자동 동기화 장애 시 보완합니다. 그 밖의 네이버 매물은 현재 공개 카드 형식에 맞춰 직접 관리합니다.</p>
+      <p>부동산뱅크 공개 매물은 하루 1회 자동 반영하며, 엑셀은 자동 동기화 장애 시 보완합니다. 우리집부동산 매물은 그곳에서 내려받은 엑셀을 올려 반영합니다. 그 밖의 네이버 매물은 현재 공개 카드 형식에 맞춰 직접 관리합니다.</p>
     </div>
     <a class="admin-text-link" href={office.naverListingsUrl} target="_blank" rel="noopener noreferrer">네이버 공개 매물 확인 <span aria-hidden="true">↗</span></a>
   </div>
@@ -70,6 +70,57 @@ import { office } from "../../../lib/site";
       <div class="admin-import-actions">
         <p>이 엑셀 보완에서는 사이트에만 있는 매물을 삭제하지 않습니다. 하루 1회 자동 동기화에서는 직전 부동산뱅크 목록에서 빠진 매물을 삭제합니다.</p>
         <button class="admin-primary-button" type="button" data-bank-apply data-write-control disabled>변경사항 반영</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="admin-panel admin-woori-import" aria-labelledby="woori-import-heading">
+    <div class="admin-panel__heading">
+      <div><p class="admin-eyebrow">우리집부동산 매물</p><h2 id="woori-import-heading">우리집부동산 엑셀 가져오기</h2></div>
+      <span class="admin-panel__number" aria-hidden="true">A2</span>
+    </div>
+    <p class="admin-panel-description">우리집부동산 매물 목록에서 엑셀로 내려받은 <strong>.xls</strong> 파일만 지원합니다. 원본 파일은 브라우저에서만 읽고 서버에는 공개 가능한 JSON만 전송합니다.</p>
+
+    <form class="admin-import-file" data-woori-import-form>
+      <div class="admin-field">
+        <label for="woori-listing-file">우리집부동산 엑셀 파일</label>
+        <input id="woori-listing-file" name="wooriListingFile" type="file" accept=".xls,application/vnd.ms-excel" required data-woori-file />
+        <small>5MB 이하의 우리집부동산 UTF-8 HTML-table .xls만 선택할 수 있습니다.</small>
+      </div>
+      <button class="admin-secondary-button" type="submit" data-woori-analyze>파일 분석</button>
+    </form>
+    <p class="admin-form-status" data-woori-status aria-live="polite">파일을 선택하면 호수·메모를 버리고 현재 매물과 비교합니다.</p>
+
+    <div class="admin-import-summary" data-woori-summary hidden>
+      <div class="admin-import-stats" aria-label="우리집부동산 분석 결과">
+        <div><span>전체</span><strong data-woori-stat="total">0</strong><small>엑셀 매물</small></div>
+        <div><span>신규</span><strong data-woori-stat="new">0</strong><small>사이트에 추가</small></div>
+        <div><span>변경</span><strong data-woori-stat="changed">0</strong><small>확인 후 갱신</small></div>
+        <div><span>삭제</span><strong data-woori-stat="removed">0</strong><small>우리집부동산 매물인데 이 엑셀에 없음</small></div>
+        <div><span>건너뜀</span><strong data-woori-stat="skipped">0</strong><small>까닭은 아래 목록</small></div>
+        <div><span>확인 필요</span><strong data-woori-stat="errors">0</strong><small>있으면 저장 차단</small></div>
+      </div>
+
+      <ul class="admin-security-checklist" aria-label="원본 파일 보안 처리">
+        <li>상세주소의 정확한 호수와 지번, 중개사 메모는 저장하지 않습니다.</li>
+        <li>공개 동 번호와 괄호 안 광고 층만 씁니다.</li>
+        <li>부동산뱅크 자동 받기 매물과 동 번호가 없는 줄(상가·점포 등)은 건너뜁니다.</li>
+        <li>원본 XLS는 Worker·GitHub·브라우저 저장소로 보내지 않습니다.</li>
+      </ul>
+
+      <div class="admin-import-errors" data-woori-errors hidden>
+        <h3>확인 필요한 항목</h3>
+        <ul data-woori-error-list></ul>
+      </div>
+
+      <div class="admin-import-preview">
+        <h3>변경 미리보기</h3>
+        <div class="admin-import-preview-list" data-woori-preview></div>
+      </div>
+
+      <div class="admin-import-actions">
+        <p>우리집부동산에서 온 매물(어젯밤 자동 받기나 지난번 엑셀) 가운데 이번 엑셀에 없는 것만 지웁니다. 부동산뱅크 매물과 직접 등록 매물은 지우지 않습니다.</p>
+        <button class="admin-primary-button" type="button" data-woori-apply data-write-control disabled>변경사항 반영</button>
       </div>
     </div>
   </section>
@@ -179,6 +230,7 @@ import { office } from "../../../lib/site";
       createManualNaverListing,
       readBankListingFile,
     } from "../../../lib/admin/bank-listing-import.mjs";
+    import { createWooriListingImport, readWooriListingFile } from "../../../lib/admin/woori-listing-import.mjs";
     import {
       getAdminSession,
       readAdminContent,
@@ -198,7 +250,7 @@ import { office } from "../../../lib/site";
       schemaVersion: 1;
       updatedAt: string;
       items: Record<string, {
-        source: "bank" | "manual";
+        source: "bank" | "manual" | "woori";
         lastSeenAt: string | null;
         lastReviewedAt: string | null;
       }>;
@@ -213,6 +265,7 @@ import { office } from "../../../lib/site";
     };
     let writeEnabled = false;
     let currentAnalysis: ReturnType<typeof createBankListingImport> | null = null;
+    let wooriAnalysis: ReturnType<typeof createWooriListingImport> | null = null;
 
     const todayInKorea = () => {
       const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
@@ -222,12 +275,13 @@ import { office } from "../../../lib/site";
     const latestCheckedAt = () => [resource.data.checkedAt, todayInKorea()].sort().at(-1) ?? todayInKorea();
     const buildNextReviewState = (
       nextData: NaverListingData,
-      { bankIds = null, reviewedManualId = null }: { bankIds?: Set<string> | null; reviewedManualId?: string | null } = {},
+      { bankIds = null, wooriIds = null, reviewedManualId = null }: { bankIds?: Set<string> | null; wooriIds?: Set<string> | null; reviewedManualId?: string | null } = {},
     ): ListingReviewState => updateListingReviewStateForAdmin({
       listings: nextData.items,
       currentState: reviewResource.data,
       updatedAt: todayInKorea(),
       bankIds,
+      wooriIds,
       reviewedManualIds: reviewedManualId ? [reviewedManualId] : [],
     }) as ListingReviewState;
     const applyBatchResult = (
@@ -402,6 +456,7 @@ import { office } from "../../../lib/site";
       writeEnabled = session.writeEnabled;
       renderManagedList();
       if (currentAnalysis) renderBankAnalysis();
+      if (wooriAnalysis) renderWooriAnalysis();
       if (!writeEnabled) return;
       void Promise.all([
         readAdminContent<NaverListingData>("naver-listings"),
@@ -530,6 +585,7 @@ import { office } from "../../../lib/site";
         applyBatchResult(result, nextData, nextReviewState);
         currentAnalysis = null;
         if (bankSummary) bankSummary.hidden = true;
+        clearWooriAnalysis();
         renderManagedList();
         resetManualForm();
         setAdminFormStatus(bankStatus, "부동산뱅크 매물을 GitHub에 저장했습니다. 배포 상태 메뉴에서 공개 반영을 확인해 주세요.", "success");
@@ -537,6 +593,117 @@ import { office } from "../../../lib/site";
         setAdminFormStatus(bankStatus, error instanceof Error ? error.message : "부동산뱅크 매물을 저장하지 못했습니다.", "error");
       } finally {
         bankApplyButton.disabled = !currentAnalysis?.nextData;
+      }
+    });
+
+    const wooriForm = document.querySelector<HTMLFormElement>("[data-woori-import-form]");
+    const wooriFile = document.querySelector<HTMLInputElement>("[data-woori-file]");
+    const wooriAnalyzeButton = document.querySelector<HTMLButtonElement>("[data-woori-analyze]");
+    const wooriStatus = document.querySelector<HTMLElement>("[data-woori-status]");
+    const wooriSummary = document.querySelector<HTMLElement>("[data-woori-summary]");
+    const wooriErrors = document.querySelector<HTMLElement>("[data-woori-errors]");
+    const wooriErrorList = document.querySelector<HTMLElement>("[data-woori-error-list]");
+    const wooriPreview = document.querySelector<HTMLElement>("[data-woori-preview]");
+    const wooriApplyButton = document.querySelector<HTMLButtonElement>("[data-woori-apply]");
+
+    const setWooriStat = (name: string, value: number) => {
+      const element = document.querySelector<HTMLElement>('[data-woori-stat="' + name + '"]');
+      if (element) element.textContent = value.toLocaleString("ko-KR");
+    };
+    function clearWooriAnalysis() {
+      wooriAnalysis = null;
+      if (wooriSummary) wooriSummary.hidden = true;
+      if (wooriApplyButton) wooriApplyButton.disabled = true;
+    }
+    const renderWooriAnalysis = () => {
+      if (!wooriAnalysis || !wooriSummary || !wooriPreview || !wooriErrorList || !wooriErrors || !wooriApplyButton) return;
+      setWooriStat("total", wooriAnalysis.rowCount);
+      setWooriStat("new", wooriAnalysis.newItems.length);
+      setWooriStat("changed", wooriAnalysis.changedItems.length);
+      setWooriStat("removed", wooriAnalysis.removedItems.length);
+      setWooriStat("skipped", wooriAnalysis.skippedItems.length);
+      setWooriStat("errors", wooriAnalysis.errors.length);
+      wooriErrorList.replaceChildren();
+      wooriAnalysis.errors.forEach((error) => {
+        const item = document.createElement("li");
+        item.textContent = error.rowNumber + "행 · " + error.message;
+        wooriErrorList.append(item);
+      });
+      wooriErrors.hidden = wooriAnalysis.errors.length === 0;
+      wooriPreview.replaceChildren();
+      const takenOver = new Set(wooriAnalysis.takenOverItems.map((item) => item.id));
+      const takeOverNote = (id: string) => takenOver.has(id) ? " · 직접 등록 → 우리집부동산 매물로 바뀜" : "";
+      wooriAnalysis.newItems.forEach((item) => wooriPreview.append(createImportPreviewItem("신규", item.title, "네이버 매물번호 " + item.id, "new")));
+      wooriAnalysis.changedItems.forEach((item) => wooriPreview.append(createImportPreviewItem("변경", item.title, item.changes.map((fieldName) => changeFieldNames[fieldName] ?? fieldName).join(", ") + takeOverNote(item.id), "changed")));
+      wooriAnalysis.sameItems.filter((item) => takenOver.has(item.id)).forEach((item) => wooriPreview.append(createImportPreviewItem("변경", item.title, "내용 같음" + takeOverNote(item.id), "changed")));
+      wooriAnalysis.removedItems.forEach((item) => wooriPreview.append(createImportPreviewItem("삭제", item.title, "우리집부동산 매물인데 이 엑셀에 없음 · 홈페이지에서 내림", "removed")));
+      wooriAnalysis.skippedItems.forEach((item) => wooriPreview.append(createImportPreviewItem("건너뜀", item.title ?? item.rowNumber + "행", item.reason, "kept")));
+      if (wooriPreview.childElementCount === 0) wooriPreview.append(createImportPreviewItem("동일", "변경할 매물이 없습니다.", "우리집부동산 마지막 확인일과 매물 목록 업데이트일만 갱신합니다.", "same"));
+      wooriSummary.hidden = false;
+      wooriApplyButton.disabled = !writeEnabled || !wooriAnalysis.nextData || wooriAnalysis.errors.length > 0;
+    };
+
+    wooriForm?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const file = wooriFile?.files?.[0];
+      if (!file) return setAdminFormStatus(wooriStatus, "우리집부동산 엑셀 파일을 선택해 주세요.", "error");
+      if (wooriAnalyzeButton) wooriAnalyzeButton.disabled = true;
+      setAdminFormStatus(wooriStatus, "브라우저에서 원본 파일을 읽고 호수·메모를 버리고 있습니다.", "saving");
+      try {
+        const table = await readWooriListingFile(file);
+        wooriAnalysis = createWooriListingImport(table.headers, table.rows, resource.data, reviewResource.data, todayInKorea());
+        renderWooriAnalysis();
+        const message = wooriAnalysis.errors.length > 0
+          ? "확인 필요한 항목이 있어 아무 매물도 저장하지 않았습니다."
+          : "파일 분석을 마쳤습니다. 변경 미리보기를 확인해 주세요.";
+        setAdminFormStatus(wooriStatus, message, wooriAnalysis.errors.length > 0 ? "error" : "success");
+      } catch (error) {
+        clearWooriAnalysis();
+        setAdminFormStatus(wooriStatus, error instanceof Error ? error.message : "우리집부동산 파일을 분석하지 못했습니다.", "error");
+      } finally {
+        if (wooriFile) wooriFile.value = "";
+        if (wooriAnalyzeButton) wooriAnalyzeButton.disabled = false;
+      }
+    });
+
+    wooriApplyButton?.addEventListener("click", async () => {
+      if (!wooriAnalysis?.nextData || !writeEnabled) return;
+      wooriApplyButton.disabled = true;
+      setAdminFormStatus(wooriStatus, "정제 결과의 변경 요약과 서버 검증을 준비하고 있습니다.", "saving");
+      try {
+        const nextData = wooriAnalysis.nextData as NaverListingData;
+        const nextReviewState = buildNextReviewState(nextData, { wooriIds: wooriAnalysis.wooriIds });
+        const confirmed = await reviewAdminContentChange({
+          changes: [
+            { resource: "listing-review-state", sha: reviewResource.sha, data: nextReviewState },
+            { resource: "naver-listings", sha: resource.sha, data: nextData },
+          ],
+          beforeByResource: {
+            "listing-review-state": reviewResource.data,
+            "naver-listings": resource.data,
+          },
+          impactPages: ["공개 매물 목록", "홈 최신 매물", "매물 비교", "관리자 재확인 상태"],
+        });
+        if (!confirmed) {
+          setAdminFormStatus(wooriStatus, "저장을 취소했습니다. 분석 결과는 그대로 유지됩니다.");
+          return;
+        }
+        setAdminFormStatus(wooriStatus, "사전 검증을 통과한 공개 매물을 GitHub에 저장하고 있습니다.", "saving");
+        const result = await writeAdminContentBatch([
+          { resource: "listing-review-state", sha: reviewResource.sha, data: nextReviewState },
+          { resource: "naver-listings", sha: resource.sha, data: nextData },
+        ]);
+        applyBatchResult(result, nextData, nextReviewState);
+        clearWooriAnalysis();
+        currentAnalysis = null;
+        if (bankSummary) bankSummary.hidden = true;
+        renderManagedList();
+        resetManualForm();
+        setAdminFormStatus(wooriStatus, "우리집부동산 매물을 GitHub에 저장했습니다. 배포 상태 메뉴에서 공개 반영을 확인해 주세요.", "success");
+      } catch (error) {
+        setAdminFormStatus(wooriStatus, error instanceof Error ? error.message : "우리집부동산 매물을 저장하지 못했습니다.", "error");
+      } finally {
+        if (wooriApplyButton) wooriApplyButton.disabled = !wooriAnalysis?.nextData;
       }
     });
 
@@ -580,6 +747,7 @@ import { office } from "../../../lib/site";
         applyBatchResult(result, nextData, nextReviewState);
         currentAnalysis = null;
         if (bankSummary) bankSummary.hidden = true;
+        clearWooriAnalysis();
         renderManagedList();
         resetManualForm();
         manualDirtyGuard.markSaved();
@@ -630,6 +798,7 @@ import { office } from "../../../lib/site";
         applyBatchResult(result, nextData, nextReviewState);
         currentAnalysis = null;
         if (bankSummary) bankSummary.hidden = true;
+        clearWooriAnalysis();
         renderManagedList();
         resetManualForm();
         setAdminFormStatus(manualStatus, "선택한 매물의 등록 종료를 GitHub에 저장했습니다. 배포 상태 메뉴에서 공개 반영을 확인해 주세요.", "success");

@@ -956,13 +956,13 @@
     },
     "bank-import": {
       "route": "/admin/listings/editor/",
-      "sources": "8fee86c235affe3c337e4b37ef27be716d7b371263074cd264659b44e944d01f",
+      "sources": "cec18d4219ed727c9b6c020f102747fc359ce6de3be4a1622245379874630b12",
       "shots": {
         "bank-phone-1-file": {
           "width": 680,
           "height": 1000,
-          "bytes": 31242,
-          "sha256": "b416ab6ac6af261c60b08b21bdce49fc937dba6436766f3f7b7c1887710d4313",
+          "bytes": 31484,
+          "sha256": "be78ca4b9acd325110296da4105b449c1564ec650ff54536ffb261b7b8d92de5",
           "marks": [
             [
               0.0912,
@@ -981,8 +981,8 @@
         "bank-phone-2-preview": {
           "width": 780,
           "height": 2028,
-          "bytes": 46274,
-          "sha256": "5c967b44039b736d97bb89e883f87ede1519485d8f06945dad37a17efe6094ab",
+          "bytes": 46742,
+          "sha256": "edf1e0661a1efbb65e19c7794a0acf6597935a13adbf9197a1dfa388a1415f48",
           "marks": [
             [
               0.0949,
@@ -1001,8 +1001,8 @@
         "bank-phone-3-review": {
           "width": 752,
           "height": 1632,
-          "bytes": 42498,
-          "sha256": "08c660fc447d29ed80a9a8013e5655c4a21d34c100c32d90da572086d85c3bb9",
+          "bytes": 40484,
+          "sha256": "33c2541755be9fff25b768a90d0816b14df8a8d9f7ca96a971fd112c690d0d0c",
           "marks": [
             [
               0.0851,
@@ -1041,8 +1041,8 @@
         "bank-wide-2-preview": {
           "width": 1520,
           "height": 1023,
-          "bytes": 29386,
-          "sha256": "1346a57d7ce4107fcef60b00b047c4df2eafe762077b46d3c187cda33c2c34eb",
+          "bytes": 29380,
+          "sha256": "fd2de92cccf3aae693cbdbfff90dfef020703e26e6067930cfbbfb81efe80087",
           "marks": [
             [
               0.0101,
@@ -1061,8 +1061,8 @@
         "bank-wide-3-review": {
           "width": 1520,
           "height": 1582,
-          "bytes": 46080,
-          "sha256": "08080f501818a999356e644856dd6baf6f198049474241a035156cabcf611eac",
+          "bytes": 45044,
+          "sha256": "10df3153fc8438e8b43b2725c089e61f846092d879314545e96b1a69c6ad6c4b",
           "marks": [
             [
               0.0561,

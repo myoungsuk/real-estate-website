@@ -1,0 +1,218 @@
+# 우리집부동산 공개 중개사 홈페이지(home.woori-house.co.kr/42957)의 공개 매물 목록을 하루 1번 받아 홈페이지 매물 목록에 반영한다.
+# 2026-11-24 우리집부동산 회신: 개별 API는 없고 로그인 없는 중개사 홈페이지를 안내함, 짧은 시간에 여러 번 부르면 IP 차단. 요청은 실행마다 1번이다.
+# 구조는 부동산뱅크 받기(sync-bank-listings.yml)와 같다: 읽기 권한 job에서 받기·시험·빌드 → 검증 산출물만 쓰기 job이 커밋 → 운영 반영 확인 → 실패 알림 이슈.
+name: Sync Woori listings
+
+on:
+  schedule:
+    - cron: "40 15 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: external-content-sync
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      mode: ${{ steps.changes.outputs.mode }}
+      base_sha: ${{ steps.package.outputs.base_sha }}
+      expected_marker: ${{ steps.package.outputs.expected_marker }}
+    steps:
+      - name: Require master branch
+        run: test "$GITHUB_REF" = "refs/heads/master"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: master
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Sync Woori public listings
+        run: npm run sync:woori
+
+      - run: npm test
+      - run: npm run check
+      - run: npm run build
+
+      - name: Build and assert Production SEO output
+        env:
+          PUBLIC_SITE_URL: https://leaderscityhappy.com
+          PUBLIC_ALLOW_INDEXING: "true"
+        run: |
+          npm run build:site
+          npm run assert:production-build
+
+      - name: Validate changed paths
+        id: changes
+        run: node scripts/check-woori-sync-worktree.mjs
+
+      - name: Package verified changes
+        id: package
+        if: steps.changes.outputs.mode == 'content'
+        run: |
+          set -euo pipefail
+          artifact="$RUNNER_TEMP/woori-sync-artifact"
+          mkdir -p "$artifact/.github" "$artifact/src/data"
+          cp .github/listing-review-state.json "$artifact/.github/listing-review-state.json"
+          cp src/data/naver-listings.json "$artifact/src/data/naver-listings.json"
+          echo "base_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "expected_marker=$(node scripts/deployment-marker.mjs print bank)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload verified changes
+        if: steps.changes.outputs.mode == 'content'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: woori-sync-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/woori-sync-artifact
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 1
+
+  publish:
+    needs: validate
+    if: needs.validate.outputs.mode == 'content'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: master
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+
+      - name: Require unchanged master base
+        env:
+          EXPECTED_BASE_SHA: ${{ needs.validate.outputs.base_sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_BASE_SHA"
+
+      - name: Download verified changes
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: woori-sync-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/woori-sync-artifact
+
+      - name: Apply and revalidate allowed paths
+        run: |
+          set -euo pipefail
+          cp "$RUNNER_TEMP/woori-sync-artifact/.github/listing-review-state.json" .github/listing-review-state.json
+          cp "$RUNNER_TEMP/woori-sync-artifact/src/data/naver-listings.json" src/data/naver-listings.json
+          node scripts/check-woori-sync-worktree.mjs
+
+      - name: Commit verified listings
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- .github/listing-review-state.json src/data/naver-listings.json
+          git diff --cached --quiet && { echo "검증 산출물에 커밋할 변경이 없습니다." >&2; exit 1; }
+          message_file="$RUNNER_TEMP/commit-message.txt"
+          printf '%s\n' \
+            "네이버 공개 매물 목록을 우리집부동산 최신 목록에 맞춰 자동 갱신" \
+            "" \
+            "홈페이지 매물 목록 가운데 우리집부동산에서 가져온 매물이 우리집부동산 공개 중개사 홈페이지의 최신 목록과 같아집니다." \
+            "무엇: 우리집부동산 공개 목록에 새로 생기거나 내용이 바뀐 매물은 반영하고, 목록에서 내려간 매물은 지웁니다. 부동산뱅크 매물과 직접 등록 매물은 그대로 둡니다." \
+            "언제: 매일 00:40(한국 시간) 자동 실행 또는 운영자가 직접 실행했을 때 만들어집니다." \
+            "확인: 반영 전에 자동 시험(npm test), 공개 자료 검사, 빌드, 검색용 운영 빌드 검사를 모두 통과했고, 바뀐 파일이 허용된 2개 안에서만 바뀌었는지 확인했습니다." \
+            "반영: 커밋 뒤 운영 사이트에 이 변경이 실제로 올라갔는지 자동으로 확인합니다." \
+            > "$message_file"
+          git commit -F "$message_file"
+
+      - name: Push with job-scoped credential
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          auth="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w 0)"
+          echo "::add-mask::$auth"
+          export GIT_CONFIG_COUNT=1
+          export GIT_CONFIG_KEY_0=http.https://github.com/.extraheader
+          export GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth"
+          git push origin HEAD:master
+
+      - name: Wait for Production content marker
+        env:
+          EXPECTED_MARKER: ${{ needs.validate.outputs.expected_marker }}
+        run: node scripts/verify-production-deployment.mjs --scope bank --expected "$EXPECTED_MARKER"
+
+  # 실패하면 GitHub 이슈를 열고(이미 열려 있으면 댓글), 다음 실행이 성공하면 닫는다(부동산뱅크 받기와 같은 방식).
+  # 이슈에는 실행 주소·멈춘 단계 이름·job 결과만 넣고 로그·비밀값은 넣지 않는다. 저장소 파일을 받지 않는다.
+  alert:
+    needs: [validate, publish]
+    if: ${{ always() && github.ref == 'refs/heads/master' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      issues: write
+    steps:
+      - name: Open or close sync failure issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VALIDATE_RESULT: ${{ needs.validate.result }}
+          PUBLISH_RESULT: ${{ needs.publish.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          title="우리집부동산 매물 자동 받기 실패"
+          case "$VALIDATE_RESULT/$PUBLISH_RESULT" in
+            success/success | success/skipped) outcome=ok ;;
+            *) outcome=failed ;;
+          esac
+          # 봇이 연 같은 제목의 열린 이슈만 쓴다(다른 사람이 같은 제목으로 연 이슈는 건드리지 않음).
+          # 이슈 목록을 못 읽으면 한 번 더 해 보고, 그래도 안 되면 경고만 남긴다(성공한 받기를 빨갛게 만들지 않고, 실패면 새 이슈를 연다).
+          list_issue() {
+            gh issue list --state open --limit 200 --json number,title,author \
+              --jq "map(select(.title == \"$title\" and .author.is_bot)) | .[0].number // empty"
+          }
+          if ! number="$(list_issue)"; then
+            sleep 10
+            if ! number="$(list_issue)"; then
+              echo "::warning::알림 이슈 목록을 읽지 못했습니다."
+              [ "$outcome" = ok ] && exit 0
+              number=""
+            fi
+          fi
+          if [ "$outcome" = ok ]; then
+            if [ -n "$number" ]; then
+              gh issue close "$number" --comment "다음 실행이 성공해 닫습니다: $RUN_URL"
+            fi
+            exit 0
+          fi
+          step="$(gh run view "$GITHUB_RUN_ID" --json jobs \
+            --jq '[.jobs[] | select(.conclusion == "failure") | .name + " / " + (([.steps[]? | select(.conclusion == "failure") | .name] | first) // "단계 모름")] | join(", ")' \
+            || true)"
+          body_file="$RUNNER_TEMP/sync-alert.md"
+          printf '%s\n' \
+            "매일 00:40(한국 시간) 우리집부동산 공개 매물을 받아 홈페이지 목록에 반영하는 작업이 실패했습니다. 홈페이지 매물 목록에 이번 변경이 반영되지 않았을 수 있습니다." \
+            "" \
+            "- 실행: $RUN_URL" \
+            "- 멈춘 곳: ${step:-확인 못 함}" \
+            "- job 결과: validate=$VALIDATE_RESULT, publish=$PUBLISH_RESULT" \
+            "" \
+            "우리집부동산은 짧은 시간에 여러 번 부르면 IP를 막으므로 손으로 다시 돌릴 때는 한 번만 돌립니다. 원인을 고치면 다음 자동 실행이 성공할 때 이 이슈가 저절로 닫힙니다. 급하면 관리자 '매물 등록·동기화'의 우리집부동산 엑셀 가져오기를 씁니다." \
+            > "$body_file"
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body-file "$body_file"
+          else
+            gh issue create --title "$title" --body-file "$body_file"
+          fi

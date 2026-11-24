@@ -112,6 +112,7 @@ npm run assert:production-build
 npm run test:e2e
 npm run audit:lighthouse
 npm run sync:bank:dry-run
+npm run sync:woori:dry-run
 npm run sync:external:dry-run
 ```
 
@@ -122,6 +123,7 @@ npm run sync:external:dry-run
 - `npm run audit:lighthouse`: 먼저 생성된 `dist/`의 홈·매물·단지 목록·신흥 SK뷰 상세·신흥 SK뷰 필터 결과를 모바일 Lighthouse 90점, LCP·TBT·CLS 내부 기준으로 검사
 - `npm run deploy`: 검사·빌드 후 Wrangler로 Cloudflare 배포
 - `npm run sync:bank:dry-run`: 허용된 부동산뱅크 공개 사무소 목록을 조회하고 예상 매물 변경을 파일 수정 없이 검증
+- `npm run sync:woori:dry-run`: 우리집부동산 공개 매물 목록을 한 번 받아 예상 매물 변경을 파일 수정 없이 검증
 - `npm run sync:external:dry-run`: `YOUTUBE_CHANNEL_ID`로 공식 Naver RSS·YouTube Atom을 조회하고 예상 변경을 파일 수정 없이 검증
 - `node scripts/work-tools-progress.mjs --write`: 중개업무 도구 진행 체크리스트·테스트 체크리스트의 체크 표시나 결과 칸을 바꾼 뒤 진행표·점수표를 다시 쓴다. 표가 실제와 다르면 `npm test`가 실패하며, `--check`는 고치지 않고 확인만 한다.
 - 실제 검색 공개 빌드: `PUBLIC_SITE_URL`과 `PUBLIC_ALLOW_INDEXING=true`를 함께 설정
@@ -134,7 +136,8 @@ npm run sync:external:dry-run
 - `src/data/office.json` → `src/lib/site.ts` → 헤더(인스타그램 바로가기 포함)·푸터·사무소·오시는 길·네이버 등록 매물 링크·구조화 데이터
 - `src/data/listings.json` → `src/lib/listings.ts` → 매물 목록 필터와 공개 상세 정적 생성
 - `src/data/naver-listings.json` → `src/lib/naver-listings.ts` → 사진 없는 네이버 공개 매물 카드·홈 6건 단위 페이징·거래/유형/단지/가격/면적 필터·최근 등록/가격 낮은·높은/면적 작은·큰 정렬·관심 매물·최대 3개 비교·비저장 문의 문장·외부 상세 링크. 부동산뱅크 `등록기간` 시작일은 `registeredAt`으로 저장하고 최근 등록순을 기본값으로 사용한다.
-- 부동산뱅크 공개 사무소 목록 → `scripts/sync-bank-listings.mjs` → EUC-KR 공개 HTML의 현재 페이지 전체 파싱·네이버 ID 기준 갱신·직전 부동산뱅크 기준선에서 사라진 항목 삭제·다른 공급처 항목 보존 → `naver-listings.json`. 정상 수집 뒤 `.github/listing-review-state.json`의 Bank `lastSeenAt`만 함께 갱신하며 경고 기준은 `.github/listing-review-policy.json`의 승인된 값만 사용한다. 기준이 `null`이면 경고 기능을 정상 비활성화하고 날짜 경과만으로 매물을 자동 종료·숨김 처리하지 않는다. 2026-08-26 1:1 문의의 본인 매물·하루 1회 허용 범위만 사용하며 로그인·상세·네이버 페이지는 조회하지 않는다.
+- 부동산뱅크 공개 사무소 목록 → `scripts/sync-bank-listings.mjs` → EUC-KR 공개 HTML의 현재 페이지 전체 파싱·네이버 ID 기준 갱신·직전 부동산뱅크 기준선에서 사라진 항목 삭제·다른 공급처 항목 보존(우리집부동산 매물은 재확인 상태 `woori` 표시까지 그대로, 같은 번호가 부동산뱅크에 올라오면 `bank`) → `naver-listings.json`. 정상 수집 뒤 `.github/listing-review-state.json`의 Bank `lastSeenAt`만 함께 갱신하며 경고 기준은 `.github/listing-review-policy.json`의 승인된 값만 사용한다. 기준이 `null`이면 경고 기능을 정상 비활성화하고 날짜 경과만으로 매물을 자동 종료·숨김 처리하지 않는다. 2026-08-26 1:1 문의의 본인 매물·하루 1회 허용 범위만 사용하며 로그인·상세·네이버 페이지는 조회하지 않는다.
+- 우리집부동산 공개 중개사 홈페이지(`home.woori-house.co.kr/42957`)가 화면에 쓰는 공개 매물 목록 JSON(`/api/mm_list.aspx`, 로그인 없음) → `scripts/sync-woori-listings.mjs`(2026-11-24, 사용자 지시 "어 해") → `scripts/sync/woori-listings.mjs`가 엑셀과 같은 16칸 줄로 바꿈(상세주소 자리에는 동 번호와 광고 층·총층만, 호수 없음. 분양권 가격은 분양가 + 프리미엄 + 옵션) → 엑셀 가져오기와 같은 `createWooriListingImport`로 건너뛰기·형식 검사·지우기 → `naver-listings.json`과 재확인 상태 `woori`. 총층을 알므로 층은 부동산뱅크와 같은 `7/22층`·`고/22층`이다. 2026-11-24 우리집부동산 회신(개별 API 없음, 로그인 없는 중개사 홈페이지 안내, 엑셀은 자주 받아도 되나 짧은 시간에 여러 번 부르면 IP 차단)에 따라 실행마다 요청 1번·다시 시도 없음이다. 빈 목록·다음 쪽 있음·처음 보는 진행 코드(`PRCS_CD`가 4가 아님)·형식이 틀린 줄이 하나라도 있으면 파일을 바꾸지 않고 실패한다(모르는 이유로 매물을 지우지 않음). 같은 날 엑셀(실제 33건)과 대조해 층 말고는 30건이 칸까지 같았다.
 - `src/data/complexes-overview.json` → 홈·목록의 `featuredComplexSlugs` 순서와 리더스시티 비교표의 `comparisonComplexSlugs` 범위를 분리하고, 리더스시티 4·5블록 숫자 카드·비교표·공통 현장 확인사항·관련 콘텐츠와 출처 제공
 - `src/data/complexes.json` → 대전 동구 주요 단지의 alias·SEO·단위 자료 안내·사진·기본 사실·면적별 세대 구성·공급 구성·생활환경·시설 확인 상태·FAQ·관련 콘텐츠·복수 출처와 목록·상세 정적 생성. 신흥 SK뷰는 공식 합계·운영자 직접 촬영 사진·공개 문구 승인을 반영해 `published`로 공개하며 상세·사이트맵·매물 단지 필터에 포함
 - `src/lib/complexes.ts`, `src/lib/complex-matching.mjs` → 공개 단지 순서 파생, NFKC·공백·구분기호 정규화와 긴 접두어 우선 매물 제목 매칭. 매칭되지 않은 매물은 숨기지 않음
@@ -149,7 +152,7 @@ npm run sync:external:dry-run
 - `/admin/deployment/` → 마지막 관리자 저장 commit·resource digest와 Production marker v2를 비교한 배포 중·공개 완료·최신 배포 포함·지연·확인 불가 상태
 - `/admin/history/` → 허용 공개 JSON별 현재 `master` 변경 이력, 과거 JSON과 현재 JSON의 안전한 diff, 현재 스키마 재검증, 정확한 2차 문구와 최신 blob SHA를 요구하는 새 커밋 복원
 - `/admin/help/` → 관리 화면 25곳 제목 아래 처음에는 접힌 '이 화면 사용법' 상자와 같은 글을 모은 사용 안내(메뉴 '확인' 묶음 끝, 휴대폰 아래 탭 제외). 문구는 `src/lib/admin-help.mjs` 한 곳에 두고, 작은따옴표로 적은 단추·칸 이름과 숫자를 `tests/admin-help.test.mjs`가 화면 원본·코드와 대조한다. 관리 화면의 단추 이름·시각·개수를 바꾸면 이 문구도 함께 고친다. 아홉 곳에만 단계 그림 11칸이 있다(2026-11-24 사용자 결정 "B 단계 그림 줄"로 계약서 사본·장부 줄 고치기·휴대폰 캘린더 구독, 같은 날 14:13:32 "AI 관련 기능이나 어려워 보이는거만"으로 계약서 AI 일정 뽑기(두 칸)·글 초안·홍보물 만들기(두 칸)·매물 안내지·부동산뱅크 엑셀 가져오기·변경 이력 복원을 더함, 상자에는 없음). 그림 글은 `src/lib/admin-help-figures.mjs`, 그림은 `public/admin/help/img/`, 크기·번호 자리·화면 원본 지문은 `src/lib/admin-help-images.json`이고, `npm run build` 뒤 `npm run help:shots`로만 찍는다(e2e 가짜 업무 API `e2e/support/*`, 이 PC에서). 그림에 찍힌 칸의 원본(그림마다 `sources`: 화면 .astro, 그 칸을 그리는 스크립트, 그 칸 글의 순수 함수. 서버 요청·공용 서식·법령 자료·CSS·`src/layouts/`는 넣지 않음)이 바뀌면 `tests/admin-help-images.test.mjs`가 떨어지므로, 그 칸을 고치는 PR이 같은 PR에서 다시 찍고 바뀐 그림을 눈으로 확인한다. 그 칸을 그리는 코드를 새 파일로 나누면 `sources`에 더한다. 계약서 AI 두 칸(`staleness: "warn"`)만은 낡아도 시험이 떨어지지 않고 `npm test` 출력과 GitHub `::warning` 주석으로 그림 이름·바뀐 파일을 알린다(사용자 결정 "AI 칸만 경고"). 그 경고가 보이면 이 PC에서 다시 찍어 넣는다.
-- `/admin/listings/`, `/admin/listings/editor/` → 네이버 공개 매물 현황·검색·유형·재확인 출처 필터와 확인일 정렬, 부동산뱅크 EUC-KR HTML-table `.xls` 브라우저 가져오기, 그 밖의 네이버 매물 직접 등록·수정·등록 종료. 원본 XLS는 서버로 보내지 않고 정제된 공개 목록과 재확인 상태를 한 Git 커밋으로 저장한다. 직접 등록 매물의 단건 `확인 완료`는 공통 변경 미리보기·최신 SHA 검증 뒤 `lastReviewedAt`만 새 커밋으로 갱신하며 변경 이력에서 복원할 수 있다. 재확인 정책이 미설정이면 관리자 화면도 `기준 미설정`으로 표시한다.
+- `/admin/listings/`, `/admin/listings/editor/` → 네이버 공개 매물 현황·검색·유형·재확인 출처 필터와 확인일 정렬, 부동산뱅크 EUC-KR HTML-table `.xls` 브라우저 가져오기, 우리집부동산 매물 목록 UTF-8 HTML-table `.xls` 브라우저 가져오기(2026-11-24, `src/lib/admin/woori-listing-import.mjs`, 부동산뱅크 칸과 따로 둔 '우리집부동산 엑셀 가져오기' 칸. 머리칸 16개가 같아야 하고 호수·지번·중개사 메모는 버리며 아파트·분양권만 `{매물명} {동}동` 제목과 괄호 안 광고 층 `7층`·`고층`을 씀(이미 `7/22층`처럼 같은 층으로 시작하는 값이 있으면 그 값을 둠). 새 매물 요약은 고정 문장, 동 번호 없는 상가·점포 줄과 부동산뱅크 매물은 건너뛰고 까닭을 보임. 재확인 상태 출처 `woori`가 기준선이라 다시 올리면 지난번 `woori` 매물 가운데 이번 파일에 없는 것만 내림. 매일 자동 받기(아래 줄)가 멈췄을 때 쓰는 비상용), 그 밖의 네이버 매물 직접 등록·수정·등록 종료. 원본 XLS는 서버로 보내지 않고 정제된 공개 목록과 재확인 상태를 한 Git 커밋으로 저장한다. 직접 등록 매물의 단건 `확인 완료`는 공통 변경 미리보기·최신 SHA 검증 뒤 `lastReviewedAt`만 새 커밋으로 갱신하며 변경 이력에서 복원할 수 있다. 재확인 정책이 미설정이면 관리자 화면도 `기준 미설정`으로 표시한다.
 - `/properties/` → 공개 매물을 거래·유형·단지·가격·면적으로 좁히고, 공개 ID만 브라우저 `localStorage`에 최대 30개 관심 매물로 저장하며 최대 3개를 비교 선택한다. `/properties/compare/?ids=...`는 공개 ID만 복원하고 `noindex,follow`, canonical `/properties/`를 사용한다. 문의 조건과 자유 메모는 현재 페이지 메모리에서만 문장으로 만든다.
 - `/blog/`, `/youtube/` → 지역 콘텐츠를 원문 종류별로 분리하고, 유튜브는 일반 영상을 기본으로 `일반 영상·Shorts 보기`를 전환하며 독립 페이지에서 6개 단위로 탐색
 - `/faq/` → 승인된 공개 FAQ 38개를 8개 카테고리 바로가기·구역별 아코디언으로 표시하고 서버에 저장하지 않는 문자 상담 작성 화면
@@ -198,7 +201,7 @@ npm run sync:external:dry-run
 - 호수 검사는 `미분양 물량 [YYYY년 M월] 1,866호`처럼 명시적인 미분양 물량 문맥의 천 단위 쉼표 수량만 통계로 구분한다. 단독 호수·동 번호와 결합한 호수·호실·다른 민감정보는 계속 차단하며, RSS 동기화도 파일 저장 전에 공통 공개 스키마·금지 필드·민감 문자열 검사를 적용한다. 공개 연락처 예외는 같은 저장소의 `office.json`을 기준으로 한다.
 - `published` 매물만 공개 목록·상세·사이트맵에 생성한다.
 - 공개 매물에는 고유 ID·slug, 동구 내 동네, 거래유형, 가격, 전용면적, 출처, 확인일을 입력한다.
-- 네이버 외부 매물 카드는 네이버에 공개된 매물번호·동 번호·광고 층수·가격·면적·방향과 부동산뱅크 등록기간 시작일(`registeredAt`)만 `naver-listings.json`에 기록하고, 각 카드가 같은 매물번호의 `fin.land.naver.com/articles/` 주소로 연결되어야 한다. 목록 수집 기준일은 루트 `checkedAt`으로 별도 관리한다.
+- 네이버 외부 매물 카드는 네이버에 공개된 매물번호·동 번호·광고 층수·가격·면적·방향과 등록일(`registeredAt`, 부동산뱅크는 등록기간 시작일·우리집부동산은 '등록' 칸)만 `naver-listings.json`에 기록하고, 각 카드가 같은 매물번호의 `fin.land.naver.com/articles/` 주소로 연결되어야 한다. 목록 수집 기준일은 루트 `checkedAt`으로 별도 관리한다.
 - 네이버 공개 카드에 없는 정확한 호수나 고객·소유자 정보는 추가하지 않는다. 공개 동 번호와 광고 층수는 그대로 표시할 수 있다.
 - 매물 대표 이미지는 `thumbnail`, 상세 이미지는 `images`에 자체 `/images/` 경로와 대체 텍스트로 저장한다.
 - 매매는 매매가만, 전세는 보증금만, 월세는 보증금과 월 임대료만 입력한다.
@@ -249,6 +252,7 @@ npm run sync:external:dry-run
 - `.github/workflows/sync-external-content.yml`은 매시간 17분 `schedule`과 `workflow_dispatch`를 지원한다. 네트워크 수집·의존성·테스트는 `contents: read` job에서 수행하고, 검증 artifact를 적용하는 별도 job만 `contents: write`를 사용하며 토큰은 push 단계에만 환경변수로 전달한다.
 - 동기화 워크플로는 허용된 콘텐츠·썸네일 경로 또는 45일 keepalive 상태 파일만 분리 커밋하고, 같은 실행에서 테스트·콘텐츠 검사·빌드를 다시 수행한다.
 - `.github/workflows/sync-bank-listings.yml`도 매일 00:10 KST와 수동 실행을 지원하며 같은 read-validation/write-publish 권한 분리를 사용한다. 공개 목록만 조회하고 `.github/bank-listing-sync-state.json`, `.github/listing-review-state.json`, `src/data/naver-listings.json`만 하나의 Git 커밋으로 변경한다. 실패하면 마지막 `alert` job(`issues: write`·`actions: read`만, 저장소를 받지 않음)이 '부동산뱅크 매물 자동 받기 실패' 이슈를 열거나(봇이 연 같은 제목 이슈가 열려 있으면 댓글) 다음 성공 때 닫으며, 이슈에는 실행 주소·멈춘 단계 이름·job 결과만 넣는다(2026-11-24 사용자 선택 "GitHub 이슈 + 대시보드 경고").
+- `.github/workflows/sync-woori-listings.yml`은 매일 00:40 KST와 수동 실행을 지원하고 부동산뱅크 받기와 같은 read-validation/write-publish 권한 분리·`external-content-sync` 동시 실행 묶음·운영 `bank` scope marker 확인·실패 알림 이슈('우리집부동산 매물 자동 받기 실패')를 쓴다. `.github/listing-review-state.json`, `src/data/naver-listings.json` 두 파일만 하나의 Git 커밋으로 바꾼다(`scripts/check-woori-sync-worktree.mjs`). 수동 실행은 한 번만 하고 짧은 시간에 되풀이하지 않는다.
 - Cloudflare Workers Builds는 GitHub `myoungsuk/real-estate-website`의 `master`에 연결되어 있으며, `master` 푸시 시 Production을 자동 빌드·배포한다.
 - Production 빌드는 `PUBLIC_SITE_URL=https://leaderscityhappy.com`, `PUBLIC_ALLOW_INDEXING=true`를 사용한다.
 - `npm run build`는 공개 `deployment-marker.json` v2에 Workers Builds·GitHub Actions source commit/branch, 허용 관리자 JSON별 정규화 SHA-256 digest와 검색 대상·Bank·외부 콘텐츠·scheduler scope hash를 생성한다. 기존 v1 scope reader는 2026-09-30까지 호환한다. 동기화 워크플로는 push 후 해당 scope가 운영 URL과 일치할 때까지 확인하며 불일치·시간 초과를 실패로 표시한다. IndexNow 워크플로는 2026-11-19부터 scope 대신 `source.commit`이 같거나 후속 커밋인지로 확인한다(뒤 커밋이 먼저 배포돼 `search` 값이 바뀌면 앞 커밋 알림이 실패하던 문제).

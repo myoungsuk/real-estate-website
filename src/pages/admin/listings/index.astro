@@ -22,8 +22,9 @@ const reviewQueue = buildListingReviewQueue(
   needsReview: number;
   bank: number;
   manual: number;
+  woori: number;
   items: Array<NaverListing & {
-    reviewSource: "bank" | "manual";
+    reviewSource: "bank" | "manual" | "woori";
     referenceDate: string | null;
     needsReview: boolean;
   }>;
@@ -44,12 +45,13 @@ const formatDate = (value: string) => new Intl.DateTimeFormat("ko-KR", { year: "
 
   <AdminPageHelp page="/admin/listings/" />
 
-  <p class="admin-inline-notice admin-inline-notice--ready"><span aria-hidden="true">i</span><span>부동산뱅크 공개 매물은 하루 1회 자동 동기화하며 엑셀은 보완용입니다. 그 밖의 네이버 매물은 직접 등록하고, 홈페이지에는 공개 정보와 네이버 개별 매물 링크만 표시합니다.</span></p>
+  <p class="admin-inline-notice admin-inline-notice--ready"><span aria-hidden="true">i</span><span>부동산뱅크 공개 매물은 하루 1회 자동 동기화하며 엑셀은 보완용입니다. 우리집부동산 공개 매물도 하루 1회 자동으로 받고(엑셀은 비상용), 그 밖의 네이버 매물은 직접 등록하며, 홈페이지에는 공개 정보와 네이버 개별 매물 링크만 표시합니다.</span></p>
 
   <section class="admin-listing-review-summary" aria-labelledby="listing-review-summary-title">
     <div><span>재확인 필요</span><strong>{reviewQueue.enabled ? `${reviewQueue.needsReview}건` : "기준 미설정"}</strong><small>경고 기준이 승인되기 전에는 재확인 경고를 만들지 않습니다.</small></div>
     <div><span>Bank 자동 확인</span><strong>{reviewQueue.bank}건</strong><small>정상 동기화에서 마지막 확인일만 갱신합니다.</small></div>
     <div><span>직접 등록</span><strong>{reviewQueue.manual}건</strong><small>날짜 경과만으로 자동 종료하거나 숨기지 않습니다.</small></div>
+    <div><span>우리집부동산</span><strong>{reviewQueue.woori}건</strong><small>매일 밤 공개 목록에서 자동으로 받고, 내려간 매물은 내립니다.</small></div>
   </section>
 
   <section class="admin-panel" aria-labelledby="listing-table-title">
@@ -58,7 +60,7 @@ const formatDate = (value: string) => new Intl.DateTimeFormat("ko-KR", { year: "
     <form class="admin-listing-filters" role="search" data-admin-listing-filters>
       <div class="admin-field admin-field--search"><label for="admin-listing-query">매물 검색</label><input id="admin-listing-query" type="search" name="q" placeholder="매물명, 유형, ID 검색" autocomplete="off" data-admin-listing-query /></div>
       <div class="admin-field"><label for="admin-listing-type">매물유형</label><select id="admin-listing-type" name="type" data-admin-listing-type><option value="all">전체 유형</option>{naverPropertyTypes.map((type) => <option value={type}>{type}</option>)}</select></div>
-      <div class="admin-field"><label for="admin-listing-review">확인 구분</label><select id="admin-listing-review" name="review" data-admin-listing-review><option value="all">전체 확인 상태</option><option value="due" disabled={!reviewQueue.enabled}>재확인 필요</option><option value="bank">Bank 자동 동기화</option><option value="manual">직접 등록</option><option value="recent">확인일 있음</option></select></div>
+      <div class="admin-field"><label for="admin-listing-review">확인 구분</label><select id="admin-listing-review" name="review" data-admin-listing-review><option value="all">전체 확인 상태</option><option value="due" disabled={!reviewQueue.enabled}>재확인 필요</option><option value="bank">Bank 자동 동기화</option><option value="manual">직접 등록</option><option value="woori">우리집부동산</option><option value="recent">확인일 있음</option></select></div>
       <div class="admin-field"><label for="admin-listing-sort">표시 순서</label><select id="admin-listing-sort" name="sort" data-admin-listing-sort><option value="registered">최근 등록순</option><option value="review-oldest">확인 오래된순</option><option value="review-recent">최근 확인순</option></select></div>
       <button class="admin-filter-reset" type="button" data-admin-listing-reset>필터 초기화</button>
     </form>
@@ -75,7 +77,7 @@ const formatDate = (value: string) => new Intl.DateTimeFormat("ko-KR", { year: "
         <tbody>{sortedListings.map((listing) => (
           <tr data-admin-listing-row data-admin-listing-type={listing.propertyType} data-admin-listing-source={listing.reviewSource} data-admin-listing-needs-review={String(listing.needsReview)} data-admin-listing-review-date={listing.referenceDate ?? ""} data-admin-listing-registered-at={listing.registeredAt} data-admin-listing-search={[listing.title, listing.id, listing.propertyType, naverTradeNames[listing.tradeType], listing.areaLabel, listing.floorLabel, listing.direction].filter(Boolean).join(" ")}>
             <td data-label="매물명"><a class="admin-table__title" href={listing.url} target="_blank" rel="noopener noreferrer">{listing.title} ↗</a><small>네이버 매물번호 {listing.id}</small></td>
-            <td data-label="유형">{listing.propertyType}</td><td data-label="거래">{naverTradeNames[listing.tradeType]}</td><td data-label="가격">{listing.priceLabel}</td><td data-label="등록일">{formatDate(listing.registeredAt)}</td><td data-label="마지막 확인"><span class:list={["admin-review-source", { "admin-review-source--manual": listing.reviewSource === "manual" }]}>{listing.reviewSource === "bank" ? "Bank" : "직접"}</span><small data-listing-review-date>{listing.referenceDate ? formatDate(listing.referenceDate) : "확인 기록 없음"}</small></td><td data-label="관리"><div class="admin-listing-row-actions">{listing.reviewSource === "manual" && <label class="admin-review-select"><input type="checkbox" value={listing.id} aria-label={`${listing.title} 확인 대상으로 선택`} data-listing-review-select disabled /><span>선택</span></label>}{listing.reviewSource === "manual" && <button class="admin-row-action" type="button" data-listing-review-confirm={listing.id} disabled>확인 완료</button>}<a class="admin-row-action" href={`/admin/listings/editor/?id=${listing.id}`}>수정·종료</a></div></td>
+            <td data-label="유형">{listing.propertyType}</td><td data-label="거래">{naverTradeNames[listing.tradeType]}</td><td data-label="가격">{listing.priceLabel}</td><td data-label="등록일">{formatDate(listing.registeredAt)}</td><td data-label="마지막 확인"><span class:list={["admin-review-source", { "admin-review-source--manual": listing.reviewSource !== "bank" }]}>{listing.reviewSource === "bank" ? "Bank" : listing.reviewSource === "woori" ? "우리집" : "직접"}</span><small data-listing-review-date>{listing.referenceDate ? formatDate(listing.referenceDate) : "확인 기록 없음"}</small></td><td data-label="관리"><div class="admin-listing-row-actions">{listing.reviewSource === "manual" && <label class="admin-review-select"><input type="checkbox" value={listing.id} aria-label={`${listing.title} 확인 대상으로 선택`} data-listing-review-select disabled /><span>선택</span></label>}{listing.reviewSource === "manual" && <button class="admin-row-action" type="button" data-listing-review-confirm={listing.id} disabled>확인 완료</button>}<a class="admin-row-action" href={`/admin/listings/editor/?id=${listing.id}`}>수정·종료</a></div></td>
           </tr>
         ))}</tbody>
       </table>
@@ -99,7 +101,7 @@ const formatDate = (value: string) => new Intl.DateTimeFormat("ko-KR", { year: "
       schemaVersion: 1;
       updatedAt: string;
       items: Record<string, {
-        source: "bank" | "manual";
+        source: "bank" | "manual" | "woori";
         lastSeenAt: string | null;
         lastReviewedAt: string | null;
       }>;
@@ -253,6 +255,7 @@ const formatDate = (value: string) => new Intl.DateTimeFormat("ko-KR", { year: "
             || (selectedReview === "due" && row.dataset.adminListingNeedsReview === "true")
             || (selectedReview === "bank" && row.dataset.adminListingSource === "bank")
             || (selectedReview === "manual" && row.dataset.adminListingSource === "manual")
+            || (selectedReview === "woori" && row.dataset.adminListingSource === "woori")
             || (selectedReview === "recent" && Boolean(row.dataset.adminListingReviewDate));
           row.hidden = !(matchesQuery && matchesType && matchesReview);
           if (!row.hidden) visible += 1;

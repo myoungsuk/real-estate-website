@@ -461,7 +461,7 @@ for (const [device, width] of DEVICES) {
     await expect(page.locator("[data-bank-stat='new']")).toHaveText("1");
     await expect(page.locator("[data-bank-stat='changed']")).toHaveText("1");
     const items = page.locator("[data-bank-preview] > article");
-    await snap(page, `bank-${device}-2-preview`, { clip: [page.locator(".admin-import-stats"), items.nth(3)], fullWidth: device === "phone", targets: [page.locator(".admin-import-stats"), items.first()] });
+    await snap(page, `bank-${device}-2-preview`, { clip: [panel.locator(".admin-import-stats"), items.nth(3)], fullWidth: device === "phone", targets: [panel.locator(".admin-import-stats"), items.first()] });
     await page.locator("[data-bank-apply]").click();
     const dialog = page.locator("dialog[open]");
     await expect(dialog).toBeVisible();

@@ -78,3 +78,14 @@ export function bankXls(headers, rows) {
     + `<tr>${headers.map(cell).join("")}</tr>${rows.map((row) => `<tr>${headers.map((header) => cell(row[header] ?? "")).join("")}</tr>`).join("")}</table></body></html>`;
   return encodeEucKr(html);
 }
+
+// 우리집부동산 매물 목록 엑셀(.xls, UTF-8 HTML 표, charset 머리 없음)을 흉내 낸 파일. 실제 파일처럼 표가 여럿이고
+// 머리칸은 th, 끝에 칸 수가 다른 안내 줄이 있다. 값은 모두 지어낸 시험 값이다.
+export function wooriXls(headers, rows) {
+  const cell = (tag, value) => `<${tag}>${String(value).replace(/&/gu, "&amp;").replace(/</gu, "&lt;")}</${tag.toUpperCase()}>`;
+  const html = "\r\n    <html><body><table><tr><td>가상 목록</td></table><table><tr><td>가상 검색</td></tr></table><table><tr><td>가상 쪽</td></tr></table>"
+    + `<table><tr>${headers.map((header) => cell("th", header)).join("")}</tr>`
+    + rows.map((row) => `<tr>${headers.map((header) => cell("td", row[header] ?? "")).join("")}</tr>`).join("")
+    + `<tr><td>가상 안내 :</td><td>가상 문구</td></tr></table></body></html>`;
+  return Buffer.from(html, "utf8");
+}
