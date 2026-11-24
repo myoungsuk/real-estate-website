@@ -285,12 +285,20 @@ const bankSeenOn = bankLastSeenOn(reviewState);
     }
 
     // 부동산뱅크 자동 받기 줄: 서버를 부르지 않고 빌드 때 실은 받은 날과 지금 시각만 본다.
+    // 미리 그린 뒤·뒤로 가기 캐시·오래 켜 둔 탭에서도 낡지 않게 화면이 보일 때마다 다시 잰다.
     const bankSync = root?.querySelector<HTMLElement>("[data-dsh-bank-sync]");
-    if (bankSync?.dataset.dshBankSync) {
+    const renderBankSync = () => {
+      if (!bankSync?.dataset.dshBankSync) return;
       const sync = bankSyncState(bankSync.dataset.dshBankSync, todayInKorea(), Date.now());
       bankSync.textContent = sync.text;
       bankSync.classList.toggle("is-late", sync.stale);
-    }
+    };
+    renderBankSync();
+    document.addEventListener("prerenderingchange", renderBankSync);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") renderBankSync();
+    });
+    window.addEventListener("pageshow", renderBankSync);
 
     if (root && boot && strip && dateLine) {
       dateLine.textContent = dateTitle(todayInKorea());
