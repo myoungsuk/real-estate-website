@@ -41,7 +41,7 @@ const MAXW = W - PAD * 2;
 const C = CARD_COLORS;
 const HIGH_LABEL = "▲ 신고가";
 const PRESALE_LABEL = "분양권";
-const CORAL = "#F06951"; // 로고의 산호색
+const BAND_YELLOW = "#FFEFB8"; // 잡지 머리 띠: 연한 노랑(2026-11-24 사용자 요청 "바탕색은 좀더 연하거나 노란색 계열", 그 전 산호 #F06951)
 
 type Theme = {
   bg: string; ink: string; soft: string; edge: string; strip: string; price: string;
@@ -58,7 +58,7 @@ const BASE: Theme = {
 export const PROMO_THEMES: Record<PromoStyle, Theme> = {
   basic: BASE,
   clean: { ...BASE, bg: "#EEF1F4", edge: "#E3E7EB", strip: "#F3F5F7", chip: null, chipInk: C.navy, rule: null, panel: "#FFFFFF" },
-  magazine: { ...BASE, chip: C.ink, rule: null, band: CORAL },
+  magazine: { ...BASE, chip: C.ink, rule: null, band: BAND_YELLOW },
   dark: {
     ...BASE, bg: C.navy, ink: "#FFFFFF", soft: "#B7C3CF", edge: "rgba(255, 255, 255, 0.16)", strip: "rgba(255, 255, 255, 0.08)", price: "#FFB49F",
     high: "#FF8A73", highInk: "#1A0A06", up: "#FF9A85", pre: "rgba(255, 255, 255, 0.16)", preInk: "#E8EEF4",
@@ -171,7 +171,8 @@ function measure<T>(pen: Pen, fn: () => T): T {
   try { return fn(); } finally { pen.draw = was; }
 }
 
-// 머리: 칩 "대전 동구 아파트 실거래가"(받은 시각은 카드에 넣지 않고 글에만, 2026-11-24 사용자 답 "이것도 뺌") → 제목 → 계약일 범위 → 흐름 기준 줄. 잡지는 이 머리 뒤를 산호색 띠로 칠한다.
+// 머리: 칩 "대전 동구 아파트 실거래가"(받은 시각은 카드에 넣지 않고 글에만, 2026-11-24 사용자 답 "이것도 뺌") → 1건만 제목(단지 이름이 제목에만 있음).
+// 여러 건 제목("실거래 n건 · n/m장")·계약일 범위·흐름 기준 줄은 그리지 않는다(2026-11-24 사용자 요청 "네모박스에 있는건 안나오게"). 잡지는 이 머리 뒤를 연한 노랑 띠로 칠한다.
 function head(pen: Pen, card: PromoCard, t: Theme, s: number) {
   const draw = () => {
     let y = TOP;
@@ -186,9 +187,8 @@ function head(pen: Pen, card: PromoCard, t: Theme, s: number) {
       line(pen, card.areaLabel, PAD, y + chipH / 2 + 1, chipPx, { weight: 800, color: t.chipInk });
     }
     y += chipH + Math.round(26 * s);
-    y = text(pen, card.title, PAD, y, { px: Math.round(66 * s), weight: 800, color: t.ink, lh: 1.14 });
-    y = text(pen, card.range, PAD, y + 6 * s, { px: Math.round(30 * s), color: t.band ? C.ink : t.soft });
-    if (card.basis) y = text(pen, card.basis, PAD, y, { px: Math.round(25 * s), color: t.band ? C.ink : t.soft });
+    if (card.items.length === 1) y = text(pen, card.title, PAD, y, { px: Math.round(66 * s), weight: 800, color: t.ink, lh: 1.14 });
+    else y -= Math.round(26 * s);
     return y;
   };
   if (!t.band) return draw();
