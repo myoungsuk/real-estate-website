@@ -27,7 +27,6 @@ export type PromoCard = {
   areaLabel: string;
   range: string;
   items: CardItem[];
-  received: string;
   basis: string;
   style: PromoStyle;
   office: Office;
@@ -48,21 +47,21 @@ type Theme = {
   bg: string; ink: string; soft: string; edge: string; strip: string; price: string;
   high: string; highInk: string; up: string; pre: string; preInk: string;
   chip: string | null; chipInk: string; spark: string; sparkArea: string; rule: string | null;
-  panel: string | null; band: string | null; whenInk: string; whenWeight: number; markPlate: boolean;
+  panel: string | null; band: string | null; markPlate: boolean;
 };
 const BASE: Theme = {
   bg: C.paper, ink: C.ink, soft: C.soft, edge: C.edge, strip: C.paper2, price: C.navy,
   high: "#B3261E", highInk: "#FFFFFF", up: "#B3261E", pre: "#E4EBF3", preInk: C.navy,
   chip: C.navy, chipInk: "#FFFFFF", spark: C.navy, sparkArea: "rgba(19, 42, 62, 0.09)", rule: C.navy,
-  panel: null, band: null, whenInk: C.soft, whenWeight: 600, markPlate: false,
+  panel: null, band: null, markPlate: false,
 };
 export const PROMO_THEMES: Record<PromoStyle, Theme> = {
   basic: BASE,
   clean: { ...BASE, bg: "#EEF1F4", edge: "#E3E7EB", strip: "#F3F5F7", chip: null, chipInk: C.navy, rule: null, panel: "#FFFFFF" },
-  magazine: { ...BASE, chip: C.ink, rule: null, band: CORAL, whenInk: C.ink, whenWeight: 800 },
+  magazine: { ...BASE, chip: C.ink, rule: null, band: CORAL },
   dark: {
     ...BASE, bg: C.navy, ink: "#FFFFFF", soft: "#B7C3CF", edge: "rgba(255, 255, 255, 0.16)", strip: "rgba(255, 255, 255, 0.08)", price: "#FFB49F",
-    whenInk: "#C9D3DD", high: "#FF8A73", highInk: "#1A0A06", up: "#FF9A85", pre: "rgba(255, 255, 255, 0.16)", preInk: "#E8EEF4",
+    high: "#FF8A73", highInk: "#1A0A06", up: "#FF9A85", pre: "rgba(255, 255, 255, 0.16)", preInk: "#E8EEF4",
     chip: "#FFB49F", chipInk: "#1A0A06", spark: "#FFB49F", sparkArea: "rgba(255, 180, 159, 0.18)", rule: "rgba(255, 255, 255, 0.5)", markPlate: true,
   },
 };
@@ -172,7 +171,7 @@ function measure<T>(pen: Pen, fn: () => T): T {
   try { return fn(); } finally { pen.draw = was; }
 }
 
-// 머리: 칩 "대전 동구 아파트 실거래가" + 오른쪽 받은 시각 → 제목 → 계약일 범위 → 흐름 기준 줄. 잡지는 이 머리 뒤를 산호색 띠로 칠한다.
+// 머리: 칩 "대전 동구 아파트 실거래가"(받은 시각은 카드에 넣지 않고 글에만, 2026-11-24 사용자 답 "이것도 뺌") → 제목 → 계약일 범위 → 흐름 기준 줄. 잡지는 이 머리 뒤를 산호색 띠로 칠한다.
 function head(pen: Pen, card: PromoCard, t: Theme, s: number) {
   const draw = () => {
     let y = TOP;
@@ -186,7 +185,6 @@ function head(pen: Pen, card: PromoCard, t: Theme, s: number) {
     } else {
       line(pen, card.areaLabel, PAD, y + chipH / 2 + 1, chipPx, { weight: 800, color: t.chipInk });
     }
-    line(pen, card.received, W - PAD, y + chipH / 2 + 1, Math.round(28 * s), { weight: t.whenWeight, color: t.whenInk, align: "right", maxW: MAXW - chipW - 24 });
     y += chipH + Math.round(26 * s);
     y = text(pen, card.title, PAD, y, { px: Math.round(66 * s), weight: 800, color: t.ink, lh: 1.14 });
     y = text(pen, card.range, PAD, y + 6 * s, { px: Math.round(30 * s), color: t.band ? C.ink : t.soft });

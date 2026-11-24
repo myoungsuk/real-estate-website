@@ -1058,7 +1058,7 @@ const recordCardText = (page) => page.addInitScript(() => {
     const value = String(text);
     const w = this.measureText(value).width;
     const left = (this.textAlign === "right" || this.textAlign === "end" ? x - w : this.textAlign === "center" ? x - w / 2 : x) + this.getTransform().e;
-    window.__cardText.push({ text: value, left, right: left + w, width: this.canvas.width });
+    window.__cardText.push({ text: value, left, right: left + w, width: this.canvas.width, top: y + this.getTransform().f, height: this.canvas.height });
     return fill.call(this, text, x, y, ...rest);
   };
 });
@@ -1087,17 +1087,21 @@ test("새 카드 4건 한 장·긴 단지 이름: 4가지 모양 모두 글자�
       await page.getByRole("radio", { name, exact: true }).check();
       await expect(card).not.toHaveAttribute("src", before);
     }
-    await expect.poll(() => page.evaluate(() => window.__cardText.some((entry) => entry.text.includes("받은 자료"))), name).toBe(true);
+    await expect.poll(() => page.evaluate(() => window.__cardText.some((entry) => entry.text === "리더스시티행복한공인중개사사무소")), name).toBe(true);
     await expect(page.locator("[data-promo-card-warn]"), `${name}: 넘침 알림 없음`).toBeHidden();
     const drawn = await page.evaluate(() => window.__cardText);
     const outside = drawn.filter((entry) => entry.width === 1080 && (entry.left < 0 || entry.right > 1080)).map((entry) => entry.text);
     expect(outside, `${name}: 그림 밖으로 나간 글자`).toEqual([]);
+    // 아래 칸(사무소 명시사항)까지 그림 높이 안에 그려짐(잘리지 않음).
+    const cut = drawn.filter((entry) => entry.width === 1080 && (entry.top < 0 || entry.top > entry.height)).map((entry) => entry.text);
+    expect(cut, `${name}: 위·아래로 잘린 글자`).toEqual([]);
     const texts = drawn.map((entry) => entry.text);
     expect(texts.some((text) => text.startsWith("가상숲리버뷰") && text.endsWith("…")), `${name}: 긴 이름은 말줄임`).toBe(true);
     expect(texts, `${name}: 딱지`).toEqual(expect.arrayContaining(["▲ 신고가", "분양권"]));
     expect(texts, `${name}: 오름 폭`).toContain("▲ 600만");
     expect(texts, `${name}: 상호 크게`).toContain("리더스시티행복한공인중개사사무소");
     expect(texts.some((text) => text.includes("국토교통부")), `${name}: 출처 상자는 그림에서 뺌`).toBe(false);
+    expect(texts.some((text) => text.includes("받은 자료")), `${name}: 받은 시각도 그림에서 뺌`).toBe(false);
   }
   // 글 4가지에는 긴 이름을 줄이지 않고 그대로 쓴다.
   await page.locator("[data-promo-text-fold] > summary").click();

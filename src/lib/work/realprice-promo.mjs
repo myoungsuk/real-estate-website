@@ -383,7 +383,6 @@ export function promoCards({ items, receivedAt, office, insights = {}, style = P
       range: dealRange(pageItems),
       items: cardItems,
       basis: promoBasisLine(cardItems.map((item) => item.flow)),
-      received: `${receivedText(receivedAt)} 받은 자료`,
       style: isPromoStyle(style) ? style : PROMO_STYLE_DEFAULT,
       // 사무소 명시사항 5항목(DEC-WT-23): 상호는 크게, 대표·등록번호·주소는 작은 글, 연락처는 크게 그린다(2026-11-24 사용자 답 "상호를 크게").
       office: { name: office.legalName, representative: office.representative, address: office.address, mobile: office.mobile, registrationNumber: office.registrationNumber },

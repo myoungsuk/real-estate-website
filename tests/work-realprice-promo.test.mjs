@@ -267,14 +267,15 @@ test("카드 금액·딱지: 큰 숫자와 작은 단위로 나누고, '▲ 오�
   assert.deepEqual(card.items.map((item) => [item.high, item.presale, item.up]), [[true, false, "▲ 2,500만"], [false, true, ""], [false, false, ""]]);
 });
 
-test("카드: 여러 장이면 제목 끝 ' · 1/2장', 위 칸은 받은 시각, 아래 칸은 사무소 명시사항 5항목(상호 크게). 출처 상자·판정 기준·신고 기한 안내는 글에만", () => {
+test("카드: 여러 장이면 제목 끝 ' · 1/2장', 받은 시각은 그림에 없고(글에만), 아래 칸은 사무소 명시사항 5항목(상호 크게). 출처 상자·판정 기준·신고 기한 안내는 글에만", () => {
   assert.equal(promoCards(input(THREE)).length, 1);
   const six = [HIGH, HIGH2, PLAIN, MONTHLY, JEONSE, PRESALE];
   const cards = promoCards(input(six));
   assert.deepEqual(cards.map((card) => card.title), ["실거래 6건 · 1/2장", "실거래 6건 · 2/2장"]);
   assert.deepEqual(cards.map((card) => card.items.length), [3, 3]);
   for (const card of cards) {
-    assert.equal(card.received, "2026. 11. 20. 09:50 받은 자료");
+    assert.equal(Object.hasOwn(card, "received"), false, "그림에 받은 시각 없음(2026-11-24 사용자 답 \"이것도 뺌\")");
+    assert.equal(JSON.stringify(card).includes("받은 자료"), false);
     assert.deepEqual(card.office, { name: office.legalName, representative: office.representative, address: office.address, mobile: office.mobile, registrationNumber: office.registrationNumber });
     for (const gone of ["source", "highRule", "disclosure"]) assert.equal(Object.hasOwn(card, gone), false, `그림 자료에 ${gone} 없음`);
     const drawn = JSON.stringify(card);
