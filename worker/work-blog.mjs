@@ -356,7 +356,7 @@ export async function createBlogDraft(context, body) {
   } catch (error) {
     const aiError = error instanceof WorkAiError ? error : new WorkAiError("AI_NETWORK");
     const definitelyNotCreated = Number.isInteger(aiError.status) && aiError.status >= 400 && aiError.status < 500;
-    logOpenAi(auditLog, { requestId, upstreamRequestId: aiError.upstreamRequestId, model: config.model, effort: config.effort, status: aiError.status, code: aiError.code, ms: Date.now() - started });
+    logOpenAi(auditLog, { requestId, upstreamRequestId: aiError.upstreamRequestId, model: config.model, effort: config.effort, status: aiError.status, code: aiError.code, upstreamError: aiError.upstreamError ?? undefined, ms: Date.now() - started });
     const code = definitelyNotCreated ? aiError.code : "AI_STATE_UNKNOWN";
     const updatedAt = iso(now);
     const statements = definitelyNotCreated

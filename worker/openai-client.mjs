@@ -1,7 +1,7 @@
 // OpenAI Responses API 공통 부품(설계서 14.1·14.5절). SDK 없이 fetch만 쓰고, 시험은 fetcher를 바꿔 끼워 실제 OpenAI를 부르지 않는다.
 // - 생성 요청(POST /v1/responses)은 자동 재시도 0회. 응답을 받기 전에 끊기면 실제로 만들어졌는지 모르므로 AI_STATE_UNKNOWN.
 // - 조회(GET /v1/responses/{id})는 1회까지 다시 부른다(비용 없음). 취소는 두 번 불러도 안전하다.
-// - 키·요청 본문·응답 본문·error.message는 로그와 오류에 넣지 않는다. 오류에는 고정 코드·HTTP 상태·x-request-id만 담는다.
+// - 키·요청 본문·응답 본문·error.message는 로그와 오류에 넣지 않는다. 오류에는 고정 코드·HTTP 상태·x-request-id와 400일 때 OpenAI 오류 이름표(type·code·param)만 담는다.
 // 단계 4가 이 파일을 그대로 쓴다(P3가 먼저 만듦).
 
 export const OPENAI_API_ROOT = "https://api.openai.com/v1";
@@ -10,13 +10,37 @@ const READ_TIMEOUT_MS = 20_000;
 const RESPONSE_ID_PATTERN = /^[A-Za-z0-9_-]{1,200}$/u;
 
 export class WorkAiError extends Error {
-  constructor(code, { status = null, upstreamRequestId = null } = {}) {
+  constructor(code, { status = null, upstreamRequestId = null, upstreamError = null } = {}) {
     super(code);
     this.name = "WorkAiError";
     this.code = code;
     this.status = status;
     this.upstreamRequestId = upstreamRequestId;
+    // 400일 때 OpenAI 오류의 type·code·param 이름표만(error.message는 읽지 않음). 로그에서 어느 칸이 틀렸는지 찾는 데 쓴다.
+    this.upstreamError = upstreamError;
   }
+}
+
+const ERROR_LABEL_PATTERN = /^[A-Za-z0-9_.:[\]-]{1,100}$/u;
+const ERROR_BODY_MAX_CHARS = 8_192;
+
+// 400 응답 본문에서 error.type·error.code·error.param만 꺼낸다. 꼴이 맞지 않는 값(글·공백 등)은 버리고, 하나도 없으면 null.
+async function readErrorLabels(response) {
+  let parsed;
+  try {
+    const text = await response.text();
+    if (text.length > ERROR_BODY_MAX_CHARS) return null;
+    parsed = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  const error = parsed?.error;
+  if (!error || typeof error !== "object") return null;
+  const labels = {};
+  for (const key of ["type", "code", "param"]) {
+    if (typeof error[key] === "string" && ERROR_LABEL_PATTERN.test(error[key])) labels[key] = error[key];
+  }
+  return Object.keys(labels).length > 0 ? labels : null;
 }
 
 const requestIdOf = (response) => {
@@ -52,12 +76,15 @@ export async function openaiRequest(path, { method = "GET", body, timeoutMs } = 
   }
   const upstreamRequestId = requestIdOf(response);
   if (!response.ok) {
-    try {
-      await response.body?.cancel();
-    } catch {
-      // 본문 닫기 실패는 무시한다.
+    const upstreamError = response.status === 400 ? await readErrorLabels(response) : null;
+    if (!upstreamError) {
+      try {
+        await response.body?.cancel();
+      } catch {
+        // 본문 닫기 실패는 무시한다.
+      }
     }
-    throw new WorkAiError(codeForStatus(response.status), { status: response.status, upstreamRequestId });
+    throw new WorkAiError(codeForStatus(response.status), { status: response.status, upstreamRequestId, upstreamError });
   }
   try {
     return { json: await response.json(), upstreamRequestId };

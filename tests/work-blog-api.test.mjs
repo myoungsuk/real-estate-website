@@ -821,3 +821,28 @@ test("운영 꼴 호출: 본문에 옵션 이름을 섞은 만들기는 400, 섞
   assert.deepEqual([plain.status, plain.json.error?.code], [409, "SOURCE_NOT_PUBLIC"], JSON.stringify(plain.json));
   assert.equal(rows(database, "SELECT count(*) AS n FROM blog_drafts")[0].n, 0);
 });
+
+test("OpenAI 400 오류 이름표(2026-11-24 계약서 AI 400 진단): type·code·param만 꺼내고 error.message·꼴이 틀린 값·400이 아닌 오류는 담지 않음", async () => {
+  const { openaiRequest, WorkAiError } = await import("../worker/openai-client.mjs");
+  const respond = (status, body) => async () => new Response(typeof body === "string" ? body : JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+  const env = { OPENAI_API_KEY: "sk-test-fake-key" };
+  const caught = async (fetcher) => {
+    try {
+      await openaiRequest("/responses", { method: "POST", body: {} }, env, fetcher);
+    } catch (error) {
+      return error;
+    }
+    throw new Error("던지지 않음");
+  };
+  const full = await caught(respond(400, { error: { message: "ZZOPENAI secret detail", type: "invalid_request_error", code: "invalid_value", param: "text.format.schema" } }));
+  assert.ok(full instanceof WorkAiError);
+  assert.deepEqual([full.code, full.status, full.upstreamError], ["AI_REQUEST_INVALID", 400, { type: "invalid_request_error", code: "invalid_value", param: "text.format.schema" }]);
+  assert.doesNotMatch(JSON.stringify(full), /ZZOPENAI/u, "error.message 없음");
+  const indexed = await caught(respond(400, { error: { type: "invalid_request_error", param: "input[0].content[1].detail", code: null } }));
+  assert.deepEqual(indexed.upstreamError, { type: "invalid_request_error", param: "input[0].content[1].detail" });
+  const messy = await caught(respond(400, { error: { type: "has space", code: "x".repeat(101), param: "a\nb" } }));
+  assert.equal(messy.upstreamError, null, "꼴이 틀린 값은 버림");
+  assert.equal((await caught(respond(400, "not json"))).upstreamError, null);
+  assert.equal((await caught(respond(400, JSON.stringify({ error: { type: "x" }, pad: "y".repeat(9000) })))).upstreamError, null, "8KB 넘는 본문은 읽지 않음");
+  assert.equal((await caught(respond(401, { error: { type: "invalid_request_error", code: "invalid_api_key" } }))).upstreamError, null, "400만");
+});
