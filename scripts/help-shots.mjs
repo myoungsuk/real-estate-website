@@ -9,7 +9,7 @@ import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import sharp from "sharp";
 import { fileURLToPath } from "node:url";
 import { ADMIN_HELP_FIGURES, ADMIN_HELP_IMAGE_MAX_BYTES } from "../src/lib/admin-help-figures.mjs";
-import { figureFingerprint } from "./admin-help-sources.mjs";
+import { figureFileHashes, figureFingerprint } from "./admin-help-sources.mjs";
 
 const WIDE_MAX_WIDTH = 1520;
 const QUALITY = 75;
@@ -77,6 +77,8 @@ for (const [id, figure] of Object.entries(ADMIN_HELP_FIGURES)) {
     }
   }
   manifest.figures[id] = { route: figure.route, sources: await figureFingerprint(figure), shots };
+  // 낡아도 경고만 하는 그림(2026-11-24 사용자 결정 "AI 칸만 경고")은 바뀐 파일 이름을 알릴 수 있게 파일별 지문도 적는다.
+  if (figure.staleness === "warn") manifest.figures[id].files = await figureFileHashes(figure);
 }
 for (const name of await readdir(IMG)) if (!keep.has(name)) await rm(new URL(name, IMG));
 await writeFile(MANIFEST, `${JSON.stringify(manifest, null, 2)}\n`);

@@ -76,3 +76,16 @@ export async function figureFingerprint(figure) {
   for (const path of [...figure.sources].sort()) entries.push({ path, text: await readFile(new URL(path, root), "utf8") });
   return fingerprintOf(entries);
 }
+
+/** 그림 sources 파일마다의 지문({ 경로: LF로 맞춘 내용의 SHA-256 }). 낡아도 경고만 하는 그림(staleness: "warn")만 manifest에 적어, 바뀐 파일 이름을 알린다. */
+export async function figureFileHashes(figure) {
+  const hashes = {};
+  for (const path of [...figure.sources].sort()) hashes[path] = fingerprintOf([{ path, text: await readFile(new URL(path, root), "utf8") }]);
+  return hashes;
+}
+
+/** 찍을 때 적어 둔 파일별 지문(recorded)과 지금 원본을 견줘 바뀐(또는 새로 더한) sources 파일 목록. 적어 둔 것이 없으면 sources 전부. */
+export async function changedSourceFiles(figure, recorded = {}) {
+  const now = await figureFileHashes(figure);
+  return Object.keys(now).filter((path) => recorded[path] !== now[path]);
+}

@@ -253,27 +253,27 @@
         },
         "calendar-phone-2-made": {
           "width": 780,
-          "height": 910,
-          "bytes": 21202,
-          "sha256": "922b46ea4dda548344229192ce42e20050301227f695ca655b85a61532ddad57",
+          "height": 1050,
+          "bytes": 22448,
+          "sha256": "af8646b0dc953103927e84ea2bc84df3864752573254bb1e894f0ec63b55bb8d",
           "marks": [
             [
               0.1282,
-              0.2052,
+              0.31,
               0.8718,
-              0.3026
+              0.3946
             ],
             [
               0.1282,
-              0.3202,
+              0.4098,
               0.8718,
-              0.4176
+              0.4944
             ],
             [
               0.1282,
-              0.7526,
+              0.7852,
               0.8718,
-              0.8499
+              0.8697
             ]
           ]
         },
@@ -330,6 +330,849 @@
               0.0379,
               0.2927,
               0.6827
+            ]
+          ]
+        }
+      }
+    },
+    "contract-ai-box": {
+      "route": "/admin/work/customers/detail/",
+      "sources": "15fbe1043747e0de307829c8cb20c6ebea8fffdfe568f99d2a1b3f7b3de476d8",
+      "shots": {
+        "aibox-phone-1-start": {
+          "width": 712,
+          "height": 1840,
+          "bytes": 53564,
+          "sha256": "8ff9a93fa0cb53e5b45d827c0fae6fdad1f2ddd0c81cfd3cf068a8c6a4388610",
+          "marks": [
+            [
+              0.0758,
+              0.1666,
+              0.9242,
+              0.302
+            ],
+            [
+              0.0758,
+              0.4128,
+              0.9242,
+              0.5876
+            ],
+            [
+              0.0758,
+              0.9141,
+              0.9242,
+              0.9707
+            ]
+          ]
+        },
+        "aibox-phone-2-ready": {
+          "width": 712,
+          "height": 544,
+          "bytes": 11152,
+          "sha256": "bbf57bc0944f0daad42ed65c2665befbe5755242cbe5071d957c74c5ab7e8d93",
+          "marks": [
+            [
+              0.0758,
+              0.5198,
+              0.9242,
+              0.7104
+            ]
+          ]
+        },
+        "aibox-wide-1-start": {
+          "width": 1444,
+          "height": 1274,
+          "bytes": 63620,
+          "sha256": "568d78af38665c4487da0a9aaf06c0cbb1d250dc74682f5bea37ed7c0cbcbc30",
+          "marks": [
+            [
+              0.0374,
+              0.1628,
+              0.9626,
+              0.2929
+            ],
+            [
+              0.0374,
+              0.4166,
+              0.9626,
+              0.5576
+            ],
+            [
+              0.0374,
+              0.8761,
+              0.9626,
+              0.9577
+            ]
+          ]
+        },
+        "aibox-wide-2-ready": {
+          "width": 1444,
+          "height": 440,
+          "bytes": 12368,
+          "sha256": "fa4ef339c656db295ed4f68bb15686e2c071dfbf0342c8ff1b3255dd6efbfb53",
+          "marks": [
+            [
+              0.0374,
+              0.6422,
+              0.8043,
+              0.8777
+            ]
+          ]
+        }
+      },
+      "files": {
+        "src/lib/work-ai-section.ts": "61f2f691aba1d09ca2672f069d503f46f0e170ae8d11d1c8ec3ba1ee9165f06c",
+        "src/lib/work/contract-ai-view.mjs": "3c78fa23c782c42f3b124b79699b05123cd6340fff75a1c3e6b6d6f4dd6650f1",
+        "src/pages/admin/work/customers/detail.astro": "7fb6910a724695ba8de511173801efe4d7eb3e087a390bba7a086d746b778ce2"
+      }
+    },
+    "contract-ai-review": {
+      "route": "/admin/work/ai/review/",
+      "sources": "366782c84183fd9159b341b3fe7fbdf9dcb4a3f774f892f05779bf92be91d4c8",
+      "shots": {
+        "aireview-phone-1-pick": {
+          "width": 780,
+          "height": 1064,
+          "bytes": 38798,
+          "sha256": "96b1cfcdb4c0a757b8a84bd4ff458e10b3568ad8178cf04b5b84bfe5110459b4",
+          "marks": [
+            [
+              0.0359,
+              0.0225,
+              0.9641,
+              0.2922
+            ],
+            [
+              0.0359,
+              0.386,
+              0.3865,
+              0.4686
+            ],
+            [
+              0.0692,
+              0.7271,
+              0.6089,
+              0.8097
+            ]
+          ]
+        },
+        "aireview-phone-2-confirm": {
+          "width": 780,
+          "height": 1714,
+          "bytes": 63712,
+          "sha256": "98b2e4635e2d395671a3b7291521f4137da4dfffda0daf89c734f9a4991e13e2",
+          "marks": [
+            [
+              0.0359,
+              0.0198,
+              0.5338,
+              0.0478
+            ],
+            [
+              0.0923,
+              0.929,
+              0.6718,
+              0.957
+            ]
+          ]
+        },
+        "aireview-wide-1-pick": {
+          "width": 1520,
+          "height": 734,
+          "bytes": 48152,
+          "sha256": "a9c4e3988bbbca0587506483cbd08981ec310169e0fc34ec2d211a165d1b99cf",
+          "marks": [
+            [
+              0.114,
+              0.5516,
+              0.1732,
+              0.5739
+            ],
+            [
+              0.436,
+              0.0194,
+              0.9375,
+              0.1718
+            ],
+            [
+              0.436,
+              0.2527,
+              0.5332,
+              0.3109
+            ]
+          ]
+        },
+        "aireview-wide-2-confirm": {
+          "width": 1520,
+          "height": 1204,
+          "bytes": 71408,
+          "sha256": "5c3269a6b45477328225a231bddd0e75e5f509239e279b785a3999fa3c36ae1c",
+          "marks": [
+            [
+              0.0153,
+              0.0274,
+              0.263,
+              0.066
+            ],
+            [
+              0.2599,
+              0.902,
+              0.5482,
+              0.9407
+            ]
+          ]
+        }
+      },
+      "files": {
+        "src/lib/work-ai-review.ts": "aa224030313a2c0716fa4675a19487ce8db3cf9b4b2a51432526f2e929ffcac2",
+        "src/lib/work/contract-ai-view.mjs": "3c78fa23c782c42f3b124b79699b05123cd6340fff75a1c3e6b6d6f4dd6650f1",
+        "src/lib/work/contract-compare.mjs": "310ec8d0bb88591e81d2fef2596a19108199afae6eac8588d6a2857c1494df88",
+        "src/pages/admin/work/ai/review.astro": "d3bbc1c1ed94ee4da0c4aa84f2b8b22c124c5cdd4f64a4a488888a950168bbd2"
+      }
+    },
+    "blog-draft": {
+      "route": "/admin/work/blog/",
+      "sources": "76c8e4aa1ae0c14c6d3a6426b9e40dc5f63e71f10c53e1538f2fd012c5fefd0c",
+      "shots": {
+        "blog-phone-1-source": {
+          "width": 772,
+          "height": 1908,
+          "bytes": 43524,
+          "sha256": "474171ec930c7b6aea6554a3b31a3d8d36353bcae4f75be8b8d27ee485d046cc",
+          "marks": [
+            [
+              0.5078,
+              0.0681,
+              0.9301,
+              0.1184
+            ],
+            [
+              0.6995,
+              0.8063,
+              0.8964,
+              0.8566
+            ]
+          ]
+        },
+        "blog-phone-2-make": {
+          "width": 772,
+          "height": 1480,
+          "bytes": 33702,
+          "sha256": "2efb01f6b2c780c386ff792fd761f13405a181d9ee5146d376a76f93657c3b87",
+          "marks": [
+            [
+              0.0699,
+              0.0878,
+              0.9301,
+              0.5455
+            ],
+            [
+              0.0699,
+              0.8495,
+              0.9301,
+              0.9198
+            ]
+          ]
+        },
+        "blog-phone-3-result": {
+          "width": 780,
+          "height": 1660,
+          "bytes": 37388,
+          "sha256": "4fd20dfa8f32945549370458ed56a009ee6d43df7dd360049a836c849fc5a33a",
+          "marks": [
+            [
+              0.0359,
+              0.0144,
+              0.9641,
+              0.1661
+            ],
+            [
+              0.0359,
+              0.8489,
+              0.9641,
+              0.9856
+            ]
+          ]
+        },
+        "blog-phone-4-cards": {
+          "width": 772,
+          "height": 798,
+          "bytes": 34804,
+          "sha256": "bb2e959788239b64e18fdd8439b21c151505ea640cc96c6758410bd87aaa06cf",
+          "marks": [
+            [
+              0.0699,
+              0.1313,
+              0.9301,
+              0.6434
+            ],
+            [
+              0.0699,
+              0.6684,
+              0.9301,
+              0.7784
+            ]
+          ]
+        },
+        "blog-wide-1-source": {
+          "width": 1520,
+          "height": 1441,
+          "bytes": 50586,
+          "sha256": "705c4eb92d7f48698f2324d7edfa69f54d82e7540d256f909d2fe9c7fc8e1470",
+          "marks": [
+            [
+              0.2222,
+              0.0874,
+              0.4023,
+              0.152
+            ],
+            [
+              0.852,
+              0.8223,
+              0.949,
+              0.8869
+            ]
+          ]
+        },
+        "blog-wide-2-make": {
+          "width": 1520,
+          "height": 1010,
+          "bytes": 37176,
+          "sha256": "4d18ee28264f87d1db285be05226c1257fd0fe4d6f1b1d443450df0a370d439a",
+          "marks": [
+            [
+              0.0344,
+              0.1246,
+              0.9656,
+              0.4575
+            ],
+            [
+              0.0344,
+              0.7864,
+              0.9656,
+              0.8861
+            ]
+          ]
+        },
+        "blog-wide-3-result": {
+          "width": 1520,
+          "height": 840,
+          "bytes": 51000,
+          "sha256": "5a80ccdf38f69f520ce785ec016cc7620ffc41c24e3b176fcde66498fb790d22",
+          "marks": [
+            [
+              0.0391,
+              0.017,
+              0.6578,
+              0.1589
+            ],
+            [
+              0.0391,
+              0.7318,
+              0.6578,
+              0.8465
+            ],
+            [
+              0.6797,
+              0.1757,
+              0.9609,
+              0.2493
+            ]
+          ]
+        },
+        "blog-wide-4-cards": {
+          "width": 768,
+          "height": 790,
+          "bytes": 34690,
+          "sha256": "dc66513a7579e58e5115434e3890426ae6446ce9c3e0594e9aee646f2c852f65",
+          "marks": [
+            [
+              0.0703,
+              0.1328,
+              0.9297,
+              0.6485
+            ],
+            [
+              0.0703,
+              0.6738,
+              0.9297,
+              0.776
+            ]
+          ]
+        }
+      }
+    },
+    "promo-pick": {
+      "route": "/admin/work/realprice/",
+      "sources": "dc6fb7c9fb12c95bf9bb3d86cfd22fde1cfdbc6139178a81820069636055a203",
+      "shots": {
+        "promo-phone-1-pick": {
+          "width": 780,
+          "height": 1800,
+          "bytes": 56940,
+          "sha256": "72932e2e3864b1e83b21ddf9fd20e11c345ac2a7868ba1799824d1cb52acbf16",
+          "marks": [
+            [
+              0.8513,
+              0.2691,
+              0.9641,
+              0.318
+            ],
+            [
+              0.4641,
+              0.9667,
+              0.7637,
+              1
+            ]
+          ]
+        },
+        "promo-wide-1-pick": {
+          "width": 1520,
+          "height": 566,
+          "bytes": 46140,
+          "sha256": "161971aac7d10689c333d8626a3bf6e0d30a52587e81b60815a02afcbaa64f54",
+          "marks": [
+            [
+              0.0234,
+              0.6118,
+              0.0516,
+              0.6873
+            ],
+            [
+              0.7125,
+              0.3063,
+              0.9469,
+              1
+            ],
+            [
+              0.6945,
+              0.8665,
+              0.9648,
+              0.9748
+            ]
+          ]
+        }
+      }
+    },
+    "promo-make": {
+      "route": "/admin/work/realprice/promo/",
+      "sources": "d6ea5c7af0126a31a62c476be1f4f073a5b9fed9ae4ef766112ac171cd7f3475",
+      "shots": {
+        "promo-phone-2-card": {
+          "width": 780,
+          "height": 1318,
+          "bytes": 49350,
+          "sha256": "dbf66893cb499c09769ac0c62dc265556c2934562cbfe2ce528910d5aa2bddfd",
+          "marks": [
+            [
+              0.0949,
+              0.0182,
+              0.9051,
+              0.0971
+            ],
+            [
+              0.0949,
+              0.9029,
+              0.9051,
+              0.9818
+            ]
+          ]
+        },
+        "promo-phone-3-post": {
+          "width": 780,
+          "height": 590,
+          "bytes": 21032,
+          "sha256": "46d264754b6382a5d1ccd00cd534119570353ac1806520271049f053bef33a59",
+          "marks": [
+            [
+              0.0949,
+              0.1422,
+              0.4897,
+              0.3494
+            ]
+          ]
+        },
+        "promo-wide-2-card": {
+          "width": 1520,
+          "height": 1138,
+          "bytes": 49634,
+          "sha256": "0e9e05d42a80fd15f0098cb6ff9ee9bb209dd922d0855d627f4c6f7cfc8c9db2",
+          "marks": [
+            [
+              0.0101,
+              0.0135,
+              0.9899,
+              0.0721
+            ],
+            [
+              0.0101,
+              0.9279,
+              0.226,
+              0.9865
+            ]
+          ]
+        },
+        "promo-wide-3-post": {
+          "width": 1520,
+          "height": 222,
+          "bytes": 14878,
+          "sha256": "e621024674a7b4d6e302202d91eb4b3eca60d10d9d534dbb26e29b760976c8e3",
+          "marks": [
+            [
+              0.0101,
+              0.2423,
+              0.25,
+              0.5954
+            ]
+          ]
+        }
+      }
+    },
+    "listing-paper": {
+      "route": "/admin/work/listing-paper/",
+      "sources": "fbcf4f612c99752a9f11a40124e6d74d5ddde40ca3329aa4b8cf0e8600f1c273",
+      "shots": {
+        "listing-phone-1-pick": {
+          "width": 772,
+          "height": 496,
+          "bytes": 11684,
+          "sha256": "7e94ed0a3d10bb7c0cdbd757eb9c1eac275a34d9f9ce97dc9c8a5211082255bf",
+          "marks": [
+            [
+              0.0311,
+              0.1787,
+              0.9689,
+              0.3092
+            ],
+            [
+              0.6835,
+              0.6868,
+              0.9249,
+              0.7834
+            ]
+          ]
+        },
+        "listing-phone-2-fill": {
+          "width": 780,
+          "height": 990,
+          "bytes": 30596,
+          "sha256": "decbda85173b32861bc27b7e9f0ac5a1ddea2bbd0364e51fd88bc01c646c4821",
+          "marks": [
+            [
+              0.0359,
+              0.2339,
+              0.9641,
+              0.5096
+            ],
+            [
+              0.0359,
+              0.0661,
+              0.9641,
+              0.2258
+            ]
+          ]
+        },
+        "listing-phone-3-image": {
+          "width": 772,
+          "height": 1404,
+          "bytes": 56208,
+          "sha256": "fc0d7184a55d6b73572f0cec24d81dd0667db694f5ac9947fdebdfab4c0f5eeb",
+          "marks": [
+            [
+              0.3277,
+              0.0356,
+              0.6722,
+              0.0697
+            ],
+            [
+              0.4139,
+              0.1205,
+              0.5861,
+              0.1547
+            ]
+          ]
+        },
+        "listing-wide-1-pick": {
+          "width": 1520,
+          "height": 276,
+          "bytes": 10334,
+          "sha256": "3e0c354d76570300a282f95ee53abdf61953cfb572c06edb4437311f3fafe442",
+          "marks": [
+            [
+              0.1466,
+              0.062,
+              0.9887,
+              0.2293
+            ],
+            [
+              0.8852,
+              0.6663,
+              0.9727,
+              0.7903
+            ]
+          ]
+        },
+        "listing-wide-2-fill": {
+          "width": 1520,
+          "height": 470,
+          "bytes": 25724,
+          "sha256": "a3de8a91d43a4035f5b218ebb648c721514ec2dc56de4371772fbd8e58c27991",
+          "marks": [
+            [
+              0.0038,
+              0.1946,
+              0.9962,
+              0.4507
+            ],
+            [
+              0.0038,
+              0.1009,
+              0.9962,
+              0.1822
+            ]
+          ]
+        },
+        "listing-wide-3-image": {
+          "width": 1428,
+          "height": 1304,
+          "bytes": 63894,
+          "sha256": "811253d96d0671781834ecea23b77c2f0c671a80202354a0cafe1201d35d6e53",
+          "marks": [
+            [
+              0.1626,
+              0.0383,
+              0.3486,
+              0.0751
+            ],
+            [
+              0.6979,
+              0.0383,
+              0.7909,
+              0.0751
+            ]
+          ]
+        }
+      }
+    },
+    "bank-import": {
+      "route": "/admin/listings/editor/",
+      "sources": "8fee86c235affe3c337e4b37ef27be716d7b371263074cd264659b44e944d01f",
+      "shots": {
+        "bank-phone-1-file": {
+          "width": 680,
+          "height": 1000,
+          "bytes": 31242,
+          "sha256": "b416ab6ac6af261c60b08b21bdce49fc937dba6436766f3f7b7c1887710d4313",
+          "marks": [
+            [
+              0.0912,
+              0.5269,
+              0.9088,
+              0.6228
+            ],
+            [
+              0.0912,
+              0.7387,
+              0.9088,
+              0.8275
+            ]
+          ]
+        },
+        "bank-phone-2-preview": {
+          "width": 780,
+          "height": 2028,
+          "bytes": 46274,
+          "sha256": "5c967b44039b736d97bb89e883f87ede1519485d8f06945dad37a17efe6094ab",
+          "marks": [
+            [
+              0.0949,
+              0.0118,
+              0.9051,
+              0.3996
+            ],
+            [
+              0.0949,
+              0.6821,
+              0.9051,
+              0.7527
+            ]
+          ]
+        },
+        "bank-phone-3-review": {
+          "width": 752,
+          "height": 1632,
+          "bytes": 42498,
+          "sha256": "08c660fc447d29ed80a9a8013e5655c4a21d34c100c32d90da572086d85c3bb9",
+          "marks": [
+            [
+              0.0851,
+              0.2281,
+              0.9149,
+              0.3106
+            ],
+            [
+              0.0851,
+              0.8971,
+              0.9149,
+              0.9608
+            ]
+          ]
+        },
+        "bank-wide-1-file": {
+          "width": 1520,
+          "height": 452,
+          "bytes": 19046,
+          "sha256": "26ce62c6ae3bcb63daf9fb668d7d5d980372bbdc5d9514c1ff2de89f17854d5d",
+          "marks": [
+            [
+              0.0261,
+              0.6104,
+              0.89,
+              0.7463
+            ],
+            [
+              0.9018,
+              0.7007,
+              0.9739,
+              0.817
+            ]
+          ]
+        },
+        "bank-wide-2-preview": {
+          "width": 1520,
+          "height": 1023,
+          "bytes": 29386,
+          "sha256": "1346a57d7ce4107fcef60b00b047c4df2eafe762077b46d3c187cda33c2c34eb",
+          "marks": [
+            [
+              0.0101,
+              0.015,
+              0.9899,
+              0.3397
+            ],
+            [
+              0.0101,
+              0.5957,
+              0.9899,
+              0.6855
+            ]
+          ]
+        },
+        "bank-wide-3-review": {
+          "width": 1520,
+          "height": 1582,
+          "bytes": 46080,
+          "sha256": "08080f501818a999356e644856dd6baf6f198049474241a035156cabcf611eac",
+          "marks": [
+            [
+              0.0561,
+              0.2212,
+              0.9439,
+              0.2772
+            ],
+            [
+              0.2436,
+              0.8824,
+              0.9439,
+              0.9461
+            ]
+          ]
+        }
+      }
+    },
+    "content-restore": {
+      "route": "/admin/history/",
+      "sources": "30550cff05f466a51c65f1acd47e183c4e6e928139f648450d44833a60566e26",
+      "shots": {
+        "history-phone-1-list": {
+          "width": 680,
+          "height": 1330,
+          "bytes": 30128,
+          "sha256": "733687257854f5e44875b471197c15243fe65f28cbb5936dea34e795671c2399",
+          "marks": [
+            [
+              0.0853,
+              0.0842,
+              0.9147,
+              0.1563
+            ],
+            [
+              0.0794,
+              0.6825,
+              0.9206,
+              0.7491
+            ]
+          ]
+        },
+        "history-phone-2-restore": {
+          "width": 680,
+          "height": 1450,
+          "bytes": 41740,
+          "sha256": "9548db653fa1bcfacff96a13288b0d5526436019b60666d1d8addce8de0566d7",
+          "marks": [
+            [
+              0.0912,
+              0.3809,
+              0.9088,
+              0.5876
+            ],
+            [
+              0.1412,
+              0.752,
+              0.8588,
+              0.7804
+            ],
+            [
+              0.1412,
+              0.8727,
+              0.8588,
+              0.9339
+            ]
+          ]
+        },
+        "history-wide-1-list": {
+          "width": 1520,
+          "height": 554,
+          "bytes": 17802,
+          "sha256": "f56288edfc5d160786e64c006ce8a58a83200ac4be04c644273f64acbb44d1f3",
+          "marks": [
+            [
+              0.0245,
+              0.1295,
+              0.8282,
+              0.2405
+            ],
+            [
+              0.9052,
+              0.6452,
+              0.9772,
+              0.7401
+            ]
+          ]
+        },
+        "history-wide-2-restore": {
+          "width": 1520,
+          "height": 806,
+          "bytes": 26160,
+          "sha256": "9d5d69fce0663a3533d526805b0b6f8ad6f8a216e5892b3332a029b1d2c094ac",
+          "marks": [
+            [
+              0.0312,
+              0.4655,
+              0.9688,
+              0.6391
+            ],
+            [
+              0.0455,
+              0.7942,
+              0.8246,
+              0.8269
+            ],
+            [
+              0.8347,
+              0.8438,
+              0.9545,
+              0.9143
             ]
           ]
         }
