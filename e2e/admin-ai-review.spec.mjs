@@ -3,6 +3,7 @@
 // 2026-11-24부터 새 묶음은 AI가 한 번 읽는다(작업 1개, pairMode null). 그 전에 만든 두 번 읽기 묶음(작업 2개)도 비교표로 그대로 열려야 해서
 // 결과 고르기 화면 시험은 한 번 읽기('한 번 읽기 …')와 옛 묶음(groupView 기본값) 둘 다 본다.
 // 계약서 결과는 모두 가상 값이고 실제 서버·D1·R2·OpenAI는 부르지 않는다.
+import { contractSumWarning, validateContractResult } from "../src/lib/work/contract-extract.mjs";
 import { expect, test } from "@playwright/test";
 
 const NOW = new Date("2026-11-23T05:00:00Z"); // 한국 11월 23일(월) 14:00
@@ -785,6 +786,24 @@ test("S-07 한쪽만: 한 작업이 실패하면 모든 칸이 '◐ 한쪽만'�
   await expect(text).toHaveText("고를 칸 4개 남음 — 계약일, 중도금 날짜, 잔금 날짜, 거래금액");
   for (const field of ["contractDate", "middlePayments", "balanceDate", "priceWon"]) await page.locator(`[data-axr-chip='${field}:first']`).click();
   await expect(next).toBeEnabled();
+  done();
+});
+
+test("코드 경고(합계 다름)는 'AI가 남긴 말'에 섞지 않고 '⚠ 금액 확인' 줄로 따로 보인다(2026-11-24 \"같이 넣어\")", async ({ page }) => {
+  const done = collectErrors(page);
+  // 매매대금 4억 8,500만인데 계약금 3,500만 + 잔금 3억 1,500만 = 3억 5,000만(합계 다름). 서버 재검사처럼 코드 경고를 맨 앞에 둔다.
+  const raw = { ...result({ price: 485_000_000, warnings: ["가상 경고 한 줄"] }), warnings: [] };
+  const sum = contractSumWarning(validateContractResult(raw).result);
+  const jobs = [job(1, { value: result({ price: 485_000_000, warnings: [sum, "가상 경고 한 줄"] }) })];
+  await setup(page, { width: 390, ai: { groups: new Map([[GROUP, [singleView({ jobs })]]]) } });
+  await openReview(page);
+  const check = page.locator("[data-axr-check='sum']");
+  await expect(check).toHaveCount(1);
+  await expect(check).toHaveClass(/ax-note--warn/u);
+  await expect(check).toContainText("금액 확인: 계약금·잔금을 더하면 3억 5,000만 원인데 매매대금은 4억 8,500만 원입니다.");
+  const said = page.locator(".ax-note", { hasText: "AI가 남긴 말" });
+  await expect(said).toContainText("“가상 경고 한 줄”");
+  await expect(said, "코드 경고는 AI 말에 없음").not.toContainText("더하면");
   done();
 });
 

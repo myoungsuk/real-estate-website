@@ -7,8 +7,9 @@
 // - validateContractResult(value): OpenAI strict에만 기대지 않고 14.4절 전체(실제 날짜·금액 범위·쪽 번호·자리 값 포함)를 다시 검사한다. 중도금이 4회를 넘으면 거절하지 않고 4자리를 못 읽은 값으로 비운다.
 //   통과하지 못하면 { ok: false }(부르는 쪽이 AI_RESULT_INVALID로 적고 원문은 저장하지 않는다).
 //   2026-11-24부터 글자 칸(근거 문구·물건 표시·경고)의 글자 수와 경고 개수는 거절하지 않고 잘라 받는다(빈 경고는 버림).
+// - 계약금 + 중도금 + 잔금이 매매대금(전세·월세는 보증금)과 다르면 경고 맨 앞에 코드가 한 문장을 붙인다(contractSumWarning, 2026-11-24 사용자 결정 "합계 검사 넣어").
 // - 사람 이름은 스키마에 없다(일정에 필요 없음).
-import { MAX_AMOUNT_WON_EXCLUSIVE } from "./work-format.mjs";
+import { MAX_AMOUNT_WON_EXCLUSIVE, formatKoreanWon } from "./work-format.mjs";
 
 export const CONTRACT_DOCUMENT_KINDS = Object.freeze(["sale_contract", "lease_contract", "unknown"]);
 export const CONTRACT_DEAL_TYPES = Object.freeze(["sale", "exchange", "jeonse", "monthly_rent"]);
@@ -178,6 +179,36 @@ function middlePayments(list) {
   };
 }
 
+// 합계 검사(2026-11-24 사용자 결정 "1번, 합계 검사 넣어"): AI가 한글·숫자 금액 차이를 놓치고 한쪽 금액을 잘못 읽어도 늘 알리도록,
+// 받은 뒤 코드가 계약금 + 중도금 + 잔금을 매매대금(매매) 또는 보증금(전세·월세)과 맞춰 보고 다르면 경고 한 문장을 만든다.
+// 칸이 하나라도 못 읽은 값(null)이거나, 거래 종류를 모르거나 교환이면 따지지 않는다(null). 지시문은 늘리지 않는다.
+// 매매에서 대출·임대보증금을 넘겨받으면 잔금이 그만큼 줄어 합계가 달라도 맞는 계약이라 그 말을 함께 적는다.
+export function contractSumWarning(result) {
+  const target = result.deal_type === "sale" ? { label: "매매대금", value: result.price_won.value }
+    : result.deal_type === "jeonse" || result.deal_type === "monthly_rent" ? { label: "보증금", value: result.deposit_won.value }
+    : null;
+  if (!target || target.value === null) return null;
+  const parts = [result.down_payment.amount.value, ...result.middle_payments.map((item) => item.amount.value), result.balance.amount.value];
+  if (parts.some((value) => value === null)) return null;
+  const sum = parts.reduce((total, value) => total + value, 0);
+  if (sum === target.value) return null;
+  const names = result.middle_payments.length > 0 ? "계약금·중도금·잔금" : "계약금·잔금";
+  const loan = result.deal_type === "sale" ? "(대출·보증금을 넘겨받는 계약이면 다를 수 있습니다)" : "";
+  return `${names}을 더하면 ${formatKoreanWon(sum)}인데 ${target.label}은 ${formatKoreanWon(target.value)}입니다. 사진에서 금액을 다시 확인해 주세요${loan}.`;
+}
+
+// 코드가 만든 경고(중도금 넘침·합계 다름)를 AI가 쓴 경고와 가린다(2026-11-24 사용자 결정 "같이 넣어").
+// 고르기 화면이 이 둘을 "AI가 남긴 말"과 따로 눈에 띄는 줄로 보이게 할 때 쓴다. 위 두 함수가 만드는 글의 첫머리로만 판단한다.
+// 돌려주는 값: "middle" | "sum" | null(AI 경고).
+const MIDDLE_WARNING_HEAD = /^중도금이 \d+회 적혀 있어 거래에 다 넣을 수 없습니다/u;
+const SUM_WARNING_HEAD = /^계약금(?:·중도금)?·잔금을 더하면 .+인데 (?:매매대금|보증금)은 /u;
+export function contractCodeWarningKind(text) {
+  if (typeof text !== "string") return null;
+  if (MIDDLE_WARNING_HEAD.test(text)) return "middle";
+  if (SUM_WARNING_HEAD.test(text)) return "sum";
+  return null;
+}
+
 // 돌려주는 값: { ok: true, result }(칸 순서를 CONTRACT_FIELD_ORDER로 맞춘 새 객체) 또는 { ok: false }.
 export function validateContractResult(value) {
   try {
@@ -187,22 +218,23 @@ export function validateContractResult(value) {
     if (!Array.isArray(value.middle_payments) || !Array.isArray(value.warnings)) fail();
     const middles = middlePayments(value.middle_payments);
     const warnings = value.warnings.map((item) => text(item, CONTRACT_WARNING_MAX)).filter(Boolean);
-    return {
-      ok: true,
-      result: {
-        document_kind: value.document_kind,
-        deal_type: value.deal_type,
-        contract_date: dateField(value.contract_date),
-        price_won: moneyField(value.price_won),
-        deposit_won: moneyField(value.deposit_won),
-        monthly_rent_won: moneyField(value.monthly_rent_won),
-        down_payment: payment(value.down_payment),
-        middle_payments: middles.payments,
-        balance: payment(value.balance),
-        property_text: textField(value.property_text),
-        warnings: [...(middles.warning ? [middles.warning] : []), ...warnings].slice(0, CONTRACT_WARNINGS_MAX_ITEMS),
-      },
+    const result = {
+      document_kind: value.document_kind,
+      deal_type: value.deal_type,
+      contract_date: dateField(value.contract_date),
+      price_won: moneyField(value.price_won),
+      deposit_won: moneyField(value.deposit_won),
+      monthly_rent_won: moneyField(value.monthly_rent_won),
+      down_payment: payment(value.down_payment),
+      middle_payments: middles.payments,
+      balance: payment(value.balance),
+      property_text: textField(value.property_text),
+      warnings: [],
     };
+    // 코드가 만든 경고(중도금 넘침·합계 다름)를 AI 경고보다 앞에 둔다(고르기 화면은 앞의 3개만 보임).
+    const sumWarning = contractSumWarning(result);
+    result.warnings = [...(middles.warning ? [middles.warning] : []), ...(sumWarning ? [sumWarning] : []), ...warnings].slice(0, CONTRACT_WARNINGS_MAX_ITEMS);
+    return { ok: true, result };
   } catch {
     return { ok: false };
   }

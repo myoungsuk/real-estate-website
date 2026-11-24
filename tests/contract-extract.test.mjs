@@ -11,6 +11,8 @@ import {
   contractFieldOrder,
   contractMiddleOverflowWarning,
   contractInstructions,
+  contractSumWarning,
+  contractCodeWarningKind,
   contractResultSchema,
   isRealDate,
   maskContractResult,
@@ -56,6 +58,39 @@ test("지시문(2026-11-24 줄임): 4줄 이하, 이름·주민번호 금지·nu
     assert.ok(first.includes(phrase), phrase);
   }
   for (const phrase of ["120자", "200자", "최대 4개", "최대 10개", "contract_date:", "balance:"]) assert.equal(first.includes(phrase), false, `지시문에 '${phrase}' 없음`);
+});
+
+test("합계 검사(2026-11-24 \"합계 검사 넣어\"): 계약금 + 중도금 + 잔금이 매매대금·보증금과 다르면 코드 경고를 맨 앞에 붙이고, 못 읽은 칸·교환·거래 종류 모름은 따지지 않는다", () => {
+  const pay = (amount, date) => ({ amount: { value: amount, evidence: { page: 1, quote: "금액", box: null } }, date: { value: date, evidence: { page: 1, quote: "날짜", box: null } } });
+  const money = (value) => ({ value, evidence: { page: 1, quote: value === null ? "" : "금액", box: null } });
+  // S2처럼 2차 중도금을 숫자 금액(105,000,000)으로 잘못 읽은 경우: 48,500,000 + 100,000,000 + 105,000,000 + 186,500,000 = 440,000,000 ≠ 485,000,000
+  const wrong = sampleContract({ price_won: money(485_000_000), down_payment: pay(48_500_000, "2026-11-20"), middle_payments: [pay(100_000_000, "2026-12-10"), pay(105_000_000, "2027-01-15")], balance: pay(186_500_000, "2027-02-26"), warnings: ["AI 경고"] });
+  const checked = validateContractResult(wrong);
+  assert.equal(checked.ok, true, "거절하지 않음");
+  assert.equal(checked.result.warnings.length, 2);
+  assert.equal(checked.result.warnings[0], "계약금·중도금·잔금을 더하면 4억 4,000만 원인데 매매대금은 4억 8,500만 원입니다. 사진에서 금액을 다시 확인해 주세요(대출·보증금을 넘겨받는 계약이면 다를 수 있습니다).");
+  assert.equal(checked.result.warnings[1], "AI 경고", "AI 경고는 코드 경고 뒤");
+  assert.equal(checked.result.middle_payments[1].amount.value, 105_000_000, "값은 고치지 않음(사람이 사진을 보고 고름)");
+  const right = { ...wrong, middle_payments: [pay(100_000_000, "2026-12-10"), pay(150_000_000, "2027-01-15")] };
+  assert.equal(contractSumWarning(validateContractResult(right).result), null, "맞으면 경고 없음");
+  assert.equal(contractSumWarning(validateContractResult(sampleContract()).result), null, "중도금 없는 매매(계약금 + 잔금)도 맞으면 없음");
+  // 전세·월세는 보증금과 맞추고 승계 문장은 붙이지 않는다. 중도금이 없으면 계약금·잔금이라고 쓴다.
+  const lease = sampleContract({ deal_type: "monthly_rent", document_kind: "lease_contract", price_won: money(null), deposit_won: money(20_000_000), monthly_rent_won: money(700_000), down_payment: pay(2_000_000, "2026-11-21"), balance: pay(17_000_000, "2026-12-20") });
+  assert.equal(validateContractResult(lease).result.warnings[0], "계약금·잔금을 더하면 1,900만 원인데 보증금은 2,000만 원입니다. 사진에서 금액을 다시 확인해 주세요.");
+  // 따지지 않는 경우
+  assert.equal(contractSumWarning(validateContractResult({ ...wrong, balance: pay(null, "2027-02-26") }).result), null, "못 읽은 칸이 있으면 따지지 않음");
+  assert.equal(contractSumWarning(validateContractResult({ ...wrong, price_won: money(null) }).result), null, "매매대금을 못 읽으면 따지지 않음");
+  assert.equal(contractSumWarning(validateContractResult({ ...wrong, deal_type: "exchange" }).result), null, "교환은 따지지 않음");
+  assert.equal(contractSumWarning(validateContractResult({ ...wrong, deal_type: null }).result), null, "거래 종류를 모르면 따지지 않음");
+  // 경고가 10개로 차도 코드 경고는 남는다(앞에 있으므로).
+  const full = validateContractResult({ ...wrong, warnings: Array.from({ length: CONTRACT_WARNINGS_MAX_ITEMS }, (_, index) => `경고${index + 1}`) });
+  assert.equal(full.result.warnings.length, CONTRACT_WARNINGS_MAX_ITEMS);
+  assert.match(full.result.warnings[0], /^계약금·중도금·잔금을 더하면/u);
+  // 코드 경고 가리기(고르기 화면이 ⚠ 줄로 따로 보임, 2026-11-24 "같이 넣어")
+  assert.equal(contractCodeWarningKind(checked.result.warnings[0]), "sum");
+  assert.equal(contractCodeWarningKind(validateContractResult(lease).result.warnings[0]), "sum", "보증금·계약금·잔금 꼴도");
+  assert.equal(contractCodeWarningKind(contractMiddleOverflowWarning(6)), "middle");
+  for (const ai of ["AI 경고", "계약금과 잔금의 합계가 매매대금과 일치하지 않습니다.", "중도금 지급일을 고쳐 씀", "", null]) assert.equal(contractCodeWarningKind(ai), null, `AI 경고: ${ai}`);
 });
 
 test("재검사: 정상 결과는 통과하고 칸 순서를 1회째 순서로 맞춘 새 객체를 돌려준다", () => {

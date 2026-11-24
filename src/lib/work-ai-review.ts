@@ -45,6 +45,7 @@ import {
   aiValueText,
 } from "./work/contract-ai-view.mjs";
 import { CONFIRM_MIDDLE_PAYMENTS_MAX } from "./work/contract-compare.mjs";
+import { contractCodeWarningKind } from "./work/contract-extract.mjs";
 import { DEAL_TYPE_LABELS, customerErrorText, customerHref, customerSaveErrorText } from "./work/customers-view.mjs";
 import { formatWon } from "./work/work-format.mjs";
 import { photoShortAtText } from "./work/photo-view.mjs";
@@ -540,7 +541,13 @@ export function mountAiReview(page: HTMLElement) {
     if (half) note("warn", "◐", half);
     if (!single()) for (const job of view.jobs) if (!job.result && job.errorCode) note("info", "ⓘ", `${job.runIndex}회: ${aiJobErrorText(job.errorCode)}`);
     const masked = view.jobs.reduce((sum, job) => sum + (job.maskedCount ?? 0), 0);
-    const warnings = [...new Set(view.jobs.flatMap((job) => (job.result?.warnings as string[] | undefined) ?? []))].slice(0, 3);
+    const allWarnings = [...new Set(view.jobs.flatMap((job) => (job.result?.warnings as string[] | undefined) ?? []))];
+    // 코드가 만든 경고(합계 다름·중도금 넘침)는 "AI가 남긴 말"에 섞지 않고 ⚠ 줄로 따로 보인다(2026-11-24 사용자 결정 "같이 넣어").
+    for (const text of allWarnings) {
+      const kind = contractCodeWarningKind(text);
+      if (kind) note("warn", "⚠", element("b", "", kind === "sum" ? "금액 확인: " : "중도금 확인: "), text).dataset.axrCheck = kind;
+    }
+    const warnings = allWarnings.filter((text) => !contractCodeWarningKind(text)).slice(0, 3);
     if (masked > 0 || warnings.length > 0) {
       const parts: (string | Node)[] = [];
       if (masked > 0) parts.push(element("b", "", `가린 항목 ${masked}개`), " — 결과 글에서 주민등록번호 꼴을 가렸습니다.");
