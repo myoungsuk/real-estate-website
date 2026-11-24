@@ -29,6 +29,8 @@ import {
   aiJobErrorText,
   aiManualProblem,
   aiPendingFields,
+  aiPickAllAi,
+  aiPickAllText,
   aiPollDelay,
   aiReviewHref,
   aiReviewParams,
@@ -183,6 +185,36 @@ test("한 번 읽기 묶음: 칸마다 AI 값 하나이고, 읽은 칸은 처음
   const old = aiCompareJobs(pair, "sale");
   assert.deepEqual(old, compareContractResults(pair[1].result, pair[0].result, "sale"));
   assert.equal(old.fields.find((item) => item.field === "balanceDate").first, "2026-12-30");
+});
+
+test("'모두 AI 값으로': 그대로 넣을 수 있는 읽은 칸만 AI 값으로 고르고, 못 읽은 칸·못 읽은 차가 있는 중도금은 그대로 두며, 덮은 직접 넣기 값은 돌려준다", () => {
+  const comparison = aiCompareJobs([{ runIndex: 1, result: result({ price: null, middles: ["2026-11-20", null] }) }], "sale");
+  assert.deepEqual(comparison.fields.map((item) => [item.field, item.status]), [["contractDate", "read"], ["middlePayments", "read"], ["balanceDate", "read"], ["priceWon", "unread"]]);
+  const before = {
+    contractDate: { kind: "keep", value: null },
+    balanceDate: { kind: "manual", value: "2026-12-29" },
+  };
+  const outcome = aiPickAllAi(comparison, before);
+  assert.deepEqual(outcome.picked, ["contractDate", "balanceDate"], "못 읽은 차가 있는 중도금·못 읽은 거래금액은 고르지 않음");
+  assert.deepEqual(outcome.choices, {
+    contractDate: { kind: "first", value: "2026-11-02" },
+    balanceDate: { kind: "first", value: "2026-12-30" },
+  }, "지금 값 그대로·직접 넣기로 고른 칸도 AI 값으로 바꿈");
+  assert.deepEqual(outcome.drafts, { balanceDate: "2026-12-29" }, "덮은 직접 넣기 값은 버리지 않고 돌려줌");
+  assert.deepEqual(before.balanceDate, { kind: "manual", value: "2026-12-29" }, "받은 고르기는 고치지 않음");
+  const pending = aiPendingFields(comparison, outcome.choices);
+  assert.deepEqual(pending, ["middlePayments"], "그대로 넣을 수 없는 칸은 사람이 고를 때까지 남음");
+  assert.equal(aiPickAllText(outcome, pending), "2칸을 AI 값으로 골랐습니다. 사진과 다른 칸만 고쳐 주세요. 남은 1칸은 AI 값을 그대로 넣을 수 없어 직접 골라 주세요. 직접 넣던 값은 '직접 넣기'를 다시 누르면 돌아옵니다.");
+  assert.deepEqual(aiConfirmBody(comparison, { ...outcome.choices, middlePayments: { kind: "keep", value: null } }, 3), { dealVersion: 3, apply: { contractDate: "2026-11-02", balanceDate: "2026-12-30" }, keep: ["middlePayments"] });
+
+  const clean = aiPickAllAi(aiCompareJobs([{ runIndex: 1, result: result({ middles: ["2026-11-20"] }) }], "sale"), {});
+  assert.deepEqual(clean.picked, ["contractDate", "middlePayments", "balanceDate", "priceWon"]);
+  assert.equal(aiPickAllText(clean, []), "4칸을 AI 값으로 골랐습니다. 사진과 다른 칸만 고쳐 주세요.");
+
+  const pair = aiCompareJobs([{ runIndex: 1, result: result({ balance: "2026-12-30" }) }, { runIndex: 2, result: result({ balance: "2026-12-31" }) }], "sale");
+  const old = aiPickAllAi(pair, {});
+  assert.deepEqual([old.picked, old.choices], [[], {}], "옛 두 번 읽기 묶음에는 'AI 값'이 하나가 아니어서 고르지 않음");
+  assert.equal(aiPickAllText(old, []), "AI 값으로 고를 칸이 없습니다.");
 });
 
 test("고르기 규칙: 못 읽은 차가 있는 중도금은 그대로 넣을 수 없고, 직접 넣기 값은 날짜·원 단위 정수·1 ~ 4차만 받는다", () => {

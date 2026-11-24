@@ -180,6 +180,36 @@ export function aiInitialChoices(comparison) {
   return choices;
 }
 
+// '모두 AI 값으로'(한 번 읽기 묶음, 사용자 승인 2026-11-24 "넣어"): AI가 읽어 그대로 넣을 수 있는 칸(read이고 aiCanApply)만 'AI 값'(first)으로 고른다.
+// - 못 읽은 칸(unread)과 못 읽은 차가 있는 중도금처럼 그대로 넣을 수 없는 칸은 건드리지 않는다(사람이 고를 때까지 남음).
+// - 이미 '지금 값 그대로'·'직접 넣기'로 고른 칸도 누른 뜻대로 AI 값으로 바꾼다. 직접 넣던 값은 drafts로 돌려주어
+//   화면이 그 칸의 '직접 넣기'를 다시 누를 때 되살린다(지우지 않음).
+// - 옛 두 번 읽기 묶음에는 'AI 값'이 하나가 아니어서(read 칸이 없음) 바꾸는 칸이 없다.
+/** @returns {{ choices: Record<string, any>, picked: string[], drafts: Record<string, any> }} */
+export function aiPickAllAi(comparison, choices) {
+  const next = { ...choices };
+  const picked = [];
+  const drafts = {};
+  for (const item of comparison.fields) {
+    if (item.status !== "read" || !aiCanApply(item.field, item.first)) continue;
+    const before = choices[item.field];
+    if (before?.kind === "manual") drafts[item.field] = before.value;
+    next[item.field] = { kind: "first", value: item.first };
+    picked.push(item.field);
+  }
+  return { choices: next, picked, drafts };
+}
+
+// '모두 AI 값으로'를 누른 뒤 상태 한 줄. pending은 누른 뒤에도 고를 칸(aiPendingFields).
+/** @param {{ picked: string[], drafts: Record<string, any> }} outcome @param {string[]} pending */
+export function aiPickAllText(outcome, pending) {
+  if (outcome.picked.length === 0) return "AI 값으로 고를 칸이 없습니다.";
+  let text = `${outcome.picked.length}칸을 AI 값으로 골랐습니다. 사진과 다른 칸만 고쳐 주세요.`;
+  if (pending.length > 0) text += ` 남은 ${pending.length}칸은 AI 값을 그대로 넣을 수 없어 직접 골라 주세요.`;
+  if (Object.keys(outcome.drafts).length > 0) text += " 직접 넣던 값은 '직접 넣기'를 다시 누르면 돌아옵니다.";
+  return text;
+}
+
 // 아직 고르지 않은 칸(다름·한쪽만인데 고르기가 없거나, 직접 넣기가 빈 칸). 서버 missingDecisions와 같은 뜻 + 직접 넣기 형식 확인.
 export function aiPendingFields(comparison, choices) {
   return comparison.fields

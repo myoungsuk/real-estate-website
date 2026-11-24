@@ -2,6 +2,7 @@
 // - 열 때 업무 세션 → 묶음(결과, 감사 ai.view) → 거래(감사 deal.view)를 한 번씩만 읽는다. 409 뒤 '다시 불러오기'를 누를 때만 다시 읽는다.
 // - 비교는 서버와 같은 함수(contract-compare.mjs)로 한다.
 //   한 번 읽기 묶음(작업 1개, 2026-11-24부터): 칸마다 AI 값 하나를 보이고, AI가 읽은 칸은 사람이 사진과 견줘 [AI 값]·[지금 값 그대로]·[직접 넣기] 가운데 고른다(미리 골라 두지 않음).
+//   표·카드 위 [모두 AI 값으로]는 그대로 넣을 수 있는 칸을 한 번에 AI 값으로 고른다(누를 때만, 다음 단계로 저절로 넘기지 않음).
 //   옛 두 번 읽기 묶음(작업 2개): 같은 칸은 넣을 값으로 두고, 다름·한쪽만 칸은 사람이 [1회 값]·[2회 값]·[지금 값 그대로]·[직접 넣기] 가운데 고른다.
 //   (시안의 '없음'은 '지금 값 그대로'로 바꿨다. 거래 칸을 실수로 비우지 않게.)
 // - '거래에 넣기 전 확인'은 지금 값 → 넣을 값과, 서버와 같은 계산 함수로 만든 일정 미리 보기를 보인다. '거래에 넣기'는 POST confirm 한 번이고 자동으로 다시 보내지 않는다.
@@ -34,6 +35,8 @@ import {
   aiJobErrorText,
   aiManualProblem,
   aiPendingFields,
+  aiPickAllAi,
+  aiPickAllText,
   aiReviewParams,
   aiSchedulePreview,
   aiShortDate,
@@ -81,6 +84,11 @@ export function mountAiReview(page: HTMLElement) {
   reloadButton.hidden = true;
   reloadButton.dataset.axrReload = "";
   status.after(reloadButton);
+  // '모두 AI 값으로'를 누른 뒤 한 줄. 다시 그려도 같은 마디를 단추 옆에 옮겨 붙여 글이 이어진다.
+  const pickAllStatus = element("p", "admin-form-status axr-status");
+  pickAllStatus.setAttribute("role", "status");
+  pickAllStatus.setAttribute("aria-live", "polite");
+  pickAllStatus.dataset.axrPickAllStatus = "";
 
   const tableMq = window.matchMedia("(min-width: 1221px)");
   const photoMq = window.matchMedia("(min-width: 980px)");
@@ -92,6 +100,8 @@ export function mountAiReview(page: HTMLElement) {
   let detail: AiDealDetail | null = null;
   let comparison: Comparison | null = null;
   let choices: Record<string, Choice> = {};
+  // '모두 AI 값으로'가 덮은 직접 넣기 값. 그 칸의 '직접 넣기'를 다시 누르면 한 번 되살린다(화면 메모리에만).
+  let manualDrafts: Record<string, unknown> = {};
   let step: Step = "compare";
   let focusField: string | null = null;
   let photoOpen = false;
@@ -146,6 +156,8 @@ export function mountAiReview(page: HTMLElement) {
       choices = Object.fromEntries(Object.entries(kept).filter(([, value]) => value !== undefined));
     } else {
       choices = initial;
+      manualDrafts = {};
+      setStatus(pickAllStatus, "", "idle");
       const pending = aiPendingFields(comparison, choices);
       focusField = pending[0] ?? null;
     }
@@ -249,6 +261,11 @@ export function mountAiReview(page: HTMLElement) {
   function manualStart(item: Item): unknown {
     const existing = choices[item.field];
     if (existing?.kind === "manual") return existing.value;
+    if (Object.hasOwn(manualDrafts, item.field)) {
+      const draft = manualDrafts[item.field];
+      delete manualDrafts[item.field];
+      return Array.isArray(draft) ? [...draft] : draft;
+    }
     const ai = [item.first, item.second].find((value) => value !== null && value !== undefined && !(Array.isArray(value) && value.length === 0));
     if (item.field === "middlePayments") return Array.isArray(ai) ? (ai as (string | null)[]).map((date) => date ?? "") : [""];
     if (MONEY.has(item.field)) return typeof ai === "number" ? ai : null;
@@ -557,6 +574,28 @@ export function mountAiReview(page: HTMLElement) {
     return box;
   }
 
+  // 한 번 읽기 묶음의 표·카드 위 '모두 AI 값으로'. AI가 읽어 그대로 넣을 수 있는 칸이 없으면 그리지 않는다.
+  // 누르면 그 칸들만 AI 값으로 고르고(못 읽은 칸은 그대로) 한 줄로 알린다. 다음 단계로 저절로 넘기지 않는다.
+  function pickAllRow(cmp: Comparison) {
+    if (!single() || aiPickAllAi(cmp, {}).picked.length === 0) return null;
+    const row = element("div", "ax-act");
+    const button = element("button", "work-secondary-button", "모두 AI 값으로");
+    button.type = "button";
+    button.dataset.axKey = "pick-all";
+    button.dataset.axrPickAll = "";
+    button.addEventListener("click", () => {
+      if (!comparison) return;
+      const outcome = aiPickAllAi(comparison, choices);
+      choices = outcome.choices as Record<string, Choice>;
+      Object.assign(manualDrafts, outcome.drafts);
+      badFields = [];
+      render("pick-all");
+      setStatus(pickAllStatus, aiPickAllText(outcome, aiPendingFields(comparison, choices)), "success");
+    });
+    row.append(button, pickAllStatus);
+    return row;
+  }
+
   // ── 거래에 넣기 전 확인 ──
 
   function intoValue(field: string, value: unknown) {
@@ -815,6 +854,8 @@ export function mountAiReview(page: HTMLElement) {
     if (step === "compare") {
       title.textContent = "AI로 뽑은 값 맞춰 보기";
       nodes.push(...notes(), summaryChips(comparison));
+      const pickAll = pickAllRow(comparison);
+      if (pickAll) nodes.push(pickAll);
       if (tableMq.matches) nodes.push(compareTable(comparison));
       else nodes.push(...compareCards(comparison));
       photoBox.hidden = false;
@@ -860,6 +901,7 @@ export function mountAiReview(page: HTMLElement) {
       step = "confirm";
       badFields = [];
       setStatus(status, "", "idle");
+      setStatus(pickAllStatus, "", "idle");
       render();
       window.scrollTo({ top: 0 });
       title.focus({ preventScroll: true });
@@ -908,6 +950,7 @@ export function mountAiReview(page: HTMLElement) {
     detail = null;
     comparison = null;
     choices = {};
+    manualDrafts = {};
     done = null;
     images.clear();
     void start();
