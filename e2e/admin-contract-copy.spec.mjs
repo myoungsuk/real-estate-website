@@ -41,7 +41,8 @@ const dealsOf = (store) => [
 ];
 
 // failUploads: POST /files 응답을 차례로 정한다(null은 정상). 다 쓰면 정상. 서버 규칙(거래 주인·가림 확인 표시·10장·미리보기 거부)은 worker/work-files.mjs를 따른다.
-async function setup(page, { width = 390, filesEnabled = true, store = makeStore(), failUploads = [] } = {}) {
+// aiEnabled: 업무 세션의 aiEnabled(켜면 AI 상자가 묶음 목록·비용 미리 보기를 부른다. 묶음은 늘 0개).
+async function setup(page, { width = 390, filesEnabled = true, store = makeStore(), failUploads = [], aiEnabled = false } = {}) {
   await page.addInitScript(() => {
     window.__blobUrls = 0;
     const original = URL.createObjectURL;
@@ -67,7 +68,12 @@ async function setup(page, { width = 390, filesEnabled = true, store = makeStore
       calls.writes.push({ method, path, headers, body: json ? request.postDataJSON() : request.postDataBuffer() });
       if (headers["x-admin-csrf"] !== "test-csrf") return route.fulfill(failure(403, "CSRF_INVALID"));
     }
-    if (path === "/session") return route.fulfill(envelope({ enabled: true, filesEnabled, administrator: "시험 관리자", csrfToken: "test-csrf", schemaVersion: 7 }));
+    if (path === "/session") return route.fulfill(envelope({ enabled: true, filesEnabled, aiEnabled, administrator: "시험 관리자", csrfToken: "test-csrf", schemaVersion: 7, aiWarnings: [] }));
+    if (aiEnabled && path === "/ai/jobs" && method === "GET") return route.fulfill(envelope({ items: [] }));
+    if (aiEnabled && path === "/ai/estimate") {
+      const pages = Number(url.searchParams.get("pages"));
+      return route.fulfill(envelope({ pages, requests: 2, estimatedCostMicroUsd: 560_000 * pages, dailyCreateLimit: 20, todayCreates: 0, remainingCreates: 20, monthlyCostLimitMicroUsd: 10_000_000, monthCostMicroUsd: 0, remainingCostMicroUsd: 10_000_000, allowed: true, blockedBy: null }));
+    }
     if (path === `/customers/${CUSTOMER_ID}` && method === "GET") return route.fulfill(envelope({ customer: store.customer, deals: dealsOf(store), notes: [], files: [] }));
     if (path === "/files" && method === "POST") {
       const body = request.postDataBuffer();
@@ -473,6 +479,22 @@ test("주민등록번호 자리를 칠하고 확대해서 확인한 뒤 올리�
   expect(await page.locator("[data-kc-canvas]").evaluate((node) => [node.width, node.height]), "창을 닫으면 사진 메모리를 비움").toEqual([0, 0]);
   expect(await mask.zoom.evaluate((node) => node.childElementCount)).toBe(0);
   expect(await page.evaluate(() => window.__blobUrls)).toBe(0);
+  assertNoErrors();
+});
+
+test("사본 0장 거래에 첫 사본을 올리면 AI 상자가 '불러오는 중'에 멈추지 않고 최근 묶음을 한 번 읽어 시작 칸을 보인다(2026-11-24 운영에서 찾음)", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const calls = await setup(page, { aiEnabled: true });
+  await openDetail(page);
+  const { block, mask } = await startMask(page, { deal: DEAL_B });
+  expect(calls.all.filter((line) => line.includes("/ai/")), "사본 0장으로 펼칠 때는 AI 업무 API를 부르지 않음").toEqual([]);
+  await mask.button("가릴 주민번호 없음").click();
+  await mask.button("주민번호 없음 확인, 올리기").click();
+  await expect(block.status).toHaveText("✓ 계약서 사본 1장을 올렸습니다.");
+  const ax = page.locator(`section.ax[data-ax-deal="${DEAL_B}"]`);
+  await expect(ax.getByRole("button", { name: "사본 1장으로 일정 뽑기" })).toBeVisible();
+  await expect(ax).not.toContainText("AI 작업을 불러오는 중");
+  expect(calls.all.filter((line) => line.startsWith("GET /ai/jobs?")), "최근 묶음은 한 번만 읽음").toEqual([`GET /ai/jobs?dealId=${DEAL_B}`]);
   assertNoErrors();
 });
 
