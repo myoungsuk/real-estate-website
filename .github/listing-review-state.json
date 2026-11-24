@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-11-21",
+  "updatedAt": "2026-11-24",
   "items": {
     "2640120487": {
       "source": "manual",
@@ -45,11 +45,6 @@
     "2645736151": {
       "source": "manual",
       "lastSeenAt": null,
-      "lastReviewedAt": null
-    },
-    "2656950560": {
-      "source": "bank",
-      "lastSeenAt": "2026-11-21",
       "lastReviewedAt": null
     },
     "2656951077": {
