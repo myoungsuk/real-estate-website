@@ -3,6 +3,9 @@
 // - 칸 상태: same(두 결과가 같은 값) · different(둘 다 값이 있는데 다름) · one_side(한쪽만 값, 또는 한 작업만 결과가 있음) · both_empty(둘 다 없음).
 //   different·one_side 칸은 사람이 apply(넣음) 또는 keep(지금 거래 값 그대로) 가운데 하나를 골라야 확정된다.
 // - 중도금은 날짜 배열 하나를 한 칸으로 다룬다. 두 결과의 길이가 다르면 순서대로 짝짓고(G11), 짝이 없는 차는 그 칸을 다름으로 본다.
+// - 한 번 읽기(2026-11-24 운영자 결정, 작업 1개 묶음): 칸 상태는 read(AI가 값을 읽음) · unread(못 읽음) 둘이다. read 칸은 견줄 둘째 값이 없어
+//   사람이 사진과 견준 뒤 apply 또는 keep으로 골라야 확정되고(같음처럼 미리 정해 두지 않음), unread 칸은 both_empty처럼 건드리지 않는다.
+//   옛 두 번 읽기 묶음(작업 2개)은 위 규칙 그대로다. 묶음을 어느 쪽으로 견줄지는 compareGroupResults()가 결과 개수로 정한다.
 // 결과(result)는 contract-extract.mjs validateContractResult()를 통과한 snake_case 객체이거나, 결과가 없는 작업이면 null이다.
 
 export const CONFIRM_DATE_FIELDS = Object.freeze(["contractDate", "middlePayments", "balanceDate"]);
@@ -18,7 +21,7 @@ export const CONFIRM_AMOUNT_FIELDS_BY_TYPE = Object.freeze({
 // 화면에 보여 주기만 하는 칸(거래에 쓰지 않음).
 export const REFERENCE_FIELDS = Object.freeze(["documentKind", "dealType", "downPaymentDate", "downPaymentWon", "middlePaymentWons", "balanceWon", "propertyText"]);
 export const CONFIRM_MIDDLE_PAYMENTS_MAX = 4;
-export const NEEDS_DECISION = Object.freeze(["different", "one_side"]);
+export const NEEDS_DECISION = Object.freeze(["different", "one_side", "read"]);
 
 // 거래 종류에 맞는 확정 칸(순서 고정). 모르는 종류면 날짜 칸만.
 export function confirmFieldsFor(dealType) {
@@ -78,6 +81,24 @@ export function compareContractResults(first, second, dealType) {
   const fields = confirmFieldsFor(dealType);
   const otherAmounts = CONFIRM_AMOUNT_FIELDS.filter((field) => !fields.includes(field));
   return { fields: fields.map(row), reference: [...REFERENCE_FIELDS, ...otherAmounts].map(row) };
+}
+
+// 한 번 읽기 결과 하나를 칸으로 나눈다. 돌려주는 꼴은 compareContractResults와 같고 second는 늘 null이다(화면이 같은 칸 그림을 쓰게).
+export function compareSingleResult(result, dealType) {
+  const values = contractValues(result);
+  const row = (field) => {
+    const value = values ? values[field] : null;
+    return { field, status: isEmpty(value) ? "unread" : "read", first: value ?? null, second: null };
+  };
+  const fields = confirmFieldsFor(dealType);
+  const otherAmounts = CONFIRM_AMOUNT_FIELDS.filter((field) => !fields.includes(field));
+  return { fields: fields.map(row), reference: [...REFERENCE_FIELDS, ...otherAmounts].map(row) };
+}
+
+// 묶음의 결과들(읽은 차례 run_index 순서, 결과가 없는 작업은 null)을 견준다. 결과가 하나면 한 번 읽기 묶음(2026-11-24부터 만든 것),
+// 둘이면 옛 두 번 읽기 묶음이다. 화면과 서버가 같은 판정을 쓰도록 이 함수 하나로 고른다.
+export function compareGroupResults(results, dealType) {
+  return results.length === 1 ? compareSingleResult(results[0], dealType) : compareContractResults(results[0] ?? null, results[1] ?? null, dealType);
 }
 
 // 사람이 고르지 않은 칸(different·one_side인데 apply에도 keep에도 없음)의 이름. apply: { 칸: 값 }, keep: [칸 이름].

@@ -119,7 +119,7 @@ export function saveLimitsStatements(db, value, nowIso) {
 
 // ── 단계 4 AI 작업(ai_jobs)용. 글 초안과 같은 한도 행·사용량 행을 쓴다(2026-11-23 사용자 결정 "같은 프로젝트·한도 하나"). 위 글 초안 문장은 그대로 둔다. ──
 
-// 여러 번(계약서 두 번 읽기 = 2회)을 한 문장으로 확인 + 늘리기. 전부 들어가거나 하나도 안 들어간다(?7 = 횟수, ?2 = 합계 최대 예상 비용).
+// 여러 번(옛 계약서 두 번 읽기 = 2회, 2026-11-24부터 한 번 읽기 = 1회)을 한 문장으로 확인 + 늘리기. 전부 들어가거나 하나도 안 들어간다(?7 = 횟수, ?2 = 합계 최대 예상 비용).
 const RESERVE_MANY_SQL = `INSERT INTO ai_usage_daily (day, create_requests, estimated_cost_micro_usd)
 SELECT ?1, ?7, ?2 WHERE ?3 >= ?7
   AND (SELECT COALESCE(SUM(estimated_cost_micro_usd), 0) FROM ai_usage_daily WHERE day >= ?4 AND day <= ?5) + ?2 <= ?6

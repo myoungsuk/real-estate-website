@@ -1,5 +1,7 @@
 // 계약서 AI 일정 뽑기(단계 4 화면, 사용자 선택 2026-11-23 "B안 별도 화면"·"다섯 다 추천대로"·비용 표시 "넣음")를 가짜 업무 API로 본다.
 // 손님 카드 거래 칸의 'AI로 일정 뽑기' 상자와 결과 고르기 화면(/admin/work/ai/review/?id=)이고, 시험 기준은 화면 시험 S-01 ~ S-18과 G20 문장이다.
+// 2026-11-24부터 새 묶음은 AI가 한 번 읽는다(작업 1개, pairMode null). 그 전에 만든 두 번 읽기 묶음(작업 2개)도 비교표로 그대로 열려야 해서
+// 결과 고르기 화면 시험은 한 번 읽기('한 번 읽기 …')와 옛 묶음(groupView 기본값) 둘 다 본다.
 // 계약서 결과는 모두 가상 값이고 실제 서버·D1·R2·OpenAI는 부르지 않는다.
 import { expect, test } from "@playwright/test";
 
@@ -57,14 +59,17 @@ const reviewDeal = (overrides = {}) => ({
   buyerIsCorporation: false, regulation: "none", landPermitArea: false, metroArea: false, landShare: false, separateFundingSubmission: false,
   leaseReportingRegion: false, leaseRenewalWithoutChange: false, status: "contracted", version: 2, ...overrides,
 });
+// 기본값은 옛 두 번 읽기 묶음(작업 2개). 한 번 읽기 묶음은 singleView로 만든다.
 const groupView = ({ id = GROUP, status = "ready", pairMode = "cross", dealId = DEAL_A, jobs = [job(1), job(2)], confirmedAt = null } = {}) => ({
   group: { id, kind: "contract_schedule", dealId, status, pairMode, createdAt: "2026-11-23T04:50:00.000Z", confirmedAt, fileIds: FILE_IDS },
   // 서버는 끝난 묶음에만 결과를 싣는다.
   jobs: status === "running" ? jobs.map((item) => ({ ...item, result: null })) : jobs,
 });
+// 한 번 읽기 묶음(작업 1개, pairMode null)
+const singleView = ({ jobs = [job(1)], ...rest } = {}) => groupView({ pairMode: null, jobs, ...rest });
 const listItem = (view) => ({ groupId: view.group.id, status: view.group.status, pairMode: view.group.pairMode, createdAt: view.group.createdAt, confirmedAt: view.group.confirmedAt, jobs: view.jobs.map(({ id, runIndex, model, status, errorCode }) => ({ id, runIndex, model, status, errorCode })) });
 const estimateOf = (pages, overrides = {}) => ({
-  pages, requests: 2, estimatedCostMicroUsd: 700_000 * pages, dailyCreateLimit: 10, todayCreates: 0, remainingCreates: 10,
+  pages, requests: 1, estimatedCostMicroUsd: 700_000 * pages, dailyCreateLimit: 10, todayCreates: 0, remainingCreates: 10,
   monthlyCostLimitMicroUsd: 10_000_000, monthCostMicroUsd: 0, remainingCostMicroUsd: 10_000_000, allowed: true, blockedBy: null, ...overrides,
 });
 const confirmed = (body) => ({
@@ -128,7 +133,7 @@ async function setup(page, { width = 390, aiEnabled = true, copiesA = 2, dealSta
       return route.fulfill(envelope(ai.estimate ? ai.estimate(pages) : estimateOf(pages)));
     }
     if (path === "/ai/jobs" && method === "POST") {
-      const answer = ai.create?.(request.postDataJSON()) ?? envelope({ groupId: GROUP, pairMode: "cross", jobs: [job(1, { status: "queued" }), job(2, { status: "queued" })].map(({ id, runIndex, model, status, errorCode }) => ({ id, runIndex, model, status, errorCode })) }, 201);
+      const answer = ai.create?.(request.postDataJSON()) ?? envelope({ groupId: GROUP, pairMode: null, jobs: [job(1, { status: "queued" })].map(({ id, runIndex, model, status, errorCode }) => ({ id, runIndex, model, status, errorCode })) }, 201);
       return route.fulfill(answer);
     }
     const one = path.match(/^\/ai\/jobs\/([^/]+)(\/cancel|\/confirm)?$/u);
@@ -234,7 +239,9 @@ test("S-01 시작: 사본 6장이면 최근 5장만 골라 두고 6장째는 막
   await expect(picks.nth(5)).toBeDisabled();
   await expect(ax).toContainText("한 번에 5장까지 고를 수 있습니다.");
   await expect(ax).toContainText("최대 약 3.50달러를 먼저 잡아 둠");
-  await expect(ax).toContainText("이번 달 10.00달러 · 오늘 10회(이번에 2회 씀)");
+  await expect(ax).toContainText("이번 달 10.00달러 · 오늘 10회(이번에 1회 씀)");
+  await expect(ax).toContainText("한 번 읽고 사람이 확인");
+  await expect(ax).not.toContainText("두 번 읽");
   await expect(ax).toContainText("OpenAI(미국)");
   await picks.nth(4).uncheck();
   await expect(ax.locator("[data-ax-go]")).toHaveText("사본 4장으로 일정 뽑기");
@@ -252,10 +259,10 @@ test("S-01 막힘·실패: 하루 한도가 모자라면 단추가 꺼지고, �
   const done = collectErrors(page);
   let daily = true;
   const answers = [failure(503, "AI_DISABLED"), failure(409, "AI_BUDGET_EXCEEDED"), failure(413, "AI_INPUT_TOO_LARGE")];
-  const calls = await setup(page, { ai: { estimate: (pages) => estimateOf(pages, daily ? { remainingCreates: 1, allowed: false, blockedBy: "daily" } : {}), create: () => answers.shift() } });
+  const calls = await setup(page, { ai: { estimate: (pages) => estimateOf(pages, daily ? { remainingCreates: 0, allowed: false, blockedBy: "daily" } : {}), create: () => answers.shift() } });
   await openCopies(page);
   const ax = box(page);
-  await expect(ax).toContainText("오늘 쓸 수 있는 횟수가 모자랍니다(남은 1회, 이번에 2회 필요). 보내지 않았습니다.");
+  await expect(ax).toContainText("오늘 쓸 수 있는 횟수가 모자랍니다(남은 0회, 이번에 1회 필요). 보내지 않았습니다.");
   await expect(ax.locator("[data-ax-go]")).toBeDisabled();
   daily = false;
   // 고른 장수를 바꾸면 그 장수의 비용을 새로 읽는다(한도가 풀린 값).
@@ -289,8 +296,8 @@ test("S-01 이미 읽는 중(409 AI_JOB_ACTIVE): 새로 만들지 않고 그 묶
 
 test("S-02·S-03 조회: 만든 뒤 처음 1분은 5초, 그 뒤 15초 간격이고 결과가 나오면 조회를 멈춘다(그 뒤 GET 0번), 진행 중에는 결과 칸을 그리지 않는다", async ({ page }) => {
   const done = collectErrors(page);
-  const running = groupView({ status: "running", jobs: [job(1, { status: "in_progress" }), job(2, { status: "in_progress" })] });
-  const ready = groupView({ jobs: [job(1), job(2, { value: result({ balance: "2026-12-31" }) })] });
+  const running = singleView({ status: "running", jobs: [job(1, { status: "in_progress" })] });
+  const ready = singleView();
   const answers = [...Array(13).fill(running), ready];
   const calls = await setup(page, { ai: { groups: new Map([[GROUP, answers]]) } });
   await openCopies(page);
@@ -308,10 +315,11 @@ test("S-02·S-03 조회: 만든 뒤 처음 1분은 5초, 그 뒤 15초 간격이
   }
   expect(await delays()).toEqual([...Array(12).fill(5_000), 15_000, 15_000]);
   await expect(ax.locator("h4")).toContainText("결과 나옴");
-  // 계약일·거래금액 같음, 잔금 다름, 중도금은 둘 다 없음(세지 않음)
-  await expect(ax.locator(".ax-sum")).toContainText("✓ 같음 2");
-  await expect(ax.locator(".ax-sum")).toContainText("≠ 다름 1");
-  await expect(ax).toContainText("고를 칸 1개");
+  // 한 번 읽기: 계약일·잔금·거래금액을 읽었고 중도금은 못 읽음. 읽은 칸은 모두 사람이 고른다.
+  await expect(ax.locator(".ax-sum")).toContainText("읽은 칸 3");
+  await expect(ax.locator(".ax-sum")).toContainText("– 못 읽음 1");
+  await expect(ax.locator(".ax-sum")).not.toContainText("같음");
+  await expect(ax).toContainText("고를 칸 3개");
   await expect(ax.locator("[data-ax-review]")).toHaveAttribute("href", REVIEW);
   await page.clock.runFor(300_000);
   await settle();
@@ -322,13 +330,17 @@ test("S-02·S-03 조회: 만든 뒤 처음 1분은 5초, 그 뒤 15초 간격이
 
 test("S-03·S-04 다시 들어옴·떠남: 최근 묶음이 진행 중이면 만들기 없이 곧바로 이어 보고, 화면을 떠나면(pagehide) 조회 타이머를 푼다", async ({ page }) => {
   const done = collectErrors(page);
-  const running = groupView({ status: "running", jobs: [job(1, { status: "in_progress" }), job(2, { status: "queued" })] });
+  const running = singleView({ status: "running", jobs: [job(1, { status: "in_progress" })] });
   const calls = await setup(page, { ai: { list: () => [listItem(running)], groups: new Map([[GROUP, [running]]]) } });
   await openCopies(page);
   const ax = box(page);
   await expect(ax.locator("h4")).toContainText("읽는 중");
   await expect.poll(() => calls.gets).toEqual([GROUP]);
   await expect(ax.locator("[data-ax-quit]")).toBeVisible();
+  // 한 번 읽기 묶음의 작업 줄은 'n회' 없이 모델 이름만
+  await expect(ax.locator(".ax-run li")).toHaveCount(1);
+  await expect(ax.locator(".ax-run li")).toContainText(`AI ${MODEL_A}`);
+  await expect(ax.locator(".ax-run")).not.toContainText("1회");
   expect(calls.all.filter((line) => line.startsWith("GET /ai/jobs?"))).toEqual([`GET /ai/jobs?dealId=${DEAL_A}`]);
   await expect.poll(() => page.evaluate(() => window.__axDelays.length)).toBe(1);
   await page.evaluate(() => window.dispatchEvent(new Event("pagehide")));
@@ -342,7 +354,7 @@ test("S-03·S-04 다시 들어옴·떠남: 최근 묶음이 진행 중이면 만
 
 test("S-03 조회 오류: 묶음 조회가 500이면 자동으로 다시 묻지 않고 '다시 확인'을 보이며, 누를 때만 한 번 더 조회한다", async ({ page }) => {
   const done = collectErrors(page);
-  const running = groupView({ status: "running", jobs: [job(1, { status: "in_progress" }), job(2, { status: "queued" })] });
+  const running = singleView({ status: "running", jobs: [job(1, { status: "in_progress" })] });
   const calls = await setup(page, { ai: { list: () => [listItem(running)], groups: new Map([[GROUP, [failure(500, "INTERNAL_ERROR"), running]]]) } });
   await openCopies(page);
   const ax = box(page);
@@ -363,7 +375,7 @@ test("S-03 조회 오류: 묶음 조회가 500이면 자동으로 다시 묻지 
 
 test("S-11 취소: 진행 중 '그만두기'는 POST …/cancel {} 한 번, 끝났지만 넣기 전 결과는 '결과 버리기'를 한 번 물은 뒤 버리고, 거래에 넣은 묶음에는 취소 단추가 없다", async ({ page }) => {
   const done = collectErrors(page);
-  const running = groupView({ status: "running", jobs: [job(1, { status: "in_progress" }), job(2, { status: "in_progress" })] });
+  const running = singleView({ status: "running", jobs: [job(1, { status: "in_progress" })] });
   let latest = running;
   const calls = await setup(page, { ai: { list: () => [listItem(latest)], groups: new Map([[GROUP, [running]]]) } });
   await openCopies(page);
@@ -373,7 +385,7 @@ test("S-11 취소: 진행 중 '그만두기'는 POST …/cancel {} 한 번, 끝�
   await expect(ax.locator("[data-ax-go]")).toBeVisible();
   expect(aiWrites(calls, "/cancel")).toEqual([{ method: "POST", path: `/ai/jobs/${GROUP}/cancel`, body: {} }]);
 
-  latest = groupView({ jobs: [job(1), job(2)] });
+  latest = singleView();
   await page.reload();
   await page.locator(`[data-kc-toggle="${DEAL_A}"]`).click();
   await expect(ax.locator("h4")).toContainText("결과 나옴");
@@ -385,7 +397,7 @@ test("S-11 취소: 진행 중 '그만두기'는 POST …/cancel {} 한 번, 끝�
   await expect(ax.locator("[data-ax-status]")).toHaveText("결과를 버렸습니다.");
   expect(aiWrites(calls, "/cancel")).toHaveLength(2);
 
-  latest = groupView({ status: "confirmed", confirmedAt: "2026-11-23T04:58:00.000Z" });
+  latest = singleView({ status: "confirmed", confirmedAt: "2026-11-23T04:58:00.000Z" });
   const readsBefore = calls.gets.length;
   await page.reload();
   await page.locator(`[data-kc-toggle="${DEAL_A}"]`).click();
@@ -397,7 +409,24 @@ test("S-11 취소: 진행 중 '그만두기'는 POST …/cancel {} 한 번, 끝�
   done();
 });
 
-test("S-12 실패 표시: 두 작업이 다 실패하면 까닭마다 정해진 문장(INCOMPLETE·EXPIRED는 새 비용)이고 자동으로 다시 실행하지 않는다", async ({ page }) => {
+test("S-12 실패 표시(한 번 읽기): 작업이 실패하면 'n회' 없이 까닭 한 줄이고 '두 번 다'라고 하지 않으며, 자동으로 다시 실행하지 않는다", async ({ page }) => {
+  const done = collectErrors(page);
+  const failed = singleView({ status: "failed", jobs: [job(1, { status: "incomplete", errorCode: "AI_RESULT_INCOMPLETE" })] });
+  const calls = await setup(page, { ai: { list: () => [listItem(failed)] } });
+  await openCopies(page);
+  const ax = box(page);
+  await expect(ax.locator("h4")).toContainText("✕ 실패");
+  await expect(ax.locator(".ax-fail h5")).toHaveText("결과를 받지 못했습니다");
+  await expect(ax.locator(".ax-fail p")).toHaveText(["출력 상한에 걸려 결과를 다 받지 못했습니다. 다시 실행하면 새 비용이 듭니다."]);
+  await expect(ax).not.toContainText("1회");
+  await page.clock.runFor(120_000);
+  await settle();
+  expect(aiWrites(calls, "/ai/jobs")).toEqual([]);
+  expect(calls.gets).toEqual([]);
+  done();
+});
+
+test("S-12 실패 표시(옛 두 번 읽기 묶음): 두 작업이 다 실패하면 까닭마다 정해진 문장(INCOMPLETE·EXPIRED는 새 비용)이고 자동으로 다시 실행하지 않는다", async ({ page }) => {
   const done = collectErrors(page);
   const failed = groupView({ status: "failed", jobs: [job(1, { status: "incomplete", errorCode: "AI_RESULT_INCOMPLETE" }), job(2, { status: "failed", errorCode: "AI_RESULT_EXPIRED" })] });
   const calls = await setup(page, { ai: { list: () => [listItem(failed)] } });
@@ -427,12 +456,108 @@ test("끝난 거래: 사본 칸의 AI 상자는 한 줄 안내만 보이고 AI �
 });
 
 // ── 결과 고르기 화면 ──
+// '한 번 읽기 …' 시험은 2026-11-24부터 만든 묶음, 그 밖의 시험은 옛 두 번 읽기 묶음(비교표)이 그대로 열리는지 본다.
 
 async function openReview(page, { expectMain = true } = {}) {
   await page.goto(REVIEW);
   if (expectMain) await expect(page.locator("[data-axr-main]")).toBeVisible();
 }
 const foot = (page) => ({ text: page.locator("[data-axr-foot-text]"), next: page.locator("[data-axr-next]"), back: page.locator("[data-axr-back-step]") });
+
+test("한 번 읽기(1280px 표): 칸마다 AI 값 하나이고 같음·다름·한쪽만·교차 아님이 없으며, 미리 골라 둔 칸 없이 AI 값·직접 넣기·지금 값 그대로를 고른 뒤 '거래에 넣기'가 한 번 간다", async ({ page }) => {
+  const done = collectErrors(page);
+  const calls = await setup(page, { width: 1280, ai: { groups: new Map([[GROUP, [singleView()]]]) } });
+  await openReview(page);
+  await expect(page.locator("[data-axr-title]")).toHaveText("AI로 뽑은 값 맞춰 보기");
+  const table = page.locator("table.ax-cmp");
+  await expect(table).toBeVisible();
+  await expect(table.locator("thead th")).toHaveText(["칸", `AI 읽음${MODEL_A}`, "거래에 넣을 값"]);
+  await expect(table).not.toContainText("1회");
+  await expect(table).not.toContainText("맞춰 봄");
+  for (const word of ["✓ 같음", "≠ 다름", "◐ 한쪽만", "둘 다 없음"]) await expect(page.locator("[data-axr-body]")).not.toContainText(word);
+  await expect(page.locator("[data-axr-cross]")).toHaveCount(0);
+  await expect(page.locator("[data-axr-single]")).toContainText(`AI(${MODEL_A})가 계약서를 한 번 읽은 값입니다.`);
+  await expect(page.locator(".ax-sum")).toContainText("확인할 칸 3");
+  await expect(page.locator(".ax-sum")).toContainText("– 못 읽음 1");
+  // 못 읽은 중도금은 고를 칸이 아니고 '지금 값 그대로'로 둔다.
+  await expect(page.locator("[data-axr-row='middlePayments']")).toContainText("— 못 읽음");
+  await expect(page.locator("[data-axr-row='middlePayments']")).toContainText("넣지 않음(지금 값 그대로)");
+  await expect(page.locator("[data-axr-row='middlePayments'] [data-axr-chip]")).toHaveCount(0);
+  const { text, next, back } = foot(page);
+  await expect(text).toHaveText("고를 칸 3개 남음 — 계약일, 잔금 날짜, 거래금액");
+  await expect(next).toBeDisabled();
+  await expect(page.locator("[data-axr-chip$=':second']"), "2회 값 단추 없음").toHaveCount(0);
+  await expect(page.locator("[data-axr-chip='contractDate:first']")).toHaveText("2026-11-02 (AI)");
+  await expect(page.locator("[data-axr-chip='contractDate:first']")).toHaveAttribute("aria-checked", "false");
+  await expect(page.locator("[data-axr-row='contractDate'] .ax-quote")).toContainText(`근거(${MODEL_A}): 1쪽 “${QUOTE}”`);
+  await expect(page.locator("tr.is-diff")).toHaveCount(3);
+  await page.locator("[data-axr-chip='contractDate:first']").click();
+  await expect(page.locator("tr.is-diff"), "고른 칸은 표시를 거둠").toHaveCount(2);
+  await page.locator("[data-axr-chip='balanceDate:manual']").click();
+  await page.locator("[data-ax-key='manual-balanceDate']").fill("2026-12-29");
+  await page.locator("[data-axr-chip='priceWon:keep']").click();
+  await expect(text).toHaveText("모두 골랐습니다");
+  await shot(page, "ai-review-single-1280-compare.png");
+  await next.click();
+  await expect(page.locator("[data-axr-title]")).toHaveText("거래에 넣기 전 확인");
+  await expect(back).toHaveText("값 고르기로 돌아가기");
+  await expect(page.locator("[data-axr-into='balanceDate'] .ax-nw b")).toHaveText("2026-12-29 (화)");
+  await expect(page.getByText("지금 값 그대로 둔 칸: 거래금액")).toBeVisible();
+  await back.click();
+  await expect(page.locator("[data-axr-chip='contractDate:first']"), "돌아가도 고른 값이 남음").toHaveAttribute("aria-checked", "true");
+  await next.click();
+  await expectNoTrace(page);
+  await next.click();
+  await expect(page.locator("[data-axr-title]")).toHaveText("거래에 넣었습니다");
+  expect(aiWrites(calls, "/confirm")).toEqual([{ method: "POST", path: `/ai/jobs/${GROUP}/confirm`, body: { dealVersion: 2, apply: { contractDate: "2026-11-02", balanceDate: "2026-12-29" }, keep: ["priceWon"] } }]);
+  expect(calls.gets, "묶음 조회는 한 번만").toEqual([GROUP]);
+  await expectNoTrace(page);
+  done();
+});
+
+test("한 번 읽기(390px 카드·키보드): 카드마다 AI 값 하나와 모델이 보이고 상태 꼬리표가 없으며, 키보드로 AI 값을 골라 넘어가고 가로 넘침이 없다", async ({ page }) => {
+  const done = collectErrors(page);
+  const calls = await setup(page, { width: 390, ai: { groups: new Map([[GROUP, [singleView({ jobs: [job(1, { value: result({ middles: ["2026-11-20"] }) })] })]]]) } });
+  await openReview(page);
+  await expect(page.locator("ul.ax-cards").first()).toBeVisible();
+  const card = page.locator("[data-axr-row='balanceDate']");
+  await expect(card.locator(".ax-card__one")).toContainText("2026-12-30");
+  await expect(card.locator(".ax-card__one")).toContainText(`AI 읽음 · ${MODEL_A}`);
+  await expect(card.locator(".ax-card__head .ax-tag"), "카드 머리에 상태 꼬리표 없음").toHaveCount(0);
+  await expect(card).toHaveClass(/is-diff/u);
+  for (const word of ["✓ 같음", "≠ 다름", "◐ 한쪽만", "1회", "2회"]) await expect(page.locator("ul.ax-cards").first()).not.toContainText(word);
+  const { text, next } = foot(page);
+  await expect(text).toHaveText("고를 칸 4개 남음 — 계약일, 중도금 날짜, 잔금 날짜, 거래금액");
+  expect(await overflowOf(page), "가로 넘침").toBe(0);
+  await shot(page, "ai-review-single-390-compare.png");
+  for (const field of ["contractDate", "middlePayments", "balanceDate", "priceWon"]) {
+    const chip = page.locator(`[data-axr-chip='${field}:first']`);
+    await chip.focus();
+    await page.keyboard.press("Enter");
+    await expect(page.locator(`[data-axr-chip='${field}:first']`)).toHaveAttribute("aria-checked", "true");
+    await expect(page.locator(`[data-axr-chip='${field}:first']`), "다시 그린 뒤에도 포커스가 같은 칩").toBeFocused();
+  }
+  await expect(card, "고른 카드는 표시를 거둠").not.toHaveClass(/is-diff/u);
+  await expect(text).toHaveText("모두 골랐습니다");
+  expect((await next.boundingBox()).height).toBeGreaterThanOrEqual(44);
+  await next.click();
+  await expect(page.locator("[data-axr-title]")).toHaveText("거래에 넣기 전 확인");
+  expect(await overflowOf(page), "확인 화면 가로 넘침").toBe(0);
+  await next.click();
+  await expect(page.locator("[data-axr-title]")).toHaveText("거래에 넣었습니다");
+  expect(aiWrites(calls, "/confirm")[0].body).toEqual({ dealVersion: 2, apply: { contractDate: "2026-11-02", middlePayments: ["2026-11-20"], balanceDate: "2026-12-30", priceWon: 350_000_000 }, keep: [] });
+  expect(await overflowOf(page), "넣은 뒤 가로 넘침").toBe(0);
+  done();
+});
+
+test("한 번 읽기 실패 묶음: 결과 고르기 화면은 'n회' 없이 까닭 한 줄로 막는다", async ({ page }) => {
+  const done = collectErrors(page);
+  await setup(page, { width: 390, ai: { groups: new Map([[GROUP, [singleView({ status: "failed", jobs: [job(1, { status: "failed", errorCode: "AI_RESULT_INVALID" })] })]]]) } });
+  await openReview(page, { expectMain: false });
+  await expect(page.locator("[data-axr-state-title]")).toHaveText("결과를 받지 못했습니다");
+  await expect(page.locator("[data-axr-state-body]")).toHaveText("읽은 결과가 정해진 꼴이 아니라 쓰지 않았습니다.");
+  done();
+});
 
 test("S-05·S-13·S-17 모두 같음(1280px 표): 넣을 값이 다 정해져 확인으로 넘어가고, 지금 값 → 넣을 값과 일정을 본 뒤 '거래에 넣기'가 { dealVersion, apply, keep }로 한 번 간다", async ({ page }) => {
   const done = collectErrors(page);
@@ -786,6 +911,7 @@ for (const width of [360, 390, 1280]) {
     await shot(page, `ai-review-${width}-compare.png`);
     await page.locator("[data-axr-chip='balanceDate:second']").click();
     const chipHeight = (await page.locator("[data-axr-chip='balanceDate:second']").boundingBox()).height;
+    // 옛 두 번 읽기 묶음(교차 아님)이다. 한 번 읽기 묶음은 아래 'S-18 한 번 읽기' 시험이 같은 폭으로 본다.
     expect(chipHeight).toBeGreaterThanOrEqual(width >= 1221 ? 36 : 44);
     expect((await next.boundingBox()).height, "넘어가기 단추(주 단추)는 마우스 PC에서도 44px").toBeGreaterThanOrEqual(44);
     if (width < 980) {
@@ -820,10 +946,37 @@ for (const width of [360, 390, 1280]) {
 }
 
 for (const width of [360, 390, 1280]) {
+  test(`S-18 한 번 읽기 폭 ${width}px: 값 고르기·확인 화면 가로 넘침 0, 고르기 단추 44px(마우스 PC 36px) 이상, 아래 막대가 아래 탭 위에 있다`, async ({ page }) => {
+    const done = collectErrors(page);
+    await setup(page, { width, ai: { groups: new Map([[GROUP, [singleView({ jobs: [job(1, { maskedCount: 1 })] })]]]) } });
+    await openReview(page);
+    const { next } = foot(page);
+    expect(await overflowOf(page), "값 고르기 화면 가로 넘침").toBe(0);
+    await expectStyledButtons(page.locator("[data-axr-page]"), "값 고르기 화면");
+    await shot(page, `ai-review-single-${width}-compare.png`);
+    for (const field of ["contractDate", "balanceDate", "priceWon"]) await page.locator(`[data-axr-chip='${field}:first']`).click();
+    const chipHeight = (await page.locator("[data-axr-chip='balanceDate:first']").boundingBox()).height;
+    expect(chipHeight).toBeGreaterThanOrEqual(width >= 1221 ? 36 : 44);
+    expect((await next.boundingBox()).height).toBeGreaterThanOrEqual(44);
+    if (width < 980) {
+      const tabTop = (await page.locator(".admin-tabbar").boundingBox()).y;
+      const nextBox = await next.boundingBox();
+      expect(nextBox.y + nextBox.height, "아래 막대가 아래 탭에 가려지지 않음").toBeLessThanOrEqual(tabTop + 1);
+    }
+    await next.click();
+    await expect(page.locator("[data-axr-title]")).toBeFocused();
+    expect(await overflowOf(page), "확인 화면 가로 넘침").toBe(0);
+    await expectStyledButtons(page.locator("[data-axr-page]"), "확인 화면");
+    await shot(page, `ai-review-single-${width}-confirm.png`);
+    done();
+  });
+}
+
+for (const width of [360, 390, 1280]) {
   test(`S-18 손님 카드 AI 상자 폭 ${width}px: 시작·읽는 중·결과 나옴 모두 가로 넘침 0이고 단추 44px(마우스 PC 36px, 주 단추 44px) 이상`, async ({ page }) => {
     const done = collectErrors(page);
-    const running = groupView({ status: "running", jobs: [job(1, { status: "in_progress" }), job(2, { status: "queued" })] });
-    const ready = groupView({ jobs: [job(1), job(2, { value: result({ balance: "2026-12-31" }) })] });
+    const running = singleView({ status: "running", jobs: [job(1, { status: "in_progress" })] });
+    const ready = singleView();
     await setup(page, { width, ai: { groups: new Map([[GROUP, [running, ready]]]) } });
     await openCopies(page);
     const ax = box(page);

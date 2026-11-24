@@ -6,7 +6,8 @@ import { readWorkData, writeWorkData } from "./work-customers-client";
 import type { DealEvent } from "./work-customers-client";
 
 export type AiGroupStatus = "running" | "ready" | "confirmed" | "failed" | "cancelled";
-export type AiPairMode = "cross" | "same_unset" | "same_chosen";
+// null은 한 번 읽기 묶음(2026-11-24부터 만든 것, 작업 1개). 나머지 셋은 그 전에 만든 두 번 읽기 묶음에만 있다.
+export type AiPairMode = "cross" | "same_unset" | "same_chosen" | null;
 export interface AiJobSummary { id: string; runIndex: number; model: string; status: string; errorCode: string | null }
 // result는 contract-extract.mjs validateContractResult()를 통과한 snake_case 객체(묶음이 끝났을 때만, 그 작업이 결과를 냈을 때만).
 export interface AiJob extends AiJobSummary { reasoningEffort: string | null; maskedCount: number; result: Record<string, any> | null }

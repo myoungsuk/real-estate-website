@@ -16,13 +16,14 @@ const DAY = 24 * HOUR;
 const iso = (ms) => new Date(ms).toISOString();
 const MARK_QUOTE = "ZZQUOTE-가상문구";
 
-// 가상 AI 묶음 하나(두 행)를 넣는다. rows: [{ status, updatedAt, confirmedAt }] 두 개. 돌려주는 값: 묶음 ID.
+// 가상 AI 묶음 하나를 넣는다. rows: [{ status, updatedAt, confirmedAt }] 두 개면 옛 두 번 읽기 묶음(pair_mode cross),
+// 한 개면 2026-11-24부터의 한 번 읽기 묶음(pair_mode 없음). 돌려주는 값: 묶음 ID.
 function insertGroup(database, { rows: list, fileIds = [], kind = "contract_schedule", groupId = nextUuid() }) {
   const insert = database.prepare(`INSERT INTO ai_jobs (id, group_id, run_index, pair_mode, kind, status, model, reasoning_effort, input_file_ids, result_json, error_code,
-    confirmed_at, created_at, updated_at) VALUES (?, ?, ?, 'cross', ?, ?, 'gpt-test', 'max', ?, ?, NULL, ?, ?, ?)`);
+    confirmed_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'gpt-test', 'max', ?, ?, NULL, ?, ?, ?)`);
   list.forEach((row, index) => {
     const result = row.status === "completed" ? JSON.stringify({ maskedCount: 0, result: { quote: MARK_QUOTE } }) : null;
-    insert.run(nextUuid(), groupId, index + 1, kind, row.status, JSON.stringify(fileIds), result, row.confirmedAt ?? null, iso(NOW), row.updatedAt);
+    insert.run(nextUuid(), groupId, index + 1, list.length === 1 ? null : "cross", kind, row.status, JSON.stringify(fileIds), result, row.confirmedAt ?? null, iso(NOW), row.updatedAt);
   });
   return groupId;
 }
@@ -75,6 +76,22 @@ test("30일 경계: 29일 23시간 전에 끝난 묶음은 남고 30일 정각·
   assert.deepEqual([quiet, aiAudit(database).length], [[], 3], "지울 것이 없으면 로그·감사 없음");
   await cron(db, AT_0305 + HOUR * 24 * 1, quiet);
   assert.deepEqual(groupsLeft(database), [], "다음 날에는 하루 지난 두 묶음도 30일이 지나 지움");
+});
+
+test("한 번 읽기 묶음(행 1개)도 같은 30일 규칙: 30일 지난 끝난 묶음은 지우고, 29일 23시간 전에 확정한 것·진행 중인 것은 남기며 옛 두 번 읽기 묶음과 함께 센다", async () => {
+  const { database, db } = freshDb();
+  const cutoff = AT_0305 - 30 * DAY;
+  const oldSingle = insertGroup(database, { rows: [{ status: "completed", updatedAt: iso(cutoff) }] });
+  const failedSingle = insertGroup(database, { rows: [{ status: "failed", updatedAt: iso(AT_0305 - 31 * DAY) }] });
+  const confirmedSingle = insertGroup(database, { rows: [{ status: "completed", updatedAt: iso(AT_0305 - 40 * DAY), confirmedAt: iso(cutoff + HOUR) }] });
+  const runningSingle = insertGroup(database, { rows: [{ status: "in_progress", updatedAt: iso(AT_0305 - 90 * DAY) }] });
+  const oldPair = insertGroup(database, { rows: closedAt(iso(AT_0305 - 31 * DAY), "cancelled") });
+  assert.deepEqual(rows(database, "SELECT pair_mode, count(*) AS n FROM ai_jobs WHERE group_id = ?", oldSingle), [{ pair_mode: null, n: 1 }]);
+  const log = [];
+  await cron(db, AT_0305, log);
+  assert.deepEqual(groupsLeft(database), [confirmedSingle, runningSingle].sort());
+  assert.deepEqual(log, [{ event: "ai_expire", groups: 3, rows: 4 }], "한 번 읽기 2묶음(행 1개씩) + 옛 1묶음(행 2개)");
+  assert.deepEqual(aiAudit(database).map((line) => line.target_id).sort(), [oldSingle, failedSingle, oldPair].sort());
 });
 
 test("진행 중(queued·in_progress) 행이 하나라도 있는 묶음은 오래돼도 남기고, 계약서 밖 종류도 건드리지 않으며, 결과 없이 닫힌 묶음(unknown·expired)은 지운다", async () => {

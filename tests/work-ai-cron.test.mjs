@@ -1,4 +1,5 @@
 // 단계 4 AI 작업 보조 조회(1분 예약) 시험. 실제 OpenAI·R2·D1은 부르지 않는다(가짜 fetcher·가짜 R2·node:sqlite).
+// 2026-11-24부터 새 묶음은 한 번 읽기(작업 1개)다. 예약은 묶음이 아니라 열린 행을 하나씩 보므로 옛 두 번 읽기 묶음의 행도 같은 길로 받는다.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
@@ -6,7 +7,7 @@ import { estimateCostMicroUsd } from "../worker/work-ai-config.mjs";
 import { AI_POLL_CRON, AI_POLL_MAX_ROWS, runAiPollCron } from "../worker/work-ai-cron.mjs";
 import { REALPRICE_CRON, handleScheduled } from "../worker/work-scheduled.mjs";
 import { completed, created, httpError, installNetworkTrap, pending, scriptedOpenAi } from "./openai-fixtures.mjs";
-import { AI_PRICES, MARK, MODEL_A, MODEL_B, sampleContract, setupAi } from "./work-ai-test-kit.mjs";
+import { AI_PRICES, MARK, MODEL_A, sampleContract, seedCopy, seedDeal, setupAi } from "./work-ai-test-kit.mjs";
 import { NOW, nextUuid, rows, work } from "./work-test-kit.mjs";
 
 const MINUTE = 60_000;
@@ -19,7 +20,13 @@ const collect = () => {
   return { entries, log: (entry) => entries.push(entry) };
 };
 const createStarted = async (ctx, ai) => (await work(ctx.env, "/ai/jobs", { method: "POST", body: ctx.body, openaiFetch: ai.fetcher })).json.data;
-const twoCreates = (more = []) => scriptedOpenAi([{ kind: "create", respond: created("resp_a1", "in_progress") }, { kind: "create", respond: created("resp_b1", "in_progress") }, ...more]);
+const oneCreate = (more = []) => scriptedOpenAi([{ kind: "create", respond: created("resp_a1", "in_progress") }, ...more]);
+// 다른 거래에 계약서 사본 1장을 붙여 묶음을 하나 더 만든다(한 번 읽기 묶음은 거래마다 하나씩만 진행 중일 수 있음).
+async function createOther(ctx, ai) {
+  const dealId = seedDeal(ctx.database);
+  const fileIds = [await seedCopy(ctx.database, ctx.r2, { dealId })];
+  return (await work(ctx.env, "/ai/jobs", { method: "POST", body: { kind: "contract_schedule", fileIds, dealId }, openaiFetch: ai.fetcher })).json.data;
+}
 
 test("wrangler.jsonc의 예약 문자열은 코드 상수와 글자까지 같다(controller.cron은 설정 문자열 그대로 온다)", async () => {
   const raw = await readFile(new URL("../wrangler.jsonc", import.meta.url), "utf8");
@@ -69,29 +76,26 @@ test("켜져 있고 열린 작업이 없으면 D1 조회 1번으로 끝난다(03
 test("화면을 닫아도 1분 예약이 끝난 결과를 D1에 옮기고 한 번만 정산한다", async (t) => {
   installNetworkTrap(t);
   const ctx = await setupAi();
-  const ai = twoCreates([
+  const ai = oneCreate([
     { kind: "retrieve", respond: pending("resp_a1") },
-    { kind: "retrieve", respond: pending("resp_b1") },
-    { kind: "retrieve", respond: completed("resp_a1", sampleContract(), { input_tokens: 9_000, output_tokens: 3_000 }) },
-    { kind: "retrieve", respond: completed("resp_b1", sampleContract({ warnings: ["가상 900101-1234567"] }), { input_tokens: 9_100, output_tokens: 3_100 }) },
+    { kind: "retrieve", respond: completed("resp_a1", sampleContract({ warnings: ["가상 900101-1234567"] }), { input_tokens: 9_000, output_tokens: 3_000 }) },
   ]);
   const { groupId } = await createStarted(ctx, ai);
   const { entries, log } = collect();
   const run = (now) => handleScheduled({ cron: AI_POLL_CRON, scheduledTime: now }, ctx.env, {}, { log, now: () => now, openaiFetch: ai.fetcher });
 
-  assert.deepEqual(await run(NOW + MINUTE), { outcome: "ok", polled: 2, changed: 0, failed: 0 });
-  assert.deepEqual(jobRows(ctx.database).map((row) => row.status), ["in_progress", "in_progress"]);
-  assert.deepEqual(await run(NOW + 2 * MINUTE), { outcome: "ok", polled: 2, changed: 2, failed: 0 });
+  assert.deepEqual(await run(NOW + MINUTE), { outcome: "ok", polled: 1, changed: 0, failed: 0 });
+  assert.deepEqual(jobRows(ctx.database).map((row) => row.status), ["in_progress"]);
+  assert.deepEqual(await run(NOW + 2 * MINUTE), { outcome: "ok", polled: 1, changed: 1, failed: 0 });
   const jobs = jobRows(ctx.database);
   assert.deepEqual(jobs.map((row) => [row.status, row.input_tokens, row.output_tokens, row.updated_at]), [
     ["completed", 9_000, 3_000, new Date(NOW + 2 * MINUTE).toISOString()],
-    ["completed", 9_100, 3_100, new Date(NOW + 2 * MINUTE).toISOString()],
   ]);
-  assert.deepEqual(JSON.parse(jobs[0].result_json), { maskedCount: 0, result: sampleContract() });
-  assert.equal(JSON.parse(jobs[1].result_json).maskedCount, 1);
-  assert.equal(jobs[1].result_json.includes("900101-1234567"), false, "예약이 받은 결과도 주민번호 꼴을 가려 저장");
-  const actual = estimateCostMicroUsd(AI_PRICES[MODEL_A], 9_000, 3_000) + estimateCostMicroUsd(AI_PRICES[MODEL_B], 9_100, 3_100);
-  const settled = [{ day: "2026-11-17", create_requests: 2, estimated_cost_micro_usd: actual, input_tokens: 18_100, output_tokens: 6_100 }];
+  assert.deepEqual(JSON.parse(jobs[0].result_json).result.contract_date, sampleContract().contract_date);
+  assert.equal(JSON.parse(jobs[0].result_json).maskedCount, 1);
+  assert.equal(jobs[0].result_json.includes("900101-1234567"), false, "예약이 받은 결과도 주민번호 꼴을 가려 저장");
+  const actual = estimateCostMicroUsd(AI_PRICES[MODEL_A], 9_000, 3_000);
+  const settled = [{ day: "2026-11-17", create_requests: 1, estimated_cost_micro_usd: actual, input_tokens: 9_000, output_tokens: 3_000 }];
   assert.deepEqual(usageRows(ctx.database), settled);
 
   assert.deepEqual(await run(NOW + 3 * MINUTE), { outcome: "idle", polled: 0 });
@@ -102,45 +106,54 @@ test("화면을 닫아도 1분 예약이 끝난 결과를 D1에 옮기고 한 �
 
   // 로그: 개수·코드만. 계약서 내용·키·응답 ID 없음.
   const summary = entries.filter((entry) => entry.event === "ai_poll_cron");
-  assert.deepEqual(summary, [{ event: "ai_poll_cron", polled: 2, changed: 0, failed: 0 }, { event: "ai_poll_cron", polled: 2, changed: 2, failed: 0 }]);
+  assert.deepEqual(summary, [{ event: "ai_poll_cron", polled: 1, changed: 0, failed: 0 }, { event: "ai_poll_cron", polled: 1, changed: 1, failed: 0 }]);
   const logText = JSON.stringify(entries);
   for (const secret of [MARK.title, MARK.key, MARK.property, MARK.quote, "resp_a1", "900101-1234567", ctx.dealId, groupId]) assert.equal(logText.includes(secret), false, secret);
 
   // 그 뒤 화면을 열면 OpenAI를 다시 부르지 않고 저장된 결과를 받는다.
   const view = await work(ctx.env, `/ai/jobs/${groupId}`, { now: NOW + 30 * MINUTE });
   assert.equal(view.json.data.group.status, "ready");
-  assert.deepEqual(view.json.data.jobs.map((job) => job.maskedCount), [0, 1]);
+  assert.deepEqual(view.json.data.jobs.map((job) => job.maskedCount), [1]);
 });
 
 test("1분 예약도 10분 지난 404는 expired, 응답 ID 없는 행은 unknown으로 닫는다", async (t) => {
   installNetworkTrap(t);
   const ctx = await setupAi();
-  const ai = twoCreates([{ kind: "retrieve", respond: httpError(404) }]);
-  await createStarted(ctx, ai);
-  ctx.database.prepare("UPDATE ai_jobs SET openai_response_id = NULL, status = 'queued' WHERE run_index = 2").run();
+  // 첫 묶음은 OpenAI가 404, 다른 거래의 둘째 묶음은 응답 ID를 적지 못한 행.
+  const ai = scriptedOpenAi([
+    { kind: "create", respond: created("resp_a1", "in_progress") },
+    { kind: "create", respond: created("resp_c1", "in_progress") },
+    { kind: "retrieve", respond: httpError(404) },
+  ]);
+  const first = await createStarted(ctx, ai);
+  const second = await createOther(ctx, ai);
+  ctx.database.prepare("UPDATE ai_jobs SET openai_response_id = NULL, status = 'queued' WHERE group_id = ?").run(second.groupId);
   const result = await runAiPollCron(ctx.env, { now: () => NOW + 11 * MINUTE, openaiFetch: ai.fetcher, log: () => {} });
   assert.deepEqual(result, { outcome: "ok", polled: 2, changed: 2, failed: 0 });
-  assert.deepEqual(jobRows(ctx.database).map((row) => [row.status, row.error_code, row.input_tokens]), [["expired", "AI_RESULT_EXPIRED", null], ["unknown", "AI_STATE_UNKNOWN", null]]);
-  assert.equal(usageRows(ctx.database)[0].create_requests, 2, "되돌리지 않음");
+  const byGroup = (groupId) => jobRows(ctx.database).filter((row) => row.group_id === groupId).map((row) => [row.status, row.error_code, row.input_tokens]);
+  assert.deepEqual(byGroup(first.groupId), [["expired", "AI_RESULT_EXPIRED", null]]);
+  assert.deepEqual(byGroup(second.groupId), [["unknown", "AI_STATE_UNKNOWN", null]]);
+  assert.equal(ai.remaining(), 0);
+  assert.equal(usageRows(ctx.database)[0].create_requests, 2, "되돌리지 않음(묶음 2개 × 1회)");
 });
 
 test("`*/10` 예약은 AI 작업을 건드리지 않고, 1분 예약은 실거래가 받기를 부르지 않는다", async (t) => {
   installNetworkTrap(t);
   const ctx = await setupAi();
-  const ai = twoCreates();
+  const ai = oneCreate();
   await createStarted(ctx, ai);
   const before = jobRows(ctx.database);
   const { entries, log } = collect();
   // 실거래가 켜기 값이 없는 `*/10` 차례(03:00이 아닌 때): AI가 켜져 있고 열린 작업이 있어도 그대로다.
   assert.deepEqual(await handleScheduled({ cron: REALPRICE_CRON, scheduledTime: AT_1407_KST }, ctx.env, {}, { log, now: () => NOW + 20 * MINUTE, openaiFetch: ai.fetcher }), { outcome: "disabled" });
   assert.deepEqual(jobRows(ctx.database), before);
-  assert.equal(ai.calls.length, 2, "조회 0번");
+  assert.equal(ai.calls.length, 1, "조회 0번");
 
   // 실거래가를 켜 둔 env로 1분 예약을 돌려도 rt_* 표·실행 기록에 손대지 않는다.
   const realpriceEnv = { ...ctx.env, WORK_REALPRICE_ENABLED: "true", MOLIT_RT_SERVICE_KEY: "ZZMOLIT-0000000000000000" };
-  const done = scriptedOpenAi([{ kind: "retrieve", respond: pending("resp_a1") }, { kind: "retrieve", respond: pending("resp_b1") }]);
+  const done = scriptedOpenAi([{ kind: "retrieve", respond: pending("resp_a1") }]);
   const result = await handleScheduled({ cron: AI_POLL_CRON, scheduledTime: AT_1407_KST }, realpriceEnv, {}, { log, now: () => NOW + MINUTE, openaiFetch: done.fetcher });
-  assert.deepEqual(result, { outcome: "ok", polled: 2, changed: 0, failed: 0 });
+  assert.deepEqual(result, { outcome: "ok", polled: 1, changed: 0, failed: 0 });
   assert.equal(rows(ctx.database, "SELECT count(*) AS n FROM rt_fetch_runs")[0].n, 0);
   assert.equal(rows(ctx.database, "SELECT count(*) AS n FROM rt_fetch_months")[0].n, 0);
   assert.equal(entries.some((entry) => entry.event === "realprice_cron"), false);
@@ -164,14 +177,14 @@ test("켰지만 다른 설정이 빠지면 D1 문장 없이 끝나고, 경고는
 test("구조 번호가 코드와 다르면 열린 작업이 있어도 OpenAI를 부르지 않고 행을 고치지 않는다", async (t) => {
   installNetworkTrap(t);
   const ctx = await setupAi();
-  const ai = twoCreates();
+  const ai = oneCreate();
   await createStarted(ctx, ai);
   const before = jobRows(ctx.database);
   ctx.database.prepare("UPDATE settings SET value_json = '8' WHERE key = 'schema_version'").run();
   const { entries, log } = collect();
   assert.deepEqual(await runAiPollCron(ctx.env, { now: () => NOW + MINUTE, openaiFetch: ai.fetcher, log }), { outcome: "schema" });
   assert.deepEqual(jobRows(ctx.database), before);
-  assert.equal(ai.calls.length, 2);
+  assert.equal(ai.calls.length, 1);
   assert.deepEqual(entries, [{ event: "ai_poll_cron", level: "warn", code: "AI_CRON_SCHEMA" }]);
 });
 
@@ -206,12 +219,15 @@ test("내부 예외는 밖으로 나가지 않고 고정 코드만 남긴다(오
   assert.deepEqual(result, { outcome: "internal_error", code: "AI_CRON_INTERNAL" });
   assert.deepEqual(entries, [{ event: "ai_poll_cron", level: "warn", code: "AI_CRON_INTERNAL" }]);
 
-  // 한 행의 적기(batch)가 실패해도 예약은 끝까지 돌고 failed로만 센다.
-  const ai = twoCreates([
+  // 한 행의 적기(batch)가 실패해도 예약은 끝까지 돌고 failed로만 센다(거래 2개에 한 번 읽기 묶음 하나씩).
+  const ai = scriptedOpenAi([
+    { kind: "create", respond: created("resp_a1", "in_progress") },
+    { kind: "create", respond: created("resp_c1", "in_progress") },
     { kind: "retrieve", respond: completed("resp_a1", sampleContract()) },
-    { kind: "retrieve", respond: completed("resp_b1", sampleContract()) },
+    { kind: "retrieve", respond: completed("resp_c1", sampleContract()) },
   ]);
   await createStarted(ctx, ai);
+  await createOther(ctx, ai);
   let batches = 0;
   const flaky = { ...ctx.db, batch: async (statements) => { batches += 1; if (batches === 1) throw new Error("ZZSECRET D1 실패"); return ctx.db.batch(statements); } };
   const second = collect();
