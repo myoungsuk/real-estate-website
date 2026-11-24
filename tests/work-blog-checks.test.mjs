@@ -7,11 +7,13 @@ import listings from "../src/data/listings.json" with { type: "json" };
 import office from "../src/data/office.json" with { type: "json" };
 import rules from "../src/data/work/ad-disclosure-rules.json" with { type: "json" };
 import { buildDisclosure, formatArea, formatManagementFee, formatWon, officeLine } from "../src/lib/work/ad-disclosure.mjs";
+import { checkView } from "../src/lib/work/blog-view.mjs";
 import {
   BLOG_RESULT_LIMITS,
   BLOG_STYLES,
   allowedStyles,
   checkBlogDraft,
+  cutBlogText,
   extractAllMoney,
   findPersonalPatterns,
   validateBlogInputs,
@@ -165,13 +167,40 @@ test("TK-61 글 성격 7가지와 거래 형태별 허용: 매매에 전세·월
   assert.deepEqual(allowedStyles(COMPLEX), ["plain", "live", "invest"]);
 });
 
-test("TK-51 결과 모양: 키 5개 정확히, 경계값 통과·한 글자 넘으면 실패, 해시태그 앞에 # 하나", () => {
+test("TK-51 결과 모양: 키 5개 정확히, 경계값은 그대로·넘으면 잘라 받음(trimmed), 빈 제목·빈 문단·모양 틀림만 실패, 해시태그 앞에 # 하나", () => {
   const base = { title: "제목", paragraphs: ["문단"], hashtags: ["태그", "##둘"], snsShort: "짧은 글", factsUsed: [] };
   assert.deepEqual(validateBlogResult(base).result.hashtags, ["#태그", "#둘"]);
-  assert.equal(validateBlogResult({ ...base, title: "가".repeat(60) }).ok, true);
-  for (const bad of [{ ...base, title: "가".repeat(61) }, { ...base, title: " " }, { ...base, paragraphs: [] }, { ...base, snsShort: "가".repeat(201) }, { ...base, extra: 1 }, [base], null]) {
+  const edge = validateBlogResult({ ...base, title: "가".repeat(60) });
+  assert.equal(edge.ok, true);
+  assert.equal("trimmed" in edge.result, false, "자르지 않았으면 trimmed 키가 없음(그 전 초안과 같은 모양)");
+  const long = validateBlogResult({ ...base, title: "가".repeat(61), snsShort: "나".repeat(201) });
+  assert.deepEqual([long.ok, long.result.title.length, long.result.snsShort.length, long.result.trimmed], [true, 60, 200, true], "한 글자 넘으면 상한 길이로 자름");
+  for (const bad of [{ ...base, title: " " }, { ...base, paragraphs: [] }, { ...base, paragraphs: [" ", ""] }, { ...base, extra: 1 }, { ...base, title: 1 }, { ...base, paragraphs: "문단" }, { ...base, hashtags: [1] }, [base], null]) {
     assert.equal(validateBlogResult(bad).ok, false, JSON.stringify(bad)?.slice(0, 40));
   }
+});
+
+test("결과 잘라 받기: 문장 끝에서 자르고, 개수는 앞에서부터 남기며, 빈 항목은 버리고 SNS 글이 비어도 받음", () => {
+  const L = BLOG_RESULT_LIMITS;
+  const base = { title: "제목", paragraphs: ["문단"], hashtags: [], snsShort: "짧은 글", factsUsed: [] };
+  const sentence = `${"가".repeat(400)}입니다. ${"나".repeat(300)}`;
+  const cut = validateBlogResult({ ...base, paragraphs: [sentence] }).result;
+  assert.equal(cut.paragraphs[0], `${"가".repeat(400)}입니다.`, "상한 안의 마지막 문장 끝에서 자르고 '…'은 붙이지 않음");
+  assert.equal(cutBlogText(`${"가".repeat(10)}. ${"나".repeat(700)}`, L.paragraph).length, L.paragraph, "문장 끝이 상한 절반보다 앞이면 상한에서 그냥 자름");
+  assert.equal(cutBlogText(`${"가".repeat(11)}😀`, 12), "가".repeat(11), "두 칸 글자(이모지)를 반으로 가르지 않음");
+  const many = validateBlogResult({
+    ...base,
+    paragraphs: Array.from({ length: L.paragraphs + 2 }, (_, index) => `문단${index + 1}`),
+    hashtags: ["", "#", " ", ...Array.from({ length: L.hashtags + 1 }, (_, index) => `태그${index + 1}`)],
+    factsUsed: Array.from({ length: L.factsUsed + 1 }, (_, index) => `사실${index + 1}`),
+    snsShort: " ",
+  }).result;
+  assert.deepEqual(many.paragraphs, Array.from({ length: L.paragraphs }, (_, index) => `문단${index + 1}`), "앞에서부터 12개");
+  assert.deepEqual(many.hashtags, Array.from({ length: L.hashtags }, (_, index) => `#태그${index + 1}`), "빈 해시태그('#'뿐 포함)는 버린 뒤 10개");
+  assert.equal(many.factsUsed.length, L.factsUsed);
+  assert.deepEqual([many.snsShort, many.trimmed], ["", true], "SNS 글은 비어도 받음");
+  const blanks = validateBlogResult({ ...base, paragraphs: [" ", "문단", ""], hashtags: [" "], factsUsed: [""] }).result;
+  assert.deepEqual([blanks.paragraphs, blanks.hashtags, blanks.factsUsed, "trimmed" in blanks], [["문단"], [], [], false], "빈 항목만 버린 것은 자른 것으로 치지 않음");
 });
 
 test("TK-48 숫자 대조: 입력과 다른 금액·면적·층·날짜는 막고, 강조점 숫자는 허용, 저·중·고를 고른 뒤 숫자 층은 막고, 단지 소개 글의 매물 숫자는 막음", () => {
@@ -326,21 +355,67 @@ test("결과 새 꼴: sections·checklist를 받아 문단을 펴고 headings를
   const L = BLOG_RESULT_LIMITS;
   const section = (extra = {}) => ({ heading: "소제목", paragraphs: ["문단"], ...extra });
   assert.equal(validateBlogResult({ ...value, sections: Array.from({ length: L.sections }, () => section({ paragraphs: Array.from({ length: L.sectionParagraphs }, () => "가".repeat(600)), heading: "나".repeat(40) })), checklist: Array.from({ length: L.checklist }, () => "다".repeat(120)) }).ok, true, "경계값(8 × 4 × 600 · 소제목 40 · 확인 10 × 120)은 통과");
+  // 상한을 넘으면 잘라 받는다(2026-11-24): 소제목 9개 → 8개, 문단 5개 → 4개, 글자 수 → 상한 길이, 확인할 점 11개 → 10개.
+  for (const [over, expect, label] of [
+    [{ sections: Array.from({ length: L.sections + 1 }, (_, index) => section({ heading: `소제목${index + 1}` })) }, (r) => r.headings.filter(Boolean).length === L.sections && r.headings[L.sections - 1] === `소제목${L.sections}`, "소제목은 앞에서 8개"],
+    [{ sections: [section({ heading: "가".repeat(41) })] }, (r) => r.headings[0].length === L.heading, "소제목 40자"],
+    [{ sections: [section({ paragraphs: Array.from({ length: L.sectionParagraphs + 1 }, (_, index) => `문단${index + 1}`) })] }, (r) => r.paragraphs.join() === "문단1,문단2,문단3,문단4", "소제목마다 문단 4개"],
+    [{ sections: [section({ paragraphs: ["가".repeat(601)] })] }, (r) => r.paragraphs[0].length === L.paragraph, "문단 600자"],
+    [{ checklist: Array.from({ length: L.checklist + 1 }, () => "확인") }, (r) => r.checklist.length === L.checklist, "확인할 점 10개"],
+    [{ checklist: ["가".repeat(121)] }, (r) => r.checklist[0].length === L.checkItem, "확인할 점 120자"],
+  ]) {
+    const checked = validateBlogResult({ ...value, ...over });
+    assert.equal(checked.ok, true, label);
+    assert.equal(checked.result.trimmed, true, label);
+    assert.ok(expect(checked.result), label);
+    assert.equal(checked.result.headings.length, checked.result.paragraphs.length, `${label}: headings 길이 = paragraphs 길이`);
+  }
+  // 빈 소제목은 문단만 남기고(앞 소제목에 이어짐), 문단이 없는 소제목 칸은 소제목째 버린다.
+  const emptyParts = validateBlogResult({ ...value, sections: [section({ heading: "앞", paragraphs: [" "] }), section({ heading: " ", paragraphs: ["이어짐"] }), section({ heading: "뒤", paragraphs: [] }), section({ heading: "끝" })], checklist: ["- ", "확인"] }).result;
+  assert.deepEqual([emptyParts.paragraphs, emptyParts.headings, emptyParts.checklist, "trimmed" in emptyParts], [["이어짐", "문단"], ["", "끝"], ["확인"], false]);
+  // 모양이 다르거나 문단이 하나도 남지 않으면 여전히 실패.
   for (const bad of [
     { ...value, sections: [] },
-    { ...value, sections: Array.from({ length: L.sections + 1 }, () => section()) },
-    { ...value, sections: [section({ heading: "가".repeat(41) })] },
-    { ...value, sections: [section({ heading: " " })] },
     { ...value, sections: [section({ paragraphs: [] })] },
-    { ...value, sections: [section({ paragraphs: Array.from({ length: L.sectionParagraphs + 1 }, () => "문단") })] },
-    { ...value, sections: [section({ paragraphs: ["가".repeat(601)] })] },
+    { ...value, sections: [section({ paragraphs: [" "] }), section({ heading: "둘", paragraphs: [""] })] },
+    { ...value, title: "" },
     { ...value, sections: [{ ...section(), extra: 1 }] },
-    { ...value, checklist: Array.from({ length: L.checklist + 1 }, () => "확인") },
-    { ...value, checklist: ["가".repeat(121)] },
+    { ...value, sections: [{ heading: "소제목" }] },
+    { ...value, sections: [section({ heading: null })] },
+    { ...value, sections: [section({ paragraphs: [1] })] },
+    { ...value, sections: ["소제목"] },
+    { ...value, sections: { heading: "소제목", paragraphs: ["문단"] } },
+    { ...value, checklist: "확인" },
+    { ...value, checklist: [null] },
     { ...value, paragraphs: ["옛 칸과 섞임"] },
   ]) assert.equal(validateBlogResult(bad).ok, false, JSON.stringify(bad).slice(0, 80));
   const old = validateBlogResult({ title: "제목", paragraphs: ["문단"], hashtags: [], snsShort: "짧은 글", factsUsed: [] }).result;
   assert.deepEqual(Object.keys(old), ["title", "paragraphs", "hashtags", "snsShort", "factsUsed"], "옛 꼴 초안은 이전과 같은 모양");
+});
+
+test("결과 글의 연락처·호수(2026-11-24): 전화번호·이메일·호수·주민등록번호 꼴은 모든 글 칸에서 복사를 막고, 사무소 공개 번호와 공개 자료에 있는 호수는 막지 않음", () => {
+  const inputs = fullAptInputs();
+  const officePhone = office.mobile;
+  const draft = (extra = {}) => ({ title: "제목", paragraphs: ["남향입니다."], headings: [""], checklist: [], hashtags: [], snsShort: "짧은 글", ...extra });
+  const personal = (checks) => checks.blocks.filter((item) => item.kind === "personal").map((item) => [item.where, item.text]);
+  // 날개-2 탐침 글: 그 전에는 막기 0·경고 0이었다.
+  const probe = checkBlogDraft(draft({ paragraphs: ["042-123-4567 · test@example.com · 천동 123-4번지 101동 1203호"] }), { source: APT, inputs, officePhone });
+  assert.deepEqual(personal(probe), [["p1", "전화번호"], ["p1", "이메일"], ["p1", "호수"]]);
+  assert.equal(checkView(probe).canCopy, false, "경고가 아니라 막기");
+  assert.doesNotMatch(JSON.stringify(probe), /042-123-4567|test@example\.com|1203호/u, "찾은 글자는 검사 결과(check_json)에 남기지 않음");
+  const everywhere = checkBlogDraft(draft({
+    title: "문의 010-1111-2222",
+    headings: ["메일 a@b.kr"],
+    paragraphs: ["남향입니다."],
+    checklist: ["1203호 확인"],
+    hashtags: ["#900101-1234567"],
+    snsShort: "연락 010.3333.4444",
+  }), { source: APT, inputs, officePhone });
+  assert.deepEqual(personal(everywhere).map(([where]) => where).sort(), ["check", "h1", "sns", "tags", "title"].sort(), "제목·소제목·확인할 점·해시태그·SNS 글 모두 봄");
+  assert.deepEqual(personal(checkBlogDraft(draft({ paragraphs: [`문의는 ${officePhone}로 주세요.`] }), { source: APT, inputs, officePhone })), [], "사무소 공개 번호는 막지 않음");
+  assert.deepEqual(personal(checkBlogDraft(draft({ paragraphs: [`문의는 ${officePhone}로 주세요.`] }), { source: APT, inputs })), [["p1", "전화번호"]], "officePhone을 주지 않으면 막음");
+  assert.deepEqual(personal(checkBlogDraft(draft({ paragraphs: ["사무소는 근린생활시설 105호에 있습니다. 지하철 1호선과 2호기 승강기"] }), { source: COMPLEX, officePhone })), [], "단지 자료에 있는 '105호'·호선·호기는 막지 않음");
+  assert.deepEqual(personal(checkBlogDraft(draft({ paragraphs: ["근린생활시설 106호"] }), { source: COMPLEX, officePhone })), [["p1", "호수"]], "자료에 없는 호수는 막음");
 });
 
 test("새 꼴 검사: 소제목(h문단 번호)과 현장에서 확인할 점(check)의 숫자·낱말도 대조, 옛 꼴은 그 칸이 없어도 됨", () => {

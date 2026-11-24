@@ -4,7 +4,12 @@ import test from "node:test";
 import {
   CONTRACT_FIELD_ORDER,
   CONTRACT_QUOTE_MAX,
+  CONTRACT_TEXT_MAX,
+  CONTRACT_WARNING_MAX,
+  CONTRACT_WARNINGS_MAX_ITEMS,
+  CONTRACT_MIDDLE_PAYMENTS_MAX,
   contractFieldOrder,
+  contractMiddleOverflowWarning,
   contractInstructions,
   contractResultSchema,
   isRealDate,
@@ -12,6 +17,8 @@ import {
   validateContractResult,
 } from "../src/lib/work/contract-extract.mjs";
 import { maskResidentNumbers } from "../worker/work-input.mjs";
+import { compareGroupResults } from "../src/lib/work/contract-compare.mjs";
+import { aiCanApply, aiInitialChoices, aiManualProblem, aiPendingFields, aiValueText } from "../src/lib/work/contract-ai-view.mjs";
 import { sampleContract } from "./work-ai-test-kit.mjs";
 
 test("스키마: 1회째와 2회째는 칸이 같고 순서만 다르며, 둘 다 모든 칸을 required로 두고 추가 칸을 막는다", () => {
@@ -41,16 +48,14 @@ test("스키마: 1회째와 2회째는 칸이 같고 순서만 다르며, 둘 �
   assert.equal(JSON.stringify(first).includes("name"), false, "사람 이름 칸 없음");
 });
 
-test("지시문: 2회째는 칸 안내 순서가 다르고, 둘 다 이름·주민번호를 쓰지 말라고 적는다", () => {
+test("지시문(2026-11-24 줄임): 4줄 이하, 이름·주민번호 금지·null·날짜와 금액 꼴·근거·한글 금액은 남기고 칸별 안내·글자 수·개수 상한은 없음", () => {
   const first = contractInstructions(1);
-  const second = contractInstructions(2);
-  assert.notEqual(first, second);
-  assert.ok(first.indexOf("contract_date:") < first.indexOf("balance:"));
-  assert.ok(second.indexOf("contract_date:") > second.indexOf("balance:"));
-  for (const text of [first, second]) {
-    assert.ok(text.includes("사람 이름·주민등록번호·전화번호·계좌번호는 어디에도 쓰지 않는다"));
-    assert.ok(text.includes("추측하거나 계산해서 채우지 않는다"));
+  assert.equal(contractInstructions(2), first, "칸 안내를 뺐으므로 2회째도 같은 글(순서 차이는 스키마에만)");
+  assert.ok(first.split("\n").length <= 4, "4줄 이하");
+  for (const phrase of ["사람 이름·주민등록번호·전화번호·계좌번호는 어디에도 쓰지 않는다", "추측하거나 계산하지 말고 value를 null", "YYYY-MM-DD", "원 단위 정수", "page", "box", "한글 금액", "warnings"]) {
+    assert.ok(first.includes(phrase), phrase);
   }
+  for (const phrase of ["120자", "200자", "최대 4개", "최대 10개", "contract_date:", "balance:"]) assert.equal(first.includes(phrase), false, `지시문에 '${phrase}' 없음`);
 });
 
 test("재검사: 정상 결과는 통과하고 칸 순서를 1회째 순서로 맞춘 새 객체를 돌려준다", () => {
@@ -61,7 +66,54 @@ test("재검사: 정상 결과는 통과하고 칸 순서를 1회째 순서로 �
   assert.deepEqual(checked.result, sampleContract());
 });
 
-test("재검사: 칸 누락·추가 칸·없는 날짜·음수·너무 큰 금액·너무 긴 글·틀린 종류는 모두 통과하지 못한다", () => {
+test("중도금 5회 이상(2026-11-24): 거절하지 않고 자리 4개를 모두 못 읽은 값으로 비우며 경고 맨 앞에 까닭을 두고, 고르기 화면은 AI 값으로 넣지 못함", () => {
+  const six = Array.from({ length: 6 }, (_, index) => ({
+    amount: { value: 10_000_000 * (index + 1), evidence: { page: 1, quote: `${index + 1}차 중도금`, box: null } },
+    date: { value: `2027-0${index + 1}-10`, evidence: { page: 1, quote: `${index + 1}차 날짜`, box: [0.1, 0.1, 0.2, 0.2] } },
+  }));
+  const checked = validateContractResult(sampleContract({ middle_payments: six, warnings: Array.from({ length: CONTRACT_WARNINGS_MAX_ITEMS }, (_, index) => `경고${index + 1}`) }));
+  assert.equal(checked.ok, true, "결과 전체를 버리지 않음");
+  const unread = { value: null, evidence: { page: 1, quote: "", box: null } };
+  assert.deepEqual(checked.result.middle_payments, Array.from({ length: CONTRACT_MIDDLE_PAYMENTS_MAX }, () => ({ amount: unread, date: unread })), "자리 4개, 날짜·금액·근거 모두 비움([] 아님)");
+  assert.equal(checked.result.warnings[0], contractMiddleOverflowWarning(6));
+  assert.match(checked.result.warnings[0], /^중도금이 6회 적혀 있어 거래에 다 넣을 수 없습니다\(4회까지\)\. 중도금은 사진을 보고 직접 넣어 주세요\.$/u);
+  assert.equal(checked.result.warnings.length, CONTRACT_WARNINGS_MAX_ITEMS, "경고 상한 10 안에서(원래 경고는 뒤에서 하나 빠짐)");
+  assert.deepEqual(checked.result.balance, sampleContract().balance, "다른 칸은 그대로");
+  assert.equal(checked.result.contract_date.value, sampleContract().contract_date.value);
+  assert.equal(validateContractResult(sampleContract({ middle_payments: six.slice(0, 4) })).result.middle_payments[3].date.value, "2027-04-10", "4회까지는 이전과 같음");
+
+  // 결과 고르기: 중도금은 '읽음' 칸이지만 모든 차가 못 읽음이라 AI 값으로 넣을 수 없고 사람이 골라야 한다.
+  const comparison = compareGroupResults([checked.result], "sale");
+  const middle = comparison.fields.find((item) => item.field === "middlePayments");
+  assert.deepEqual([middle.status, middle.first], ["read", [null, null, null, null]], "빈 배열('중도금 없음')이 아님");
+  assert.equal(aiCanApply("middlePayments", middle.first), false, "'모두 AI 값으로'가 거르는 판정(aiCanApply)이 거짓");
+  assert.equal(Object.hasOwn(aiInitialChoices(comparison), "middlePayments"), false, "처음 고르기에 넣지 않음");
+  assert.ok(aiPendingFields(comparison, {}).includes("middlePayments"), "고르지 않으면 넣기 전에 남은 칸");
+  assert.notEqual(aiManualProblem("middlePayments", middle.first), null, "못 읽은 값을 직접 넣기로 그대로 넘겨도 막힘");
+  assert.equal(aiValueText("middlePayments", middle.first), "1차 못 읽음 · 2차 못 읽음 · 3차 못 읽음 · 4차 못 읽음");
+  const balance = comparison.fields.find((item) => item.field === "balanceDate");
+  assert.equal(aiCanApply("balanceDate", balance.first), true, "다른 칸은 AI 값으로 넣을 수 있음");
+});
+
+test("재검사(2026-11-24): 글자 칸은 상한에서 자르고 경고는 빈 것을 버린 뒤 앞 10개만, 날짜·금액 값은 자르지 않음", () => {
+  const ev = (quote) => ({ page: 1, quote, box: null });
+  const checked = validateContractResult(sampleContract({
+    contract_date: { value: "2026-11-02", evidence: ev("가".repeat(CONTRACT_QUOTE_MAX + 5)) },
+    property_text: { value: "나".repeat(CONTRACT_TEXT_MAX + 1), evidence: ev("") },
+    warnings: ["", " ", ...Array.from({ length: CONTRACT_WARNINGS_MAX_ITEMS + 2 }, (_, index) => `경고${index + 1}`), "다".repeat(CONTRACT_WARNING_MAX + 1)],
+  }));
+  assert.equal(checked.ok, true);
+  assert.equal(checked.result.contract_date.evidence.quote.length, CONTRACT_QUOTE_MAX);
+  assert.equal(checked.result.contract_date.value, "2026-11-02");
+  assert.equal(checked.result.property_text.value.length, CONTRACT_TEXT_MAX);
+  assert.deepEqual(checked.result.warnings, Array.from({ length: CONTRACT_WARNINGS_MAX_ITEMS }, (_, index) => `경고${index + 1}`), "빈 경고를 버린 뒤 앞 10개");
+  const long = validateContractResult(sampleContract({ warnings: ["다".repeat(CONTRACT_WARNING_MAX + 1)] }));
+  assert.equal(long.result.warnings[0].length, CONTRACT_WARNING_MAX);
+  const emoji = validateContractResult(sampleContract({ property_text: { value: `${"가".repeat(CONTRACT_TEXT_MAX - 1)}😀`, evidence: ev("") } }));
+  assert.equal(emoji.result.property_text.value, "가".repeat(CONTRACT_TEXT_MAX - 1), "두 칸 글자를 반으로 가르지 않음");
+});
+
+test("재검사: 칸 누락·추가 칸·없는 날짜·음수·너무 큰 금액·중도금 5개·틀린 종류·글자 칸이 글자 아님은 모두 통과하지 못한다", () => {
   const without = (key) => {
     const { [key]: _removed, ...rest } = sampleContract();
     return rest;
@@ -79,9 +131,12 @@ test("재검사: 칸 누락·추가 칸·없는 날짜·음수·너무 큰 금�
     "문자 금액": price("350000000"),
     "틀린 문서 종류": sampleContract({ document_kind: "deed" }),
     "틀린 거래 종류": sampleContract({ deal_type: "lease" }),
-    "중도금 5개": sampleContract({ middle_payments: Array.from({ length: 5 }, () => sampleContract().balance) }),
-    "경고 11개": sampleContract({ warnings: Array.from({ length: 11 }, () => "가상 경고") }),
-    "너무 긴 원문 문구": sampleContract({ contract_date: { value: "2026-11-02", evidence: { page: 1, quote: "가".repeat(CONTRACT_QUOTE_MAX + 1), box: null } } }),
+    "넘친 중도금 모양 틀림": sampleContract({ middle_payments: [...Array.from({ length: 4 }, () => sampleContract().balance), { amount: 1, date: null }] }),
+    "넘친 중도금 칸 이름 틀림": sampleContract({ middle_payments: [...Array.from({ length: 4 }, () => sampleContract().balance), { won: sampleContract().balance.amount }] }),
+    "경고가 글자 아님": sampleContract({ warnings: [1] }),
+    "경고가 배열 아님": sampleContract({ warnings: "가상 경고" }),
+    "원문 문구가 글자 아님": sampleContract({ contract_date: { value: "2026-11-02", evidence: { page: 1, quote: null, box: null } } }),
+    "물건 표시가 숫자": sampleContract({ property_text: { value: 1, evidence: { page: 1, quote: "", box: null } } }),
     "쪽 번호 0": sampleContract({ contract_date: { value: "2026-11-02", evidence: { page: 0, quote: "", box: null } } }),
     "자리 값 5개": sampleContract({ contract_date: { value: "2026-11-02", evidence: { page: 1, quote: "", box: [0, 0, 1, 1, 1] } } }),
     "자리 값 범위 밖": sampleContract({ contract_date: { value: "2026-11-02", evidence: { page: 1, quote: "", box: [0, 0, 1.2, 1] } } }),

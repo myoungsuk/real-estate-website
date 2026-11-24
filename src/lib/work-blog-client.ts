@@ -47,7 +47,8 @@ export interface BlogLimits {
 }
 
 // headings·checklist는 소제목이 있는 새 꼴 초안에만 있다(2026-11-23). headings는 paragraphs와 같은 길이이고 소제목이 없는 문단은 "".
-export interface BlogResult { title: string; paragraphs: string[]; headings?: string[]; checklist?: string[]; hashtags: string[]; snsShort: string; factsUsed: string[] }
+// trimmed는 AI 글이 상한을 넘어 서버가 잘라 받았을 때만 true로 있다(2026-11-24).
+export interface BlogResult { title: string; paragraphs: string[]; headings?: string[]; checklist?: string[]; hashtags: string[]; snsShort: string; factsUsed: string[]; trimmed?: boolean }
 export interface BlogCheckItem { kind: string; text: string; where: string }
 
 export interface BlogDraft {

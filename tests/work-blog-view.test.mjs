@@ -118,6 +118,7 @@ test("글 초안 화면: 복사 글은 해시태그를 정리하고 맨 끝에 �
   const sns = snsCopyText({ snsShort: " 짧은 글 ", hashtags: ["#천동", "#대전"], disclosureText });
   assert.equal(sns, "짧은 글\n\n#천동 #대전\n\n──────────\n중개사무소 ZZTEST-7F3A");
   assert.ok(sns.endsWith(disclosureText), "명시사항은 AI 글이 아니라 화면이 맨 끝에 붙임");
+  assert.equal(snsCopyText({ snsShort: " ", hashtags: ["#천동"], disclosureText }), "#천동\n\n──────────\n중개사무소 ZZTEST-7F3A", "짧은 글이 비면 그 줄을 뺌(빈 줄로 시작하지 않음)");
 });
 
 test("글 초안 화면: 보관 목록 상태 글은 열린 초안·닫힌 초안을 구분하고 닫힌 초안에는 지울 날을 붙인다", () => {
