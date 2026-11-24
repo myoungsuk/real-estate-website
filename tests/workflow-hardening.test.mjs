@@ -39,7 +39,7 @@ test("CI는 읽기 전용 자격 증명과 Production SEO 산출물 검사를 �
   assert.match(workflow, /npm run audit:lighthouse/u);
 });
 
-for (const name of ["sync-bank-listings.yml", "sync-external-content.yml"]) {
+for (const name of ["sync-bank-listings.yml", "sync-woori-listings.yml", "sync-external-content.yml"]) {
   test(`${name}은 읽기 검증과 쓰기 배포를 분리하고 Production marker를 확인한다`, async () => {
     const workflow = await readWorkflow(name);
     assertPinnedOfficialActions(workflow);
@@ -95,8 +95,8 @@ test("IndexNow 알림은 성공한 master CI와 그 커밋을 포함한 Producti
   assert.doesNotMatch(workflow, /--scope search/u);
 });
 
-test("부동산뱅크 자동 받기는 실패하면 이슈를 열고 성공하면 닫으며, 알림 job만 이슈 권한을 갖는다", async () => {
-  const workflow = await readWorkflow("sync-bank-listings.yml");
+for (const [label, name] of [["부동산뱅크", "sync-bank-listings.yml"], ["우리집부동산", "sync-woori-listings.yml"]]) test(`${label} 자동 받기는 실패하면 이슈를 열고 성공하면 닫으며, 알림 job만 이슈 권한을 갖는다`, async () => {
+  const workflow = await readWorkflow(name);
   const alertIndex = workflow.indexOf("\n  alert:");
   assert.ok(alertIndex > workflow.indexOf("\n  publish:"), "알림 job은 publish 뒤에 있음");
   const beforeAlert = workflow.slice(0, alertIndex);

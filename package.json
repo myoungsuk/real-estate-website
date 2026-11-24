@@ -17,6 +17,8 @@
     "audit:lighthouse": "node scripts/run-lighthouse.mjs",
     "sync:bank": "node scripts/sync-bank-listings.mjs",
     "sync:bank:dry-run": "node scripts/sync-bank-listings.mjs --dry-run",
+    "sync:woori": "node scripts/sync-woori-listings.mjs",
+    "sync:woori:dry-run": "node scripts/sync-woori-listings.mjs --dry-run",
     "sync:external": "node scripts/sync-external-content.mjs",
     "sync:external:dry-run": "node scripts/sync-external-content.mjs --dry-run",
     "deploy": "npm run build && wrangler deploy"

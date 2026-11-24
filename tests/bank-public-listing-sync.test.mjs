@@ -324,6 +324,66 @@ test("Bank 동기화는 다음 날 내용이 같아도 재확인일만 갱신하
   assert.equal(await readFile(summaryPath, "utf8"), beforeSummary);
 });
 
+test("밤 부동산뱅크 받기는 우리집부동산 엑셀 매물과 그 표시를 그대로 두고 부동산뱅크에서 빠진 것만 지운다", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "bank-listing-woori-test-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await mkdir(join(root, "src", "data"), { recursive: true });
+  await mkdir(join(root, ".github"), { recursive: true });
+  // 모두 지어낸 시험 값이다.
+  const oldBank = publicListing("2888888888", { title: "사라질 부동산뱅크 매물" });
+  const woori = publicListing("9900000001", { title: "가상마을 901동", floorLabel: "고층", direction: null, summary: "네이버에 공개된 광고 매물입니다. 자세한 조건은 상세 화면에서 확인해 주세요." });
+  const manual = publicListing("2999999999", { title: "직접 등록 매물" });
+  const content = { checkedAt: "2026-11-20", items: [publicListing(firstCandidate.naverId), oldBank, woori, manual] };
+  const bankState = {
+    version: 1,
+    officePath: BANK_OFFICE_PATH,
+    updatedAt: "2026-11-20",
+    items: [{ naverId: firstCandidate.naverId, bankId: firstCandidate.bankId }, { naverId: oldBank.id, bankId: "100000001" }],
+  };
+  const reviewState = {
+    schemaVersion: 1,
+    updatedAt: "2026-11-20",
+    items: {
+      [firstCandidate.naverId]: { source: "bank", lastSeenAt: "2026-11-20", lastReviewedAt: null },
+      [oldBank.id]: { source: "bank", lastSeenAt: "2026-11-20", lastReviewedAt: null },
+      [woori.id]: { source: "woori", lastSeenAt: "2026-11-20", lastReviewedAt: null },
+      [manual.id]: { source: "manual", lastSeenAt: null, lastReviewedAt: "2026-11-19" },
+    },
+  };
+  await writeFile(join(root, "src", "data", "naver-listings.json"), `${JSON.stringify(content, null, 2)}
+`, "utf8");
+  await writeFile(join(root, ".github", "bank-listing-sync-state.json"), `${JSON.stringify(bankState, null, 2)}
+`, "utf8");
+  await writeFile(join(root, ".github", "listing-review-state.json"), `${JSON.stringify(reviewState, null, 2)}
+`, "utf8");
+
+  const result = await runBankListingSync({
+    rootDir: root,
+    fetcher: fixtureFetcher(),
+    fetchAttempts: 1,
+    now: new Date("2026-11-20T15:10:00Z"),
+    logger: { log() {} },
+    summaryPath: null,
+  });
+  assert.equal(result.contentChanged, true);
+  const nextContent = JSON.parse(await readFile(join(root, "src", "data", "naver-listings.json"), "utf8"));
+  const nextReview = JSON.parse(await readFile(join(root, ".github", "listing-review-state.json"), "utf8"));
+  const ids = nextContent.items.map(({ id }) => id);
+  assert.equal(ids.includes(oldBank.id), false);
+  assert.deepEqual(nextContent.items.find(({ id }) => id === woori.id), woori);
+  assert.deepEqual(nextContent.items.find(({ id }) => id === manual.id), manual);
+  assert.ok(ids.includes(secondCandidate.naverId));
+  assert.deepEqual(nextReview.items[woori.id], reviewState.items[woori.id]);
+  assert.deepEqual(nextReview.items[manual.id], reviewState.items[manual.id]);
+  assert.deepEqual(nextReview.items[firstCandidate.naverId], { source: "bank", lastSeenAt: "2026-11-21", lastReviewedAt: null });
+  assert.deepEqual(nextReview.items[secondCandidate.naverId], { source: "bank", lastSeenAt: "2026-11-21", lastReviewedAt: null });
+  assert.equal(Object.hasOwn(nextReview.items, oldBank.id), false);
+  validateListingReviewState(nextReview, {
+    listingIds: new Set(ids),
+    bankIds: new Set([firstCandidate.naverId, secondCandidate.naverId]),
+  });
+});
+
 test("부동산뱅크 동기화 워크플로는 공개 목록·Bank 상태·재확인 상태만 커밋한다", async () => {
   assert.deepEqual(classifyBankSyncChanges([]), { mode: "none", paths: [] });
   assert.deepEqual(classifyBankSyncChanges(["src/data/naver-listings.json"]), {
