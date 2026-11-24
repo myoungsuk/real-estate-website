@@ -184,3 +184,30 @@ export function moneyItemMeta(item) {
 
 /** 장부 줄 종류 이름 @param {string} kind */
 export const moneyKindText = (kind) => /** @type {Record<string, string>} */ (LEDGER_KIND_LABELS)[kind] ?? kind;
+
+// 부동산뱅크 매물 자동 받기(.github/workflows/sync-bank-listings.yml, 매일 00:10 한국 시각)가 멈췄는지 보는 줄(2026-11-24 사용자 선택 "GitHub 이슈 + 대시보드 경고").
+// 받은 날은 .github/listing-review-state.json의 부동산뱅크 매물 lastSeenAt이다(자동 받기·관리자 XLS 가져오기 때만 바뀌고, 매물이 그대로여도 날마다 바뀜).
+// 화면은 빌드 때 받은 날을 싣고, 지금 시각과의 차이는 화면을 연 때 잰다(자동 받기가 실패하면 새로 빌드되지 않으므로).
+export const BANK_SYNC_STALE_HOURS = 36;
+const HOUR_MS = 60 * 60 * 1000;
+
+/** 부동산뱅크 매물 가운데 가장 늦은 받은 날. 부동산뱅크 매물이 없으면 null @param {{ items?: Record<string, { source: string, lastSeenAt: string | null }> }} reviewState */
+export function bankLastSeenOn(reviewState) {
+  const dates = Object.values(reviewState?.items ?? {})
+    .filter((item) => item?.source === "bank" && /^\d{4}-\d{2}-\d{2}$/u.test(item.lastSeenAt ?? ""))
+    .map((item) => /** @type {string} */ (item.lastSeenAt));
+  return dates.length > 0 ? dates.sort().at(-1) ?? null : null;
+}
+
+/**
+ * 받은 날(한국 날짜)의 0시부터 36시간이 넘으면 멈춤으로 본다(00:10 실행·배포가 늦어지는 몫을 넉넉히 둠). 색만으로 알리지 않게 '!'와 '멈춤'을 글에 넣는다.
+ * @param {string} lastSeenOn 'YYYY-MM-DD' @param {string} today 한국 날짜 'YYYY-MM-DD' @param {number} nowMs 지금 시각(밀리초)
+ */
+export function bankSyncState(lastSeenOn, today, nowMs) {
+  const days = Math.max(0, dayIndex(today) - dayIndex(lastSeenOn));
+  const ago = days === 0 ? "오늘" : days === 1 ? "어제" : `${days}일 전`;
+  const stale = nowMs - Date.parse(`${lastSeenOn}T00:00:00.000+09:00`) > BANK_SYNC_STALE_HOURS * HOUR_MS;
+  return stale
+    ? { stale, text: `! 부동산뱅크 자동 받기 멈춤 · 마지막 ${shortDate(lastSeenOn)}(${ago})` }
+    : { stale, text: `부동산뱅크 자동 받기 ${ago} · ${shortDate(lastSeenOn)}` };
+}

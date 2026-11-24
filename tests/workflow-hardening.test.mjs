@@ -94,3 +94,31 @@ test("IndexNow 알림은 성공한 master CI와 그 커밋을 포함한 Producti
   assert.match(workflow, /node scripts\/verify-production-commit\.mjs --commit "\$INDEXED_COMMIT"/u);
   assert.doesNotMatch(workflow, /--scope search/u);
 });
+
+test("부동산뱅크 자동 받기는 실패하면 이슈를 열고 성공하면 닫으며, 알림 job만 이슈 권한을 갖는다", async () => {
+  const workflow = await readWorkflow("sync-bank-listings.yml");
+  const alertIndex = workflow.indexOf("\n  alert:");
+  assert.ok(alertIndex > workflow.indexOf("\n  publish:"), "알림 job은 publish 뒤에 있음");
+  const beforeAlert = workflow.slice(0, alertIndex);
+  const alertJob = workflow.slice(alertIndex);
+
+  // 이슈 권한은 알림 job에만 있고, 알림 job은 저장소를 받거나 쓰지 않는다.
+  assert.doesNotMatch(beforeAlert, /issues: write|actions: read|GH_TOKEN/u);
+  assert.match(alertJob, /needs: \[validate, publish\]/u);
+  assert.match(alertJob, /if: \$\{\{ always\(\) && github\.ref == 'refs\/heads\/master' \}\}/u);
+  assert.match(alertJob, /permissions:\s*\n\s*actions: read\s*\n\s*issues: write\s*\n\s*steps:/u);
+  assert.doesNotMatch(alertJob, /contents: write|uses:|secrets\.|GITHUB_TOKEN:|git push/u);
+  assert.equal((alertJob.match(/GH_TOKEN: \$\{\{ github\.token \}\}/gu) ?? []).length, 1);
+
+  // 성공 = validate 성공 + publish 성공 또는 바뀐 것 없어 건너뜀. 나머지(실패·취소)는 실패로 알린다.
+  assert.match(alertJob, /success\/success \| success\/skipped\) outcome=ok ;;/u);
+  assert.match(alertJob, /\*\) outcome=failed ;;/u);
+  // 봇이 연 같은 제목의 열린 이슈만 다루고, 열려 있으면 새로 열지 않고 댓글을 단다.
+  assert.match(alertJob, /select\(\.title == \\"\$title\\" and \.author\.is_bot\)/u);
+  assert.match(alertJob, /gh issue close "\$number" --comment/u);
+  assert.match(alertJob, /gh issue comment "\$number" --body-file "\$body_file"/u);
+  assert.match(alertJob, /gh issue create --title "\$title" --body-file "\$body_file"/u);
+  // 이슈 본문에는 실행 주소·단계 이름·job 결과만 넣는다(로그를 읽지 않음).
+  assert.doesNotMatch(alertJob, /--log|gh run download|cat .*\.log/u);
+  assert.match(alertJob, /gh run view "\$GITHUB_RUN_ID" --json jobs/u);
+});
