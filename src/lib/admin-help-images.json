@@ -956,7 +956,7 @@
     },
     "bank-import": {
       "route": "/admin/listings/editor/",
-      "sources": "cec18d4219ed727c9b6c020f102747fc359ce6de3be4a1622245379874630b12",
+      "sources": "ca5a40ac3f2477b6454249df977a14cacaf90e79a477aa12bb3954fecc9cc86b",
       "shots": {
         "bank-phone-1-file": {
           "width": 680,
@@ -1107,8 +1107,8 @@
         "history-phone-2-restore": {
           "width": 680,
           "height": 1450,
-          "bytes": 41740,
-          "sha256": "9548db653fa1bcfacff96a13288b0d5526436019b60666d1d8addce8de0566d7",
+          "bytes": 40832,
+          "sha256": "9954a7e0baae643a74a8ca22791f3b87e4b381b5da55ef515d102142b13b7d3e",
           "marks": [
             [
               0.0912,
@@ -1153,8 +1153,8 @@
         "history-wide-2-restore": {
           "width": 1520,
           "height": 806,
-          "bytes": 26160,
-          "sha256": "9d5d69fce0663a3533d526805b0b6f8ad6f8a216e5892b3332a029b1d2c094ac",
+          "bytes": 25592,
+          "sha256": "aed39b6bc43be3305c9b9a965aad93b2ca049660ad19430046ceea24955f8669",
           "marks": [
             [
               0.0312,

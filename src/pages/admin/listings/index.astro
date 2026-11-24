@@ -51,7 +51,7 @@ const formatDate = (value: string) => new Intl.DateTimeFormat("ko-KR", { year: "
     <div><span>재확인 필요</span><strong>{reviewQueue.enabled ? `${reviewQueue.needsReview}건` : "기준 미설정"}</strong><small>경고 기준이 승인되기 전에는 재확인 경고를 만들지 않습니다.</small></div>
     <div><span>Bank 자동 확인</span><strong>{reviewQueue.bank}건</strong><small>정상 동기화에서 마지막 확인일만 갱신합니다.</small></div>
     <div><span>직접 등록</span><strong>{reviewQueue.manual}건</strong><small>날짜 경과만으로 자동 종료하거나 숨기지 않습니다.</small></div>
-    <div><span>우리집부동산</span><strong>{reviewQueue.woori}건</strong><small>매일 밤 공개 목록에서 자동으로 받고, 내려간 매물은 내립니다.</small></div>
+    <div><span>우리집부동산</span><strong>{reviewQueue.woori}건</strong><small>매일 아침 공개 목록에서 자동으로 받고, 내려간 매물은 내립니다.</small></div>
   </section>
 
   <section class="admin-panel" aria-labelledby="listing-table-title">
