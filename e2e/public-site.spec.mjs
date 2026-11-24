@@ -439,7 +439,7 @@ test("사용 안내 단계 그림: 390px은 휴대폰 그림만, 1280px은 넓�
     page.on("request", listener);
     await page.goto("/admin/help/");
     const figures = page.locator(".admin-help-figure");
-    expect(await figures.count(), "단계 그림 3곳(먼저 3곳, 2026-11-24)").toBe(3);
+    expect(await figures.count(), "단계 그림 11칸(2026-11-24 먼저 3곳, 같은 날 14:13:32 계약서 AI 등 8칸 더함)").toBe(11);
     for (const figure of await figures.all()) {
       await expect(figure.locator(`.admin-help-figure__frames--${hidden}`)).toBeHidden();
       const frames = figure.locator(`.admin-help-figure__frames--${shown} > li`);

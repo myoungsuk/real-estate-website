@@ -1,18 +1,28 @@
 // 사용 안내 단계 그림(사용자 결정 2026-11-24 10:46:13 "B 단계 그림 줄 — 그림이 화면과 달라지면 시험이 떨어져 다시 찍게 함").
 // 그림끼리 픽셀을 비교하지 않는다(Windows와 CI 글꼴이 달라 늘 다름). 대신 찍을 때 적어 둔 화면 원본 지문이 지금 원본과 같은지 본다.
+// 예외: 계약서 AI 두 그림(staleness: "warn")은 낡아도 떨어뜨리지 않고 그림 이름·바뀐 파일을 한 줄씩 알린다(CI에서는 GitHub ::warning 주석).
+// 사용자 결정 2026-11-24 "AI 칸만 경고". 구조·크기·SHA 검사는 이 두 그림도 그대로다.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import test from "node:test";
 import { ADMIN_HELP_GUIDE } from "../src/lib/admin-help.mjs";
 import { ADMIN_HELP_FIGURES, ADMIN_HELP_IMAGE_MAX_BYTES, figureFrameStarts } from "../src/lib/admin-help-figures.mjs";
-import { figureFingerprint, fingerprintOf, screenSourceFiles } from "../scripts/admin-help-sources.mjs";
+import { changedSourceFiles, figureFileHashes, figureFingerprint, fingerprintOf, screenSourceFiles } from "../scripts/admin-help-sources.mjs";
 
 const root = new URL("../", import.meta.url);
 const IMG = new URL("public/admin/help/img/", root);
 const manifest = JSON.parse(await readFile(new URL("src/lib/admin-help-images.json", root), "utf8"));
 const sections = ADMIN_HELP_GUIDE.flatMap((group) => group.sections);
 const RESHOOT = "npm run build 뒤 npm run help:shots로 다시 찍고, 바뀐 그림을 확인해 함께 커밋";
+const WARN_ONLY = ["contract-ai-box", "contract-ai-review"];
+
+// 낡은 경고 그림을 알린다. 시험 출력에 한 줄, GitHub Actions에서는 ::warning 주석(실행 요약에 보임)도 남긴다.
+function warnStale(id, files) {
+  const line = `다시 찍을 그림(경고만, 시험은 통과): ${id} · 바뀐 파일: ${files.join(", ") || "(알 수 없음)"} — ${RESHOOT}`;
+  console.log(line);
+  if (process.env.GITHUB_ACTIONS === "true") console.log(`::warning title=사용 안내 그림이 낡았을 수 있음::${line}`);
+}
 
 // WebP 머리에서 가로·세로 픽셀과 조각 이름을 읽는다(VP8·VP8L·VP8X).
 function webpInfo(buffer) {
@@ -98,8 +108,27 @@ test("그림을 찍은 뒤 그 칸의 원본(화면 .astro·칸을 그리는 스
     assert.equal(new Set(figure.sources).size, figure.sources.length, `${id}: sources 겹침 없음`);
     for (const file of figure.sources) assert.ok(reachable.includes(file), `${id}: ${file}은 그 화면이 불러오는 파일이어야 함(이름이 바뀌었거나 더 쓰지 않으면 sources를 고침)`);
     assert.ok(figure.sources.every((file) => !file.endsWith(".css") && !file.startsWith("src/layouts/")), `${id}: CSS·공통 틀은 지문에서 뺌`);
+    if (figure.staleness === "warn") {
+      assert.deepEqual(Object.keys(manifest.figures[id].files ?? {}).sort(), [...figure.sources].sort(), `${id}: 경고 그림은 파일별 지문을 적어 둠 — ${RESHOOT}`);
+      if (manifest.figures[id].sources !== await figureFingerprint(figure)) warnStale(id, await changedSourceFiles(figure, manifest.figures[id].files));
+      continue;
+    }
     assert.equal(manifest.figures[id].sources, await figureFingerprint(figure), `${id}(${figure.sources.join(", ")}): 그림에 찍힌 칸의 원본이 그림을 찍은 뒤 바뀌었습니다. 그림이 낡았을 수 있음 — ${RESHOOT}`);
   }
+});
+
+test("낡아도 경고만 하는 그림은 계약서 AI 두 그림뿐이고, 경고에는 바뀐 파일 이름이 나온다", async () => {
+  const warn = Object.entries(ADMIN_HELP_FIGURES).filter(([, figure]) => figure.staleness !== undefined);
+  assert.deepEqual(warn.map(([id]) => id).sort(), WARN_ONLY, "사용자 결정 2026-11-24 \"AI 칸만 경고\"의 두 그림만");
+  for (const [id, figure] of warn) {
+    assert.equal(figure.staleness, "warn", `${id}: staleness는 \"warn\"만`);
+    const now = await figureFileHashes(figure);
+    assert.deepEqual(await changedSourceFiles(figure, now), [], `${id}: 같으면 바뀐 파일 없음`);
+    const [first, ...rest] = [...figure.sources].sort();
+    assert.deepEqual(await changedSourceFiles(figure, { ...now, [first]: "0".repeat(64) }), [first], `${id}: 한 파일만 다르면 그 파일`);
+    assert.deepEqual(await changedSourceFiles(figure, {}), [first, ...rest], `${id}: 적어 둔 것이 없으면 전부`);
+  }
+  for (const [id, figure] of Object.entries(ADMIN_HELP_FIGURES)) if (figure.staleness === undefined) assert.equal(manifest.figures[id]?.files, undefined, `${id}: 시험이 떨어지는 그림은 파일별 지문을 적지 않음`);
 });
 
 test("화면 원본 지문은 줄 끝(CRLF·LF)과 상관없고, 원본 한 글자가 바뀌면 달라진다", async () => {
