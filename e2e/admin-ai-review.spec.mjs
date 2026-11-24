@@ -550,6 +550,71 @@ test("한 번 읽기(390px 카드·키보드): 카드마다 AI 값 하나와 모
   done();
 });
 
+test("한 번 읽기 '모두 AI 값으로'(360px 카드): 단추 하나로 그대로 넣을 수 있는 칸만 AI 값이 되고, 한 칸을 '직접 넣기'로 고쳐 넘어가면 지금 값 → 넣을 값에 그대로 나오며 apply·keep이 맞다", async ({ page }) => {
+  const done = collectErrors(page);
+  // 거래금액은 못 읽음, 중도금은 2차 날짜를 못 읽어 AI 값을 그대로 넣을 수 없는 칸이다.
+  const value = result({ price: null, middles: ["2026-11-20", null] });
+  const calls = await setup(page, { width: 360, ai: { groups: new Map([[GROUP, [singleView({ jobs: [job(1, { value })] })]]]) } });
+  await openReview(page);
+  const { text, next } = foot(page);
+  const pickAll = page.locator("[data-axr-pick-all]");
+  const pickStatus = page.locator("[data-axr-pick-all-status]");
+  await expect(pickAll).toHaveText("모두 AI 값으로");
+  await expect(pickStatus).toBeHidden();
+  await expect(text).toHaveText("고를 칸 3개 남음 — 계약일, 중도금 날짜, 잔금 날짜");
+  const pickBox = await pickAll.boundingBox();
+  expect(pickBox.height, "단추 44px 이상").toBeGreaterThanOrEqual(44);
+  expect(pickBox.height, "단추 이름이 두 줄로 꺾이지 않음").toBeLessThan(60);
+  // 누르기 전에 직접 넣던 값은 단추가 덮어도 '직접 넣기'를 다시 누르면 돌아온다.
+  await page.locator("[data-axr-chip='balanceDate:manual']").click();
+  await page.locator("[data-ax-key='manual-balanceDate']").fill("2026-12-28");
+  await pickAll.click();
+  await expect(pickAll, "누른 뒤에도 포커스가 단추에 남음").toBeFocused();
+  await expect(pickStatus).toHaveText("2칸을 AI 값으로 골랐습니다. 사진과 다른 칸만 고쳐 주세요. 남은 1칸은 AI 값을 그대로 넣을 수 없어 직접 골라 주세요. 직접 넣던 값은 '직접 넣기'를 다시 누르면 돌아옵니다.");
+  await expect(pickStatus).toHaveAttribute("aria-live", "polite");
+  for (const field of ["contractDate", "balanceDate"]) await expect(page.locator(`[data-axr-chip='${field}:first']`)).toHaveAttribute("aria-checked", "true");
+  await expect(page.locator("[data-ax-key='manual-balanceDate']"), "AI 값으로 바뀌어 직접 넣기 칸이 닫힘").toHaveCount(0);
+  await expect(page.locator("[data-axr-chip='middlePayments:first']"), "못 읽은 차가 있는 중도금은 AI 값 단추 없음").toHaveCount(0);
+  await expect(page.locator("[data-axr-chip^='middlePayments:'][aria-checked='true']"), "중도금은 고르지 않은 채 둠").toHaveCount(0);
+  await expect(page.locator("[data-axr-row='priceWon'] [data-axr-chip]"), "못 읽은 거래금액은 고를 칸이 아님").toHaveCount(0);
+  await expect(page.locator("[data-axr-title]"), "다음 단계로 저절로 넘어가지 않음").toHaveText("AI로 뽑은 값 맞춰 보기");
+  await expect(text).toHaveText("고를 칸 1개 남음 — 중도금 날짜");
+  await expect(next).toBeDisabled();
+  expect(await overflowOf(page), "알림 줄이 붙은 뒤 가로 넘침").toBe(0);
+  await shot(page, "ai-review-single-360-pick-all.png");
+  // 사진과 다른 한 칸만 직접 넣기로 고친다.
+  await page.locator("[data-axr-chip='balanceDate:manual']").click();
+  const manual = page.locator("[data-ax-key='manual-balanceDate']");
+  await expect(manual, "덮기 전 직접 넣던 값이 돌아옴").toHaveValue("2026-12-28");
+  await manual.fill("2026-12-29");
+  await page.locator("[data-axr-chip='middlePayments:keep']").click();
+  await expect(text).toHaveText("모두 골랐습니다");
+  await expect(next).toBeEnabled();
+  await next.click();
+  await expect(page.locator("[data-axr-title]")).toHaveText("거래에 넣기 전 확인");
+  await expect(page.locator("[data-axr-into]")).toHaveCount(2);
+  await expect(page.locator("[data-axr-into='contractDate'] b")).toHaveText("2026-11-02 (월)");
+  await expect(page.locator("[data-axr-into='balanceDate'] s")).toHaveText("2026-12-20 (일)");
+  await expect(page.locator("[data-axr-into='balanceDate'] .ax-nw b")).toHaveText("2026-12-29 (화)");
+  await expect(page.getByText("지금 값 그대로 둔 칸: 중도금일")).toBeVisible();
+  expect(await overflowOf(page), "확인 화면 가로 넘침").toBe(0);
+  await next.click();
+  await expect(page.locator("[data-axr-title]")).toHaveText("거래에 넣었습니다");
+  expect(aiWrites(calls, "/confirm")).toEqual([{ method: "POST", path: `/ai/jobs/${GROUP}/confirm`, body: { dealVersion: 2, apply: { contractDate: "2026-11-02", balanceDate: "2026-12-29" }, keep: ["middlePayments"] } }]);
+  expect(calls.all.filter((line) => line.startsWith("POST ")), "쓰기는 거래에 넣기 한 번뿐").toEqual([`POST /ai/jobs/${GROUP}/confirm`]);
+  await expectNoTrace(page);
+  done();
+});
+
+test("옛 두 번 읽기 묶음에는 '모두 AI 값으로'가 없다(AI 값이 하나가 아님)", async ({ page }) => {
+  const done = collectErrors(page);
+  await setup(page, { width: 390, ai: { groups: new Map([[GROUP, [groupView({ jobs: [job(1), job(2, { value: result({ balance: "2026-12-31" }) })] })]]]) } });
+  await openReview(page);
+  await expect(page.locator("[data-axr-chip='balanceDate:second']")).toBeVisible();
+  await expect(page.locator("[data-axr-pick-all]")).toHaveCount(0);
+  done();
+});
+
 test("한 번 읽기 실패 묶음: 결과 고르기 화면은 'n회' 없이 까닭 한 줄로 막는다", async ({ page }) => {
   const done = collectErrors(page);
   await setup(page, { width: 390, ai: { groups: new Map([[GROUP, [singleView({ status: "failed", jobs: [job(1, { status: "failed", errorCode: "AI_RESULT_INVALID" })] })]]]) } });
