@@ -165,6 +165,18 @@ test("CSP는 Cloudflare Web Analytics와 Google 태그 공식 도메인만 추�
   assert.doesNotMatch(privacy, /분석 쿠키도 사용하지 않습니다/);
 });
 
+test("처리방침에 계약서 사본 AI 일정 뽑기의 OpenAI 국외 이전·AI 결과 30일 보관이 있다(사용자 승인 2026-11-24 09:23 '이대로 올림')", async () => {
+  const privacy = await readSource("src/pages/privacy.astro");
+  assert.match(privacy, /중개 업무\(상담 기록, 계약 일정과 할 일 관리, 계약서 사본에서 일정 뽑기, 매출장부 정리, 현장·서류 사진 보관\)/u);
+  assert.match(privacy, /<p>AI가 뽑은 일정 결과\(뽑은 값과 근거 글\): 거래에 넣거나 취소한 뒤, 또는 손대지 않은 채 30일이 지나면 지웁니다\./u);
+  assert.match(privacy, /<p>이전받는 자: OpenAI OpCo, LLC\(미국\), 연락처: dpo@openai\.com<\/p>/u);
+  assert.match(privacy, /AI 학습에 쓰지 않고, 처리하는 동안 약 10분 임시 보관한 뒤 지웁니다\. 다만 남용 감시를 위해 최대 30일 보관할 수 있고/u);
+  assert.match(privacy, /사무소가 주민등록번호를 가렸다고 확인한 사본만 보냅니다\./u);
+  // 8항 안(9항 앞)에 있어야 국외 이전 항목으로 읽힌다.
+  const eighth = privacy.slice(privacy.indexOf("<h2>8. 처리 위탁과 국외 이전</h2>"), privacy.indexOf("<h2>9. "));
+  assert.match(eighth, /OpenAI OpCo, LLC/u);
+});
+
 test("Google 태그는 공개 레이아웃의 Production 빌드와 운영 도메인에서만 실행된다", async () => {
   const [baseLayout, adminLayout] = await Promise.all([
     readSource("src/layouts/BaseLayout.astro"),
