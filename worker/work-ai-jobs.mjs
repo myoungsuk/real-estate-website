@@ -297,7 +297,7 @@ async function sendCreate(ctx, job, images) {
   } catch (error) {
     const aiError = error instanceof WorkAiError ? error : new WorkAiError("AI_NETWORK");
     const notCreated = Number.isInteger(aiError.status) && aiError.status >= 400 && aiError.status < 500;
-    logAi(log, { requestId, run: job.runIndex, upstreamRequestId: aiError.upstreamRequestId, model: job.model.model, effort: job.model.effort, status: aiError.status, code: aiError.code, ms: Date.now() - started });
+    logAi(log, { requestId, run: job.runIndex, upstreamRequestId: aiError.upstreamRequestId, model: job.model.model, effort: job.model.effort, status: aiError.status, code: aiError.code, upstreamError: aiError.upstreamError ?? undefined, ms: Date.now() - started });
     const code = notCreated ? aiError.code : "AI_STATE_UNKNOWN";
     const statements = notCreated
       ? [refundJobStatement(db, { jobId: job.id, day: job.day, reservedCostMicroUsd: job.reservedCostMicroUsd }), db.prepare(CLOSE_NOT_CREATED_SQL).bind(job.id, code, iso(now))]
