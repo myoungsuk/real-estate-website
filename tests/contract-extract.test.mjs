@@ -30,7 +30,14 @@ test("스키마: 1회째와 2회째는 칸이 같고 순서만 다르며, 둘 �
       assert.deepEqual(def.required, Object.keys(def.properties), "strict 모드는 모든 칸이 required여야 함");
     }
   }
-  assert.equal(JSON.stringify(first).includes("maxLength"), false, "지원 목록에 없는 maxLength는 보내지 않음(재검사에서만 봄)");
+  for (const schema of [first, second]) {
+    const json = JSON.stringify(schema);
+    for (const keyword of ["maxLength", "pattern", "minimum", "maximum", "minItems", "maxItems"]) {
+      assert.equal(json.includes(`"${keyword}"`), false, `값 조건 ${keyword}는 보내지 않음(2026-11-24 운영 invalid_json_schema, 재검사에서만 봄)`);
+    }
+    assert.equal(json.includes('"type":["array"'), false, "null이 될 수 있는 배열은 type 배열이 아니라 anyOf");
+    assert.deepEqual(schema.$defs.evidence.properties.box, { anyOf: [{ type: "array", items: { type: "number" } }, { type: "null" }] });
+  }
   assert.equal(JSON.stringify(first).includes("name"), false, "사람 이름 칸 없음");
 });
 
