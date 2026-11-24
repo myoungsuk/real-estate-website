@@ -1,5 +1,6 @@
 // 관리자 '이 화면 사용법' 상자(AdminPageHelp)와 '사용 안내' 화면(/admin/help/)이 함께 쓰는 문구다.
 // 사용자 결정: 2026-11-19 13:34:39 "제목 아래 '사용법' 상자"·"관리자 안 새 메뉴 '사용 안내'", 14:03:46 "글만 넣기"(사진 없음).
+// 2026-11-24 10:46:13 "B 단계 그림 줄": '사용 안내' 화면의 세 곳에만 { type: "figure" } 단계 그림(src/lib/admin-help-figures.mjs). 상자에는 그림을 넣지 않는다.
 // 작은따옴표('…')로 묶은 말은 그 화면에 실제로 보이는 단추·칸·표시 이름이다. tests/admin-help.test.mjs가 화면 원본(.astro와 그 화면이
 // 불러오는 부품·스크립트)에 그 이름이 있는지 확인하므로, 화면의 단추 이름을 바꾸면 이 문구도 함께 고친다. 화면 밖의 말(로그인 화면 영어,
 // 휴대폰 앱 메뉴 이름 등)은 큰따옴표(“…”)로 쓰고 시험하지 않는다.
@@ -62,7 +63,8 @@ const facts = ADMIN_HELP_FACTS;
  *   | { type: "note", title: string, text: string }
  *   | { type: "steps", items: string[] }
  *   | { type: "list", items: string[] }
- *   | { type: "table", head: string[], rows: string[][] }} AdminHelpBlock
+ *   | { type: "table", head: string[], rows: string[][] }
+ *   | { type: "figure", id: string }} AdminHelpBlock
  * @typedef {{ id: string, title: string, level?: 2 | 3, screens: string[] | "all", blocks: AdminHelpBlock[] }} AdminHelpSection
  * @typedef {{ label: string, sections: AdminHelpSection[] }} AdminHelpGroup
  */
@@ -558,6 +560,7 @@ export const ADMIN_HELP_GUIDE = Object.freeze([
               "휴대폰을 잃어버렸거나 주소가 남에게 갔으면 '새 주소 만들기'(지금 주소는 바로 끊김) 또는 '구독 주소 취소'를 누릅니다.",
             ],
           },
+          { type: "figure", id: "calendar-feed" },
           { type: "text", text: "기한은 주말이어도 미루지 않습니다. 공휴일은 계산에 넣지 않으니 직접 확인해 주세요." },
         ],
       },
@@ -786,6 +789,7 @@ export const ADMIN_HELP_GUIDE = Object.freeze([
               "계약서 사본은 한 번에 한 장씩, 한 거래에 10장까지 올립니다. 검게 칠한 사본만 서버로 가고 칠하기 전 사진은 보내지 않습니다. 올린 사본은 '보기'로 열고 '크게 보기'로 키워 보며, '지우기'로 휴지통에 옮깁니다. 못 올리면 그 창에서 '다시 올리기'를 누릅니다.",
             ],
           },
+          { type: "figure", id: "contract-copy" },
           {
             type: "table",
             head: ["지울 때", "어떻게 되나"],
@@ -907,6 +911,7 @@ export const ADMIN_HELP_GUIDE = Object.freeze([
               "줄 끝 휴지통 그림을 누르면 줄 아래에서 한 번 더 묻습니다. '휴지통으로 옮기기'를 누르면 휴지통으로 옮기고, 7일 안에는 알림의 '되살리기'로 되돌릴 수 있습니다.",
             ],
           },
+          { type: "figure", id: "ledger-edit" },
           { type: "note", title: "표에서 못 고치는 것", text: "종류, 거래에 이은 줄의 날짜, 메모는 표에서 고치지 않습니다. 메모는 줄 끝 '고치기'에서 고칩니다. 다른 화면에서 같은 줄을 먼저 고쳤으면 덮어쓰지 않고 저장된 값을 다시 읽어 보여 주며, 넣던 값은 줄 아래 글로 남깁니다." },
           { type: "note", title: "경고", text: "입금·미입금은 늘 부가세를 포함합니다(보수와 기타 수입). 법정 상한보다 큰 보수나 10%와 다른 부가세는 저장한 뒤 굵은 경고로 알립니다. 저장은 그대로 되니 맞는 값이면 그대로 둡니다. 기준일이 없는 장부 줄은 합계와 CSV 파일에 들어가지 않고, '그 줄만 보기'로 따로 봅니다." },
         ],
