@@ -1015,7 +1015,7 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
           const title = titleInput.value;
           const paragraphs = paragraphTexts();
           const view = checkView(current.currentSource
-            ? checkBlogDraft({ title, paragraphs, headings: headingTexts(), checklist: checklistTexts(), snsShort: snsInput.value, hashtags: normalizeHashtags(tagsInput.value) }, { source: current.currentSource, inputs: current.inputs, emphasis: current.emphasisNumbers })
+            ? checkBlogDraft({ title, paragraphs, headings: headingTexts(), checklist: checklistTexts(), snsShort: snsInput.value, hashtags: normalizeHashtags(tagsInput.value) }, { source: current.currentSource, inputs: current.inputs, emphasis: current.emphasisNumbers, officePhone })
             : { blocks: [], warnings: [] });
           const blocks = view.blocks as CheckLine[];
           const warnings = view.warnings as CheckLine[];

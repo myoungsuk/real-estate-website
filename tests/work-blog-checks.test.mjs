@@ -7,6 +7,7 @@ import listings from "../src/data/listings.json" with { type: "json" };
 import office from "../src/data/office.json" with { type: "json" };
 import rules from "../src/data/work/ad-disclosure-rules.json" with { type: "json" };
 import { buildDisclosure, formatArea, formatManagementFee, formatWon, officeLine } from "../src/lib/work/ad-disclosure.mjs";
+import { checkView } from "../src/lib/work/blog-view.mjs";
 import {
   BLOG_RESULT_LIMITS,
   BLOG_STYLES,
@@ -390,6 +391,31 @@ test("결과 새 꼴: sections·checklist를 받아 문단을 펴고 headings를
   ]) assert.equal(validateBlogResult(bad).ok, false, JSON.stringify(bad).slice(0, 80));
   const old = validateBlogResult({ title: "제목", paragraphs: ["문단"], hashtags: [], snsShort: "짧은 글", factsUsed: [] }).result;
   assert.deepEqual(Object.keys(old), ["title", "paragraphs", "hashtags", "snsShort", "factsUsed"], "옛 꼴 초안은 이전과 같은 모양");
+});
+
+test("결과 글의 연락처·호수(2026-11-24): 전화번호·이메일·호수·주민등록번호 꼴은 모든 글 칸에서 복사를 막고, 사무소 공개 번호와 공개 자료에 있는 호수는 막지 않음", () => {
+  const inputs = fullAptInputs();
+  const officePhone = office.mobile;
+  const draft = (extra = {}) => ({ title: "제목", paragraphs: ["남향입니다."], headings: [""], checklist: [], hashtags: [], snsShort: "짧은 글", ...extra });
+  const personal = (checks) => checks.blocks.filter((item) => item.kind === "personal").map((item) => [item.where, item.text]);
+  // 날개-2 탐침 글: 그 전에는 막기 0·경고 0이었다.
+  const probe = checkBlogDraft(draft({ paragraphs: ["042-123-4567 · test@example.com · 천동 123-4번지 101동 1203호"] }), { source: APT, inputs, officePhone });
+  assert.deepEqual(personal(probe), [["p1", "전화번호"], ["p1", "이메일"], ["p1", "호수"]]);
+  assert.equal(checkView(probe).canCopy, false, "경고가 아니라 막기");
+  assert.doesNotMatch(JSON.stringify(probe), /042-123-4567|test@example\.com|1203호/u, "찾은 글자는 검사 결과(check_json)에 남기지 않음");
+  const everywhere = checkBlogDraft(draft({
+    title: "문의 010-1111-2222",
+    headings: ["메일 a@b.kr"],
+    paragraphs: ["남향입니다."],
+    checklist: ["1203호 확인"],
+    hashtags: ["#900101-1234567"],
+    snsShort: "연락 010.3333.4444",
+  }), { source: APT, inputs, officePhone });
+  assert.deepEqual(personal(everywhere).map(([where]) => where).sort(), ["check", "h1", "sns", "tags", "title"].sort(), "제목·소제목·확인할 점·해시태그·SNS 글 모두 봄");
+  assert.deepEqual(personal(checkBlogDraft(draft({ paragraphs: [`문의는 ${officePhone}로 주세요.`] }), { source: APT, inputs, officePhone })), [], "사무소 공개 번호는 막지 않음");
+  assert.deepEqual(personal(checkBlogDraft(draft({ paragraphs: [`문의는 ${officePhone}로 주세요.`] }), { source: APT, inputs })), [["p1", "전화번호"]], "officePhone을 주지 않으면 막음");
+  assert.deepEqual(personal(checkBlogDraft(draft({ paragraphs: ["사무소는 근린생활시설 105호에 있습니다. 지하철 1호선과 2호기 승강기"] }), { source: COMPLEX, officePhone })), [], "단지 자료에 있는 '105호'·호선·호기는 막지 않음");
+  assert.deepEqual(personal(checkBlogDraft(draft({ paragraphs: ["근린생활시설 106호"] }), { source: COMPLEX, officePhone })), [["p1", "호수"]], "자료에 없는 호수는 막음");
 });
 
 test("새 꼴 검사: 소제목(h문단 번호)과 현장에서 확인할 점(check)의 숫자·낱말도 대조, 옛 꼴은 그 칸이 없어도 됨", () => {

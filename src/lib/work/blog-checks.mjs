@@ -45,6 +45,7 @@ const RRN = /(?<!\d)\d{6}\s*[-.‐-―−]?\s*[1-8]\d{6}(?!\d)/u;
 const PHONE = /(?<!\d)0(?:1[016789]|[2-6]\d{0,1}|70|50\d?)(?:[\s.()\-‐-―−]{0,2}\d){7,8}(?!\d)/gu;
 const EMAIL = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/iu;
 const UNIT = /(?<!\d)\d{1,4}\s*호(?!선|점|기|차|텔)/u;
+const UNIT_ALL = new RegExp(UNIT.source, "gu");
 const digitsOf = (value) => value.replace(/\D/gu, "");
 
 // 글자 하나에서 찾은 개인정보 형식 이름들(rrn·phone·email·unit). 사무소 확정 번호는 빼고 본다.
@@ -364,10 +365,14 @@ const sameArea = (a, b) => Math.abs(a - b) < 0.005;
 
 // 글 검사. draft: { title, paragraphs[], hashtags[], snsShort }. 돌려주는 값: { blocks[], warnings[] }.
 // 항목 모양: { kind, text, where }. where는 "title"·"p1"…·"sns". 숫자 다름(block)은 복사를 막는다.
-export function checkBlogDraft(draft, { source, inputs = {}, emphasis = "" }) {
+// 2026-11-24부터 결과 글 칸 전부의 주민등록번호·전화번호(사무소 공개 번호 officePhone 빼고)·이메일·호수 꼴도 복사를 막는다(kind "personal",
+// text는 찾은 글자 대신 종류 이름만 적는다. check_json이 D1에 남기 때문). 공개 자료에 그대로 있는 호수(사무소 '105호' 같은 것)는 막지 않는다.
+// 지번은 따로 보지 않는다(입력에 소재지를 보내지 않으므로 '입력에 있는 사실만' 지시문에 맡김, 대장 결정 2026-11-24).
+export function checkBlogDraft(draft, { source, inputs = {}, emphasis = "", officePhone = "" }) {
   const allowed = allowedNumbers({ source, inputs, emphasis });
   const inputText = [emphasis, source.title, source.facts.summary,
     ...(source.type === "complex" ? [...source.facts.items.map((fact) => `${fact.label} ${fact.value}`), ...complexDetailTexts(source.facts.details)] : [])].join(" ");
+  const publicUnits = new Set([...inputText.normalize("NFKC").matchAll(UNIT_ALL)].map((match) => match[0].replace(/\s/gu, "")));
   const blocks = [];
   const warnings = [];
   // 해시태그도 복사하는 글에 들어가므로 같은 숫자 대조를 한다.
@@ -376,6 +381,8 @@ export function checkBlogDraft(draft, { source, inputs = {}, emphasis = "" }) {
   const parts = [["title", draft.title], ...headingParts, ...draft.paragraphs.map((text, index) => [`p${index + 1}`, text]),
     ...(draft.checklist ?? []).map((text) => ["check", text]), ["sns", draft.snsShort], ["tags", (draft.hashtags ?? []).join(" ")]];
   for (const [where, raw] of parts) {
+    const scrubbed = String(raw ?? "").normalize("NFKC").replace(UNIT_ALL, (unit) => (publicUnits.has(unit.replace(/\s/gu, "")) ? " " : unit));
+    for (const kind of findPersonalPatterns(scrubbed, { officePhone, checkUnit: true })) blocks.push({ kind: "personal", text: PERSONAL_LABELS[kind], where });
     const text = normalizeNumberText(raw);
     for (const item of extractAllMoney(text)) {
       if (allowed.complex) blocks.push({ kind: "complex_number", text: item.text, where });
@@ -410,7 +417,10 @@ export function checkBlogDraft(draft, { source, inputs = {}, emphasis = "" }) {
   return { blocks, warnings };
 }
 
+const PERSONAL_LABELS = Object.freeze({ rrn: "주민등록번호", phone: "전화번호", email: "이메일", unit: "호수" });
+
 export const CHECK_KIND_LABELS = Object.freeze({
+  personal: "연락처·호수처럼 보이는 글자",
   money: "입력과 다른 금액",
   area: "입력과 다른 면적",
   floor: "입력과 다른 층",

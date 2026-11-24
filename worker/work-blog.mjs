@@ -431,7 +431,7 @@ async function pollDraft(context, row) {
     if (!checked.ok) return stmtsFor("failed", { errorCode: "AI_RESULT_INVALID", tokens });
     const source = findBlogSource(sourcesOf(context), row.source_type, row.source_id);
     const stored = parseJson(row.disclosure_json) ?? {};
-    const checks = source ? checkBlogDraft(checked.result, { source, inputs: stored.inputs ?? {}, emphasis: stored.emphasisNumbers ?? "" }) : null;
+    const checks = source ? checkBlogDraft(checked.result, { source, inputs: stored.inputs ?? {}, emphasis: stored.emphasisNumbers ?? "", officePhone: OFFICE_PHONE }) : null;
     const checkJson = checks ? JSON.stringify({ blocks: checks.blocks.slice(0, 50), warnings: checks.warnings.slice(0, 50) }).slice(0, 8000) : null;
     return stmtsFor("completed", { resultJson: JSON.stringify(checked.result), checkJson: checkJson && parseJson(checkJson) ? checkJson : null, tokens });
   }
