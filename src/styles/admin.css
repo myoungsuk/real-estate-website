@@ -1150,6 +1150,9 @@
   .admin-help-figure__frames--wide .admin-help-figure__shot { max-width: 760px; }
 }
 
+/* 명함 모양 색(보드 20번 2026-11-24, 명함 시안 1판 handoff-card-designs-1 그대로). 종이에 찍는 고정 색이라 관리자 화면 색 이름(--ds-*·--ad-*)과 따로 둔다. */
+.bc,
+.bc-page { --bc-green: #1F4D3A; --bc-cream: #F3EEDD; --bc-green-soft: #A9D3B9; --bc-green-pale: #DDE8DF; --bc-green-ink: #3C5E4E; --bc-green-rule: #C9D6C9; --bc-sign-blue: #1E3F9C; --bc-sign-yellow: #FFD23F; --bc-white: #FFFFFF; --bc-ivory: #FBF8F2; --bc-stamp-red: #D2382E; --bc-ivory-rule: #E3DCCD; --bc-night-deep: #1A1240; --bc-night: #3A2878; --bc-night-soft: #C9B8FF; --bc-night-pale: #D7CCFF; --bc-moon: #FFE38A; --bc-night-tag: #FFE34D; }
 /* 실거래가·실거래가 설정(단계 P, P1-d·P1-f). 운영자 결정 2026-11-20 13:36:35 D안: 휴대폰·PC 모두 위 상태 한 줄(문제가 있을 때만 펼침) →
    보기 3칸 → 찾기칸 → 거르기 단추 6개 → 'n건 보는 중'·켜짐 줄·다 담기 → 목록(거래마다 '담기' 단추). 979px 이하는 거르기 단추가 두 줄로 감기고,
    980px 이상은 찾기칸 오른쪽에 한 줄. 목록은 1220px 이하 세 줄 카드, 1221px 이상 표(매물 현황과 같은 경계).
@@ -1631,17 +1634,86 @@ html:has(.rt-pick-bar:not([hidden])) { scroll-padding-bottom: calc(var(--rt-pick
 .bc p,
 .bc dl,
 .bc dd { margin: 0; }
-.bc--front { display: grid; grid-template-columns: 1fr auto; grid-template-rows: 1fr auto; padding: calc(var(--mm) * 5.6) calc(var(--mm) * 5.8); }
+.bc--white.bc--front { display: grid; grid-template-columns: 1fr auto; grid-template-rows: 1fr auto; padding: calc(var(--mm) * 5.6) calc(var(--mm) * 5.8); }
 .bc__logo { display: block; width: auto; height: calc(var(--mm) * 10.8); }
 .bc__who { align-self: start; text-align: right; }
 .bc__who small { display: block; color: var(--ds-ink-soft); font-size: calc(var(--mm) * 2.9); font-weight: 700; }
 .bc__who strong { display: block; color: var(--ds-navy); font-size: calc(var(--mm) * 7.1); font-weight: 900; letter-spacing: 0.04em; line-height: 1.15; }
-.bc__tel { grid-column: 1 / -1; align-self: end; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 0 calc(var(--mm) * 2); padding-top: calc(var(--mm) * 1.9); border-top: calc(var(--mm) * 0.25) solid var(--ds-navy); }
+.bc--white .bc__tel { grid-column: 1 / -1; align-self: end; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 0 calc(var(--mm) * 2); padding-top: calc(var(--mm) * 1.9); border-top: calc(var(--mm) * 0.25) solid var(--ds-navy); }
 .bc__tel b { font-size: calc(var(--mm) * 5.4); font-weight: 900; letter-spacing: 0.01em; }
 .bc__tel span { color: var(--ds-ink-soft); font-size: calc(var(--mm) * 2.7); }
+/* 명함 모양(보드 20번 2026-11-24 "고를 수 있게"): 흰 종이 밖 5가지. 색은 명함 시안 1판(handoff-card-designs-1) 그대로이고 인쇄용 고정 값이다. */
+.bc--green.bc--front,
+.bc--sign.bc--front,
+.bc--stamp.bc--front,
+.bc--night.bc--front { padding: calc(var(--mm) * 5.6) calc(var(--mm) * 5.8); }
+.bc--green .bc__tel,
+.bc--sign .bc__tel,
+.bc--stamp .bc__tel,
+.bc--night .bc__tel { position: absolute; right: calc(var(--mm) * 5.8); bottom: calc(var(--mm) * 5.2); left: calc(var(--mm) * 5.8); display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 0 calc(var(--mm) * 2); }
+.bc__brand { font-size: calc(var(--mm) * 2.9); font-weight: 700; }
+.bc__name { font-size: calc(var(--mm) * 7.6); font-weight: 900; letter-spacing: 0.04em; line-height: 1.2; }
+.bc--green.bc--front { color: var(--bc-cream); background: var(--bc-green); }
+.bc--green .bc__brand { color: var(--bc-green-soft); }
+.bc--green .bc__name { font-size: calc(var(--mm) * 8); }
+.bc--green .bc__badge { position: absolute; top: calc(var(--mm) * 5.4); right: calc(var(--mm) * 5.8); display: grid; place-items: center; width: calc(var(--mm) * 15); height: calc(var(--mm) * 15); border-radius: 50%; background: var(--bc-cream); }
+/* 둥근 칸 안에 로고 전체가 들어가게 폭으로 맞춘다(높이로 맞추면 잘라 낸 로고의 양 끝이 원 밖으로 나가 초록 위에서 사라짐). */
+.bc--green .bc__badge .bc__logo { width: calc(var(--mm) * 12); height: auto; max-height: calc(var(--mm) * 9.6); object-fit: contain; mix-blend-mode: multiply; }
+.bc--green .bc__tel { padding-top: calc(var(--mm) * 1.9); border-top: calc(var(--mm) * 0.25) solid var(--bc-green-soft); }
+.bc--green .bc__tel span { color: var(--bc-green-pale); }
+.bc--green.bc--back { color: var(--bc-green); background: var(--bc-cream); }
+.bc--sign.bc--front { padding-top: calc(var(--mm) * 9); color: var(--bc-white); background: var(--bc-sign-blue); }
+.bc__awning,
+.bc__stripe { position: absolute; top: 0; right: 0; left: 0; }
+.bc__awning { height: calc(var(--mm) * 4.4); background: repeating-linear-gradient(90deg, var(--bc-sign-yellow) 0 calc(var(--mm) * 6), var(--bc-white) calc(var(--mm) * 6) calc(var(--mm) * 12)); }
+.bc__stripe { height: calc(var(--mm) * 2.6); background: repeating-linear-gradient(90deg, var(--bc-sign-blue) 0 calc(var(--mm) * 6), var(--bc-sign-yellow) calc(var(--mm) * 6) calc(var(--mm) * 12)); }
+.bc--sign .bc__brand { color: var(--bc-sign-yellow); font-size: calc(var(--mm) * 3.2); font-weight: 900; }
+.bc--sign .bc__role { margin-top: calc(var(--mm) * 1) !important; font-size: calc(var(--mm) * 2.9); font-weight: 700; }
+.bc--sign .bc__name { line-height: 1.15; }
+.bc--sign .bc__tel b { color: var(--bc-sign-yellow); font-size: calc(var(--mm) * 5.6); }
+.bc--sign .bc__tel span { color: var(--bc-white); }
+.bc--sign.bc--back { padding-top: calc(var(--mm) * 7.6); }
+.bc--photo.bc--front { display: grid; grid-template-columns: calc(var(--mm) * 34) minmax(0, 1fr); }
+/* 사진 명함: 대표 얼굴 쪽으로 1.4배 당겨(칸 높이의 140%) 뒤 간판 글자('리더스시티')가 반쯤 잘려 보이지 않게 한다(2판). 꾸밈 그림이라 배경으로 그린다. */
+.bc__photo { display: block; width: 100%; height: 100%; background-repeat: no-repeat; background-size: auto 140%; background-position: 20% 25%; }
+.bc__side { display: flex; flex-direction: column; justify-content: space-between; min-width: 0; padding: calc(var(--mm) * 5) calc(var(--mm) * 5) calc(var(--mm) * 5) calc(var(--mm) * 4.6); }
+/* 세로 flex 칸이 로고를 칸 폭으로 늘리지 않게 왼쪽에 붙이고, 넘치면 비율을 지켜 줄인다. */
+.bc--photo .bc__logo { align-self: flex-start; max-width: 100%; height: calc(var(--mm) * 8.4); object-fit: contain; }
+.bc--photo .bc__who { text-align: left; }
+.bc--photo .bc__tel { padding-top: calc(var(--mm) * 1.4); border-top: calc(var(--mm) * 0.25) solid var(--ds-navy); }
+.bc--photo .bc__tel b { display: block; font-size: calc(var(--mm) * 5); }
+.bc--photo .bc__tel span { font-size: calc(var(--mm) * 2.6); }
+.bc--stamp { background: var(--bc-ivory); }
+.bc--stamp .bc__logo { height: calc(var(--mm) * 9.6); mix-blend-mode: multiply; }
+.bc--stamp .bc__seal { position: absolute; top: calc(var(--mm) * 5); right: calc(var(--mm) * 6); display: flex; flex-direction: column; align-items: center; justify-content: center; box-sizing: border-box; width: calc(var(--mm) * 21); height: calc(var(--mm) * 21); border: calc(var(--mm) * 0.9) solid var(--bc-stamp-red); border-radius: 50%; color: var(--bc-stamp-red); transform: rotate(-8deg); }
+.bc--stamp .bc__seal::after { content: ""; position: absolute; inset: calc(var(--mm) * 0.9); border: calc(var(--mm) * 0.3) solid var(--bc-stamp-red); border-radius: 50%; }
+.bc--stamp .bc__seal small { font-size: calc(var(--mm) * 2.6); font-weight: 700; }
+.bc--stamp .bc__seal strong { font-size: calc(var(--mm) * 6); font-weight: 900; line-height: 1.1; }
+.bc--stamp .bc__tel { padding-top: calc(var(--mm) * 1.9); border-top: calc(var(--mm) * 0.25) solid var(--ds-ink); }
+.bc--stamp.bc--back .bc__headline { color: var(--bc-stamp-red); }
+.bc--night.bc--front { color: var(--bc-white); background: linear-gradient(var(--bc-night-deep), var(--bc-night)); }
+.bc--night .bc__brand { color: var(--bc-night-soft); }
+.bc__moon { position: absolute; top: calc(var(--mm) * 5); right: calc(var(--mm) * 8); width: calc(var(--mm) * 7); height: calc(var(--mm) * 7); border-radius: 50%; box-shadow: calc(var(--mm) * -1.6) calc(var(--mm) * 0.6) 0 0 var(--bc-moon); }
+.bc--night .bc__tag { display: inline-block; margin-top: calc(var(--mm) * 1) !important; padding: calc(var(--mm) * 0.5) calc(var(--mm) * 1.4); color: var(--bc-night-deep); background: var(--bc-night-tag); font-size: calc(var(--mm) * 2.7); font-weight: 900; }
+.bc--night .bc__tel span { color: var(--bc-night-pale); }
+.bc--night.bc--back .bc__headline { color: var(--bc-night); }
+.bc--sign.bc--back .bc__headline { color: var(--bc-sign-blue); }
+.bc--green.bc--back .bc__headline { color: var(--bc-green); }
+.bc--green.bc--back :is(.bc__rows dt, .bc__legal) { color: var(--bc-green-ink); }
+.bc--green.bc--back .bc__legal { border-top-color: var(--bc-green-rule); }
+.bc--stamp.bc--back .bc__legal { border-top-color: var(--bc-ivory-rule); }
+.bc-set[hidden] { display: none; }
+.paper-shapes { grid-template-columns: repeat(auto-fit, minmax(6.5em, 1fr)); }
+.paper-shape-field { margin: 4px 0 14px; }
+.paper-shape-field > p { margin: 0 0 6px; color: var(--ds-ink); font-weight: 800; }
+/* '문구 고치기' 접는 상자(글 초안의 .bl-fold 모양을 그대로 씀, 2판) */
+.paper-copy { margin: 0 0 14px; }
+.paper-copy > :last-child { padding-bottom: 14px; }
 .bc--back { display: flex; flex-direction: column; justify-content: space-between; padding: calc(var(--mm) * 5.4) calc(var(--mm) * 5.8); }
 .bc__headline { color: var(--ds-navy); font-size: calc(var(--mm) * 3.7); font-weight: 900; }
 .bc__areas { margin-top: calc(var(--mm) * 0.5) !important; font-size: calc(var(--mm) * 2.7); font-weight: 700; }
+/* '문구 고치기'로 비운 칸(지역 줄·꼬리표)은 숨긴다(.bc__tag의 inline-block보다 앞서게). */
+.bc [data-card-text][hidden] { display: none !important; }
 .bc__rows div { display: grid; grid-template-columns: calc(var(--mm) * 8.5) minmax(0, 1fr); gap: calc(var(--mm) * 1.5); font-size: calc(var(--mm) * 2.54); line-height: 1.35; }
 .bc__rows dt { color: var(--ds-ink-soft); font-weight: 700; }
 .bc__legal { padding-top: calc(var(--mm) * 1.2); border-top: calc(var(--mm) * 0.17) solid var(--ds-edge); color: var(--ds-ink-soft); font-size: calc(var(--mm) * 2.54); line-height: 1.35; }
@@ -1659,6 +1731,19 @@ html:has(.rt-pick-bar:not([hidden])) { scroll-padding-bottom: calc(var(--rt-pick
   .paper-print--done img { display: block; width: 150mm; height: auto; border: 0.3mm solid var(--ds-edge); }
   .paper-print .bc { --mm: 1mm; }
   .bc-page { page: paper-card; break-after: page; box-sizing: border-box; width: 96mm; height: 56mm; padding: 3mm; overflow: hidden; }
+  /* 재단 여유 3mm: 색 바탕 모양은 인쇄 칸 바탕을 명함 바탕과 같게, 가장자리에 닿는 띠·사진은 3mm 밖까지 늘린다(재단이 밀려도 흰 테두리가 남지 않게). */
+  .bc-page { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  /* overflow: visible이면 Chrome이 사진 모양 앞면 쪽을 A4로 뽑는다(2026-11-24 e2e에서 확인). clip + 3mm 여유로 재단 여유만큼만 밖에 그린다. */
+  .bc-page .bc { overflow: clip; overflow-clip-margin: 3mm; }
+  .bc-page[data-shape="green"][data-side="front"] { background: var(--bc-green); }
+  .bc-page[data-shape="green"][data-side="back"] { background: var(--bc-cream); }
+  .bc-page[data-shape="sign"][data-side="front"] { background: var(--bc-sign-blue); }
+  .bc-page[data-shape="stamp"] { background: var(--bc-ivory); }
+  .bc-page[data-shape="night"][data-side="front"] { background: linear-gradient(var(--bc-night-deep), var(--bc-night)); }
+  .bc-page .bc__bleed-top { top: -3mm; right: -3mm; left: -3mm; }
+  .bc-page .bc__awning { height: 7.4mm; }
+  .bc-page .bc__stripe { height: 5.6mm; }
+  .bc-page .bc__bleed-left { width: calc(100% + 3mm); height: calc(100% + 6mm); margin: -3mm 0 -3mm -3mm; }
   .bc-a4 { page: paper-sheet; break-after: page; position: relative; width: 210mm; height: 297mm; overflow: hidden; }
   .bc-a4__slot { position: absolute; width: 90mm; height: 50mm; }
   .bc-a4__marks { position: absolute; inset: 0; width: 210mm; height: 297mm; stroke: var(--ds-ink); stroke-width: 0.15; }

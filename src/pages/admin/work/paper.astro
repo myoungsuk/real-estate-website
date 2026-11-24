@@ -2,12 +2,19 @@
 import AdminIcon from "../../../components/admin/AdminIcon.astro";
 import AdminPageHelp from "../../../components/admin/AdminPageHelp.astro";
 import BusinessCard from "../../../components/admin/BusinessCard.astro";
+import PaperCopyFields from "../../../components/admin/PaperCopyFields.astro";
 import office from "../../../data/office.json";
 import AdminLayout from "../../../layouts/AdminLayout.astro";
-import { DONE_DEAL_TYPES, DONE_LIMITS, businessCardView } from "../../../lib/work/promo-paper.mjs";
+import { INTRO_SHAPES, INTRO_SHAPE_DEFAULT } from "../../../lib/work/intro-paper.mjs";
+import { CARD_SHAPES, CARD_SHAPE_DEFAULT, DONE_DEAL_TYPES, DONE_LIMITS, DONE_SHAPES, DONE_SHAPE_DEFAULT, businessCardView } from "../../../lib/work/promo-paper.mjs";
+import { paperCopyFields } from "../../../lib/work/paper-copy.mjs";
 
 // 홍보 종이 1차(보드 45번 C, 운영자 결정 2026-11-20 18:09). 명함 글은 빌드 때 사무소 확정 공개 정보로 채운다.
 const card = businessCardView(office);
+// '문구 고치기' 칸(보드 20번 2판): 모양마다 새로 쓴 글, 처음 값은 지금 문구.
+const doneCopy = paperCopyFields("done", office);
+const introCopy = paperCopyFields("intro", office);
+const cardCopy = paperCopyFields("card", office);
 
 // A4 10장 판: 2열 × 5줄(90×50mm). 가로 여백 15mm·세로 23.5mm로 위아래·좌우가 같아 양면(긴 쪽 넘기기)으로 뽑아도 앞뒤 칸이 맞는다.
 const SHEET = { left: 15, top: 23.5, w: 90, h: 50, cols: 2, rows: 5 };
@@ -39,13 +46,21 @@ const cropMarks = [
       <span class="admin-stage-badge">저장하지 않음</span>
     </header>
 
-    <p class="work-doc__lead">거래 완료 알림 그림과 명함 인쇄 파일을 만듭니다. 넣은 값은 저장하지 않고 화면을 닫으면 사라집니다.</p>
+    <p class="work-doc__lead">거래 완료 알림 그림, 대표 소개 그림과 명함 인쇄 파일을 만듭니다. 넣은 값과 고른 모양은 저장하지 않고 화면을 닫으면 사라집니다.</p>
 
     <AdminPageHelp page="/admin/work/paper/" />
 
     <section class="work-tool paper-done" aria-labelledby="paper-done-title" data-done-tool>
       <h2 id="paper-done-title">거래 완료 알림</h2>
-      <p class="work-help">단지 이름·거래 종류·면적만 들어갑니다. 면적은 '전용 84㎡대'처럼 흐리게 쓰고, 가격·동·층·계약 날짜는 넣지 않습니다.</p>
+      <p class="work-help">단지 이름·거래 종류·면적만 들어갑니다. 면적은 '전용 84㎡대'처럼 흐리게 쓰고, 동·층·계약 날짜는 넣지 않습니다. 가격은 '가격 넣기'를 켰을 때만 들어갑니다.</p>
+      <div class="paper-shape-field">
+        <p id="done-shape-title">모양</p>
+        <div class="rt-styles paper-shapes" role="radiogroup" aria-labelledby="done-shape-title">
+          {DONE_SHAPES.map(([value, label]) => (
+            <label class="rt-style"><input type="radio" name="done-shape" value={value} checked={value === DONE_SHAPE_DEFAULT} autocomplete="off" data-done-shape /><span>{label}</span></label>
+          ))}
+        </div>
+      </div>
       <div class="work-row">
         <label class="work-row__label" for="done-name">단지 이름</label>
         <div class="work-row__control">
@@ -68,6 +83,32 @@ const cropMarks = [
           <small data-done-area-preview>그림에는 정수로 내려 '전용 84㎡대'처럼 나옵니다.</small>
         </div>
       </div>
+      <div class="work-row">
+        <span class="work-row__label">가격</span>
+        <div class="work-row__control">
+          <label class="work-check"><input type="checkbox" autocomplete="off" data-done-price-on /> 가격 넣기</label>
+          <small>처음에는 꺼져 있습니다. 가격을 넣으면 공개 실거래가와 맞춰 거래하신 분이 드러날 수 있습니다.</small>
+        </div>
+      </div>
+      <div class="work-row" data-done-price-row="amount" hidden>
+        <label class="work-row__label" for="done-amount" data-done-amount-label>매매가(만 원)</label>
+        <div class="work-row__control">
+          <input id="done-amount" type="text" inputmode="numeric" maxlength="8" autocomplete="off" placeholder="예: 41500" data-done-field="amountMan" />
+        </div>
+      </div>
+      <div class="work-row" data-done-price-row="monthly" hidden>
+        <label class="work-row__label" for="done-deposit">보증금(만 원)</label>
+        <div class="work-row__control">
+          <input id="done-deposit" type="text" inputmode="numeric" maxlength="8" autocomplete="off" placeholder="예: 3000" data-done-field="depositMan" />
+        </div>
+      </div>
+      <div class="work-row" data-done-price-row="monthly" hidden>
+        <label class="work-row__label" for="done-monthly">월세(만 원)</label>
+        <div class="work-row__control">
+          <input id="done-monthly" type="text" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="예: 90" data-done-field="monthlyMan" />
+        </div>
+      </div>
+      <PaperCopyFields tool="done" fields={doneCopy} shape={DONE_SHAPE_DEFAULT} note="고른 모양에 새로 쓴 글만 고칩니다. 단지 이름·면적·가격·보호 문장·사무소 명시사항은 여기서 바꾸지 않습니다. 날짜·동 번호·호수·층·다른 전화번호는 넣을 수 없습니다." />
       <div class="work-receipt__actions">
         <button class="work-primary-button" type="button" data-done-make>알림 그림 만들기</button>
         <a class="work-primary-button" data-done-download hidden>그림 저장</a>
@@ -81,22 +122,57 @@ const cropMarks = [
       <canvas data-done-canvas hidden></canvas>
     </section>
 
+    <section class="work-tool paper-done" aria-labelledby="paper-intro-title" data-intro-tool>
+      <h2 id="paper-intro-title">대표 소개</h2>
+      <p class="work-help">사무소 정보와 공개한 사진(대표·사무소·단지)으로 채워집니다. 그림의 한 줄 글은 '문구 고치기'에서 고칠 수 있습니다.</p>
+      <div class="paper-shape-field">
+        <p id="intro-shape-title">모양</p>
+        <div class="rt-styles paper-shapes" role="radiogroup" aria-labelledby="intro-shape-title">
+          {INTRO_SHAPES.map(([value, label]) => (
+            <label class="rt-style"><input type="radio" name="intro-shape" value={value} checked={value === INTRO_SHAPE_DEFAULT} autocomplete="off" data-intro-shape /><span>{label}</span></label>
+          ))}
+        </div>
+      </div>
+      <PaperCopyFields tool="intro" fields={introCopy} shape={INTRO_SHAPE_DEFAULT} note="고른 모양의 한 줄 글만 고칩니다. 대표 이름·소개글·사무소 명시사항은 여기서 바꾸지 않습니다. 동 번호·호수·다른 전화번호는 넣을 수 없습니다." />
+      <div class="work-receipt__actions">
+        <button class="work-primary-button" type="button" data-intro-make>소개 그림 만들기</button>
+        <a class="work-primary-button" data-intro-download hidden>그림 저장</a>
+      </div>
+      <p class="admin-form-status" role="status" aria-live="polite" data-intro-status></p>
+      <figure class="paper-done__preview" data-intro-preview hidden>
+        <img alt="" data-intro-image />
+      </figure>
+      <canvas data-intro-canvas hidden></canvas>
+    </section>
+
     <section class="work-tool paper-card" aria-labelledby="paper-card-title">
       <h2 id="paper-card-title">명함</h2>
       {card.blocked ? (
         <p class="work-message" role="status">{card.blocked}</p>
       ) : (
         <>
-          <p class="work-help">사무소 정보로 자동으로 채워집니다(90×50mm, 흰 종이). 인쇄소에는 '인쇄소용 PDF(앞·뒤)', 집 프린터에는 'A4 10장 판'을 씁니다.</p>
-          <div class="bc-stage">
-            <figure><BusinessCard side="front" view={card} /><figcaption>앞면</figcaption></figure>
-            <figure><BusinessCard side="back" view={card} /><figcaption>뒷면</figcaption></figure>
+          <p class="work-help">사무소 정보로 자동으로 채워집니다(90×50mm). 모양을 고른 뒤 인쇄소에는 '인쇄소용 PDF(앞·뒤)', 집 프린터에는 'A4 10장 판'을 씁니다.</p>
+          <div class="paper-shape-field">
+            <p id="card-shape-title">모양</p>
+            <div class="rt-styles paper-shapes" role="radiogroup" aria-labelledby="card-shape-title">
+              {CARD_SHAPES.map(([value, label]) => (
+                <label class="rt-style"><input type="radio" name="card-shape" value={value} checked={value === CARD_SHAPE_DEFAULT} autocomplete="off" data-card-shape /><span>{label}</span></label>
+              ))}
+            </div>
           </div>
+          {CARD_SHAPES.map(([value]) => (
+            <div class="bc-stage bc-set" data-card-set={value} hidden={value !== CARD_SHAPE_DEFAULT}>
+              <figure><BusinessCard side="front" view={card} shape={value} /><figcaption>앞면</figcaption></figure>
+              <figure><BusinessCard side="back" view={card} shape={value} /><figcaption>뒷면</figcaption></figure>
+            </div>
+          ))}
+          <PaperCopyFields tool="card" fields={cardCopy} shape={CARD_SHAPE_DEFAULT} note="고른 모양의 뒷면 제목·지역 줄(보라 밤은 앞면 꼬리표도)만 고칩니다. 이름·전화·이메일·상호·등록번호·주소는 여기서 바꾸지 않습니다. 동 번호·호수·다른 전화번호는 넣을 수 없습니다." />
           <div class="work-receipt__actions">
             <button class="work-secondary-button" type="button" data-card-print="card">인쇄소용 PDF(앞·뒤)</button>
             <button class="work-secondary-button" type="button" data-card-print="sheet">A4 10장 판</button>
           </div>
-          <p class="work-help">인쇄 창에서 '대상'을 'PDF로 저장'으로, 배율은 100%(맞춤 끄기)로 둡니다. 인쇄소용 PDF는 사방 3mm 재단 여유를 넣은 96×56mm 두 쪽(앞·뒤)입니다. A4 10장 판은 앞면 한 장·뒷면 한 장이고, 양면으로 뽑을 때는 긴 쪽 넘기기를 고릅니다.</p>
+          <p class="admin-form-status" role="status" aria-live="polite" data-card-status></p>
+          <p class="work-help">인쇄 창에서 '대상'을 'PDF로 저장'으로, 배율은 100%(맞춤 끄기)로 둡니다. 인쇄소용 PDF는 사방 3mm 재단 여유를 넣은 96×56mm 두 쪽(앞·뒤)이고, 색 바탕은 재단 여유까지 칠합니다. A4 10장 판은 앞면 한 장·뒷면 한 장이고, 양면으로 뽑을 때는 긴 쪽 넘기기를 고릅니다.</p>
         </>
       )}
     </section>
@@ -105,15 +181,16 @@ const cropMarks = [
     <div class="paper-print paper-print--done" data-done-sheet></div>
     {!card.blocked && (
       <>
+      {/* 인쇄 칸은 비워 두고, 인쇄 단추를 누를 때 고른 모양의 앞·뒤 명함을 복사해 채운다. */}
       <div class="paper-print paper-print--card">
-        <div class="bc-page"><BusinessCard side="front" view={card} /></div>
-        <div class="bc-page"><BusinessCard side="back" view={card} /></div>
+        <div class="bc-page" data-card-page="front" data-side="front"></div>
+        <div class="bc-page" data-card-page="back" data-side="back"></div>
       </div>
       <div class="paper-print paper-print--sheet">
         {(["front", "back"] as const).map((side) => (
           <div class="bc-a4">
             {slots.map((slot) => (
-              <div class="bc-a4__slot" style={`left: ${slot.x}mm; top: ${slot.y}mm;`}><BusinessCard side={side} view={card} /></div>
+              <div class="bc-a4__slot" style={`left: ${slot.x}mm; top: ${slot.y}mm;`} data-card-slot={side}></div>
             ))}
             <svg class="bc-a4__marks" viewBox="0 0 210 297" aria-hidden="true">
               {cropMarks.map(([x1, y1, x2, y2]) => <line x1={x1} y1={y1} x2={x2} y2={y2} />)}
@@ -128,16 +205,30 @@ const cropMarks = [
   <script>
     import office from "../../../data/office.json";
     import { loadLogo } from "../../../lib/work-card-draw";
-    import { renderDoneCard } from "../../../lib/work-done-card";
+    import { renderDoneShape, type DoneShape } from "../../../lib/work-done-shapes";
+    import { renderIntroCard, type IntroShape, type IntroView } from "../../../lib/work-intro-card";
     import { areaBandText, buildDoneNotice, doneFileName } from "../../../lib/work/promo-paper.mjs";
+    import { buildIntroView, introFileName } from "../../../lib/work/intro-paper.mjs";
     import { todayInKorea } from "../../../lib/work/legal-dates.mjs";
+    import { checkPaperCopy } from "../../../lib/work/paper-copy.mjs";
+    import { bindCopyFields } from "../../../lib/work-paper-copy";
 
     const root = document.querySelector<HTMLElement>("[data-paper]");
 
     if (root) {
+      // 열 때·뒤로 가기 캐시로 돌아올 때 세 칸을 처음 값으로 되돌린다(넣은 값·고른 모양을 남기지 않음).
+      const resets: (() => void)[] = [];
       const name = root.querySelector<HTMLInputElement>('[data-done-field="complexName"]');
       const deal = root.querySelector<HTMLSelectElement>('[data-done-field="dealType"]');
       const area = root.querySelector<HTMLInputElement>('[data-done-field="areaM2"]');
+      const priceOn = root.querySelector<HTMLInputElement>("[data-done-price-on]");
+      const amount = root.querySelector<HTMLInputElement>('[data-done-field="amountMan"]');
+      const deposit = root.querySelector<HTMLInputElement>('[data-done-field="depositMan"]');
+      const monthly = root.querySelector<HTMLInputElement>('[data-done-field="monthlyMan"]');
+      const amountLabel = root.querySelector<HTMLElement>("[data-done-amount-label]");
+      const amountRows = [...root.querySelectorAll<HTMLElement>('[data-done-price-row="amount"]')];
+      const monthlyRows = [...root.querySelectorAll<HTMLElement>('[data-done-price-row="monthly"]')];
+      const shapes = [...root.querySelectorAll<HTMLInputElement>("[data-done-shape]")];
       const areaPreview = root.querySelector<HTMLElement>("[data-done-area-preview]");
       const make = root.querySelector<HTMLButtonElement>("[data-done-make]");
       const download = root.querySelector<HTMLAnchorElement>("[data-done-download]");
@@ -148,9 +239,18 @@ const cropMarks = [
       const canvas = root.querySelector<HTMLCanvasElement>("[data-done-canvas]");
       const sheet = root.querySelector<HTMLElement>("[data-done-sheet]");
 
-      if (name && deal && area && areaPreview && make && download && print && status && preview && image && canvas && sheet) {
+      // 인쇄: 누른 단추에 맞는 인쇄 칸 하나만 보이게 body에 표시를 달고, 인쇄 창이 닫히면 뗀다.
+      const printAs = (mode: "done" | "card" | "sheet") => {
+        document.body.dataset.paperPrint = mode;
+        window.print();
+      };
+      window.addEventListener("afterprint", () => {
+        delete document.body.dataset.paperPrint;
+      });
+
+      if (name && deal && area && priceOn && amount && deposit && monthly && amountLabel && areaPreview && make && download && print && status && preview && image && canvas && sheet) {
         const AREA_HINT = "그림에는 정수로 내려 '전용 84㎡대'처럼 나옵니다.";
-        // 입력이 바뀌면 만든 그림을 버린다(그림을 만드는 중에 바뀌면 끝난 그림도 버림). 입력값은 이 칸과 변수에만 있고 저장·전송하지 않는다.
+        // 입력이 바뀌면 만든 그림을 버린다(그림을 만드는 중에 바뀌면 끝난 그림도 버림). 입력값·고른 모양은 이 칸과 변수에만 있고 저장·전송하지 않는다.
         let token = 0;
         const setStatus = (text: string, state: "idle" | "success" | "error") => {
           status.textContent = text;
@@ -166,55 +266,58 @@ const cropMarks = [
           image.alt = "";
           sheet.replaceChildren();
         };
+        // 가격 칸: '가격 넣기'를 켰을 때만 보이고, 월세는 보증금·월세 두 칸, 매매·전세는 한 칸(이름만 바뀜).
+        const syncPriceRows = () => {
+          const rent = deal.value === "monthly-rent";
+          for (const row of amountRows) row.hidden = !priceOn.checked || rent;
+          for (const row of monthlyRows) row.hidden = !priceOn.checked || !rent;
+          amountLabel.textContent = deal.value === "jeonse" ? "보증금(만 원)" : "매매가(만 원)";
+        };
         const refresh = () => {
           clearImage();
           make.disabled = false;
+          syncPriceRows();
           const band = areaBandText(area.value);
           areaPreview.textContent = band ? `그림에는 '${band}'로 나옵니다.` : AREA_HINT;
           setStatus("", "idle");
         };
-        const current = () => buildDoneNotice({ complexName: name.value, dealType: deal.value, areaM2: area.value }, office);
+        const shape = () => (shapes.find((input) => input.checked)?.value ?? "basic") as DoneShape;
+        // '문구 고치기': 글을 고치면 만든 그림을 버린다(다른 칸과 같음).
+        const doneCopy = bindCopyFields(root, "done", () => refresh(), shape);
+        const current = () => buildDoneNotice({
+          complexName: name.value,
+          dealType: deal.value,
+          areaM2: area.value,
+          priceOn: priceOn.checked,
+          amountMan: amount.value,
+          depositMan: deposit.value,
+          monthlyMan: monthly.value,
+        }, office);
 
-        // 인쇄: 누른 단추에 맞는 인쇄 칸 하나만 보이게 body에 표시를 달고, 인쇄 창이 닫히면 뗀다.
-        const printAs = (mode: "done" | "card" | "sheet") => {
-          document.body.dataset.paperPrint = mode;
-          window.print();
-        };
-        window.addEventListener("afterprint", () => {
-          delete document.body.dataset.paperPrint;
-        });
-
-        // 명함 로고: 흰 여백을 잘라 낸 로고(카드 그림과 같은 함수)로 바꾼다. 실패하면 원래 파일을 그대로 쓴다.
-        void loadLogo().then((logo) => {
-          const cut = document.createElement("canvas");
-          cut.width = logo.w;
-          cut.height = logo.h;
-          cut.getContext("2d")?.drawImage(logo.image, logo.x, logo.y, logo.w, logo.h, 0, 0, logo.w, logo.h);
-          const url = cut.toDataURL("image/png");
-          for (const img of document.querySelectorAll<HTMLImageElement>("img[data-card-logo]")) img.src = url;
-        }).catch(() => undefined);
-
-        for (const field of [name, deal, area]) {
-          field.addEventListener("input", refresh);
-          field.addEventListener("change", refresh);
-        }
-        make.addEventListener("click", async () => {
+        const render = async () => {
           const built = current();
           if (!built.ok) {
             clearImage();
             setStatus(built.error.message, "error");
             return;
           }
+          const chosen = shape();
+          const words = checkPaperCopy("done", chosen, doneCopy?.values(chosen) ?? {}, office);
+          if (!words.ok) {
+            clearImage();
+            setStatus(words.error.message, "error");
+            return;
+          }
           const mine = ++token;
           make.disabled = true;
           try {
-            const result = await renderDoneCard(canvas, built.notice);
+            const result = await renderDoneShape(canvas, chosen, built.notice, words.copy);
             if (mine !== token) return;
             if (result.overflow) {
-              setStatus("단지 이름이 길어 그림에 다 들어가지 않습니다. 이름을 줄여 주세요.", "error");
+              setStatus("글이 길어 그림에 다 들어가지 않습니다. 단지 이름이나 '문구 고치기'의 글을 줄여 주세요.", "error");
               return;
             }
-            const alt = `거래 완료 알림: ${built.notice.name} · ${built.notice.fact}`;
+            const alt = `거래 완료 알림: ${built.notice.name} · ${built.notice.fact}${built.notice.price ? ` · ${built.notice.price}` : ""}`;
             image.src = result.dataUrl;
             image.alt = alt;
             preview.hidden = false;
@@ -232,24 +335,238 @@ const cropMarks = [
           } finally {
             if (mine === token) make.disabled = false;
           }
-        });
-        print.addEventListener("click", () => printAs("done"));
-        for (const button of root.querySelectorAll<HTMLButtonElement>("[data-card-print]")) {
-          button.addEventListener("click", () => printAs(button.dataset.cardPrint === "sheet" ? "sheet" : "card"));
-        }
+        };
 
-        const reset = () => {
+        for (const field of [name, deal, area, priceOn, amount, deposit, monthly]) {
+          field.addEventListener("input", refresh);
+          field.addEventListener("change", refresh);
+        }
+        // 모양을 바꾸면 그림이 있을 때만 같은 값으로 다시 그린다(그림이 없으면 만들기 단추를 기다림).
+        for (const input of shapes) {
+          input.addEventListener("change", () => {
+            const had = !preview.hidden;
+            doneCopy?.show(shape());
+            clearImage();
+            setStatus("", "idle");
+            if (had) void render();
+          });
+        }
+        make.addEventListener("click", () => void render());
+        print.addEventListener("click", () => printAs("done"));
+
+        resets.push(() => {
           name.value = "";
           area.value = "";
           deal.value = "sale";
+          priceOn.checked = false;
+          amount.value = "";
+          deposit.value = "";
+          monthly.value = "";
+          for (const input of shapes) input.checked = input.value === "basic";
+          doneCopy?.resetAll();
           make.disabled = false;
           refresh();
-        };
-        window.addEventListener("pageshow", (event) => {
-          if (event.persisted) reset();
         });
-        reset();
       }
+
+      // ── 대표 소개 ──
+      const introShapes = [...root.querySelectorAll<HTMLInputElement>("[data-intro-shape]")];
+      const introMake = root.querySelector<HTMLButtonElement>("[data-intro-make]");
+      const introDownload = root.querySelector<HTMLAnchorElement>("[data-intro-download]");
+      const introStatus = root.querySelector<HTMLElement>("[data-intro-status]");
+      const introPreview = root.querySelector<HTMLElement>("[data-intro-preview]");
+      const introImage = root.querySelector<HTMLImageElement>("[data-intro-image]");
+      const introCanvas = root.querySelector<HTMLCanvasElement>("[data-intro-canvas]");
+      if (introMake && introDownload && introStatus && introPreview && introImage && introCanvas) {
+        let introToken = 0;
+        const setIntroStatus = (text: string, state: "idle" | "success" | "error") => {
+          introStatus.textContent = text;
+          introStatus.dataset.state = state;
+        };
+        const introShape = () => (introShapes.find((input) => input.checked)?.value ?? "white") as IntroShape;
+        const clearIntro = () => {
+          introToken += 1;
+          introDownload.hidden = true;
+          introDownload.removeAttribute("href");
+          introPreview.hidden = true;
+          introImage.removeAttribute("src");
+          introImage.alt = "";
+        };
+        const introRender = async () => {
+          const built = buildIntroView(office);
+          if (!built.ok) {
+            clearIntro();
+            setIntroStatus(built.error, "error");
+            return;
+          }
+          const chosen = introShape();
+          const words = checkPaperCopy("intro", chosen, introCopy?.values(chosen) ?? {}, office);
+          if (!words.ok) {
+            clearIntro();
+            setIntroStatus(words.error.message, "error");
+            return;
+          }
+          const view = { ...built.view, copy: { ...built.view.copy, [chosen]: words.copy.line } } as IntroView;
+          const mine = ++introToken;
+          introMake.disabled = true;
+          try {
+            const result = await renderIntroCard(introCanvas, chosen, view);
+            if (mine !== introToken) return;
+            if (result.overflow) {
+              setIntroStatus("글이 길어 그림 안 다른 글과 겹칩니다. '문구 고치기'의 글을 줄이거나 사무소 정보를 확인해 주세요.", "error");
+              return;
+            }
+            introImage.src = result.dataUrl;
+            introImage.alt = `대표 소개: ${built.view.brand} ${built.view.role} ${built.view.name}`;
+            introPreview.hidden = false;
+            introDownload.href = result.dataUrl;
+            introDownload.download = introFileName(todayInKorea());
+            introDownload.hidden = false;
+            setIntroStatus("✓ 그림을 만들었습니다. '그림 저장'으로 내려받으세요.", "success");
+          } catch {
+            if (mine === introToken) setIntroStatus("그림을 만들지 못했습니다. 다시 눌러 주세요.", "error");
+          } finally {
+            if (mine === introToken) introMake.disabled = false;
+          }
+        };
+        const introCopy = bindCopyFields(root, "intro", () => {
+          clearIntro();
+          setIntroStatus("", "idle");
+        }, introShape);
+        for (const input of introShapes) {
+          input.addEventListener("change", () => {
+            const had = !introPreview.hidden;
+            introCopy?.show(introShape());
+            clearIntro();
+            setIntroStatus("", "idle");
+            if (had) void introRender();
+          });
+        }
+        introMake.addEventListener("click", () => void introRender());
+        resets.push(() => {
+          for (const input of introShapes) input.checked = input.value === "white";
+          introCopy?.resetAll();
+          clearIntro();
+          setIntroStatus("", "idle");
+        });
+      }
+
+      // ── 명함 ──
+      // 명함 로고: 흰 여백을 잘라 낸 로고(카드 그림과 같은 함수)로 바꾼다. 실패하면 원래 파일을 그대로 쓴다.
+      void loadLogo().then((logo) => {
+        const cut = document.createElement("canvas");
+        cut.width = logo.w;
+        cut.height = logo.h;
+        cut.getContext("2d")?.drawImage(logo.image, logo.x, logo.y, logo.w, logo.h, 0, 0, logo.w, logo.h);
+        const url = cut.toDataURL("image/png");
+        for (const img of document.querySelectorAll<HTMLImageElement>("img[data-card-logo]")) img.src = url;
+      }).catch(() => undefined);
+
+      const cardShapes = [...root.querySelectorAll<HTMLInputElement>("[data-card-shape]")];
+      const cardSets = [...root.querySelectorAll<HTMLElement>("[data-card-set]")];
+      const cardShape = () => cardShapes.find((input) => input.checked)?.value ?? "white";
+      const showCardSet = () => {
+        const chosen = cardShape();
+        for (const set of cardSets) set.hidden = set.dataset.cardSet !== chosen;
+      };
+      // '문구 고치기'(명함): 고른 모양의 앞·뒤 명함 글을 바로 바꾼다. 모양마다 미리 보기가 따로라 다른 모양에서 고친 글은 그 미리 보기에 남는다.
+      // 검사에 걸리거나 글이 미리 보기에서 두 줄로 꺾이면(넘치면) 인쇄 단추를 끄고 까닭 한 줄을 보인다(잘린 명함을 뽑지 않음).
+      const cardStatus = root.querySelector<HTMLElement>("[data-card-status]");
+      const cardButtons = [...root.querySelectorAll<HTMLButtonElement>("[data-card-print]")];
+      const setCardText = (set: HTMLElement | undefined, key: string, value: string) => {
+        for (const el of set?.querySelectorAll<HTMLElement>(`[data-card-text="${key}"]`) ?? []) {
+          el.textContent = value;
+          el.hidden = value === "";
+        }
+      };
+      const writeCardSet = (shape: string, copy: Record<string, string>) => {
+        const set = cardSets.find((item) => item.dataset.cardSet === shape);
+        for (const [key, value] of Object.entries(copy)) setCardText(set, key, value);
+        return set;
+      };
+      // 글 칸이 한 줄을 넘었는지(줄 높이의 1.5배보다 높으면 꺾임), 명함 면 밖으로 글이 나갔는지.
+      const cardOverflow = (set: HTMLElement | undefined) => {
+        for (const el of set?.querySelectorAll<HTMLElement>("[data-card-text]") ?? []) {
+          if (el.hidden) continue;
+          const line = Number.parseFloat(getComputedStyle(el).lineHeight);
+          if (Number.isFinite(line) && el.getBoundingClientRect().height > line * 1.5) return true;
+        }
+        for (const face of set?.querySelectorAll<HTMLElement>("[data-card-face]") ?? []) if (face.scrollHeight > face.clientHeight + 1 || face.scrollWidth > face.clientWidth + 1) return true;
+        return false;
+      };
+      const setCardState = (message: string) => {
+        if (cardStatus) {
+          cardStatus.textContent = message;
+          cardStatus.dataset.state = message ? "error" : "idle";
+        }
+        for (const button of cardButtons) button.disabled = message !== "";
+      };
+      let cardCopy: ReturnType<typeof bindCopyFields> = null;
+      // 고른 모양의 글을 검사해 미리 보기에 넣는다. 통과하면 true.
+      const applyCard = () => {
+        const chosen = cardShape();
+        const words = checkPaperCopy("card", chosen, cardCopy?.values(chosen) ?? {}, office);
+        if (!words.ok) {
+          setCardState(words.error.message);
+          return false;
+        }
+        const set = writeCardSet(chosen, words.copy);
+        if (cardOverflow(set)) {
+          setCardState("글이 길어 명함에서 두 줄로 꺾이거나 넘칩니다. '문구 고치기'의 글을 줄여 주세요.");
+          return false;
+        }
+        setCardState("");
+        return true;
+      };
+      cardCopy = bindCopyFields(root, "card", applyCard, cardShape);
+      for (const input of cardShapes) {
+        input.addEventListener("change", () => {
+          showCardSet();
+          cardCopy?.show(cardShape());
+          applyCard();
+        });
+      }
+      // 인쇄 칸 채우기: 고른 모양의 미리 보기 앞·뒤 명함을 복사한다(인쇄소용 두 쪽, A4 앞 10장·뒤 10장). 바탕색 재단 여유는 data-shape로 CSS가 칠한다.
+      const fillPrint = () => {
+        const chosen = cardShape();
+        const set = cardSets.find((item) => item.dataset.cardSet === chosen);
+        for (const side of ["front", "back"] as const) {
+          const face = set?.querySelector<HTMLElement>(`[data-card-face="${side}"]`);
+          if (!face) continue;
+          const page = root.querySelector<HTMLElement>(`[data-card-page="${side}"]`);
+          if (page) {
+            page.dataset.shape = chosen;
+            page.replaceChildren(face.cloneNode(true));
+          }
+          for (const slot of root.querySelectorAll<HTMLElement>(`[data-card-slot="${side}"]`)) slot.replaceChildren(face.cloneNode(true));
+        }
+      };
+      for (const button of cardButtons) {
+        button.addEventListener("click", () => {
+          if (!applyCard()) return;
+          fillPrint();
+          printAs(button.dataset.cardPrint === "sheet" ? "sheet" : "card");
+        });
+      }
+      resets.push(() => {
+        for (const input of cardShapes) input.checked = input.value === "white";
+        showCardSet();
+        cardCopy?.resetAll();
+        // 모든 모양의 미리 보기 글을 처음 문구로(고친 글을 남기지 않음).
+        for (const set of cardSets) {
+          const shape = set.dataset.cardSet ?? "";
+          writeCardSet(shape, cardCopy?.values(shape) ?? {});
+        }
+        setCardState("");
+      });
+
+      const reset = () => {
+        for (const fn of resets) fn();
+      };
+      window.addEventListener("pageshow", (event) => {
+        if (event.persisted) reset();
+      });
+      reset();
     }
   </script>
 </AdminLayout>

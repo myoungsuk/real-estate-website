@@ -11,8 +11,12 @@ import {
   bigPriceText,
   buildCompareSheet,
   buildListingSheet,
+  LISTING_SHAPES,
+  LISTING_SHAPE_DEFAULT,
+  buildShapeSheet,
   checkListingInputs,
   listingFileName,
+  shapeComplex,
   listingOfficeBlockReason,
   listingPaperSources,
   pickBlockReason,
@@ -178,4 +182,57 @@ test("위반건축물·미등기를 고르면 머리 칩·표·비교표 종류 
     const compare = buildCompareSheet([item, itemOf("9900000002", { floorMode: "band", floorBand: "중", totalFloors: 15 })], office, naverListings.checkedAt).sheet;
     assert.deepEqual(compare.rows.find((row) => row.key === "kind").values, [kind, "아파트"], `${violation}: 비교표 종류 줄`);
   }
+});
+
+// ── 보드 20번(2026-11-24): 가격표 모양 ──
+const complexes = await readJson("../src/data/complexes.json");
+
+test("가격표 모양: 처음 값은 기본, 새 모양 4가지", () => {
+  assert.deepEqual(LISTING_SHAPES.map(([value]) => value), ["basic", "white", "green", "night", "photo"]);
+  assert.equal(LISTING_SHAPE_DEFAULT, "basic");
+});
+
+test("가격표 글: 필수 13항목이 위 매물 칸이나 표에 buildDisclosure 글 그대로 있고, 표에는 위에 보인 항목을 다시 싣지 않는다", () => {
+  for (const items of [[itemOf("9900000001")], [itemOf("9900000001"), itemOf("9900000002", { floorMode: "band", floorBand: "중", totalFloors: 15 })], [itemOf("9900000001"), itemOf("9900000006"), itemOf("9900000007")]]) {
+    const built = buildShapeSheet(items, office, naverListings.checkedAt);
+    assert.equal(built.ok, true);
+    const { sheet } = built;
+    assert.deepEqual(sheet.rows.map((row) => row.key).filter((key) => ["price", "tradeType", "area", "direction", "totalFloors", "floor"].includes(key)), [], "위 칸 항목은 표에 없음");
+    assert.equal(sheet.rows.at(-1).key, "id");
+    items.forEach((item, index) => {
+      const entry = sheet.entries[index];
+      const column = (key) => sheet.rows.find((row) => row.key === key)?.values[index];
+      for (const { key, value } of item.disclosure) {
+        if (key === "price") assert.equal(value, `${entry.tradeLabel} ${entry.price}`, key);
+        else if (key === "tradeType") assert.equal(entry.tradeLabel, value, key);
+        else if (key === "area") assert.ok(entry.line.includes(value), `${key}: ${value} / ${entry.line}`);
+        else if (key === "totalFloors") assert.ok(entry.line.includes(`총 ${value}`), key);
+        else if (key === "direction") assert.ok(entry.line.includes(value), key);
+        else if (key === "rooms" || key === "bathrooms") assert.ok(column("rooms").includes(value), key);
+        else assert.equal(column(key), value, `${key} ${index}`);
+      }
+    });
+    assert.equal(sheet.columns.length, items.length > 1 ? items.length : 0);
+    assert.deepEqual(sheet.disclosure, officeLines(office));
+    assert.equal(sheet.closeTag, "평일 밤 8시까지 상담");
+    assert.ok(sheet.contact.includes("leaderscityhappy.com"));
+    assert.equal(typeof sheet.sub, "string", "확인일 줄과 연락 줄이 섞이지 않음");
+    assert.doesNotMatch(sheetText(sheet), /최저|가장 낮|가장 싼|최고가|급매/u);
+  }
+  assert.equal(buildShapeSheet([], office, "2026-11-20").ok, false);
+  assert.equal(buildShapeSheet([1, 2, 3, 4].map(() => itemOf("9900000001")), office, "2026-11-20").ok, false);
+  assert.equal(buildShapeSheet([itemOf("9900000001")], { ...office, legalName: "" }, "2026-11-20").ok, false);
+});
+
+test("사진 크게: 담은 매물이 모두 같은 공개 단지일 때만 그 단지 공개 사진, 아니면 null", () => {
+  const leaders5 = complexes.find((complex) => complex.slug === "leaders-city-5");
+  const like = (title) => ({ ...itemOf("9900000001"), title });
+  assert.equal(shapeComplex([like("리더스시티5블록 501동"), like("리더스시티 5블록 503동")], complexes)?.slug, "leaders-city-5");
+  assert.equal(shapeComplex([like("리더스시티5블록 501동"), like("가상단지 101동")], complexes), null);
+  assert.equal(shapeComplex([like("가상단지 101동")], complexes), null);
+  assert.equal(shapeComplex([like("리더스시티5블록 501동")], complexes.map((complex) => ({ ...complex, status: "draft" }))), null, "공개 단지만");
+  const built = buildShapeSheet([like("리더스시티5블록 501동")], office, "2026-11-20", leaders5);
+  assert.deepEqual(built.sheet.photo, { src: leaders5.image.src, alt: leaders5.image.alt, caption: `사진: ${leaders5.name}` });
+  assert.equal(built.sheet.heading, `${leaders5.name} 매물`);
+  assert.equal(buildShapeSheet([itemOf("9900000001")], office, "2026-11-20").sheet.photo, null);
 });

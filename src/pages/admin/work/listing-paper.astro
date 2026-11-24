@@ -1,21 +1,30 @@
 ---
 import AdminIcon from "../../../components/admin/AdminIcon.astro";
 import AdminPageHelp from "../../../components/admin/AdminPageHelp.astro";
+import PaperCopyFields from "../../../components/admin/PaperCopyFields.astro";
+import complexes from "../../../data/complexes.json";
 import naverListings from "../../../data/naver-listings.json";
 import office from "../../../data/office.json";
 import disclosureRules from "../../../data/work/ad-disclosure-rules.json";
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 import { formatDate } from "../../../lib/work/ad-disclosure.mjs";
-import { LISTING_PICK_MAX, bigPriceText, listingOfficeBlockReason, listingPaperSources } from "../../../lib/work/listing-paper.mjs";
+import { LISTING_PICK_MAX, LISTING_SHAPES, LISTING_SHAPE_DEFAULT, bigPriceText, listingOfficeBlockReason, listingPaperSources } from "../../../lib/work/listing-paper.mjs";
+import { paperCopyFields } from "../../../lib/work/paper-copy.mjs";
 
 // 매물 안내지·비교표(보드 45번 D, 운영자 결정 2026-11-20 23:32:49 "관리자 화면에서만", 23:41:16 "A 매물 종이"·"만들 때마다 넣고 저장 안 함"·"넣지 않기").
 // - 공개 매물(naver-listings.json)만 빌드 때 목록으로 그린다. 고른 매물마다 글 초안(P3)과 같은 명시사항 칸(work-disclosure-fields.ts)을 채운다.
 // - 공동주택 필수 13항목은 1:1로 보내는 그림에도 늘 넣는다. 빈 필수 항목이 있으면 그림을 만들지 않는다.
 // - 넣은 값은 이 화면 메모리에만 두고 저장·서버 전송·URL·브라우저 저장소에 넣지 않는다.
 const sources = listingPaperSources(naverListings, disclosureRules);
+// '문구 고치기' 칸(보드 20번 2판): 새 모양마다 새로 쓴 글, 처음 값은 지금 문구.
+const listingCopy = paperCopyFields("listing", office);
 // 브라우저에는 빌드 때 만든 목록을 JSON으로만 넘긴다. 브라우저 묶음이 가격 읽기(naver-listing-filter.mjs)를 끌어오면 공개 /properties/ 묶음까지 바뀌기 때문.
 // "<"는 JSON 이스케이프(\u003c)로 바꿔 글 안의 </script>가 칸을 끊지 못하게 한다.
-const pageData = JSON.stringify({ checkedAt: naverListings.checkedAt, sources }).replace(/</gu, "\\u003c");
+// '사진 크게' 모양이 담은 매물의 단지를 찾을 때 쓰는 공개 단지(이름·별칭·공개 승인 사진)만 넘긴다(단지 소개 글 전체는 넘기지 않음).
+const shapeComplexes = complexes
+  .filter((complex) => complex.status === "published" && complex.image?.src)
+  .map((complex) => ({ slug: complex.slug, name: complex.name, aliases: complex.aliases ?? [], status: complex.status, image: { src: complex.image.src, alt: complex.image.alt ?? "" } }));
+const pageData = JSON.stringify({ checkedAt: naverListings.checkedAt, sources, complexes: shapeComplexes }).replace(/</gu, "\\u003c");
 const officeBlocked = listingOfficeBlockReason(office);
 const tradeLabels: Record<string, string> = { sale: "매매", jeonse: "전세", "monthly-rent": "월세" };
 const metaOf = (source: (typeof sources)[number]) => {
@@ -85,6 +94,16 @@ const metaOf = (source: (typeof sources)[number]) => {
         <section class="work-tool lp-step" aria-labelledby="lp-make-title">
           <h2 id="lp-make-title"><span class="lp-step__no" aria-hidden="true">3</span>그림 만들기</h2>
           <p class="work-help">그림에는 담은 순서대로 싣고, '가장 낮은' 같은 표시는 하지 않습니다. 호수·손님 정보는 넣지 않고 파일 이름에는 날짜만 들어갑니다.</p>
+          <div class="paper-shape-field">
+            <p id="lp-shape-title">모양</p>
+            <div class="rt-styles paper-shapes" role="radiogroup" aria-labelledby="lp-shape-title">
+              {LISTING_SHAPES.map(([value, label]) => (
+                <label class="rt-style"><input type="radio" name="lp-shape" value={value} checked={value === LISTING_SHAPE_DEFAULT} autocomplete="off" data-lp-shape /><span>{label}</span></label>
+              ))}
+            </div>
+          </div>
+          <p class="work-help">'기본' 밖의 모양은 위에 가격을 크게, 아래에 명시사항 표를 싣습니다. 표 글씨를 20px보다 작게 하지 않으므로, 자리가 모자라면 만들지 않습니다. 그때는 담은 매물을 줄이거나 '기본'을 고릅니다. '사진 크게'는 담은 매물이 모두 같은 단지일 때만 그 단지 사진을 쓰고, 아니면 건물 그림을 씁니다.</p>
+          <PaperCopyFields tool="listing" fields={listingCopy} shape={LISTING_SHAPE_DEFAULT} note="고른 모양에 새로 쓴 글(상담 줄·큰 제목·꼬리표)만 고칩니다. 가격·매물 줄·명시사항 표·사무소 명시사항은 여기서 바꾸지 않습니다. 동 번호·호수·다른 전화번호는 넣을 수 없습니다." />
           <div class="work-receipt__actions">
             <button class="work-primary-button" type="button" disabled data-lp-make>안내지 그림 만들기</button>
             <a class="work-primary-button" data-lp-download hidden>그림 저장</a>
@@ -108,15 +127,20 @@ const metaOf = (source: (typeof sources)[number]) => {
     import office from "../../../data/office.json";
     import disclosureRules from "../../../data/work/ad-disclosure-rules.json";
     import { renderCompareCard, renderListingCard, type CompareSheet, type ListingSheet } from "../../../lib/work-listing-card";
+    import { renderListingShape, type ListingShape, type ShapeSheet } from "../../../lib/work-listing-shapes";
     import { createDisclosureFields, disclosureFieldLabel, keepHeight, type DisclosureSource } from "../../../lib/work-disclosure-fields";
     import { todayInKorea } from "../../../lib/work/legal-dates.mjs";
+    import { checkPaperCopy } from "../../../lib/work/paper-copy.mjs";
+    import { bindCopyFields } from "../../../lib/work-paper-copy";
     import {
       LISTING_PICK_MAX,
       buildCompareSheet,
       buildListingSheet,
+      buildShapeSheet,
       checkListingInputs,
       listingFileName,
       pickBlockReason,
+      shapeComplex,
     } from "../../../lib/work/listing-paper.mjs";
     import { matchesBlogSourceQuery } from "../../../lib/work/blog-sources.mjs";
 
@@ -143,7 +167,9 @@ const metaOf = (source: (typeof sources)[number]) => {
         const canvas = pick<HTMLCanvasElement>("[data-lp-canvas]");
         const sheetBox = pick<HTMLElement>("[data-lp-sheet]");
 
-        const pageData = JSON.parse(root.querySelector("[data-lp-data]")?.textContent ?? "{}") as { checkedAt?: string; sources?: Source[] };
+        const pageData = JSON.parse(root.querySelector("[data-lp-data]")?.textContent ?? "{}") as { checkedAt?: string; sources?: Source[]; complexes?: { slug: string; name: string; aliases: string[]; status: string; image: { src: string; alt: string } }[] };
+        const shapeInputs = [...root.querySelectorAll<HTMLInputElement>("[data-lp-shape]")];
+        const chosenShape = () => (shapeInputs.find((input) => input.checked)?.value ?? "basic") as ListingShape;
         const sources = pageData.sources ?? [];
         const byId = new Map(sources.map((source) => [source.id, source]));
         const items = [...list.querySelectorAll<HTMLElement>("[data-lp-item]")];
@@ -296,15 +322,34 @@ const metaOf = (source: (typeof sources)[number]) => {
             ready.push(checked.item);
           }
           const compare = ready.length > 1;
-          const built = compare ? buildCompareSheet(ready, office, pageData.checkedAt ?? null) : buildListingSheet(ready[0], office);
+          const shape = chosenShape();
+          const built = shape !== "basic"
+            ? buildShapeSheet(ready, office, pageData.checkedAt ?? null, shapeComplex(ready, pageData.complexes ?? []))
+            : compare ? buildCompareSheet(ready, office, pageData.checkedAt ?? null) : buildListingSheet(ready[0], office);
           if (!built.ok || !built.sheet) {
             setStatus(built.error ?? "그림을 만들 수 없습니다.", "error");
+            return;
+          }
+          const words = checkPaperCopy("listing", shape, listingCopy?.values(shape) ?? {}, office);
+          if (!words.ok) {
+            setStatus(words.error.message, "error");
             return;
           }
           const mine = ++token;
           make.disabled = true;
           try {
-            const result = compare ? await renderCompareCard(canvas, built.sheet as CompareSheet) : await renderListingCard(canvas, built.sheet as ListingSheet);
+            let result: { dataUrl: string; overflow: boolean };
+            if (shape !== "basic") {
+              const shaped = await renderListingShape(canvas, shape, built.sheet as ShapeSheet, words.copy);
+              if (mine !== token) return;
+              if (!shaped.fits) {
+                setStatus("이 모양에는 명시사항 표가 20px 글씨로 다 들어가지 않아 만들지 않았습니다. 담은 매물을 줄이거나 '기본' 모양을 골라 주세요.", "error");
+                return;
+              }
+              result = { dataUrl: shaped.dataUrl, overflow: false };
+            } else {
+              result = compare ? await renderCompareCard(canvas, built.sheet as CompareSheet) : await renderListingCard(canvas, built.sheet as ListingSheet);
+            }
             if (mine !== token) return;
             if (result.overflow) {
               setStatus("글이 길어 그림에 다 들어가지 않습니다. 관리비·주차처럼 긴 칸을 줄이거나 담은 매물을 줄여 주세요.", "error");
@@ -330,7 +375,25 @@ const metaOf = (source: (typeof sources)[number]) => {
           }
         });
 
+        // '문구 고치기': 글을 고치면 만든 그림을 버린다.
+        const listingCopy = bindCopyFields(root, "listing", () => {
+          clearImage();
+          setStatus("", "idle");
+        }, chosenShape);
+        // 모양을 바꾸면 그림이 있을 때만 같은 값으로 다시 그린다. 고른 모양은 화면 메모리(라디오)에만 있다.
+        for (const input of shapeInputs) {
+          input.addEventListener("change", () => {
+            const had = !preview.hidden;
+            listingCopy?.show(chosenShape());
+            clearImage();
+            setStatus("", "idle");
+            if (had) make.click();
+          });
+        }
+
         const reset = () => {
+          for (const input of shapeInputs) input.checked = input.value === "basic";
+          listingCopy?.resetAll();
           for (const entry of picked) entry.box.remove();
           picked = [];
           touched = false;

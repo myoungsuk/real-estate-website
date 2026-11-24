@@ -1,27 +1,74 @@
 ---
-// 명함 A안 흰 종이(보드 45번 C, 운영자 결정 2026-11-20 18:09 "A 흰 종이"). 재단 크기 90×50mm, 안전 여백 4mm 안에 글을 둔다.
+// 명함(보드 45번 C, 운영자 결정 2026-11-20 18:09 "A 흰 종이" + 보드 20번 2026-11-24 "고를 수 있게" — 모양 6가지). 재단 크기 90×50mm, 안전 여백 4mm 안에 글을 둔다.
 // 크기는 모두 --mm(화면 미리 보기는 칸 폭에 맞춘 px, 인쇄는 1mm)의 배수라 화면과 인쇄가 같은 배치다. 가장 작은 글자는 2.54mm(약 7.2pt).
-// 글은 src/lib/work/promo-paper.mjs businessCardView()(사무소 확정 공개 정보)만 쓴다. 직함은 넣지 않는다.
+// 글은 src/lib/work/promo-paper.mjs businessCardView()(사무소 확정 공개 정보)만 쓴다. 직함은 넣지 않는다. 모양은 class(bc--모양)만 바꾼다.
+// data-card-text 칸(뒷면 제목·지역 줄·보라 밤 꼬리표)은 화면의 '문구 고치기'가 글을 바꾼다(2판). 처음 글은 지금 문구다.
+// 재단 여유(인쇄소용 3mm): 바탕색은 인쇄 칸(.bc-page[data-shape])이, 가장자리에 닿는 띠·사진(.bc__bleed-*)은 admin.css 인쇄 규칙이 늘린다.
+import { CARD_PHOTO } from "../../lib/work/promo-paper.mjs";
+
 interface Props {
   side: "front" | "back";
   view: ReturnType<typeof import("../../lib/work/promo-paper.mjs").businessCardView>;
+  shape?: string;
 }
 
-const { side, view } = Astro.props;
+const { side, view, shape = "white" } = Astro.props;
 const LOGO = "/images/brand/leaders-city-happy-logo.webp";
+const front = view.front;
 ---
 
 {side === "front" ? (
-  <div class="bc bc--front">
-    <img class="bc__logo" src={LOGO} alt="리더스시티 행복한부동산" data-card-logo />
-    <p class="bc__who"><small>{view.front.role}</small><strong>{view.front.name}</strong></p>
-    <p class="bc__tel"><b>{view.front.phone}</b><span>{view.front.email}</span></p>
-  </div>
+  shape === "green" ? (
+    <div class="bc bc--front bc--green" data-card-face="front">
+      <p class="bc__brand">{front.brand} {front.role}</p>
+      <p class="bc__name">{front.name}</p>
+      <span class="bc__badge"><img class="bc__logo" src={LOGO} alt="리더스시티 행복한부동산" data-card-logo /></span>
+      <p class="bc__tel"><b>{front.phone}</b><span>{front.email}</span></p>
+    </div>
+  ) : shape === "sign" ? (
+    <div class="bc bc--front bc--sign" data-card-face="front">
+      <span class="bc__awning bc__bleed-top" aria-hidden="true"></span>
+      <p class="bc__brand">{front.brand}</p>
+      <p class="bc__role">{front.role}</p>
+      <p class="bc__name">{front.name}</p>
+      <p class="bc__tel"><b>{front.phone}</b><span>{front.email}</span></p>
+    </div>
+  ) : shape === "photo" ? (
+    <div class="bc bc--front bc--photo" data-card-face="front">
+      <span class="bc__photo bc__bleed-left" style={`background-image: url("${CARD_PHOTO}");`} aria-hidden="true"></span>
+      <div class="bc__side">
+        <img class="bc__logo" src={LOGO} alt="리더스시티 행복한부동산" data-card-logo />
+        <p class="bc__who"><small>{front.role}</small><strong>{front.name}</strong></p>
+        <p class="bc__tel"><b>{front.phone}</b><span>{front.email}</span></p>
+      </div>
+    </div>
+  ) : shape === "stamp" ? (
+    <div class="bc bc--front bc--stamp" data-card-face="front">
+      <img class="bc__logo" src={LOGO} alt="리더스시티 행복한부동산" data-card-logo />
+      <p class="bc__seal"><small>{front.role}</small><strong>{front.name}</strong></p>
+      <p class="bc__tel"><b>{front.phone}</b><span>{front.email}</span></p>
+    </div>
+  ) : shape === "night" ? (
+    <div class="bc bc--front bc--night" data-card-face="front">
+      <span class="bc__moon" aria-hidden="true"></span>
+      <p class="bc__brand">{front.brand} {front.role}</p>
+      <p class="bc__name">{front.name}</p>
+      {front.closeTag && <p class="bc__tag" data-card-text="tag">{front.closeTag}</p>}
+      <p class="bc__tel"><b>{front.phone}</b><span>{front.email}</span></p>
+    </div>
+  ) : (
+    <div class="bc bc--front bc--white" data-card-face="front">
+      <img class="bc__logo" src={LOGO} alt="리더스시티 행복한부동산" data-card-logo />
+      <p class="bc__who"><small>{front.role}</small><strong>{front.name}</strong></p>
+      <p class="bc__tel"><b>{front.phone}</b><span>{front.email}</span></p>
+    </div>
+  )
 ) : (
-  <div class="bc bc--back">
+  <div class={`bc bc--back bc--${shape}`} data-card-face="back">
+    {shape === "sign" && <span class="bc__stripe bc__bleed-top" aria-hidden="true"></span>}
     <div>
-      <p class="bc__headline">{view.back.headline}</p>
-      <p class="bc__areas">{view.back.areas}</p>
+      <p class="bc__headline" data-card-text="headline">{view.back.headline}</p>
+      <p class="bc__areas" data-card-text="areas">{view.back.areas}</p>
     </div>
     <dl class="bc__rows">
       {view.back.rows.map(([label, value]) => (

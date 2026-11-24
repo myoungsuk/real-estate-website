@@ -5,11 +5,12 @@
 // - 분양권처럼 명시 기준이 정해지지 않은 매물은 고를 수 없다(blog-sources.mjs classifyPropertyType의 까닭을 그대로 보임).
 // - 비교는 같은 종류(명시 규칙의 같은 분류)·같은 거래 형태끼리 최대 3건. '가장 낮은' 같은 표시는 넣지 않는다.
 // - 호수·손님 정보는 넣지 않는다(소재지 칸은 blog-checks.mjs가 호수·전화번호 모양을 막음). 파일 이름에는 날짜만 넣는다.
+import { matchComplexByListingTitle } from "../complex-matching.mjs";
 import { MAX_COMPARE_LISTINGS } from "../listing-compare.mjs";
 import { buildDisclosure, formatDate, formatPrice, officeFieldsMissing, officeLines, resolveFloor } from "./ad-disclosure.mjs";
 import { listBlogSources } from "./blog-sources.mjs";
 import { validateBlogInputs } from "./blog-checks.mjs";
-import { OFFICE_DOMAIN, kakaoLine } from "./promo-paper.mjs";
+import { OFFICE_DOMAIN, kakaoLine, weekdayCloseTag } from "./promo-paper.mjs";
 
 export const LISTING_CARD_SIZE = Object.freeze({ width: 1080, height: 1350 });
 export const LISTING_PICK_MAX = MAX_COMPARE_LISTINGS;
@@ -178,6 +179,90 @@ export function buildCompareSheet(items, office, checkedAt) {
       rows,
       phone: `상담 ${office.mobile}`,
       phoneSub: [kakaoLine(office.kakaoUrl), OFFICE_DOMAIN].filter(Boolean),
+      disclosure: officeLines(office),
+    },
+  };
+}
+
+// ── 가격표 모양(보드 20번, 2026-11-24 사용자 답 "어 그렇게 해" — 가격표 01·06·08·10) ──
+// '기본'은 지금 안내지·비교표(2026-11-20 "A 매물 종이"). 새 모양은 위에 매물마다 가격·층·면적·방향을 크게, 아래에 나머지 명시사항 표를 싣는다.
+// 담는 규칙은 기본과 같다(같은 종류·같은 거래 형태끼리 최대 3건, 2026-11-21 00:08:46 "같은 종류·거래끼리만"). 표 글씨는 20px 아래로 줄이지 않고, 넘치면 만들지 않는다.
+export const LISTING_SHAPES = Object.freeze([
+  ["basic", "기본"],
+  ["white", "흰 종이"],
+  ["green", "초록 메뉴판"],
+  ["night", "보라 밤"],
+  ["photo", "사진 크게"],
+]);
+export const LISTING_SHAPE_DEFAULT = "basic";
+// 새로 쓴 문구(공개 전 승인 대상).
+export const LISTING_SHAPE_COPY = Object.freeze({
+  white: "보러 오시기 전에 전화 주세요",
+  green: "오늘의 매물",
+  night: "퇴근길에 보는 매물",
+  call: "집 보기 예약",
+});
+
+// 새 모양의 표 줄: 위 매물 칸에 이미 보인 항목(가격·거래 형태·면적·방향·총 층수, 1건 안내지와 같은 SHOWN_IN_HEAD)은 빼고,
+// 나머지 명시 항목을 buildDisclosure() 순서대로 싣는다(방·욕실은 한 줄). 맨 끝에 매물번호. 없는 값은 "—".
+function shapeRows(items) {
+  const order = [];
+  for (const item of items) {
+    for (const { key, label } of item.disclosure) {
+      if (SHOWN_IN_HEAD.has(key)) continue;
+      const rowKey = key === "bathrooms" ? "rooms" : key;
+      if (order.some((row) => row.key === rowKey)) continue;
+      order.push({ key: rowKey, label: rowKey === "rooms" ? "방 · 욕실" : label });
+    }
+  }
+  order.push({ key: "id", label: "매물번호" });
+  return order
+    .map(({ key, label }) => ({ key, label, values: items.map((item) => compareValue(item, key) ?? "—") }))
+    .filter((row) => row.values.some((value) => value !== "—"));
+}
+
+// 담은 매물이 모두 같은 공개 단지(사진 있는 published)에 맞으면 그 단지. 아니면 null(사진 모양은 그림으로 대신).
+export function shapeComplex(items, complexes) {
+  const published = (complexes ?? []).filter((complex) => complex.status === "published");
+  let found = null;
+  for (const item of items) {
+    const complex = matchComplexByListingTitle(item.title, published);
+    if (!complex || (found && found.slug !== complex.slug)) return null;
+    found = complex;
+  }
+  return found;
+}
+
+// 새 모양 글 묶음(1 ~ 3건). complex: shapeComplex() 결과(없으면 null).
+export function buildShapeSheet(items, office, checkedAt, complex = null) {
+  const blocked = listingOfficeBlockReason(office);
+  if (blocked) return { ok: false, error: blocked };
+  if (items.length < 1 || items.length > LISTING_PICK_MAX) return { ok: false, error: `가격표는 1 ~ ${LISTING_PICK_MAX}건으로 만듭니다.` };
+  const trade = items[0].tradeLabel;
+  const types = [...new Set(items.map((item) => item.propertyType))];
+  const kind = types.length === 1 ? types[0] : "공동주택";
+  const rows = shapeRows(items);
+  // 공개 단지 사진(complexes.json image, 공개 승인 사진)만 쓴다.
+  const photo = complex?.image?.src ? { src: complex.image.src, alt: complex.image.alt ?? "", caption: `사진: ${complex.name}` } : null;
+  return {
+    ok: true,
+    sheet: {
+      heading: complex ? `${complex.name} 매물` : `${trade} ${kind} ${items.length}건`,
+      sub: [checkedAt ? `${formatDate(checkedAt)} 확인` : null, LISTING_SOURCE_NOTE].filter(Boolean).join(" · "),
+      entries: items.map((item, index) => ({
+        no: String(index + 1),
+        tradeLabel: item.tradeLabel,
+        title: item.title,
+        line: [item.floor, item.area ? `${item.areaLabel === "전용면적" ? "전용 " : ""}${item.area}` : null, item.direction].filter(Boolean).join(" · "),
+        price: item.price,
+      })),
+      columns: items.length > 1 ? items.map((item, index) => `${index + 1}. ${item.title}`) : [],
+      rows,
+      recheck: LISTING_RECHECK,
+      photo,
+      phone: office.mobile,
+      closeTag: weekdayCloseTag(office.hours),
+      contact: [kakaoLine(office.kakaoUrl), OFFICE_DOMAIN].filter(Boolean),
       disclosure: officeLines(office),
     },
   };

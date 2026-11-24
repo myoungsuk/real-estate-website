@@ -6,10 +6,20 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { OFFICE_DISCLOSURE_FIELDS, officeFieldsMissing, officeLines } from "../src/lib/work/ad-disclosure.mjs";
 import { PROMO_DISCLOSURE_FIELDS, disclosureLines, disclosureProblems } from "../src/lib/work/realprice-promo.mjs";
+import { findDateText } from "../src/lib/work/paper-parts.mjs";
 import {
+  CARD_SHAPES,
+  CARD_SHAPE_DEFAULT,
   DONE_CARD_SIZE,
+  DONE_COPY,
   DONE_GUARD,
+  DONE_GUARD_PRICED,
+  DONE_SHAPES,
+  DONE_SHAPE_DEFAULT,
   areaBandText,
+  donePriceText,
+  parseMan,
+  weekdayCloseTag,
   buildDoneNotice,
   businessCardView,
   cardHoursText,
@@ -85,7 +95,7 @@ test("그림 크기·파일 이름·카카오톡 줄", () => {
 test("명함: 앞면은 대표·이름·전화·이메일, 직함은 없고 뒷면은 영업시간·상호·주소", () => {
   const view = businessCardView(office);
   assert.equal(view.blocked, null);
-  assert.deepEqual(view.front, { role: "대표", name: office.representative, phone: office.mobile, email: office.email });
+  assert.deepEqual(view.front, { brand: office.brandName, role: "대표", name: office.representative, phone: office.mobile, email: office.email, closeTag: "평일 밤 8시까지 상담" });
   assert.equal(cardHoursText(office.hours), "평일 09:00 ~ 20:00 · 토 09:00 ~ 18:00 · 일 예약 상담");
   assert.deepEqual(view.back.rows.map(([label]) => label), ["영업", "상담", "홈"]);
   assert.deepEqual(view.back.legal, [`${office.legalName} · 등록번호 ${office.registrationNumber}`, office.address]);
@@ -94,4 +104,65 @@ test("명함: 앞면은 대표·이름·전화·이메일, 직함은 없고 뒷�
   assert.doesNotMatch(all, /평(?!일)/u);
   assert.match(businessCardView({ ...office, address: "" }).blocked, /소재지/u);
   assert.equal(cardHoursText([{ label: "일요일", opens: null, closes: null, note: null }]), "일 휴무");
+});
+
+// ── 보드 20번(2026-11-24): 가격 고르기·모양 고르기 ──
+test("가격은 '가격 넣기'를 켰을 때만 들어가고, 꺼져 있으면 칸에 값이 있어도 넣지 않는다", () => {
+  const off = buildDoneNotice(good({ amountMan: "41500" }), office);
+  assert.equal(off.ok, true);
+  assert.equal(off.notice.price, null);
+  assert.equal(off.notice.guard, DONE_GUARD);
+  const on = buildDoneNotice(good({ priceOn: true, amountMan: "41,500" }), office);
+  assert.equal(on.notice.price, "4억 1,500만 원");
+  assert.equal(on.notice.guard, DONE_GUARD_PRICED);
+  assert.doesNotMatch(DONE_GUARD_PRICED, /가격|동의|허락/u, "허락받았다고 쓰지 않는다(확인 칸 없음)");
+  assert.match(DONE_GUARD_PRICED, /동·층·계약 날짜/u);
+  assert.equal(buildDoneNotice(good({ dealType: "jeonse", priceOn: true, amountMan: "23000" }), office).notice.price, "보증금 2억 3,000만 원");
+  assert.equal(buildDoneNotice(good({ dealType: "monthly-rent", priceOn: true, depositMan: "3000", monthlyMan: "90" }), office).notice.price, "보증금 3,000만 원 · 월 90만 원");
+  assert.equal(buildDoneNotice(good({ priceOn: true, amountMan: "" }), office).error.code, "PRICE");
+  assert.match(buildDoneNotice(good({ dealType: "jeonse", priceOn: true }), office).error.message, /보증금을/u);
+  assert.equal(buildDoneNotice(good({ dealType: "monthly-rent", priceOn: true, depositMan: "3000" }), office).error.code, "PRICE");
+  assert.equal(buildDoneNotice(good({ priceOn: "true", amountMan: "41500" }), office).notice.price, null, "true(참)일 때만 켬");
+});
+
+test("가격 칸: 만 원 단위 숫자만, 1 ~ 상한", () => {
+  assert.equal(parseMan("41,500", 999_999), 41500);
+  assert.equal(parseMan(" 90 ", 9_999), 90);
+  for (const bad of ["", "0", "4.5", "4억", "-1", "1000000", "abc", null]) assert.equal(parseMan(bad, 999_999), null, String(bad));
+  assert.equal(parseMan("10000", 9_999), null);
+  assert.equal(donePriceText("sale", { amountMan: "999999" }).text, "99억 9,999만 원");
+});
+
+test("단지 이름에 날짜를 넣으면 만들지 않는다(대장 조건: 거래 완료 그림에 날짜 없음)", () => {
+  for (const bad of ["행복단지 2026년", "행복단지 11월", "행복단지 2026.11", "행복단지 11/24"]) {
+    assert.equal(buildDoneNotice(good({ complexName: bad }), office).error.code, "NAME", bad);
+  }
+});
+
+test("모든 모양의 글에 날짜 모양이 없다(모양 문구·가격 켬·끔·거래 종류 셋)", () => {
+  assert.deepEqual(DONE_SHAPES.map(([value]) => value), ["basic", "white", "green", "receipt", "stamp"]);
+  assert.equal(DONE_SHAPE_DEFAULT, "basic", "처음 값은 지금 그림");
+  const copy = JSON.stringify(DONE_COPY);
+  assert.deepEqual(findDateText([copy]), [], copy);
+  for (const dealType of ["sale", "jeonse", "monthly-rent"]) {
+    for (const priceOn of [false, true]) {
+      const { notice } = buildDoneNotice(good({ dealType, priceOn, amountMan: "41500", depositMan: "3000", monthlyMan: "90" }), office);
+      const free = Object.values(notice).flat().filter((value) => typeof value === "string").filter((value) => !notice.disclosure.includes(value));
+      assert.deepEqual(findDateText(free), [], `${dealType} ${priceOn}`);
+      assert.doesNotMatch(free.join("\n"), /[0-9]+\s*(?:동(?!구)|층|호)/u, "동·층·호수 없음");
+    }
+  }
+});
+
+test("영업시간 꼬리표는 office.json 평일 닫는 시각으로 만든다", () => {
+  assert.equal(weekdayCloseTag(office.hours), "평일 밤 8시까지 상담");
+  assert.equal(weekdayCloseTag([{ label: "평일", closes: "18:00" }]), "평일 밤 6시까지 상담");
+  assert.equal(weekdayCloseTag([{ label: "평일", closes: "17:30" }]), "평일 17시 30분까지 상담");
+  for (const bad of [[], [{ label: "평일", closes: null }], [{ label: "평일", closes: "8pm" }], [{ label: "토요일", closes: "18:00" }], undefined]) assert.equal(weekdayCloseTag(bad), null);
+});
+
+test("명함 모양 6가지, 처음 값 흰 종이, 글은 모양과 상관없이 같다", () => {
+  assert.deepEqual(CARD_SHAPES.map(([value]) => value), ["white", "green", "sign", "photo", "stamp", "night"]);
+  assert.equal(CARD_SHAPE_DEFAULT, "white");
+  assert.equal(businessCardView({ ...office, hours: [] }).front.closeTag, null, "시각이 없으면 꼬리표 없음");
 });
