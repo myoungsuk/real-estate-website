@@ -11,10 +11,10 @@ import {
   REALPRICE_PRICE_OPTIONS,
   chipText,
 } from "../../../../lib/work/realprice-view.mjs";
-import { PROMO_IDS_MAX, PROMO_PATH, PROMO_PLACES } from "../../../../lib/work/realprice-promo.mjs";
+import { PROMO_IDS_MAX, PROMO_PATH, PROMO_PLACES, PROMO_STYLE_DEFAULT, PROMO_STYLES } from "../../../../lib/work/realprice-promo.mjs";
 
 // 단계 P 실거래가(P1-d, P1-f). 운영자 결정 2026-11-20 13:36:35 D안: 위 상태 한 줄 → 보기 3칸(새 거래·주요 거래·관심 단지) → 찾기칸 →
-// 거르기 단추 6개(기간·평형·금액·신고가만·분양권만·더 보기) → 'n건 보는 중'·켜짐 줄·다 담기 → 목록(거래마다 '담기'). 휴대폰·PC가 같은 순서이고
+// 거르기 단추 6개(기간·평형·금액·신고가만·분양권만·더 보기) → 'n건 보는 중'·켜짐 줄·다 담기 → 목록(거래마다 담기 체크칸). 휴대폰·PC가 같은 순서이고
 // 폭에 따른 모양은 CSS(admin.css '실거래가')가 나눈다. 서버를 부르므로 탭 미리 그리기 prerender 목록에 넣지 않는다.
 // 거래 흐름(보드 63번, 2026-11-20 운영자 "권하는 조합"): 매매 거래마다 12개월 흐름선·직전 거래·최고가 대비(앞선 최고 기준)·최근 3개월 건수.
 // 1221px 이상 표는 칸 3개(흐름 아래 3개월 건수, 거래 종류·표시는 금액 아래, 법정동·준공연도는 단지 아래 작은 줄), 1220px 이하 카드는 '흐름·직전 거래'를 눌러 펼친다. 쪽을 그린 뒤 보이는 매매 ID만 30개씩 한 번에 묻고 페이지 메모리에서 다시 쓴다.
@@ -220,6 +220,7 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
               <caption class="sr-only">실거래 목록(계약일 최근순)</caption>
               <thead>
                 <tr>
+                  <th scope="col" class="rt-pick-col">담기</th>
                   <th scope="col">단지</th>
                   <th scope="col" class="rt-th-size"><span>전용면적·</span><wbr />층</th>
                   <th scope="col">금액</th>
@@ -232,7 +233,6 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
                   <th scope="col" class="rt-only-card">법정동</th>
                   <th scope="col" class="rt-only-card">새로 들어옴</th>
                   <th scope="col" class="rt-only-card">흐름·직전 거래</th>
-                  <th scope="col" class="rt-pick-col">담기</th>
                 </tr>
               </thead>
               <tbody data-rt-rows></tbody>
@@ -254,11 +254,11 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
         <div class="rt-preview__head">
           <h2 class="rt-preview__title" id="rt-preview-title">미리보기 <small data-rt-preview-count>담은 거래 0건</small></h2>
           <div data-rt-preview-where hidden>
-            <p class="rt-preview__where" id="rt-preview-where-title">어디에 올릴까요?</p>
-            <div class="rt-preview__chips" role="radiogroup" aria-labelledby="rt-preview-where-title">
-              {PROMO_PLACES.map(([value, label], index) => (
-                <label class="rt-preview__chip">
-                  <input type="radio" name="rt-promo-kind" value={value} checked={index === 0} autocomplete="off" />
+            <p class="rt-preview__where" id="rt-preview-style-title">카드 모양</p>
+            <div class="rt-preview__styles" role="radiogroup" aria-labelledby="rt-preview-style-title">
+              {PROMO_STYLES.map(([value, label]) => (
+                <label class="rt-preview__style">
+                  <input type="radio" name="rt-promo-style" value={value} checked={value === PROMO_STYLE_DEFAULT} autocomplete="off" />
                   <span>{label}</span>
                 </label>
               ))}
@@ -268,7 +268,7 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
         <div class="rt-preview__body">
           <div class="rt-preview__empty" data-rt-preview-empty>
             <b>담은 거래가 없습니다</b>
-            <span>목록의 '담기'를 누르면 여기에 홍보물 그림이 바로 보입니다(최대 {PROMO_IDS_MAX}건).</span>
+            <span>목록에서 거래를 체크하면 여기에 홍보물 그림이 바로 보입니다(최대 {PROMO_IDS_MAX}건).</span>
           </div>
           <p class="rt-loading" role="status" data-rt-preview-loading hidden>홍보물 그림을 그리고 있습니다…</p>
           <p class="admin-inline-notice rt-notice" data-rt-preview-notice hidden><span aria-hidden="true">i</span><span data-rt-preview-notice-text></span></p>
@@ -282,13 +282,18 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
         <div class="rt-preview__act" data-rt-preview-act hidden>
           <div class="rt-preview__downloads" data-rt-preview-downloads></div>
           <p class="rt-preview__size" data-rt-preview-size></p>
-          <button class="admin-secondary-button rt-preview__copy" type="button" aria-describedby="rt-preview-copy-count" data-rt-preview-copy>
-            <span data-rt-preview-copy-text>인스타그램 글 복사</span>
-            <small id="rt-preview-copy-count" aria-hidden="true" data-rt-preview-copy-count></small>
-          </button>
-          <button class="admin-secondary-button" type="button" data-rt-preview-print>종이로 뽑기(A4)</button>
-          <p class="rt-preview__hint" data-rt-preview-post></p>
+          <p class="rt-preview__where" id="rt-preview-copy-title">올릴 곳에 맞춘 글 복사</p>
+          <div class="rt-places rt-places--panel" role="group" aria-labelledby="rt-preview-copy-title">
+            {PROMO_PLACES.map(([value, label]) => (
+              <button class="rt-place" type="button" data-rt-preview-copy={value} aria-describedby="rt-preview-post">
+                <b>{label}</b>
+                <small data-rt-preview-copy-state>글 복사</small>
+              </button>
+            ))}
+          </div>
+          <p class="rt-preview__hint" id="rt-preview-post" data-rt-preview-post>올릴 곳 단추를 누르면 그곳에 맞춘 글이 복사됩니다(출처·명시사항 포함).</p>
           <p class="admin-form-status" role="status" aria-live="polite" data-rt-preview-status></p>
+          <button class="admin-secondary-button" type="button" data-rt-preview-print>종이로 뽑기(A4)</button>
           <a class="admin-text-link rt-preview__more" href={PROMO_PATH} data-rt-preview-link>크게 보기·글 미리 보기 <span aria-hidden="true">→</span></a>
         </div>
       </aside>
@@ -297,7 +302,7 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
 
   <script>
     import office from "../../../../data/office.json";
-    import { renderPromoCard, type PromoCard } from "../../../../lib/work-realprice-card";
+    import { renderPromoCard, type PromoCard, type PromoStyle } from "../../../../lib/work-realprice-card";
     import { getWorkSession, readWork, WorkApiError } from "../../../../lib/work-realprice-client";
     import { renderBackfillBars } from "../../../../lib/work-realprice-dom";
     import { todayInKorea } from "../../../../lib/work/legal-dates.mjs";
@@ -326,12 +331,15 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
       PROMO_IDS_MAX,
       PROMO_PATH,
       PROMO_PLACES,
+      PROMO_STYLE_DEFAULT,
       isPromoSelectable,
+      isPromoStyle,
       promoCards,
       promoFileName,
       promoHref,
       promoSteps,
       promoTexts,
+      promoUpText,
       selectionText,
       takeButtonView,
       takeResultText,
@@ -527,6 +535,12 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
         td.dataset.label = label;
         return td;
       };
+      const srOnly = (text: string) => {
+        const span = document.createElement("span");
+        span.className = "sr-only";
+        span.textContent = text;
+        return span;
+      };
       const tag = (text: string, className: string) => {
         const span = document.createElement("span");
         span.className = `rt-tag ${className}`;
@@ -534,9 +548,8 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
         return span;
       };
 
-      // 홍보물 담기 칸(P1-f D안: 체크 칸을 '담기' 단추 모양으로): 해제된 거래는 담을 수 없다(설계서 22.10절). 다 담으면(최대 건수) 나머지 칸은 잠근다.
-      // 체크 칸은 보이지 않게만 숨기고(키보드·화면 읽기 프로그램은 그대로 체크 칸으로 씀) 글자는 '담기' → '✓ 담음'으로 바꾼다.
-      const pickLabel = (selectable: boolean, checked: boolean) => (!selectable ? "담을 수 없음" : checked ? "✓ 담음" : "담기");
+      // 홍보물 담기 칸(2026-11-24 사용자 답 "화면 배치까지": 줄 맨 앞 체크칸): 해제된 거래는 담을 수 없다(설계서 22.10절). 다 담으면(최대 건수) 나머지 칸은 잠근다.
+      // 진짜 체크 칸은 44px 칸 전체를 덮는 투명한 칸으로 두고(키보드 Space·화면 읽기는 체크 칸 그대로), 보이는 네모는 그림일 뿐이다(aria-hidden).
       function pickCell(item: Trade) {
         const td = cell("rt-pick", "담기");
         const label = document.createElement("label");
@@ -550,10 +563,10 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
         box.checked = selectable && picked.has(item.tradeKey);
         box.disabled = !selectable || (!box.checked && picked.size >= PROMO_IDS_MAX);
         box.setAttribute("aria-label", `${item.aptName || "단지명 없음"} ${dateText(item.dealDate)} ${kindLabel(item)}${selectable ? " 홍보물에 담기" : " 해제된 거래라 홍보물에 담을 수 없음"}`);
-        const text = document.createElement("span");
-        text.setAttribute("aria-hidden", "true");
-        text.textContent = pickLabel(selectable, box.checked);
-        label.append(box, text);
+        const mark = document.createElement("span");
+        mark.className = "rt-pick-mark";
+        mark.setAttribute("aria-hidden", "true");
+        label.append(box, mark);
         td.append(label);
         return td;
       }
@@ -572,8 +585,6 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
           if (box.dataset.rtPick !== "on") continue;
           box.checked = picked.has(box.value);
           box.disabled = !box.checked && full;
-          const text = box.nextElementSibling;
-          if (text) text.textContent = pickLabel(true, box.checked);
         }
         pickText.textContent = selectionText(picked.size);
         const href = promoHref([...picked.keys()]);
@@ -614,6 +625,7 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
       // 담은 거래가 바뀌면 잠깐 기다렸다가(연달아 담기) 공용 모듈로 ids를 다시 읽고(해제 거래 빼기·명시사항 빈 칸 막기), 지금 홍보물 화면과 같은 카드를 그린다.
       // 칸이 보이지 않으면(1220px 이하, CSS가 숨김) 부르지 않고, 넓혀서 보이게 되면 그때 그린다. 그림은 data 주소(CSP img-src에 blob 없음)이고, 서버 값은 textContent·속성으로만 넣는다.
       type PromoKind = "instagram" | "threads" | "blog" | "kakao";
+      // 2026-11-24 사용자 답: '어디에 올릴까요?' 대신 카드 모양 4개(처음 '기본')와 올릴 곳 단추 4개(누르면 그곳 글 복사, '✓ 복사됨').
       const preview = pick("[data-rt-preview]");
       const previewShown = () => preview.getClientRects().length > 0;
       const previewCount = pick("[data-rt-preview-count]");
@@ -627,14 +639,15 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
       const previewWarn = pick("[data-rt-preview-warn]");
       const previewAct = pick("[data-rt-preview-act]");
       const previewDownloads = pick("[data-rt-preview-downloads]");
-      const previewCopy = pick<HTMLButtonElement>("[data-rt-preview-copy]");
-      const previewCopyText = pick("[data-rt-preview-copy-text]");
-      const previewCopyCount = pick("[data-rt-preview-copy-count]");
+      const previewCopyButtons = [...root.querySelectorAll<HTMLButtonElement>("[data-rt-preview-copy]")];
       const previewPost = pick("[data-rt-preview-post]");
       const previewStatus = pick("[data-rt-preview-status]");
       const previewLink = pick<HTMLAnchorElement>("[data-rt-preview-link]");
       const promoKindNames = Object.fromEntries(PROMO_PLACES) as Record<PromoKind, string>;
       let previewKey = "";
+      let previewStyleKey = "";
+      // 같은 거래를 모양만 바꿔 다시 그릴 때는 서버를 다시 부르지 않는다(받은 자료·흐름을 이 화면 메모리에만 둠).
+      let previewLoaded: { input: { items: unknown; receivedAt: unknown; office: unknown; insights?: Record<string, unknown> }; flow: Record<string, unknown>; count: number } | null = null;
       let previewSeq = 0;
       let previewTimer = 0;
       let previewTexts: Record<PromoKind, string> | null = null;
@@ -647,24 +660,24 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
       if (typeof ResizeObserver === "function") new ResizeObserver(() => { if (previewShown()) schedulePreview(); }).observe(preview);
       previewRetry.addEventListener("click", () => {
         previewKey = "";
+        previewLoaded = null;
         void renderPreview();
       });
 
-      const previewKind = () => (root.querySelector<HTMLInputElement>('input[name="rt-promo-kind"]:checked')?.value ?? "instagram") as PromoKind;
-      // 올릴 곳을 바꾸면 복사 단추·글자 수·붙여 넣기 안내를 그 곳에 맞추고 복사함 표시는 지운다(홍보물 화면과 같은 글).
-      function showPreviewText() {
-        if (!previewTexts) return;
-        const kind = previewKind();
-        const counted = textCount(kind, previewTexts[kind]);
-        previewCopyText.textContent = `${promoKindNames[kind]} 글 복사`;
-        previewCopyCount.textContent = kind === "instagram" ? `${counted.label} · 해시태그 ${counted.tags}개` : counted.label;
-        previewCopyCount.dataset.state = counted.over ? "over" : "";
-        previewCopy.classList.remove("is-done");
-        previewPost.textContent = promoSteps(kind, { cardCount: previewImages.length || 1, counted }).post;
+      const previewStyle = () => {
+        const value = root.querySelector<HTMLInputElement>('input[name="rt-promo-style"]:checked')?.value;
+        return (isPromoStyle(value) ? value : PROMO_STYLE_DEFAULT) as PromoStyle;
+      };
+      function resetPreviewCopied() {
+        for (const button of previewCopyButtons) {
+          button.classList.remove("is-done");
+          const state = button.querySelector("[data-rt-preview-copy-state]");
+          if (state) state.textContent = "글 복사";
+        }
         previewStatus.textContent = "";
       }
       root.addEventListener("change", (event) => {
-        if ((event.target as HTMLInputElement).name === "rt-promo-kind") showPreviewText();
+        if ((event.target as HTMLInputElement).name === "rt-promo-style") void renderPreview();
       });
 
       function showPreviewBlocked(text: string, canRetry: boolean) {
@@ -701,49 +714,60 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
         if (!previewShown()) return;
         const ids = [...picked.keys()];
         const key = ids.join(",");
-        if (key === previewKey) return;
+        const style = previewStyle();
+        if (key === previewKey && style === previewStyleKey) return;
+        const reuse = key === previewKey && previewLoaded !== null;
         previewKey = key;
+        previewStyleKey = style;
         const seq = ++previewSeq;
         previewCount.textContent = `담은 거래 ${ids.length}건`;
         previewLink.href = promoHref(ids) ?? PROMO_PATH;
-        previewTexts = null;
         previewImages = [];
         previewCards.replaceChildren();
         previewDownloads.replaceChildren();
         previewWarn.hidden = true;
-        previewNotice.hidden = true;
         previewBlocked.hidden = true;
         previewAct.hidden = true;
-        previewWhere.hidden = true;
+        resetPreviewCopied();
+        if (!reuse) {
+          previewTexts = null;
+          previewLoaded = null;
+          previewNotice.hidden = true;
+          previewWhere.hidden = true;
+        }
         previewEmpty.hidden = ids.length > 0;
         if (ids.length === 0) {
           previewLoading.hidden = true;
           return;
         }
         previewLoading.hidden = false;
-        let loaded: Awaited<ReturnType<typeof loadPromoTrades>>;
-        try {
-          loaded = await loadPromoTrades(readWork, ids, office);
-        } catch (error) {
+        if (!reuse) {
+          let loaded: Awaited<ReturnType<typeof loadPromoTrades>>;
+          try {
+            loaded = await loadPromoTrades(readWork, ids, office);
+          } catch (error) {
+            if (seq !== previewSeq) return;
+            const code = errorCode(error);
+            showPreviewBlocked(`담은 거래를 불러오지 못했습니다. ${apiErrorText(code)}`, code !== "AUTH_REQUIRED");
+            return;
+          }
           if (seq !== previewSeq) return;
-          const code = errorCode(error);
-          showPreviewBlocked(`담은 거래를 불러오지 못했습니다. ${apiErrorText(code)}`, code !== "AUTH_REQUIRED");
-          return;
+          const { selection, input, blocked } = loaded;
+          if (selection.notices.length > 0) {
+            pick("[data-rt-preview-notice-text]").textContent = selection.notices.join(" ");
+            previewNotice.hidden = false;
+          }
+          if (blocked) {
+            showPreviewBlocked(blocked, selection.items.length > 0 && !selection.receivedAt);
+            return;
+          }
+          previewTexts = promoTexts(input) as Record<PromoKind, string>;
+          const flow = await previewInsights(selection.items);
+          if (seq !== previewSeq) return;
+          previewLoaded = { input, flow, count: selection.items.length };
         }
-        if (seq !== previewSeq) return;
-        const { selection, input, blocked } = loaded;
-        if (selection.notices.length > 0) {
-          pick("[data-rt-preview-notice-text]").textContent = selection.notices.join(" ");
-          previewNotice.hidden = false;
-        }
-        if (blocked) {
-          showPreviewBlocked(blocked, selection.items.length > 0 && !selection.receivedAt);
-          return;
-        }
-        previewTexts = promoTexts(input) as Record<PromoKind, string>;
-        const flow = await previewInsights(selection.items);
-        if (seq !== previewSeq) return;
-        const cards = promoCards({ ...input, insights: flow }) as PromoCard[];
+        const { input, flow, count } = previewLoaded as NonNullable<typeof previewLoaded>;
+        const cards = promoCards({ ...input, insights: flow, style }) as PromoCard[];
         const canvas = document.createElement("canvas");
         const today = todayInKorea();
         const figures: HTMLElement[] = [];
@@ -784,29 +808,36 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
         previewCards.replaceChildren(...figures);
         previewDownloads.replaceChildren(...links);
         pick("[data-rt-preview-size]").textContent = `1080×1350 PNG · ${cards.length}장`;
-        previewCount.textContent = `담은 거래 ${selection.items.length}건 · 그림 ${cards.length}장`;
+        previewCount.textContent = `담은 거래 ${count}건 · 그림 ${cards.length}장`;
         previewWarn.hidden = !overflow;
         previewLoading.hidden = true;
         previewWhere.hidden = false;
         previewAct.hidden = false;
-        showPreviewText();
       }
 
-      previewCopy.addEventListener("click", async () => {
-        if (!previewTexts) return;
-        const kind = previewKind();
-        const name = promoKindNames[kind];
-        try {
-          await navigator.clipboard.writeText(previewTexts[kind]);
-          previewCopyText.textContent = `✓ ${name} 글 복사함`;
-          previewCopy.classList.add("is-done");
-          previewStatus.textContent = `✓ ${name} 글을 복사했습니다.`;
-          previewStatus.dataset.state = "success";
-        } catch {
-          previewStatus.textContent = "자동 복사가 막혔습니다. '크게 보기·글 미리 보기'에서 글을 골라 직접 복사해 주세요.";
-          previewStatus.dataset.state = "error";
-        }
-      });
+      // 올릴 곳 단추: 그 곳 글을 복사하고 '✓ 복사됨'으로 바꾼 뒤, 글자 수와 그 앱에서 할 일을 한 줄로 알린다(홍보물 화면과 같은 글).
+      for (const button of previewCopyButtons) {
+        button.addEventListener("click", async () => {
+          if (!previewTexts) return;
+          const kind = button.dataset.rtPreviewCopy as PromoKind;
+          const name = promoKindNames[kind];
+          const counted = textCount(kind, previewTexts[kind]);
+          const steps = promoSteps(kind, { cardCount: previewImages.length || 1, counted });
+          resetPreviewCopied();
+          previewPost.textContent = `${steps.text} ${steps.post}`;
+          try {
+            await navigator.clipboard.writeText(previewTexts[kind]);
+            button.classList.add("is-done");
+            const state = button.querySelector("[data-rt-preview-copy-state]");
+            if (state) state.textContent = "✓ 복사됨";
+            previewStatus.textContent = `✓ ${name} 글을 복사했습니다.`;
+            previewStatus.dataset.state = "success";
+          } catch {
+            previewStatus.textContent = "자동 복사가 막혔습니다. '크게 보기·글 미리 보기'에서 글을 골라 직접 복사해 주세요.";
+            previewStatus.dataset.state = "error";
+          }
+        });
+      }
 
       // 종이로 뽑기(A4): 누를 때만 인쇄용 판(.rt-print-sheet, 홍보물 화면과 같은 인쇄 CSS)을 붙였다가 인쇄가 끝나면 뗀다. 평소 목록 인쇄는 그대로다.
       pick<HTMLButtonElement>("[data-rt-preview-print]").addEventListener("click", async () => {
@@ -837,6 +868,9 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
         const strong = document.createElement("strong");
         strong.textContent = item.aptName || "단지명 없음";
         name.append(strong);
+        // 딱지(분양권·▲ 신고가)는 단지 이름 옆에 둔다(2026-11-24, 표·카드 같음).
+        if (item.kind === "presale") name.append(tag("분양권", "rt-tag--presale"));
+        if (high) name.append(tag("신고가", "rt-tag--high"));
         const sub = document.createElement("small");
         sub.className = "rt-name__sub rt-only-table";
         sub.textContent = [item.umdName, Number.isInteger(item.buildYear) ? `${item.buildYear}년` : ""].filter(Boolean).join(" · ");
@@ -863,6 +897,14 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
           monthly.textContent = parts.monthly;
           price.append(" ", monthly);
         }
+        const up = high ? promoUpText(item) : "";
+        if (up) {
+          const rise = document.createElement("small");
+          rise.className = "rt-up";
+          rise.textContent = up;
+          rise.append(srOnly(" 앞선 최고보다"));
+          price.append(rise);
+        }
         if (high && Number.isSafeInteger(item.prevMaxWon)) {
           const prev = document.createElement("small");
           prev.className = "rt-prev";
@@ -877,7 +919,6 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
           kind.append(direct);
         }
         const flags = cell("rt-flags rt-only-card", "표시");
-        if (high) flags.append(tag("신고가", "rt-tag--high"));
         if (item.cancelled) flags.append(tag("해제", "rt-tag--cancel"));
         if (item.isNew) flags.append(tag("새로 들어옴", "rt-tag--new rt-only-table"));
         const date = cell("rt-date", "계약일");
@@ -890,7 +931,6 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
         const meta = document.createElement("span");
         meta.className = "rt-price__meta rt-only-table";
         meta.append(item.dealingGbn === "direct" ? `${kindLabel(item)} · 직거래` : kindLabel(item));
-        if (high) meta.append(tag("신고가", "rt-mtag rt-mtag--high"));
         if (item.cancelled) meta.append(tag("해제", "rt-mtag rt-mtag--cancel"));
         if (item.isNew) meta.append(tag("새로 들어옴", "rt-mtag rt-mtag--new"));
         price.append(meta);
@@ -899,7 +939,7 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
         const ratio = cell("rt-ratio rt-only-table", "최고가 대비");
         const fold = cell("rt-flowcell rt-only-card", "흐름·직전 거래");
         tr.dataset.rtKey = item.tradeKey;
-        tr.append(name, size, price, kind, flags, flow, last, ratio, date, umd, fresh, fold, pickCell(item));
+        tr.append(pickCell(item), name, size, price, kind, flags, flow, last, ratio, date, umd, fresh, fold);
         fillInsight(tr, item);
         return tr;
       }
@@ -907,12 +947,6 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
       // ── 거래 흐름(보드 63번) ──
 
       const SVG_NS = "http://www.w3.org/2000/svg";
-      const srOnly = (text: string) => {
-        const span = document.createElement("span");
-        span.className = "sr-only";
-        span.textContent = text;
-        return span;
-      };
       const small = (text: string, className = "") => {
         const element = document.createElement("small");
         if (className) element.className = className;
