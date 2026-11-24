@@ -270,6 +270,7 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
     import { createDisclosureFields, keepHeight, releaseHeight, type FieldState } from "../../../lib/work-disclosure-fields";
     import {
       BLOG_SOURCE_PAGE_SIZE,
+      BLOG_TRIMMED_NOTE,
       apiErrorText,
       blogCopyText,
       checkView,
@@ -974,7 +975,7 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
           checklistInput.value = (result.checklist ?? []).join("\n");
           checklistRow.hidden = !result.checklist;
           const closed = next.closed === "confirmed" ? " · 다 씀" : next.closed === "cancelled" ? " · 버림" : next.closed === "auto" ? " · 30일 지나 닫힘" : "";
-          resultMeta.textContent = `${kstShort(next.createdAt)} 만듦${closed} · 고치면 바로 다시 검사합니다. 고친 글은 저장되지 않습니다.`;
+          resultMeta.textContent = `${kstShort(next.createdAt)} 만듦${closed} · 고치면 바로 다시 검사합니다. 고친 글은 저장되지 않습니다.${result.trimmed ? ` ${BLOG_TRIMMED_NOTE}` : ""}`;
           relocRow.hidden = !next.needsLocation;
           relocInput.value = sourceKey(next.source) === locationKey ? locationValue : "";
           sourceGone.hidden = next.sourcePublic;

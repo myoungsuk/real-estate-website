@@ -4,6 +4,9 @@ import test from "node:test";
 import {
   CONTRACT_FIELD_ORDER,
   CONTRACT_QUOTE_MAX,
+  CONTRACT_TEXT_MAX,
+  CONTRACT_WARNING_MAX,
+  CONTRACT_WARNINGS_MAX_ITEMS,
   contractFieldOrder,
   contractInstructions,
   contractResultSchema,
@@ -41,16 +44,14 @@ test("스키마: 1회째와 2회째는 칸이 같고 순서만 다르며, 둘 �
   assert.equal(JSON.stringify(first).includes("name"), false, "사람 이름 칸 없음");
 });
 
-test("지시문: 2회째는 칸 안내 순서가 다르고, 둘 다 이름·주민번호를 쓰지 말라고 적는다", () => {
+test("지시문(2026-11-24 줄임): 4줄 이하, 이름·주민번호 금지·null·날짜와 금액 꼴·근거·한글 금액은 남기고 칸별 안내·글자 수·개수 상한은 없음", () => {
   const first = contractInstructions(1);
-  const second = contractInstructions(2);
-  assert.notEqual(first, second);
-  assert.ok(first.indexOf("contract_date:") < first.indexOf("balance:"));
-  assert.ok(second.indexOf("contract_date:") > second.indexOf("balance:"));
-  for (const text of [first, second]) {
-    assert.ok(text.includes("사람 이름·주민등록번호·전화번호·계좌번호는 어디에도 쓰지 않는다"));
-    assert.ok(text.includes("추측하거나 계산해서 채우지 않는다"));
+  assert.equal(contractInstructions(2), first, "칸 안내를 뺐으므로 2회째도 같은 글(순서 차이는 스키마에만)");
+  assert.ok(first.split("\n").length <= 4, "4줄 이하");
+  for (const phrase of ["사람 이름·주민등록번호·전화번호·계좌번호는 어디에도 쓰지 않는다", "추측하거나 계산하지 말고 value를 null", "YYYY-MM-DD", "원 단위 정수", "page", "box", "한글 금액", "warnings"]) {
+    assert.ok(first.includes(phrase), phrase);
   }
+  for (const phrase of ["120자", "200자", "최대 4개", "최대 10개", "contract_date:", "balance:"]) assert.equal(first.includes(phrase), false, `지시문에 '${phrase}' 없음`);
 });
 
 test("재검사: 정상 결과는 통과하고 칸 순서를 1회째 순서로 맞춘 새 객체를 돌려준다", () => {
@@ -61,7 +62,25 @@ test("재검사: 정상 결과는 통과하고 칸 순서를 1회째 순서로 �
   assert.deepEqual(checked.result, sampleContract());
 });
 
-test("재검사: 칸 누락·추가 칸·없는 날짜·음수·너무 큰 금액·너무 긴 글·틀린 종류는 모두 통과하지 못한다", () => {
+test("재검사(2026-11-24): 글자 칸은 상한에서 자르고 경고는 빈 것을 버린 뒤 앞 10개만, 날짜·금액 값은 자르지 않음", () => {
+  const ev = (quote) => ({ page: 1, quote, box: null });
+  const checked = validateContractResult(sampleContract({
+    contract_date: { value: "2026-11-02", evidence: ev("가".repeat(CONTRACT_QUOTE_MAX + 5)) },
+    property_text: { value: "나".repeat(CONTRACT_TEXT_MAX + 1), evidence: ev("") },
+    warnings: ["", " ", ...Array.from({ length: CONTRACT_WARNINGS_MAX_ITEMS + 2 }, (_, index) => `경고${index + 1}`), "다".repeat(CONTRACT_WARNING_MAX + 1)],
+  }));
+  assert.equal(checked.ok, true);
+  assert.equal(checked.result.contract_date.evidence.quote.length, CONTRACT_QUOTE_MAX);
+  assert.equal(checked.result.contract_date.value, "2026-11-02");
+  assert.equal(checked.result.property_text.value.length, CONTRACT_TEXT_MAX);
+  assert.deepEqual(checked.result.warnings, Array.from({ length: CONTRACT_WARNINGS_MAX_ITEMS }, (_, index) => `경고${index + 1}`), "빈 경고를 버린 뒤 앞 10개");
+  const long = validateContractResult(sampleContract({ warnings: ["다".repeat(CONTRACT_WARNING_MAX + 1)] }));
+  assert.equal(long.result.warnings[0].length, CONTRACT_WARNING_MAX);
+  const emoji = validateContractResult(sampleContract({ property_text: { value: `${"가".repeat(CONTRACT_TEXT_MAX - 1)}😀`, evidence: ev("") } }));
+  assert.equal(emoji.result.property_text.value, "가".repeat(CONTRACT_TEXT_MAX - 1), "두 칸 글자를 반으로 가르지 않음");
+});
+
+test("재검사: 칸 누락·추가 칸·없는 날짜·음수·너무 큰 금액·중도금 5개·틀린 종류·글자 칸이 글자 아님은 모두 통과하지 못한다", () => {
   const without = (key) => {
     const { [key]: _removed, ...rest } = sampleContract();
     return rest;
@@ -80,8 +99,10 @@ test("재검사: 칸 누락·추가 칸·없는 날짜·음수·너무 큰 금�
     "틀린 문서 종류": sampleContract({ document_kind: "deed" }),
     "틀린 거래 종류": sampleContract({ deal_type: "lease" }),
     "중도금 5개": sampleContract({ middle_payments: Array.from({ length: 5 }, () => sampleContract().balance) }),
-    "경고 11개": sampleContract({ warnings: Array.from({ length: 11 }, () => "가상 경고") }),
-    "너무 긴 원문 문구": sampleContract({ contract_date: { value: "2026-11-02", evidence: { page: 1, quote: "가".repeat(CONTRACT_QUOTE_MAX + 1), box: null } } }),
+    "경고가 글자 아님": sampleContract({ warnings: [1] }),
+    "경고가 배열 아님": sampleContract({ warnings: "가상 경고" }),
+    "원문 문구가 글자 아님": sampleContract({ contract_date: { value: "2026-11-02", evidence: { page: 1, quote: null, box: null } } }),
+    "물건 표시가 숫자": sampleContract({ property_text: { value: 1, evidence: { page: 1, quote: "", box: null } } }),
     "쪽 번호 0": sampleContract({ contract_date: { value: "2026-11-02", evidence: { page: 0, quote: "", box: null } } }),
     "자리 값 5개": sampleContract({ contract_date: { value: "2026-11-02", evidence: { page: 1, quote: "", box: [0, 0, 1, 1, 1] } } }),
     "자리 값 범위 밖": sampleContract({ contract_date: { value: "2026-11-02", evidence: { page: 1, quote: "", box: [0, 0, 1.2, 1] } } }),

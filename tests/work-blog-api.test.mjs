@@ -457,7 +457,7 @@ test("TK-63 생성 요청 실패: 4xx(429·401·400)는 만들어지지 않은 �
   }
 });
 
-test("TK-51 결과 받기: 조회 5xx는 1번 다시, 두 번 연속이면 그대로 진행 중, 결과 모양이 틀리거나 거절·잘림·실패면 failed(원문 저장 안 함, 실제 비용으로 바로잡음)", async (t) => {
+test("TK-51 결과 받기: 조회 5xx는 1번 다시, 두 번 연속이면 그대로 진행 중, 결과 모양이 틀리거나 거절·잘림·실패면 failed(원문 저장 안 함, 실제 비용으로 바로잡음), 상한을 넘은 글은 잘라 completed", async (t) => {
   installNetworkTrap(t);
   const runCase = async (steps) => {
     const { database, env } = blogDb();
@@ -472,12 +472,12 @@ test("TK-51 결과 받기: 조회 5xx는 1번 다시, 두 번 연속이면 그�
   const twice = await runCase([{ kind: "retrieve", respond: httpError(503) }, { kind: "retrieve", respond: networkError() }]);
   assert.deepEqual([twice.polled.status, twice.draft.status, twice.draft.errorCode], [200, "queued", null], "다음 조회에서 다시 봄");
 
+  // 2026-11-24부터 상한을 넘은 글자 수·개수는 잘라 받으므로 실패가 아니다(아래 over). 실패는 모양이 다르거나 제목·문단이 비었을 때뿐.
   const invalidResults = [
-    sampleResult({ title: "가".repeat(61) }),
-    sampleResult({ paragraphs: Array.from({ length: 13 }, () => "문단") }),
-    sampleResult({ paragraphs: ["가".repeat(601)] }),
-    sampleResult({ hashtags: Array.from({ length: 11 }, (_, index) => `태그${index}`) }),
-    sampleResult({ snsShort: "가".repeat(201) }),
+    sampleResult({ title: " " }),
+    sampleResult({ paragraphs: [" "] }),
+    sampleResult({ paragraphs: "문단" }),
+    sampleResult({ hashtags: [1] }),
     { ...sampleResult(), extra: "x" },
     (() => {
       const result = sampleResult();
@@ -494,6 +494,12 @@ test("TK-51 결과 받기: 조회 5xx는 1번 다시, 두 번 연속이면 그�
   }
   const edge = await runCase([{ kind: "retrieve", respond: completed("resp_fake_5", sampleResult({ title: "가".repeat(60), snsShort: "나".repeat(200), paragraphs: Array.from({ length: 12 }, () => "다".repeat(600)), hashtags: Array.from({ length: 10 }, (_, index) => `태그${index}`) })) }]);
   assert.equal(edge.draft.status, "completed", "경계값(60·200·12×600·10)은 통과");
+  assert.equal("trimmed" in edge.draft.result, false, "경계값은 자르지 않음");
+  const over = await runCase([{ kind: "retrieve", respond: completed("resp_fake_5", sampleResult({ title: "가".repeat(61), snsShort: "나".repeat(201), paragraphs: Array.from({ length: 13 }, () => "다".repeat(601)), hashtags: Array.from({ length: 11 }, (_, index) => `태그${index}`) })) }]);
+  const trimmed = over.draft.result;
+  assert.deepEqual([over.draft.status, over.draft.errorCode, trimmed.trimmed, trimmed.title.length, trimmed.snsShort.length, trimmed.paragraphs.length, Math.max(...trimmed.paragraphs.map((text) => text.length)), trimmed.hashtags.length],
+    ["completed", null, true, 60, 200, 12, 600, 10], "넘친 결과는 상한으로 잘라 completed(trimmed)로 저장");
+  assert.equal(usageRows(over.database)[0].estimated_cost_micro_usd, ACTUAL_4000_5000, "잘라 받아도 실제 비용으로 바로잡음");
   for (const [respond, code] of [[refusal("resp_fake_5"), "AI_RESULT_INVALID"], [incomplete("resp_fake_5"), "AI_RESULT_INCOMPLETE"], [failedResponse("resp_fake_5"), "AI_UPSTREAM_FAILED"]]) {
     const result = await runCase([{ kind: "retrieve", respond }]);
     assert.deepEqual([result.draft.status, result.draft.errorCode, result.draft.result], ["failed", code, null], code);
@@ -708,7 +714,10 @@ test("2026-11-23 글 초안 개선: 단지 글은 단지 자료 7개 항목을 �
   assert.deepEqual(payload.complex.details, expected, "보내는 단지 자료 = 숫자 검사가 보는 자료");
   assert.deepEqual(Object.keys(payload.complex.details), ["highlights", "unitGroups", "supplySummary", "livingSections", "amenityGroups", "checkpoints", "faqs"]);
   assert.doesNotMatch(call.body.input[0].content[0].text, /"seo"|"sources"|"image"|"aliases"|relatedContentIds|\.webp/u, "출처·검색 설정·사진·별칭·관련 콘텐츠는 보내지 않음");
-  for (const phrase of ["소제목(heading) 4 ~ 6개", "1,200 ~ 2,000자", "억지로 늘리지 않는다", "현장에서 확인할 점", "현장 메모"]) assert.ok(call.body.instructions.includes(phrase), phrase);
+  // 2026-11-24 지시문 줄임: 할 일·입력 사실만·사무소 정보 빼기·글 성격과 현장 메모·구성 한 줄(5줄)만 두고, 글자 수·개수 숫자와 금지 목록은 코드가 잡는다.
+  assert.ok(call.body.instructions.split("\n").length <= 5, "지시문은 5줄 이하");
+  for (const phrase of ["kind가 complex", "입력 JSON에 있는 사실만", "명시사항", "style.instruction", "현장에서 확인할 점", "현장 메모"]) assert.ok(call.body.instructions.includes(phrase), phrase);
+  for (const phrase of ["1,200 ~ 2,000자", "60자", "4 ~ 6개", "'평'", "직선거리", "보장"]) assert.ok(!call.body.instructions.includes(phrase), `지시문에 '${phrase}' 없음`);
   assert.deepEqual(call.body.text.format.schema.properties.sections.items.required, ["heading", "paragraphs"]);
 
   const done = await work(env, `/blog/drafts/${made.json.data.draft.id}`, { openaiFetch: openai.fetcher, now: NOW + 10_000 });

@@ -4,8 +4,9 @@
 //   보내지 않고 아래 재검사에서만 보며, null이 될 수 있는 배열(box)은 type 배열 대신 anyOf로 쓴다.
 // - 두 번 읽기의 2회째(runIndex 2)는 칸 순서를 바꾼 스키마·지시문을 쓴다(같은 식으로 같이 틀릴 가능성을 줄이려는 것, DEC-WT-17).
 //   2026-11-24부터 새 묶음은 한 번 읽기라 runIndex 1만 보낸다. 2회째 꼴은 옛 묶음 기록과 시험을 위해 순수 함수로만 남긴다.
-// - validateContractResult(value): OpenAI strict에만 기대지 않고 14.4절 전체(글자 수·실제 날짜·금액 범위 포함)를 다시 검사한다.
+// - validateContractResult(value): OpenAI strict에만 기대지 않고 14.4절 전체(실제 날짜·금액 범위·중도금 개수·쪽 번호·자리 값 포함)를 다시 검사한다.
 //   통과하지 못하면 { ok: false }(부르는 쪽이 AI_RESULT_INVALID로 적고 원문은 저장하지 않는다).
+//   2026-11-24부터 글자 칸(근거 문구·물건 표시·경고)의 글자 수와 경고 개수는 거절하지 않고 잘라 받는다(빈 경고는 버림).
 // - 사람 이름은 스키마에 없다(일정에 필요 없음).
 import { MAX_AMOUNT_WON_EXCLUSIVE } from "./work-format.mjs";
 
@@ -84,30 +85,17 @@ export function contractResultSchema(runIndex) {
   };
 }
 
-const FIELD_GUIDE = Object.freeze({
-  document_kind: "document_kind: 매매 계약서는 sale_contract, 임대차(전세·월세) 계약서는 lease_contract, 그 밖이거나 알 수 없으면 unknown.",
-  deal_type: "deal_type: sale(매매)·exchange(교환)·jeonse(전세)·monthly_rent(월세). 알 수 없으면 null.",
-  contract_date: "contract_date: 계약을 맺은 날(계약서 끝의 작성일).",
-  price_won: "price_won: 매매대금. 임대차 계약서면 null.",
-  deposit_won: "deposit_won: 보증금. 매매 계약서면 null.",
-  monthly_rent_won: "monthly_rent_won: 월 차임. 월세가 아니면 null.",
-  down_payment: "down_payment: 계약금의 금액(amount)과 치르는 날(date).",
-  middle_payments: "middle_payments: 중도금을 차수 순서대로 최대 4개. 없으면 빈 배열.",
-  balance: "balance: 잔금의 금액(amount)과 치르는 날(date).",
-  property_text: "property_text: 계약서의 부동산 표시(소재지)를 적힌 대로 120자 안으로.",
-  warnings: "warnings: 사람이 꼭 다시 봐야 할 점만 짧게(각 200자 이하, 최대 10개). 흐림·가림·고친 흔적·한글 금액과 숫자 금액이 다름 등.",
-});
-
-export function contractInstructions(runIndex) {
-  const order = contractFieldOrder(runIndex);
+// 2026-11-24 사용자 결정("AI 호출할 때 제약을 많이 걸수록 성능이 나빠진다", "어 그렇게 해"): 지시문은 할 일과 꼭 지킬 뜻만 4줄로 둔다.
+// 칸별 안내·글자 수·개수 상한은 뺐다. 글자 수·경고 개수는 validateContractResult()가 잘라 받고, 중도금 5개 이상·날짜·금액·쪽 번호·자리 값은 거절한다.
+// 남긴 것: 날짜·금액 꼴과 값이 null일 때의 근거 꼴(어기면 묶음 전체가 AI_RESULT_INVALID라 비용만 씀),
+// 이름·전화번호·계좌번호(코드는 주민등록번호 꼴만 가림), 한글 금액 우선(코드가 알 수 없음).
+// 칸 안내를 뺐으므로 runIndex와 상관없이 같은 글이다(2회째의 다른 순서는 스키마에만 남음).
+export function contractInstructions(_runIndex) {
   return [
-    "너는 한국 부동산 계약서 사진에서 날짜와 금액만 뽑는 도우미다. 결과는 사람이 사진과 대조해 확인한 뒤에만 저장한다.",
-    "사진에 적힌 글자만 옮긴다. 보이지 않거나 읽을 수 없으면 value를 null로 둔다. 추측하거나 계산해서 채우지 않는다. 신고 기한 같은 날짜를 만들어 내지 않는다.",
-    "사람 이름·주민등록번호·전화번호·계좌번호는 어디에도 쓰지 않는다.",
-    "날짜는 YYYY-MM-DD, 금액은 원 단위 정수로 쓴다(예: 금 삼억오천만원정 → 350000000). 한글 금액과 숫자 금액이 다르면 한글 금액을 쓰고 warnings에 적는다.",
-    "evidence.quote에는 그 값을 읽은 자리의 글자를 120자 안으로 옮긴다. evidence.page는 그 사진의 쪽 번호(1부터), box는 그 자리의 [왼쪽, 위, 오른쪽, 아래] 비율(0 ~ 1)이고 모르면 null이다. value가 null이면 quote는 빈 글자, page는 1, box는 null로 둔다.",
-    "아래 순서대로 칸을 채운다.",
-    ...order.map((key, index) => `${index + 1}. ${FIELD_GUIDE[key]}`),
+    "너는 한국 부동산 계약서 사진에서 거래 날짜·금액 칸을 읽어 스키마대로 옮기는 도우미다. 결과는 사람이 사진과 대조해 고른 뒤에만 쓰인다.",
+    "사진에 적힌 것만 옮기고, 안 보이거나 확실하지 않은 칸은 추측하거나 계산하지 말고 value를 null로 둔다. 날짜는 YYYY-MM-DD, 금액은 원 단위 정수다.",
+    "evidence에는 그 값을 읽은 쪽 번호(page, 1부터)·그 자리의 글자(quote)·자리(box, [왼쪽, 위, 오른쪽, 아래] 0 ~ 1 비율, 모르면 null)를 적고, value가 null이면 page 1·빈 quote·box null로 둔다.",
+    "사람 이름·주민등록번호·전화번호·계좌번호는 어디에도 쓰지 않는다. 한글 금액과 숫자 금액이 다르면 한글 금액을 쓰고, 그런 점과 흐림·가림·고친 흔적처럼 사람이 다시 볼 점은 warnings에 적는다.",
   ].join("\n");
 }
 
@@ -124,9 +112,14 @@ function exactKeys(value, keys) {
 }
 // 줄바꿈·제어 문자는 빈칸으로 바꾼다(한 줄 글로 저장).
 const oneLine = (value) => value.replace(/[\u0000-\u001f\u007f]+/gu, " ").trim();
+// 글자 칸(근거 문구·물건 표시·경고)은 상한을 넘으면 거절하지 않고 상한에서 자른다(2026-11-24, 이모지 같은 두 칸 글자를 반으로 가르지 않음).
+// 일정 계산에 쓰는 날짜·금액 값은 자르지 않고 아래에서 그대로 거절한다.
 function text(value, max) {
-  if (typeof value !== "string" || value.length > max) fail();
-  return oneLine(value);
+  if (typeof value !== "string") fail();
+  const line = oneLine(value);
+  if (line.length <= max) return line;
+  const code = line.charCodeAt(max - 1);
+  return line.slice(0, code >= 0xd800 && code <= 0xdbff ? max - 1 : max).trim();
 }
 
 export function isRealDate(value) {
@@ -173,7 +166,8 @@ export function validateContractResult(value) {
     if (!CONTRACT_DOCUMENT_KINDS.includes(value.document_kind)) fail();
     if (value.deal_type !== null && !CONTRACT_DEAL_TYPES.includes(value.deal_type)) fail();
     if (!Array.isArray(value.middle_payments) || value.middle_payments.length > CONTRACT_MIDDLE_PAYMENTS_MAX) fail();
-    if (!Array.isArray(value.warnings) || value.warnings.length > CONTRACT_WARNINGS_MAX_ITEMS) fail();
+    // 중도금은 일정이 되므로 5개 이상이면 거절한다(앞 4개만 남기면 차수가 조용히 빠짐). 경고는 글이라 아래에서 앞 10개만 남긴다.
+    if (!Array.isArray(value.warnings)) fail();
     return {
       ok: true,
       result: {
@@ -187,7 +181,7 @@ export function validateContractResult(value) {
         middle_payments: value.middle_payments.map(payment),
         balance: payment(value.balance),
         property_text: textField(value.property_text),
-        warnings: value.warnings.map((item) => text(item, CONTRACT_WARNING_MAX)),
+        warnings: value.warnings.map((item) => text(item, CONTRACT_WARNING_MAX)).filter(Boolean).slice(0, CONTRACT_WARNINGS_MAX_ITEMS),
       },
     };
   } catch {

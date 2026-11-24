@@ -108,6 +108,8 @@ export function normalizeHashtags(text) {
 
 const DISCLOSURE_RULE = "──────────";
 export const CHECKLIST_HEADING = "현장에서 확인할 점";
+// AI 글이 상한(blog-checks.mjs BLOG_RESULT_LIMITS)을 넘어 서버가 잘라 받은 초안(result.trimmed)에 붙이는 한 줄.
+export const BLOG_TRIMMED_NOTE = "AI 글이 길어 칸에 맞게 뒷부분을 잘랐습니다. 잘린 곳의 끝 문장을 확인해 주세요.";
 const HEADING_MARK = "■";
 
 // 블로그 글: 제목 → 문단(소제목이 있으면 그 문단 앞에 "■ 소제목" 한 줄) → 현장에서 확인할 점 → 해시태그 → 명시사항(코드가 붙임).
@@ -128,10 +130,11 @@ export function blogCopyText({ title, paragraphs, headings = [], checklist = [],
   return [...body, ...(tags ? [tags] : []), `${DISCLOSURE_RULE}\n${disclosureText}`].join("\n\n");
 }
 
-// SNS 글: 짧은 글 → 해시태그 → 명시사항(SNS 광고에도 같은 명시사항을 붙인다).
+// SNS 글: 짧은 글 → 해시태그 → 명시사항(SNS 광고에도 같은 명시사항을 붙인다). 짧은 글이 비면(2026-11-24부터 AI가 비워도 받음) 그 줄을 뺀다.
 export function snsCopyText({ snsShort, hashtags, disclosureText }) {
   const tags = hashtags.join(" ");
-  return [String(snsShort ?? "").trim(), ...(tags ? [tags] : []), `${DISCLOSURE_RULE}\n${disclosureText}`].join("\n\n");
+  const short = String(snsShort ?? "").trim();
+  return [...(short ? [short] : []), ...(tags ? [tags] : []), `${DISCLOSURE_RULE}\n${disclosureText}`].join("\n\n");
 }
 
 // ── 초안 상태 ──
