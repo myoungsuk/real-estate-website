@@ -830,13 +830,13 @@
     },
     "listing-paper": {
       "route": "/admin/work/listing-paper/",
-      "sources": "fbcf4f612c99752a9f11a40124e6d74d5ddde40ca3329aa4b8cf0e8600f1c273",
+      "sources": "50742512e6f5277c3aa7157957de52f66d474b340c0f10d5ac98322a7e7f7021",
       "shots": {
         "listing-phone-1-pick": {
           "width": 772,
           "height": 496,
-          "bytes": 11684,
-          "sha256": "7e94ed0a3d10bb7c0cdbd757eb9c1eac275a34d9f9ce97dc9c8a5211082255bf",
+          "bytes": 11744,
+          "sha256": "71cc3e144efe679e294df3dbca518a81570f87a365f5a9aba5337b1076b4b03f",
           "marks": [
             [
               0.0311,
@@ -855,8 +855,8 @@
         "listing-phone-2-fill": {
           "width": 780,
           "height": 990,
-          "bytes": 30596,
-          "sha256": "decbda85173b32861bc27b7e9f0ac5a1ddea2bbd0364e51fd88bc01c646c4821",
+          "bytes": 30390,
+          "sha256": "a54ef8905daa15558d53ccd02bcab1a3185a1852a7f0474b38c2a493a4d1d9bb",
           "marks": [
             [
               0.0359,
@@ -875,8 +875,8 @@
         "listing-phone-3-image": {
           "width": 772,
           "height": 1404,
-          "bytes": 56208,
-          "sha256": "fc0d7184a55d6b73572f0cec24d81dd0667db694f5ac9947fdebdfab4c0f5eeb",
+          "bytes": 56384,
+          "sha256": "c9b75ef169eacecf8226e9bae7954365b160fa80389205131ed5ca4c79096339",
           "marks": [
             [
               0.3277,
@@ -895,8 +895,8 @@
         "listing-wide-1-pick": {
           "width": 1520,
           "height": 276,
-          "bytes": 10334,
-          "sha256": "3e0c354d76570300a282f95ee53abdf61953cfb572c06edb4437311f3fafe442",
+          "bytes": 10428,
+          "sha256": "6d122a1f26c9fafcacd57ed464df7c414566177ce4e51c6c7edadce1344fc374",
           "marks": [
             [
               0.1466,
@@ -915,8 +915,8 @@
         "listing-wide-2-fill": {
           "width": 1520,
           "height": 470,
-          "bytes": 25724,
-          "sha256": "a3de8a91d43a4035f5b218ebb648c721514ec2dc56de4371772fbd8e58c27991",
+          "bytes": 25648,
+          "sha256": "d6d01457f7eb99a5c79fea5dd808ef052ab1852002ff8b2936107b2d44da4d8b",
           "marks": [
             [
               0.0038,
@@ -935,8 +935,8 @@
         "listing-wide-3-image": {
           "width": 1428,
           "height": 1304,
-          "bytes": 63894,
-          "sha256": "811253d96d0671781834ecea23b77c2f0c671a80202354a0cafe1201d35d6e53",
+          "bytes": 64104,
+          "sha256": "5e5a8686120cb8568054587569cc5c6239d0c0c73c8dcf201ee2d5b54ba69d40",
           "marks": [
             [
               0.1626,

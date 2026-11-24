@@ -1,7 +1,8 @@
 // 거래 완료 알림 카드 그림(보드 45번 C, 운영자 결정 2026-11-20 18:09 "① 가격 빼고 달·면적 흐리게"). canvas 1080×1350 → toDataURL('image/png').
 // 글은 src/lib/work/promo-paper.mjs의 buildDoneNotice()가 만들고, 이 파일은 그리기만 한다(서버 요청·브라우저 저장 없음).
 // 줄 나누기·글·네모·가로줄·로고는 업무 카드 공통 파일(work-card-draw.ts)을 실거래가 홍보물 카드와 함께 쓴다.
-// 모양: 머리 줄(로고 + "거래 완료 알림") → 도장 "거래 완료"(빨강 테두리, DESIGN.md stamp-red) → 단지 이름 → "전용 n㎡대 · 거래 종류" → 안내 2줄 → 보호 문장 → 상담 칸 → 아래 칸 사무소 명시사항.
+// 모양: 머리 줄(로고 + "거래 완료 알림") → 도장 "거래 완료"(빨강 테두리, DESIGN.md stamp-red) → 단지 이름 → "전용 n㎡대 · 거래 종류" → (가격을 켰을 때만 가격) → 안내 2줄 → 보호 문장 → 상담 칸 → 아래 칸 사무소 명시사항.
+// 이 그림은 홍보 종이 '모양'의 '기본'이다. 다른 모양은 work-done-shapes.ts.
 import { DONE_CARD_SIZE } from "./work/promo-paper.mjs";
 import { CARD_COLORS, font, hline, loadLogo, rect, text, width, type Logo, type Pen } from "./work-card-draw";
 
@@ -10,9 +11,15 @@ export type DoneNotice = {
   stamp: string;
   name: string;
   fact: string;
+  area?: string;
+  deal?: string;
+  // 가격을 켰을 때만 글이 있다(보드 20번, 2026-11-24 "넣을지 고르게"). 꺼져 있으면 null.
+  price?: string | null;
   message: string[];
   guard: string;
   phone: string;
+  mobile?: string;
+  hours?: string;
   sub: string[];
   disclosure: string[];
 };
@@ -101,6 +108,7 @@ function body(pen: Pen, logo: Logo, notice: DoneNotice, s: number) {
   y = stamp(pen, notice.stamp, PAD, y, Math.round(60 * s)) + Math.round(34 * s);
   y = text(pen, notice.name, PAD, y, { px: namePx(pen, notice.name, s), weight: 900, color: C.navy, lh: 1.12 });
   y = factText(pen, notice.fact, y + Math.round(10 * s), Math.round(50 * s));
+  if (notice.price) y = text(pen, notice.price, PAD, y + Math.round(8 * s), { px: Math.round(56 * s), weight: 900, color: C.navy, lh: 1.2 });
   y += Math.round(30 * s);
   for (const line of notice.message) y = text(pen, line, PAD, y, { px: Math.round(40 * s), lh: 1.5 });
   y = text(pen, notice.guard, PAD, y + Math.round(14 * s), { px: Math.round(30 * s), color: C.soft, lh: 1.45 });

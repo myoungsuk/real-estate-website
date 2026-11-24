@@ -369,3 +369,105 @@ test("손가락으로 쓰는 넓은 화면 1280px: 조밀한 PC 규칙(36px·14p
     await context.close();
   }
 });
+
+// 보드 20번(2026-11-24 사용자 답 "어 그렇게 해" — 가격표 01·06·08·10): 모양 띠. 처음 값은 '기본'(지금 그림)이다.
+// '기본' 밖의 모양은 명시사항 표를 20px보다 작게 하지 않으므로, 자리가 모자라면 그림 없이 막는 문장만 보인다.
+test("매물 안내지 모양 1280px: 처음 '기본', 그림이 있을 때 모양을 바꾸면 다시 그림, 1건은 모든 모양 PNG 1080×1350, 3건은 그리거나 막는 문장, 서버 요청 0", async ({ page }) => {
+  test.skip(saleApartments.length < 3, SHORT_OF("층 숫자가 있는 매매 아파트", 3 - saleApartments.length));
+  const assertNoErrors = collectErrors(page);
+  const { apiCalls, violations } = await setup(page, 1280);
+  await page.goto(PAGE);
+  const shape = (label) => page.getByRole("radio", { name: label, exact: true });
+  const status = page.locator("[data-lp-status]");
+  const image = page.locator("[data-lp-image]");
+  const preview = page.locator("[data-lp-preview]");
+  await expect(shape("기본")).toBeChecked();
+
+  const [a, b, c] = saleApartments;
+  await page.locator(`[data-lp-pick='${a.id}']`).click();
+  await fillApartment(page, a.id);
+  await page.getByRole("button", { name: "안내지 그림 만들기" }).click();
+  await expect(status).toHaveText(/^✓ 그림을 만들었습니다/u);
+  for (const label of ["흰 종이", "초록 메뉴판", "보라 밤", "사진 크게"]) {
+    const before = await image.getAttribute("src");
+    await shape(label).check();
+    await expect(preview, label).toBeVisible();
+    await expect(status, label).toHaveText(/^✓ 그림을 만들었습니다/u);
+    await expect.poll(() => image.getAttribute("src"), label).not.toBe(before);
+    const src = await image.getAttribute("src");
+    expect(pngSize(Buffer.from(src.split(",")[1], "base64")), label).toEqual({ width: 1080, height: 1350, signature: "PNG" });
+  }
+
+  // 3건 비교: 그림이 되면 1080×1350, 안 되면 그림 없이 까닭을 알린다(작은 글씨로 줄여 넣지 않음).
+  for (const item of [b, c]) {
+    await page.locator(`[data-lp-pick='${item.id}']`).click();
+    await fillApartment(page, item.id);
+  }
+  for (const label of ["흰 종이", "초록 메뉴판", "보라 밤", "사진 크게"]) {
+    await shape(label).check();
+    await page.getByRole("button", { name: "비교표 그림 만들기" }).click();
+    await expect(status, label).toHaveText(/^✓ 그림을 만들었습니다|20px 글씨로 다 들어가지 않아/u);
+    if (await preview.isVisible()) {
+      const src = await image.getAttribute("src");
+      expect(pngSize(Buffer.from(src.split(",")[1], "base64")), label).toEqual({ width: 1080, height: 1350, signature: "PNG" });
+    } else {
+      await expect(page.locator("[data-lp-download]"), label).toBeHidden();
+    }
+  }
+  expect(apiCalls).toEqual([]);
+  expect(violations).toEqual([]);
+  assertNoErrors();
+});
+
+// 문구 고치기(보드 20번 2판): 새 모양의 상담 줄·큰 제목·꼬리표를 고치면 그림이 바뀌고, 막는 글이면 만들지 않는다. '기본'·'사진 크게'는 고칠 칸이 없다.
+test("매물 안내지 문구 고치기 1280px: 보라 밤 꼬리표를 고치면 그림이 바뀌고 비우면 빼고 그림, 동·호수·다른 전화번호는 막음, '기본'은 고칠 칸 없음, 서버 요청 0", async ({ page }) => {
+  test.skip(saleApartments.length < 1, SHORT_OF("층 숫자가 있는 매매 아파트", 1));
+  const assertNoErrors = collectErrors(page);
+  const { apiCalls, violations } = await setup(page, 1280);
+  await page.goto(PAGE);
+  const status = page.locator("[data-lp-status]");
+  const image = page.locator("[data-lp-image]");
+  const preview = page.locator("[data-lp-preview]");
+  const make = page.getByRole("button", { name: "안내지 그림 만들기" });
+  const [a] = saleApartments;
+  await page.locator(`[data-lp-pick='${a.id}']`).click();
+  await fillApartment(page, a.id);
+  await page.locator("[data-copy-tool='listing'] summary").click();
+  await expect(page.locator("[data-copy-set='basic']")).toContainText("이 모양에는 고칠 문구가 없습니다");
+  await page.getByRole("radio", { name: "보라 밤", exact: true }).check();
+  const tag = page.locator("#listing-copy-night-tag");
+  await expect(tag).toBeVisible();
+  await expect(tag).toHaveValue("평일 밤 8시까지 상담");
+  await make.click();
+  await expect(status).toHaveText(/^✓ 그림을 만들었습니다/u);
+  const before = await image.getAttribute("src");
+  await tag.fill("주말 예약 상담");
+  await expect(preview).toBeHidden();
+  await make.click();
+  await expect(status).toHaveText(/^✓ 그림을 만들었습니다/u);
+  const edited = await image.getAttribute("src");
+  expect(edited).not.toBe(before);
+  await tag.fill("");
+  await make.click();
+  await expect(status).toHaveText(/^✓ 그림을 만들었습니다/u);
+  expect(await image.getAttribute("src")).not.toBe(edited);
+  for (const [value, reason] of [["101동 앞", "동 번호·호수"], ["010-9999-0000", "사무소 번호가 아닌 전화번호"]]) {
+    await tag.fill(value);
+    await make.click();
+    await expect(status, value).toContainText(reason);
+    await expect(preview, value).toBeHidden();
+  }
+  await page.getByRole("button", { name: "처음 문구로" }).click();
+  await expect(tag).toHaveValue("평일 밤 8시까지 상담");
+  await page.getByRole("radio", { name: "초록 메뉴판", exact: true }).check();
+  await page.locator("#listing-copy-green-head").fill("이번 주 매물");
+  await make.click();
+  await expect(status).toHaveText(/^✓ 그림을 만들었습니다/u);
+  const src = await image.getAttribute("src");
+  expect(pngSize(Buffer.from(src.split(",")[1], "base64"))).toEqual({ width: 1080, height: 1350, signature: "PNG" });
+  await page.getByRole("radio", { name: "사진 크게", exact: true }).check();
+  await expect(page.locator("[data-copy-set='photo']")).toContainText("이 모양에는 고칠 문구가 없습니다");
+  expect(apiCalls).toEqual([]);
+  expect(violations).toEqual([]);
+  assertNoErrors();
+});
