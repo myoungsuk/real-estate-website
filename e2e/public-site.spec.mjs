@@ -422,8 +422,46 @@ test("관리 화면 사용법 상자는 접혀 있다가 열리고, 자세한 �
   await expect(page.locator("#work-fee")).toBeInViewport();
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex,nofollow,noarchive");
   await expect(page.locator('.admin-menu a[href="/admin/help/"]').first()).toHaveAttribute("aria-current", "page");
-  await expect(page.locator("#admin-main img"), "사진 없이 글만").toHaveCount(0);
+  // 2026-11-24 "B 단계 그림 줄": 그림은 단계 그림 칸 안에만, 관리자 그림 폴더에서만 온다.
+  await expect(page.locator("#admin-main img:not(.admin-help-figure img)"), "단계 그림 밖에는 사진 없음").toHaveCount(0);
+  for (const src of await page.locator("#admin-main .admin-help-figure img").evaluateAll((images) => images.map((image) => image.getAttribute("src")))) {
+    expect(src).toMatch(/^\/admin\/help\/img\/[a-z0-9-]+\.webp$/u);
+  }
   assertNoBrowserErrors();
+});
+
+test("사용 안내 단계 그림: 390px은 휴대폰 그림만, 1280px은 넓은 화면 그림만 받아 모두 뜨고, 번호는 그림 아래 글과 같은 수다", async ({ page }) => {
+  await page.route("**/api/admin/**", (route) => route.fulfill({ status: 503, json: { ok: false, error: { code: "TEST_OFFLINE", message: "시험 중에는 관리 API를 부르지 않습니다." } } }));
+  for (const [width, shown, hidden] of [[390, "phone", "wide"], [1280, "wide", "phone"]]) {
+    await page.setViewportSize({ width, height: 900 });
+    const requested = [];
+    const listener = (request) => { if (request.url().includes("/admin/help/img/")) requested.push(new URL(request.url()).pathname); };
+    page.on("request", listener);
+    await page.goto("/admin/help/");
+    const figures = page.locator(".admin-help-figure");
+    expect(await figures.count(), "단계 그림 3곳(먼저 3곳, 2026-11-24)").toBe(3);
+    for (const figure of await figures.all()) {
+      await expect(figure.locator(`.admin-help-figure__frames--${hidden}`)).toBeHidden();
+      const frames = figure.locator(`.admin-help-figure__frames--${shown} > li`);
+      for (const frame of await frames.all()) {
+        const image = frame.locator("img");
+        await image.scrollIntoViewIfNeeded();
+        await expect.poll(() => image.evaluate((node) => node.complete && node.naturalWidth > 0), { message: `${width}px 그림이 뜸` }).toBe(true);
+        expect(await image.getAttribute("alt")).toBeTruthy();
+        const pins = frame.locator(".admin-help-figure__pin");
+        await expect(pins).toHaveCount(await frame.locator(".admin-help-figure__pins > li").count());
+        const box = await image.boundingBox();
+        for (const pin of await pins.all()) {
+          const at = await pin.boundingBox();
+          expect(at.x >= box.x - 1 && at.x + at.width <= box.x + box.width + 1, `${width}px 번호가 그림 가로 안`).toBe(true);
+        }
+      }
+    }
+    page.off("request", listener);
+    expect(requested.length, `${width}px 받은 그림`).toBeGreaterThan(0);
+    expect(requested.every((path) => path.includes(`-${shown}-`)), `${width}px 숨은 쪽 그림을 받지 않음: ${requested.join(" ")}`).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), `${width}px 가로 넘침`).toBeLessThanOrEqual(1);
+  }
 });
 
 // 화면 목록은 사용법 문구 한 곳(admin-help.mjs ADMIN_PAGE_HELP)에서 센다. 관리 화면마다 항목이 하나씩 있는지는 tests/admin-help.test.mjs가 화면 원본과 대조한다.

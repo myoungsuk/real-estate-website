@@ -1,9 +1,11 @@
 ---
+import AdminHelpFigure from "../../../components/admin/AdminHelpFigure.astro";
 import AdminHelpText from "../../../components/admin/AdminHelpText.astro";
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 import { ADMIN_HELP_GUIDE } from "../../../lib/admin-help.mjs";
 
 // 관리자 '사용 안내'(보드 62번, 사용자 결정 2026-11-19 13:34:39·14:03:46). 2026-11-19 대장 안내서를 사진 없이 글만 옮겼다.
+// 2026-11-24 "B 단계 그림 줄"(사용자 결정 10:46:13)로 세 곳(계약서 사본·매출장부 고치기·휴대폰 캘린더 구독)에만 단계 그림을 넣었다(AdminHelpFigure, 이 화면에만).
 // 각 관리 화면의 '이 화면 사용법' 상자가 이 화면의 같은 칸(id)으로 연결한다. 문구는 src/lib/admin-help.mjs에서 고친다.
 const quickLinks = [
   { href: "#external-links-instagram", label: "인스타그램 게시물을 홈에 올리기" },
@@ -14,7 +16,7 @@ const quickLinks = [
 
 <AdminLayout
   title="사용 안내 | 행복한부동산 관리자"
-  description="관리자 화면을 메뉴 순서대로 쓰는 방법을 글로 정리한 안내입니다."
+  description="관리자 화면을 메뉴 순서대로 쓰는 방법을 글과 단계 그림으로 정리한 안내입니다."
 >
   <div class="admin-page-header admin-page-header--compact">
     <div>
@@ -66,6 +68,8 @@ const quickLinks = [
               section.level === 3
                 ? <h4 class="admin-help-block-title">{block.text}</h4>
                 : <h3 class="admin-help-block-title">{block.text}</h3>
+            ) : block.type === "figure" ? (
+              <AdminHelpFigure id={block.id} />
             ) : block.type === "table" ? (
               <table class="admin-help-table">
                 <thead><tr>{block.head.map((cell) => <th scope="col">{cell}</th>)}</tr></thead>

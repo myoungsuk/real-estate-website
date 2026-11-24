@@ -8,6 +8,7 @@ import {
   extractHelpLabels,
   splitHelpText,
 } from "../src/lib/admin-help.mjs";
+import { ADMIN_HELP_FIGURES } from "../src/lib/admin-help-figures.mjs";
 
 const root = new URL("../", import.meta.url);
 const readSource = (path) => readFile(new URL(path, root), "utf8");
@@ -92,6 +93,8 @@ const blockTexts = (block) => {
   if (block.type === "steps" || block.type === "list") return block.items;
   if (block.type === "table") return [...block.head, ...block.rows.flat()];
   if (block.type === "note") return [block.title, block.text];
+  // 단계 그림(2026-11-24): 번호 글과 대체 글의 작은따옴표 이름도 화면 원본과 대조한다.
+  if (block.type === "figure") return [...(ADMIN_HELP_FIGURES[block.id].note ? [ADMIN_HELP_FIGURES[block.id].note] : []), ...[...ADMIN_HELP_FIGURES[block.id].phone, ...ADMIN_HELP_FIGURES[block.id].wide].flatMap((frame) => [frame.alt, ...frame.pins])];
   return [block.text];
 };
 
@@ -260,7 +263,10 @@ test("사용 안내 화면은 관리자 메뉴 '확인' 묶음 끝에 있고, �
   assert.match(page, /import AdminLayout from "[./]+layouts\/AdminLayout\.astro";/u, "noindex 머리말은 AdminLayout이 넣음");
   assert.match(page, /<AdminLayout\b/u);
   assert.doesNotMatch(page, /<AdminPageHelp\b/u, "사용 안내 화면에는 상자를 두지 않음");
-  assert.doesNotMatch(page, /<img\b|\.webp|\.png|\.jpe?g/u, "사진 없이 글만(사용자 결정 14:03:46)");
+  // 2026-11-19 14:03:46 "글만 넣기" → 2026-11-24 10:46:13 "B 단계 그림 줄": 그림은 사용 안내 화면의 단계 그림 부품으로만 넣고, 상자에는 넣지 않는다.
+  assert.doesNotMatch(page, /<img\b|\.webp|\.png|\.jpe?g/u, "화면 원본에 그림을 직접 넣지 않음(단계 그림 부품으로만)");
+  assert.match(page, /block\.type === "figure" \? \(\s*<AdminHelpFigure id=\{block\.id\} \/>/u, "단계 그림 부품");
+  assert.doesNotMatch(box, /<img\b|AdminHelpFigure|\.webp/u, "'이 화면 사용법' 상자에는 그림 없음");
   assert.match(headers, /\/admin\/\*\r?\n\s+Cache-Control: no-store\r?\n\s+X-Robots-Tag: noindex, nofollow, noarchive/u, "/admin/help/도 /admin/* 규칙으로 no-store·noindex");
   assert.match(config, /return !pathname\.startsWith\("\/admin\/"\)/u, "사이트맵에서 /admin/ 아래 전부 제외");
   assert.doesNotMatch(llms, /\/admin/u, "llms.txt는 관리자 주소를 쓰지 않음");

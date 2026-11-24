@@ -1,0 +1,70 @@
+---
+// 사용 안내 단계 그림(사용자 결정 2026-11-24 10:46:13 "B 단계 그림 줄"). '사용 안내' 화면에만 쓰고 '이 화면 사용법' 상자에는 쓰지 않는다.
+// 그림 글·번호 글은 src/lib/admin-help-figures.mjs, 그림 크기·번호 자리는 npm run help:shots가 쓴 src/lib/admin-help-images.json에서 읽는다.
+// 번호 동그라미와 테두리는 그림에 굽지 않고 글자로 얹으며(aria-hidden), 번호 뜻은 그림 아래 번호 목록 글에 있다.
+// 휴대폰 그림 줄은 979px 이하, 넓은 화면 그림 줄은 980px 이상에서만 보이고, 숨은 쪽 그림은 loading="lazy"라 받지 않는다.
+import AdminHelpText from "./AdminHelpText.astro";
+import { ADMIN_HELP_FIGURES, figureFrameStarts } from "../../lib/admin-help-figures.mjs";
+import images from "../../lib/admin-help-images.json";
+
+interface Props {
+  id: string;
+}
+
+type Shot = { width: number; height: number; marks: number[][] };
+const { id } = Astro.props;
+const figure = ADMIN_HELP_FIGURES[id];
+const shots = (images.figures as Record<string, { shots: Record<string, Shot> } | undefined>)[id]?.shots;
+if (!figure || !shots) throw new Error(`사용 안내 그림 ${id}이 없습니다(npm run help:shots로 찍음)`);
+const devices = [["phone", figure.phone], ["wide", figure.wide]] as const;
+const pct = (value: number) => `${(Math.min(1, Math.max(0, value)) * 100).toFixed(2)}%`;
+// 번호 동그라미 자리: 테두리 왼쪽 바깥 → 오른쪽 바깥 → 안쪽 오른쪽 위 차례로 그림 안에 들어가는 곳(폭 전체 칸은 글이 왼쪽에서 시작하므로 오른쪽 위).
+const pinPlace = ([left, top, right, bottom]: number[]) => {
+  const middle = (top + bottom) / 2;
+  if (left > 0.09) return { side: "left", x: left, y: middle };
+  if (right < 0.91) return { side: "right", x: right, y: middle };
+  return { side: "inside", x: right, y: top };
+};
+// 그림의 큰 부분을 덮는 자리(예: 크게 본 사진 전체)는 테두리를 그리지 않고 번호만 둔다.
+const ringed = ([left, top, right, bottom]: number[]) => (right - left) * (bottom - top) < 0.3;
+const titleId = `admin-help-figure-${id}`;
+---
+
+<figure class="admin-help-figure" aria-labelledby={titleId}>
+  <figcaption class="admin-help-figure__title" id={titleId}>그림으로 보기: {figure.title}</figcaption>
+  {figure.note && <p class="admin-help-figure__note"><AdminHelpText text={figure.note} /></p>}
+  {devices.map(([device, frames]) => {
+    const starts = figureFrameStarts(frames);
+    return (
+      <ol class={`admin-help-figure__frames admin-help-figure__frames--${device}`} role="list">
+        {frames.map((frame, index) => {
+          const shot = shots[frame.shot];
+          if (!shot || shot.marks.length !== frame.pins.length) throw new Error(`사용 안내 그림 ${frame.shot}: 번호 자리와 글 수가 다릅니다(npm run help:shots)`);
+          return (
+            <li class="admin-help-figure__frame">
+              <div class="admin-help-figure__shot">
+                <img src={`/admin/help/img/${frame.shot}.webp`} width={Math.round(shot.width / 2)} height={Math.round(shot.height / 2)} alt={frame.alt} loading="lazy" decoding="async" />
+                <span class="admin-help-figure__marks" aria-hidden="true">
+                  {shot.marks.map((box, markIndex) => {
+                    const place = pinPlace(box);
+                    return (
+                      <>
+                        {ringed(box) && <span class="admin-help-figure__ring" style={`left:${pct(box[0])};top:${pct(box[1])};width:${pct(box[2] - box[0])};height:${pct(box[3] - box[1])}`} />}
+                        <span class={`admin-help-figure__pin admin-help-figure__pin--${place.side}`} style={`left:${pct(place.x)};top:${pct(place.y)}`}>{starts[index] + markIndex}</span>
+                      </>
+                    );
+                  })}
+                </span>
+              </div>
+              <ol class="admin-help-figure__pins" start={starts[index]} role="list">
+                {frame.pins.map((pin, pinIndex) => (
+                  <li><span class="admin-help-figure__num" aria-hidden="true">{starts[index] + pinIndex}</span><span><AdminHelpText text={pin} /></span></li>
+                ))}
+              </ol>
+            </li>
+          );
+        })}
+      </ol>
+    );
+  })}
+</figure>

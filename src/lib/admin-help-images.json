@@ -1,0 +1,339 @@
+{
+  "note": "npm run help:shots가 쓰는 파일입니다. 손으로 고치지 않습니다.",
+  "figures": {
+    "contract-copy": {
+      "route": "/admin/work/customers/detail/",
+      "sources": "d2e921c728a4daadea108f7f48d7de9990c510f69758a4feae4a3dc968d4f0a0",
+      "shots": {
+        "contract-phone-1-panel": {
+          "width": 712,
+          "height": 868,
+          "bytes": 21814,
+          "sha256": "84b0be1bea95874a735fbdddb7e51000b0680816ac64af007483d6fa8563ddf7",
+          "marks": [
+            [
+              0.0337,
+              0.0276,
+              0.4326,
+              0.1299
+            ],
+            [
+              0.0337,
+              0.7319,
+              0.9663,
+              0.8517
+            ]
+          ]
+        },
+        "contract-phone-2-mask": {
+          "width": 780,
+          "height": 942,
+          "bytes": 27938,
+          "sha256": "a3acc87a572ed8347fd16402c5fe858a8b06025d431f69fd1a1083f4e0622771",
+          "marks": [
+            [
+              0.2413,
+              0.2274,
+              0.4045,
+              0.2515
+            ],
+            [
+              0.0308,
+              0.6822,
+              0.1805,
+              0.7332
+            ],
+            [
+              0.0308,
+              0.8642,
+              0.9692,
+              0.9745
+            ]
+          ]
+        },
+        "contract-phone-3-zoom": {
+          "width": 780,
+          "height": 1166,
+          "bytes": 18564,
+          "sha256": "3a381041ab3842e47c726391e93dda5deee7646e1d557dee69bf17f08087a097",
+          "marks": [
+            [
+              0.0308,
+              0.0206,
+              0.9692,
+              0.7243
+            ],
+            [
+              0.0308,
+              0.8903,
+              0.9692,
+              0.9794
+            ]
+          ]
+        },
+        "contract-phone-4-done": {
+          "width": 712,
+          "height": 1102,
+          "bytes": 28372,
+          "sha256": "0cbffd1e671c82309d6aafe708d02f0f7e8e265f294912625b02ee7179f02082",
+          "marks": [
+            [
+              0.0337,
+              0.1919,
+              0.7162,
+              0.2355
+            ]
+          ]
+        },
+        "contract-wide-1-panel": {
+          "width": 1444,
+          "height": 664,
+          "bytes": 26182,
+          "sha256": "dc97459d32266d8a0d964aa68312cd1c1db9e46f896ba3fcfd92177a0b427960",
+          "marks": [
+            [
+              0.0166,
+              0.0361,
+              0.1939,
+              0.1597
+            ],
+            [
+              0.0166,
+              0.8403,
+              0.9834,
+              0.9639
+            ]
+          ]
+        },
+        "contract-wide-2-mask": {
+          "width": 1520,
+          "height": 1226,
+          "bytes": 44994,
+          "sha256": "f1bf1b59e48bc7198dcf4b7efbf954c6576e8676d6b232a027b07b65b763cd65",
+          "marks": [
+            [
+              0.2315,
+              0.33,
+              0.4009,
+              0.3675
+            ],
+            [
+              0.013,
+              0.8027,
+              0.0765,
+              0.835
+            ],
+            [
+              0.013,
+              0.9138,
+              0.987,
+              0.9838
+            ]
+          ]
+        },
+        "contract-wide-3-zoom": {
+          "width": 1520,
+          "height": 1310,
+          "bytes": 47624,
+          "sha256": "c32eafc254e54e92b8ea247b9fce20bb37913066e33e386b47b621a299860015",
+          "marks": [
+            [
+              0.013,
+              0.0151,
+              0.987,
+              0.8016
+            ],
+            [
+              0.013,
+              0.9194,
+              0.987,
+              0.9849
+            ]
+          ]
+        },
+        "contract-wide-4-done": {
+          "width": 1444,
+          "height": 814,
+          "bytes": 33792,
+          "sha256": "8b082ace72da9d72cad553e8347a65b3a583b248114c4fbcf78db3b706af9814",
+          "marks": [
+            [
+              0.0166,
+              0.2636,
+              0.3531,
+              0.3225
+            ]
+          ]
+        }
+      }
+    },
+    "ledger-edit": {
+      "route": "/admin/work/ledger/",
+      "sources": "daf713e8322902bbd68436e4cf177f47528c5d5df0bcca3ffbeeea3542b71221",
+      "shots": {
+        "ledger-phone-1-card": {
+          "width": 772,
+          "height": 440,
+          "bytes": 11884,
+          "sha256": "74c0ed06c3102fe2583d58d9a6d62ab0281e3105f391020dcefef5a415e89d09",
+          "marks": [
+            [
+              0.8156,
+              0.6871,
+              0.9301,
+              0.8866
+            ]
+          ]
+        },
+        "ledger-phone-2-form": {
+          "width": 780,
+          "height": 990,
+          "bytes": 16900,
+          "sha256": "9315e617cb7d9d64aa139e17a4811f78b41d9428120a4d0bc7d8e3022e023db8",
+          "marks": [
+            [
+              0.0744,
+              0.0976,
+              0.9256,
+              0.1864
+            ],
+            [
+              0.0744,
+              0.8628,
+              0.9256,
+              0.9677
+            ]
+          ]
+        },
+        "ledger-wide-1-saved": {
+          "width": 1520,
+          "height": 568,
+          "bytes": 47610,
+          "sha256": "00b02aece6c5c8719ebf943eb1bee7d217691507c94e54bfe4e636571646fbdb",
+          "marks": [
+            [
+              0.3587,
+              0.5853,
+              0.4443,
+              0.6606
+            ],
+            [
+              0.8552,
+              0.5987,
+              0.9009,
+              0.6435
+            ],
+            [
+              0.6945,
+              0.0251,
+              0.7226,
+              0.1004
+            ]
+          ]
+        }
+      }
+    },
+    "calendar-feed": {
+      "route": "/admin/work/schedule/",
+      "sources": "283d5f4dee469bc32ca77e4603fec8be68991ebef81230737fdd41f6870f5eba",
+      "shots": {
+        "calendar-phone-1-empty": {
+          "width": 772,
+          "height": 652,
+          "bytes": 24642,
+          "sha256": "793be2b2d05c5cb284125b690a5e87c26af795444ae4fedfff212f576a34e819",
+          "marks": [
+            [
+              0.0907,
+              0.7338,
+              0.9093,
+              0.8929
+            ]
+          ]
+        },
+        "calendar-phone-2-made": {
+          "width": 780,
+          "height": 910,
+          "bytes": 21202,
+          "sha256": "922b46ea4dda548344229192ce42e20050301227f695ca655b85a61532ddad57",
+          "marks": [
+            [
+              0.1282,
+              0.2052,
+              0.8718,
+              0.3026
+            ],
+            [
+              0.1282,
+              0.3202,
+              0.8718,
+              0.4176
+            ],
+            [
+              0.1282,
+              0.7526,
+              0.8718,
+              0.8499
+            ]
+          ]
+        },
+        "calendar-phone-3-qr": {
+          "width": 780,
+          "height": 954,
+          "bytes": 22042,
+          "sha256": "8b09e2ed9d22acdd4d53ff1febbf9483fa1148bd105a6d2d2612e2040c4526a1",
+          "marks": [
+            [
+              0.1282,
+              0.0335,
+              0.8256,
+              0.6026
+            ]
+          ]
+        },
+        "calendar-wide-1-empty": {
+          "width": 1520,
+          "height": 339,
+          "bytes": 19874,
+          "sha256": "e10daad9f6aaac1f4594eba430d08c24214e1f81679847fdf95605c42ee12283",
+          "marks": [
+            [
+              0.0404,
+              0.5996,
+              0.1922,
+              0.8187
+            ]
+          ]
+        },
+        "calendar-wide-2-made": {
+          "width": 1520,
+          "height": 556,
+          "bytes": 21464,
+          "sha256": "d209aa796398f5f525b09d6d2d7d3b0539b0c89b42ef91304fbb483b5025f53e",
+          "marks": [
+            [
+              0.0163,
+              0.8418,
+              0.4925,
+              0.9557
+            ]
+          ]
+        },
+        "calendar-wide-3-qr": {
+          "width": 1520,
+          "height": 650,
+          "bytes": 22102,
+          "sha256": "1e15cf455e01f672e254679ae579dca4223802436a91e8259bb7463c9616f76d",
+          "marks": [
+            [
+              0.0163,
+              0.0379,
+              0.2927,
+              0.6827
+            ]
+          ]
+        }
+      }
+    }
+  }
+}

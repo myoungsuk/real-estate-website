@@ -1121,6 +1121,33 @@
 .admin-help-table th:first-child,
 .admin-help-table td:first-child { width: 42%; }
 
+/* 사용 안내 단계 그림(AdminHelpFigure, 사용자 결정 2026-11-24 10:46:13 "B 단계 그림 줄"). 사용 안내 화면에만 있다.
+   979px 이하는 휴대폰 그림(폭 390px까지), 980px 이상은 PC 그림(폭 760px까지)을 한 줄에 하나씩 세로로 놓는다(두 칸씩 놓으면 PC 그림 글자가 너무 작아짐). 숨은 쪽 그림은 받지 않는다.
+   번호 동그라미·테두리는 도장 빨강(--ds-stamp, 흰 글자와 대비 4.5:1 넘음)이고 색만이 아니라 숫자와 테두리 네모로 가리킨다. */
+.admin-help-figure { margin: 18px 0 8px; }
+.admin-help-section .admin-help-figure__title { margin: 0 0 10px; color: var(--ds-navy); font-size: 1.0625rem; font-weight: 800; }
+.admin-help-section .admin-help-figure__note { margin: -4px 0 12px; color: var(--ds-ink-soft); }
+.admin-help-section .admin-help-figure__frames { display: grid; gap: 22px; margin: 0; padding: 0; list-style: none; }
+.admin-help-figure__frames--wide { display: none !important; }
+.admin-help-figure__frame { min-width: 0; }
+.admin-help-figure__shot { position: relative; max-width: 390px; border: 1px solid var(--ds-edge); border-radius: var(--ad-radius); background: var(--ds-paper); line-height: 0; }
+.admin-help-figure__shot img { display: block; width: 100%; height: auto; border-radius: calc(var(--ad-radius) - 1px); }
+.admin-help-figure__marks { position: absolute; inset: 0; pointer-events: none; }
+.admin-help-figure__ring { position: absolute; border: 3px solid var(--ds-stamp); border-radius: 6px; box-shadow: 0 0 0 2px var(--ds-paper); }
+.admin-help-figure__pin,
+.admin-help-figure__num { display: inline-block; min-width: 26px; height: 26px; padding: 0 6px; border-radius: 13px; background: var(--ds-stamp); color: var(--ds-paper); font-size: 0.9375rem; font-weight: 800; line-height: 26px; text-align: center; }
+.admin-help-figure__pin { position: absolute; box-shadow: 0 0 0 2px var(--ds-paper); transform: translate(calc(-100% - 6px), -50%); }
+.admin-help-figure__pin--right { transform: translate(6px, -50%); }
+.admin-help-figure__pin--inside { transform: translate(calc(-100% - 6px), 6px); }
+.admin-help-section .admin-help-figure__pins { display: grid; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; }
+.admin-help-figure__pins li { display: flex; align-items: flex-start; gap: 8px; }
+.admin-help-figure__num { flex: none; margin-top: 1px; }
+@media (min-width: 980px) {
+  .admin-help-figure__frames--phone { display: none !important; }
+  .admin-help-figure__frames--wide { display: grid !important; gap: 28px; }
+  .admin-help-figure__frames--wide .admin-help-figure__shot { max-width: 760px; }
+}
+
 /* 실거래가·실거래가 설정(단계 P, P1-d·P1-f). 운영자 결정 2026-11-20 13:36:35 D안: 휴대폰·PC 모두 위 상태 한 줄(문제가 있을 때만 펼침) →
    보기 3칸 → 찾기칸 → 거르기 단추 6개 → 'n건 보는 중'·켜짐 줄·다 담기 → 목록(거래마다 '담기' 단추). 979px 이하는 거르기 단추가 두 줄로 감기고,
    980px 이상은 찾기칸 오른쪽에 한 줄. 목록은 1220px 이하 세 줄 카드, 1221px 이상 표(매물 현황과 같은 경계).
