@@ -12,8 +12,15 @@ import {
   PROMO_IDS_MAX,
   PROMO_LIMITS,
   PROMO_NOTICE,
+  PROMO_ONE_CARD_MAX,
   PROMO_SOURCE,
+  PROMO_STYLES,
+  PROMO_STYLE_DEFAULT,
   disclosureProblems,
+  isPromoStyle,
+  priceSplit,
+  promoPages,
+  promoUpText,
   isPromoSelectable,
   parsePromoIds,
   promoBlockReason,
@@ -178,7 +185,7 @@ test("대장 조건 4: recordHigh가 null(판정 준비 전·첫 상한 날)이�
   assert.equal(promoTitle([pending[0]]), "가상숲1단지 매매");
   const card = promoCards(input(selection.items))[0];
   assert.equal(JSON.stringify(card).includes("신고가"), false, "카드 자료에도 없음");
-  assert.equal(card.highRule, "");
+  assert.deepEqual(card.items.map((item) => item.up), ["", ""], "신고가가 아니면 ▲ 오름 폭도 없음");
   // 신고가가 true여도 앞선 최고가가 없으면 신고가로 쓰지 않는다(지어내지 않음).
   assert.doesNotMatch(promoTexts(input([{ ...HIGH, prevMaxWon: null }])).blog, /신고가/u);
 });
@@ -221,17 +228,57 @@ test("스레드 500자: 1건은 자세히, 여러 건은 한 줄씩, 넘으면 �
   assert.deepEqual(textCount("blog", "가나다"), { count: 3, limit: null, tags: 0, over: false, label: "3자" });
 });
 
-test("카드: 3건씩 최대 2장, 여러 장이면 제목 끝 ' · 1/2장', 아래 칸은 출처·받은 시각·안내·명시사항, 신고가가 있는 장만 판정 기준", () => {
+test("카드 장 수(2026-11-24 사용자 답 '4곳까지 1장'): 4건까지 한 장, 5건은 3 + 2, 6건은 3 + 3, 6건을 넘는 거래는 넣지 않음", () => {
+  assert.equal(PROMO_ONE_CARD_MAX, 4);
+  const six = [HIGH, HIGH2, PLAIN, MONTHLY, JEONSE, PRESALE];
+  assert.deepEqual(promoPages([]), []);
+  for (const n of [1, 2, 3, 4]) assert.deepEqual(promoPages(six.slice(0, n)).map((page) => page.length), [n], `${n}건은 한 장`);
+  assert.deepEqual(promoPages(six.slice(0, 5)).map((page) => page.length), [3, 2]);
+  assert.deepEqual(promoPages(six).map((page) => page.length), [3, 3]);
+  assert.deepEqual(promoPages([...six, { ...PLAIN, tradeKey: key("sale", "202610", 9) }]).map((page) => page.length), [3, 3], "담기 최대 6건 그대로");
+  const four = promoCards(input(six.slice(0, 4)));
+  assert.deepEqual([four.length, four[0].title, four[0].items.length], [1, "실거래 4건", 4], "4건은 장 표시 없는 한 장");
+  assert.deepEqual(promoCards(input(six.slice(0, 5))).map((card) => card.title), ["실거래 5건 · 1/2장", "실거래 5건 · 2/2장"]);
+});
+
+test("카드 모양 4가지(처음 '기본'): 모르는 모양은 기본으로 그린다. 모양은 그림 자료의 style 한 칸뿐이라 글·숫자는 같다", () => {
+  assert.deepEqual(PROMO_STYLES.map(([value]) => value), ["basic", "clean", "magazine", "dark"]);
+  assert.deepEqual(PROMO_STYLES.map(([, label]) => label), ["기본", "깔끔 카드", "잡지", "다크"]);
+  assert.equal(PROMO_STYLE_DEFAULT, "basic");
+  assert.deepEqual(["basic", "dark", "neon", "", undefined].map(isPromoStyle), [true, true, false, false, false]);
+  assert.equal(promoCards(input(THREE))[0].style, "basic");
+  assert.equal(promoCards(input(THREE, { style: "dark" }))[0].style, "dark");
+  assert.equal(promoCards(input(THREE, { style: "neon" }))[0].style, "basic");
+  const strip = (card) => ({ ...card, style: "" });
+  assert.deepEqual(strip(promoCards(input(THREE, { style: "magazine" }))[0]), strip(promoCards(input(THREE))[0]));
+});
+
+test("카드 금액·딱지: 큰 숫자와 작은 단위로 나누고, '▲ 오름 폭'은 신고가(앞선 최고 매매가 대비)에만, 분양권은 딱지 표시", () => {
+  assert.deepEqual(priceSplit("5억 8,750만 원"), { num: "5억 8,750", unit: "만 원" });
+  assert.deepEqual(priceSplit("4억 원"), { num: "4억", unit: "원" });
+  assert.deepEqual(priceSplit("가격 미상"), { num: "가격 미상", unit: "" });
+  assert.equal(promoUpText(HIGH), "▲ 2,500만");
+  assert.equal(promoUpText({ ...HIGH, priceWon: 711_000_000, prevMaxWon: 599_000_000 }), "▲ 1억 1,200만");
+  assert.equal(promoUpText({ ...HIGH, priceWon: 600_000_000, prevMaxWon: 500_000_000 }), "▲ 1억");
+  assert.equal(promoUpText(PLAIN), "", "신고가가 아니면 없음");
+  assert.equal(promoUpText({ ...HIGH, prevMaxWon: null }), "", "앞선 최고가를 모르면 없음");
+  assert.equal(promoUpText({ ...HIGH, priceWon: 495_000_000 }), "", "같거나 낮으면 없음");
+  const [card] = promoCards(input([HIGH, PRESALE, PLAIN]));
+  assert.deepEqual(card.items.map((item) => [item.high, item.presale, item.up]), [[true, false, "▲ 2,500만"], [false, true, ""], [false, false, ""]]);
+});
+
+test("카드: 여러 장이면 제목 끝 ' · 1/2장', 위 칸은 받은 시각, 아래 칸은 사무소 명시사항 5항목(상호 크게). 출처 상자·판정 기준·신고 기한 안내는 글에만", () => {
   assert.equal(promoCards(input(THREE)).length, 1);
   const six = [HIGH, HIGH2, PLAIN, MONTHLY, JEONSE, PRESALE];
   const cards = promoCards(input(six));
   assert.deepEqual(cards.map((card) => card.title), ["실거래 6건 · 1/2장", "실거래 6건 · 2/2장"]);
   assert.deepEqual(cards.map((card) => card.items.length), [3, 3]);
-  assert.deepEqual(cards.map((card) => Boolean(card.highRule)), [true, false], "신고가 없는 장은 판정 기준 줄 없음");
   for (const card of cards) {
-    assert.equal(card.source, `출처 ${PROMO_SOURCE}`);
-    assert.equal(card.received, `2026. 11. 20. 09:50 받은 자료. ${PROMO_NOTICE}`);
-    assert.deepEqual(card.disclosure, [`${office.legalName} · 대표 ${office.representative}`, office.address, `연락처 ${office.mobile} · 등록번호 ${office.registrationNumber}`]);
+    assert.equal(card.received, "2026. 11. 20. 09:50 받은 자료");
+    assert.deepEqual(card.office, { name: office.legalName, representative: office.representative, address: office.address, mobile: office.mobile, registrationNumber: office.registrationNumber });
+    for (const gone of ["source", "highRule", "disclosure"]) assert.equal(Object.hasOwn(card, gone), false, `그림 자료에 ${gone} 없음`);
+    const drawn = JSON.stringify(card);
+    for (const text of [PROMO_SOURCE, PROMO_NOTICE, PROMO_HIGH_RULE, PROMO_HIGH_RULE_SHORT]) assert.equal(drawn.includes(text), false, "그림에는 출처·안내·판정 기준 글이 없음");
     assert.equal(card.allHigh, false, "여러 장이면 줄마다 신고가 표");
     for (const item of card.items) assert.equal(Object.hasOwn(item, "aptDong"), false, "카드에 동 번호 칸 없음");
   }
@@ -239,6 +286,15 @@ test("카드: 3건씩 최대 2장, 여러 장이면 제목 끝 ' · 1/2장', 아
   assert.deepEqual([allHigh.title, allHigh.allHigh], ["매매 신고가 2건", true]);
   assert.equal(promoCards(input([HIGH]))[0].title, "가상숲1단지 매매 신고가");
   assert.equal(JSON.stringify(cards).match(/\d+\s?동(?![구\w])/u), null, "카드 자료 전체에 동 번호 0");
+});
+
+test("출처·신고 기한 안내·신고가 판정 기준은 그림에서 빠져도 글 4가지에는 그대로 남는다", () => {
+  const texts = promoTexts(input([HIGH, PLAIN]));
+  for (const [kind, text] of Object.entries(texts)) {
+    assert.ok(text.includes("국토교통부"), `${kind} 출처`);
+    assert.ok(text.includes("09:50"), `${kind} 받은 시각(스레드는 줄인 날짜)`);
+    assert.match(text, /신고 기한|30일/u, `${kind} 신고 기한`);
+  }
 });
 
 test("파일 이름은 날짜만(realprice-YYYYMMDD.png, 두 장이면 -1·-2), 받은 시각은 한국 시각", () => {

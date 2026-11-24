@@ -18,7 +18,18 @@ export const PROMO_PATH = "/admin/work/realprice/promo/";
 // 블로그·카카오톡 1:1 채팅은 이 글 길이에서 걸리는 상한이 없어 두지 않는다. 글에 이모지를 넣지 않아 글자 수는 코드 포인트로 센다.
 export const PROMO_LIMITS = Object.freeze({ threads: 500, instagram: 2200, instagramHashtags: 30 });
 export const PROMO_CARD_SIZE = Object.freeze({ width: 1080, height: 1350 });
-export const PROMO_CARD_ROWS = 3; // 한 장에 거래 3건까지, 4 ~ 6건은 두 장(2026-11-20 운영자 답 "3건씩 나눠 최대 2장")
+// 한 장에 거래 4건까지, 5 ~ 6건은 3건씩 두 장(2026-11-24 사용자 답 "4곳까지 1장", 그 전 2026-11-20 "3건씩 나눠 최대 2장").
+export const PROMO_ONE_CARD_MAX = 4;
+export const PROMO_SPLIT_ROWS = 3;
+// 카드 모양 4가지(2026-11-24 사용자 답: 처음 모양 "기본"). 고른 모양은 화면 메모리에만 두고 브라우저에 저장하지 않는다.
+export const PROMO_STYLES = Object.freeze([
+  ["basic", "기본"],
+  ["clean", "깔끔 카드"],
+  ["magazine", "잡지"],
+  ["dark", "다크"],
+]);
+export const PROMO_STYLE_DEFAULT = "basic";
+export const isPromoStyle = (value) => PROMO_STYLES.some(([key]) => key === value);
 
 export const PROMO_AREA_LABEL = "대전 동구 아파트 실거래가";
 export const PROMO_SOURCE = "국토교통부 실거래가 공개 자료(공공데이터포털)";
@@ -330,29 +341,52 @@ const cardItem = (item, insight) => ({
   floor: floorText(item.floor),
   date: dateText(item.dealDate),
   prev: isHigh(item) ? formatKoreanWon(item.prevMaxWon) : "",
+  presale: item.kind === "presale",
+  up: promoUpText(item),
   flow: item.kind === "sale" && insight ? promoFlow(insight, { high: isHigh(item), buildYear: item.buildYear ?? null }) : null,
 });
 
-// 3건씩 나눠 최대 2장. 여러 장이면 제목 끝에 " · 1/2장". 아래 칸은 출처·받은 시각·안내, 신고가가 있는 장만 판정 기준, 명시사항.
-// insights: 거래 ID → 거래 흐름 응답 한 개(없거나 못 받았으면 빈 값). basis는 그 장에 실제로 그린 흐름 항목만 적는다.
-export function promoCards({ items, receivedAt, office, insights = {} }) {
-  if (promoBlockReason({ items, receivedAt, office })) return [];
+// 장 나누기: 4건까지 한 장, 5 ~ 6건은 3건씩 두 장(5건은 3 + 2). 담는 최대 건수(PROMO_IDS_MAX)를 넘는 거래는 넣지 않는다.
+export function promoPages(items) {
+  const list = items.slice(0, PROMO_IDS_MAX);
+  if (list.length <= PROMO_ONE_CARD_MAX) return list.length ? [list] : [];
   const pages = [];
-  for (let at = 0; at < items.length && pages.length < Math.ceil(PROMO_IDS_MAX / PROMO_CARD_ROWS); at += PROMO_CARD_ROWS) pages.push(items.slice(at, at + PROMO_CARD_ROWS));
+  for (let at = 0; at < list.length; at += PROMO_SPLIT_ROWS) pages.push(list.slice(at, at + PROMO_SPLIT_ROWS));
+  return pages;
+}
+
+// 금액을 큰 숫자와 작은 단위로 나눈다("5억 8,750만 원" → "5억 8,750" + "만 원", "4억 원" → "4억" + "원"). 월세 둘째 줄은 나누지 않는다.
+export function priceSplit(main) {
+  const match = /^(.+?) ?(만 원|원)$/u.exec(main);
+  return match ? { num: match[1], unit: match[2] } : { num: main, unit: "" };
+}
+
+// 신고가 오름 폭: 앞선 최고 매매가보다 얼마나 높은지("▲ 300만"). 신고가가 아니면 빈 글자(직전 거래 대비는 쓰지 않음).
+export function promoUpText(item) {
+  if (!isHigh(item) || !Number.isSafeInteger(item.priceWon) || item.priceWon <= item.prevMaxWon) return "";
+  return `▲ ${formatKoreanWon(item.priceWon - item.prevMaxWon).replace(/ 원$/u, "")}`;
+}
+
+// 장마다 그림 자료. 여러 장이면 제목 끝에 " · 1/2장". 그림에는 출처 상자를 두지 않고(2026-11-24 사용자 답 "완전히 뺌") 받은 시각과
+// 사무소 명시사항 5항목만 둔다. 출처·신고 기한 안내·신고가 판정 기준은 글 4가지에 그대로 남는다(P1-e 받은 시각 막기도 그대로).
+// insights: 거래 ID → 거래 흐름 응답 한 개(없거나 못 받았으면 빈 값). basis는 그 장에 실제로 그린 흐름 항목만 적는다.
+export function promoCards({ items, receivedAt, office, insights = {}, style = PROMO_STYLE_DEFAULT }) {
+  if (promoBlockReason({ items, receivedAt, office })) return [];
+  const pages = promoPages(items);
   const title = promoTitle(items);
   return pages.map((pageItems, index) => {
     const cardItems = pageItems.map((item) => cardItem(item, insights[item.tradeKey] ?? null));
     return {
-    title: pages.length > 1 ? `${title} · ${index + 1}/${pages.length}장` : title,
-    allHigh: pages.length === 1 && allHigh(pageItems), // 한 장에 모두 신고가면 제목에 "신고가"가 있어 줄마다 표를 달지 않음
-    areaLabel: PROMO_AREA_LABEL,
-    range: dealRange(pageItems),
-    items: cardItems,
-    basis: promoBasisLine(cardItems.map((item) => item.flow)),
-    source: `출처 ${PROMO_SOURCE}`,
-    received: `${receivedText(receivedAt)} 받은 자료. ${PROMO_NOTICE}`,
-    highRule: anyHigh(pageItems) ? PROMO_HIGH_RULE : "",
-    disclosure: disclosureLines(office),
+      title: pages.length > 1 ? `${title} · ${index + 1}/${pages.length}장` : title,
+      allHigh: pages.length === 1 && allHigh(pageItems), // 한 장에 모두 신고가면 제목에 "신고가"가 있어 줄마다 표를 달지 않음
+      areaLabel: PROMO_AREA_LABEL,
+      range: dealRange(pageItems),
+      items: cardItems,
+      basis: promoBasisLine(cardItems.map((item) => item.flow)),
+      received: `${receivedText(receivedAt)} 받은 자료`,
+      style: isPromoStyle(style) ? style : PROMO_STYLE_DEFAULT,
+      // 사무소 명시사항 5항목(DEC-WT-23): 상호는 크게, 대표·등록번호·주소는 작은 글, 연락처는 크게 그린다(2026-11-24 사용자 답 "상호를 크게").
+      office: { name: office.legalName, representative: office.representative, address: office.address, mobile: office.mobile, registrationNumber: office.registrationNumber },
     };
   });
 }

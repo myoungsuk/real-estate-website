@@ -2,11 +2,11 @@
 import AdminIcon from "../../../../components/admin/AdminIcon.astro";
 import AdminPageHelp from "../../../../components/admin/AdminPageHelp.astro";
 import AdminLayout from "../../../../layouts/AdminLayout.astro";
-import { PROMO_IDS_MAX, PROMO_PLACES } from "../../../../lib/work/realprice-promo.mjs";
+import { PROMO_IDS_MAX, PROMO_PLACES, PROMO_STYLE_DEFAULT, PROMO_STYLES } from "../../../../lib/work/realprice-promo.mjs";
 
-// 단계 P 실거래가 홍보물(P1-e, 운영자 시안 승인 2026-11-20 10:43:09: 카드 A안, 4 ~ 6건은 3건씩 최대 2장, 해시태그·카카오톡은 권하는 대로).
-// P1-f D안(운영자 결정 2026-11-20 13:36:35 "이번에 같이"): 담은 거래 요약 → "어디에 올릴까요?" → ① 그림 저장 ② 글 복사 ③ 그 앱에서 붙여 넣기.
-// 글 미리 보기·카드 그림 크게 보기는 접어 두고, 맨 아래에 A4 인쇄. 글·그림은 브라우저에서만 만들고 서버에 저장하지 않는다.
+// 단계 P 실거래가 홍보물(P1-e, 운영자 시안 승인 2026-11-20 10:43:09: 카드 A안, 4 ~ 6건은 3건씩 최대 2장(2026-11-24부터 4건까지 한 장), 해시태그·카카오톡은 권하는 대로).
+// 2026-11-24 사용자 답(새 모양): 담은 거래 요약 → 카드 모양 4가지(처음 '기본') → 카드 그림 → 그림 저장 → 올릴 곳 단추 4개(누르면 그곳 글 복사, '✓ 복사됨').
+// 4건까지 한 장, 5 ~ 6건은 3건씩 두 장. 글 미리 보기는 접어 두고, 맨 아래에 A4 인쇄. 글·그림은 브라우저에서만 만들고 서버에 저장하지 않는다.
 const listHref = "/admin/work/realprice/";
 ---
 
@@ -23,7 +23,7 @@ const listHref = "/admin/work/realprice/";
       <span class="admin-stage-badge">국토교통부 공개 자료</span>
     </header>
 
-    <p class="work-doc__lead rt-promo__lead">담은 실거래(최대 {PROMO_IDS_MAX}건)로 올릴 그림과 글을 만듭니다. 숫자는 받은 자료 그대로이고 출처·받은 시각·사무소 명시사항이 자동으로 붙습니다.</p>
+    <p class="work-doc__lead rt-promo__lead">담은 실거래(최대 {PROMO_IDS_MAX}건)로 올릴 그림과 글을 만듭니다. 숫자는 받은 자료 그대로이고, 그림에는 받은 시각·사무소 명시사항이, 글에는 출처까지 자동으로 붙습니다.</p>
 
     <AdminPageHelp page="/admin/work/realprice/promo/" />
 
@@ -52,53 +52,39 @@ const listHref = "/admin/work/realprice/";
         <a class="rt-picked__back" href={listHref}><span aria-hidden="true">←</span> 거래 다시 고르기</a>
       </section>
 
-      <section class="admin-panel rt-where" aria-labelledby="promo-where-title">
-        <h2 id="promo-where-title">어디에 올릴까요?</h2>
-        <div class="rt-where__grid" role="radiogroup" aria-labelledby="promo-where-title">
-          {PROMO_PLACES.map(([value, label], index) => (
-            <label class="rt-where__choice">
-              <input type="radio" name="promo-kind" value={value} checked={index === 0} autocomplete="off" />
+      <section class="admin-panel rt-where" aria-labelledby="promo-style-title">
+        <h2 id="promo-style-title">카드 모양</h2>
+        <div class="rt-styles" role="radiogroup" aria-labelledby="promo-style-title">
+          {PROMO_STYLES.map(([value, label]) => (
+            <label class="rt-style">
+              <input type="radio" name="promo-style" value={value} checked={value === PROMO_STYLE_DEFAULT} autocomplete="off" />
               <span>{label}</span>
             </label>
           ))}
         </div>
+        <p class="rt-loading" role="status" data-promo-card-loading>카드 그림을 그리고 있습니다…</p>
+        <div class="rt-promo__card-list" data-promo-card-list></div>
+        <p class="rt-promo__warn" data-promo-card-warn hidden>글이 길어 그림 아래 칸과 겹칠 수 있습니다. 그림을 확인해 주세요.</p>
+        <p class="work-help">1080×1350 PNG(인스타그램 세로 피드 크기)입니다. 4건까지 한 장, 5건 이상은 3건씩 두 장으로 나눕니다.</p>
+        <div class="rt-step__downloads" data-promo-downloads></div>
 
-        <ol class="rt-steps">
-          <li class="rt-step">
-            <span class="rt-step__no" aria-hidden="true">1</span>
-            <div class="rt-step__body">
-              <p data-promo-step-image>카드 그림을 휴대폰에 저장합니다.</p>
-              <p class="rt-loading" role="status" data-promo-card-loading>카드 그림을 그리고 있습니다…</p>
-              <div class="rt-step__downloads" data-promo-downloads></div>
-              <p class="rt-promo__warn" data-promo-card-warn hidden>글이 길어 그림 아래 칸과 겹칠 수 있습니다. '카드 그림 크게 보기'에서 확인해 주세요.</p>
-            </div>
-          </li>
-          <li class="rt-step">
-            <span class="rt-step__no" aria-hidden="true">2</span>
-            <div class="rt-step__body">
-              <p data-promo-step-text>글을 복사합니다.</p>
-              <button class="work-primary-button rt-step__button" type="button" data-promo-copy>글 복사</button>
-              <p class="admin-form-status" role="status" aria-live="polite" data-promo-status></p>
-            </div>
-          </li>
-          <li class="rt-step">
-            <span class="rt-step__no" aria-hidden="true">3</span>
-            <div class="rt-step__body">
-              <p data-promo-step-post></p>
-            </div>
-          </li>
-        </ol>
+        <h3 class="rt-places__title" id="promo-copy-title">올릴 곳에 맞춘 글 복사</h3>
+        <div class="rt-places" role="group" aria-labelledby="promo-copy-title">
+          {PROMO_PLACES.map(([value, label]) => (
+            <button class="rt-place" type="button" data-promo-copy={value} aria-describedby="promo-post">
+              <b>{label}</b>
+              <small data-promo-copy-state>글 복사</small>
+            </button>
+          ))}
+        </div>
+        <p class="rt-places__post" id="promo-post" data-promo-step-post>그림을 저장한 뒤 올릴 곳 단추를 누르면 그곳에 맞춘 글이 복사됩니다(출처·명시사항 포함).</p>
+        <p class="admin-form-status" role="status" aria-live="polite" data-promo-status></p>
 
         <details class="rt-promo__fold" data-promo-text-fold>
           <summary>글 미리 보기</summary>
           <label class="work-output__label" for="promo-preview" data-promo-preview-label>인스타그램 글</label>
           <textarea id="promo-preview" class="work-preview rt-promo__preview" rows="14" readonly data-promo-preview></textarea>
           <small class="work-output__count" aria-live="polite" data-promo-count></small>
-        </details>
-        <details class="rt-promo__fold">
-          <summary>카드 그림 크게 보기 <span data-promo-card-count></span></summary>
-          <p class="work-help">1080×1350 PNG(인스타그램 세로 피드 크기)입니다. 4건 이상은 3건씩 두 장으로 나눕니다.</p>
-          <div class="rt-promo__card-list" data-promo-card-list></div>
         </details>
 
         <div class="rt-promo__print">
@@ -114,10 +100,12 @@ const listHref = "/admin/work/realprice/";
   <script>
     import office from "../../../../data/office.json";
     import { getWorkSession, readWork, WorkApiError } from "../../../../lib/work-realprice-client";
-    import { renderPromoCard, type PromoCard } from "../../../../lib/work-realprice-card";
+    import { renderPromoCard, type PromoCard, type PromoStyle } from "../../../../lib/work-realprice-card";
     import { todayInKorea } from "../../../../lib/work/legal-dates.mjs";
     import {
       PROMO_PLACES,
+      PROMO_STYLE_DEFAULT,
+      isPromoStyle,
       parsePromoIds,
       priceText,
       promoCards,
@@ -153,23 +141,24 @@ const listHref = "/admin/work/realprice/";
       const pickedCount = pick("[data-promo-picked-count]");
       const cardList = pick("[data-promo-card-list]");
       const cardLoading = pick("[data-promo-card-loading]");
-      const cardCount = pick("[data-promo-card-count]");
       const cardWarn = pick("[data-promo-card-warn]");
       const downloads = pick("[data-promo-downloads]");
-      const stepImage = pick("[data-promo-step-image]");
-      const stepText = pick("[data-promo-step-text]");
       const stepPost = pick("[data-promo-step-post]");
       const textFold = pick<HTMLDetailsElement>("[data-promo-text-fold]");
       const previewLabel = pick("[data-promo-preview-label]");
       const preview = pick<HTMLTextAreaElement>("[data-promo-preview]");
       const count = pick("[data-promo-count]");
-      const copyButton = pick<HTMLButtonElement>("[data-promo-copy]");
+      const copyButtons = [...root.querySelectorAll<HTMLButtonElement>("[data-promo-copy]")];
       const status = pick("[data-promo-status]");
       const printButton = pick<HTMLButtonElement>("[data-promo-print]");
       const sheet = pick("[data-promo-sheet]");
       const kindNames = Object.fromEntries(PROMO_PLACES) as Record<Kind, string>;
       let texts: Record<Kind, string> | null = null;
       let cardTotal = 1;
+      // 글 미리 보기에 보일 곳(마지막으로 누른 올릴 곳, 처음은 인스타그램)과 카드 그림 자료(모양을 바꾸면 다시 그림).
+      let shownKind: Kind = PROMO_PLACES[0][0] as Kind;
+      let cardInput: { items: unknown; receivedAt: unknown; office: unknown; insights?: Record<string, unknown> } | null = null;
+      let drawSeq = 0;
 
       function showState(title: string, body: string, { symbol = "!", canRetry = false } = {}) {
         boot.hidden = true;
@@ -181,46 +170,65 @@ const listHref = "/admin/work/realprice/";
         statePanel.hidden = false;
       }
 
-      const selectedKind = () => (root.querySelector<HTMLInputElement>('input[name="promo-kind"]:checked')?.value ?? "instagram") as Kind;
-      // 올릴 곳을 바꾸면 순서 글·미리 보기·복사 단추를 그 곳에 맞추고, 복사함 표시는 지운다(그림 저장함 표시는 남김).
-      function showText() {
+      const selectedStyle = () => {
+        const value = root.querySelector<HTMLInputElement>('input[name="promo-style"]:checked')?.value;
+        return (isPromoStyle(value) ? value : PROMO_STYLE_DEFAULT) as PromoStyle;
+      };
+      // 글 미리 보기·글자 수를 그 곳에 맞춘다.
+      function showText(kind: Kind) {
         if (!texts) return;
-        const kind = selectedKind();
+        shownKind = kind;
         const counted = textCount(kind, texts[kind]);
-        const steps = promoSteps(kind, { cardCount: cardTotal, counted });
-        stepImage.textContent = steps.image;
-        stepText.textContent = steps.text;
-        stepPost.textContent = steps.post;
         previewLabel.textContent = `${kindNames[kind]} 글`;
         preview.value = texts[kind];
         count.textContent = kind === "instagram" ? `${counted.label} · 해시태그 ${counted.tags}개` : counted.label;
         count.dataset.state = counted.over ? "over" : "";
-        copyButton.textContent = `${kindNames[kind]} 글 복사`;
-        copyButton.classList.remove("is-done");
-        status.textContent = "";
+        return counted;
+      }
+      // 복사함 표시를 모두 지운다(모양을 바꾸거나 다른 곳을 누를 때).
+      function resetCopied() {
+        for (const button of copyButtons) {
+          button.classList.remove("is-done");
+          const state = button.querySelector("[data-promo-copy-state]");
+          if (state) state.textContent = "글 복사";
+        }
       }
       root.addEventListener("change", (event) => {
-        if ((event.target as HTMLInputElement).name === "promo-kind") showText();
+        if ((event.target as HTMLInputElement).name !== "promo-style") return;
+        // 새 그림이라 저장·복사 표시를 처음으로 돌린다(목록 오른쪽 미리보기 칸과 같음).
+        resetCopied();
+        status.textContent = "";
+        void redraw();
       });
       preview.addEventListener("focus", () => preview.scrollIntoView({ block: "nearest" }));
-      copyButton.addEventListener("click", async () => {
-        const name = kindNames[selectedKind()];
-        try {
-          await navigator.clipboard.writeText(preview.value);
-          copyButton.textContent = `✓ ${name} 글 복사함`;
-          copyButton.classList.add("is-done");
-          status.textContent = `✓ ${name} 글을 복사했습니다.`;
-          status.dataset.state = "success";
-        } catch {
-          // 자동 복사가 막히면 접어 둔 글 미리 보기를 펼쳐 글을 골라 둔다(직접 복사).
-          textFold.open = true;
-          preview.focus({ preventScroll: true });
-          preview.select();
-          preview.scrollIntoView({ block: "nearest" });
-          status.textContent = "자동 복사가 막혔습니다. 펼친 글 미리 보기에서 골라 둔 글을 직접 복사해 주세요.";
-          status.dataset.state = "error";
-        }
-      });
+      // 올릴 곳 단추: 그 곳 글을 복사하고 '✓ 복사됨'으로 바꾼 뒤, 그 앱에서 할 일을 한 줄로 알린다.
+      for (const button of copyButtons) {
+        button.addEventListener("click", async () => {
+          if (!texts) return;
+          const kind = button.dataset.promoCopy as Kind;
+          const name = kindNames[kind];
+          const counted = showText(kind)!;
+          const steps = promoSteps(kind, { cardCount: cardTotal, counted });
+          resetCopied();
+          stepPost.textContent = `${steps.text} ${steps.post}`;
+          try {
+            await navigator.clipboard.writeText(texts[kind]);
+            button.classList.add("is-done");
+            const state = button.querySelector("[data-promo-copy-state]");
+            if (state) state.textContent = "✓ 복사됨";
+            status.textContent = `✓ ${name} 글을 복사했습니다.`;
+            status.dataset.state = "success";
+          } catch {
+            // 자동 복사가 막히면 접어 둔 글 미리 보기를 펼쳐 글을 골라 둔다(직접 복사).
+            textFold.open = true;
+            preview.focus({ preventScroll: true });
+            preview.select();
+            preview.scrollIntoView({ block: "nearest" });
+            status.textContent = "자동 복사가 막혔습니다. 펼친 글 미리 보기에서 골라 둔 글을 직접 복사해 주세요.";
+            status.dataset.state = "error";
+          }
+        });
+      }
       printButton.addEventListener("click", () => window.print());
 
       // 담은 거래 요약(단지 · 종류 / 금액). 서버 값은 textContent로만 넣는다.
@@ -238,7 +246,7 @@ const listHref = "/admin/work/realprice/";
       }
 
       // 카드 그림: 크게 보기 그림과 ① 저장 링크(data 주소, CSP img-src에 blob이 없어 data를 쓴다). 서버 값은 textContent·속성으로만 넣는다.
-      async function drawCards(cards: PromoCard[]) {
+      async function drawCards(cards: PromoCard[], seq: number) {
         const canvas = document.createElement("canvas");
         const today = todayInKorea();
         const figures: HTMLElement[] = [];
@@ -247,6 +255,7 @@ const listHref = "/admin/work/realprice/";
         let overflow = false;
         for (const [index, card] of cards.entries()) {
           const result = await renderPromoCard(canvas, card);
+          if (seq !== drawSeq) return;
           overflow ||= result.overflow;
           const figure = document.createElement("figure");
           figure.className = "rt-promo__card";
@@ -255,12 +264,9 @@ const listHref = "/admin/work/realprice/";
           image.width = 540;
           image.height = 675;
           image.alt = `카드 그림${cards.length > 1 ? ` ${index + 1}/${cards.length}장` : ""}: ${card.title}`;
+          // 파일 이름은 바로 아래 저장 단추 밑에 적으므로 그림 밑에는 다시 쓰지 않는다(그림과 저장 단추가 붙어 보이게 된 2026-11-24 새 모양).
           const name = promoFileName(today, index, cards.length);
-          const caption = document.createElement("figcaption");
-          const file = document.createElement("small");
-          file.textContent = name;
-          caption.append(file);
-          figure.append(image, caption);
+          figure.append(image);
           figures.push(figure);
           const wrap = document.createElement("div");
           wrap.className = "rt-step__download";
@@ -288,10 +294,25 @@ const listHref = "/admin/work/realprice/";
         downloads.replaceChildren(...links);
         sheet.replaceChildren(...prints);
         sheet.dataset.count = String(cards.length);
-        cardCount.textContent = cards.length > 1 ? `${cards.length}장` : "";
         cardWarn.hidden = !overflow;
         cardLoading.hidden = true;
         printButton.disabled = false;
+      }
+
+      // 모양을 고르면 같은 자료로 카드를 다시 그린다(서버를 다시 부르지 않음). 저장함 표시는 새 그림이라 지워진다.
+      async function redraw() {
+        if (!cardInput) return;
+        const seq = ++drawSeq;
+        const cards = promoCards({ ...cardInput, style: selectedStyle() }) as PromoCard[];
+        cardTotal = cards.length;
+        cardLoading.textContent = "카드 그림을 그리고 있습니다…";
+        cardLoading.hidden = false;
+        printButton.disabled = true;
+        try {
+          await drawCards(cards, seq);
+        } catch {
+          if (seq === drawSeq) cardLoading.textContent = "카드 그림을 그리지 못했습니다. 화면을 새로 고쳐 주세요. 글은 그대로 복사할 수 있습니다.";
+        }
       }
 
       async function start() {
@@ -337,17 +358,12 @@ const listHref = "/admin/work/realprice/";
             insights = {};
           }
         }
-        const cards = promoCards({ ...input, insights }) as PromoCard[];
-        cardTotal = cards.length;
+        cardInput = { ...input, insights };
         renderPicked(selection.items as PromoItem[]);
         boot.hidden = true;
         main.hidden = false;
-        showText();
-        try {
-          await drawCards(cards);
-        } catch {
-          cardLoading.textContent = "카드 그림을 그리지 못했습니다. 화면을 새로 고쳐 주세요. 글은 그대로 복사할 수 있습니다.";
-        }
+        showText(shownKind);
+        await redraw();
       }
       retry.addEventListener("click", () => void start());
 

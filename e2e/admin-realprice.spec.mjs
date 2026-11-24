@@ -134,10 +134,18 @@ function collectErrors(page) {
 const overflowOf = (page) => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 const rows = (page) => page.locator("[data-rt-rows] > tr");
 
-// 누르는 곳 44px: 거르기 단추 6개·찾기·다 담기·첫 줄 담기(찾기칸은 48px).
+// 누르는 곳 44px: 거르기 단추 6개·찾기·다 담기·첫 줄 담기 칸(찾기칸은 48px). 담기 칸은 글자 없는 체크칸이라 '담기 칸'으로 부른다.
 const tapSizes = (page) => page.evaluate(() => [...document.querySelectorAll(".rt-chip, .rt-find__go, .rt-take, [data-rt-rows] > tr:first-child .rt-pick-button")]
   .filter((element) => element.getClientRects().length > 0)
-  .map((element) => { const box = element.getBoundingClientRect(); return { name: (element.querySelector("[data-rt-chip-text]") ?? element).textContent.trim(), width: box.width, height: box.height }; }));
+  .map((element) => { const box = element.getBoundingClientRect(); return { name: (element.querySelector("[data-rt-chip-text]") ?? element).textContent.trim() || "담기 칸", width: box.width, height: box.height }; }));
+// 담기 체크칸이 보이는 모양: 담음 "✓"(남색 네모 안 흰 ✓), 빈칸, 잠김(해제·다 참). 진짜 체크 칸 상태와 보이는 네모가 같아야 한다.
+const pickState = (row) => row.locator(".rt-pick-button").evaluate((label) => {
+  const input = label.querySelector("input");
+  const tick = getComputedStyle(label.querySelector(".rt-pick-mark"), "::before").content.includes("✓");
+  if (input.checked) return tick ? "✓" : "어긋남";
+  if (tick) return "어긋남";
+  return input.disabled ? "잠김" : "빈칸";
+});
 
 test("실거래가 D안 390px: 상태 한 줄은 접힘, 찾기칸·거르기 단추 6개(44px)·'n건 보는 중' 줄, 첫 거래는 시안 위치 안, 세 줄 카드, 30건 더 보기, 키보드로 거르기·보기 바꾸기", async ({ page }) => {
   const assertNoErrors = collectErrors(page);
@@ -157,7 +165,7 @@ test("실거래가 D안 390px: 상태 한 줄은 접힘, 찾기칸·거르기 �
   await expect(page.locator("[data-rt-clear-all]")).toBeHidden();
   await expect(page.locator("[data-rt-take]")).toHaveText("위에서 6건 담기");
   const sizes = await tapSizes(page);
-  expect(sizes.map((size) => size.name), "단추 9개").toEqual(["찾기", "최근 3개월", "평형", "금액", "신고가만", "분양권만", "더 보기", "위에서 6건 담기", "담기"]);
+  expect(sizes.map((size) => size.name), "단추 9개").toEqual(["찾기", "최근 3개월", "평형", "금액", "신고가만", "분양권만", "더 보기", "위에서 6건 담기", "담기 칸"]);
   expect(sizes.filter((size) => size.width < 44 || size.height < 44), "44px보다 작은 단추").toEqual([]);
   const firstBox = await rows(page).first().boundingBox();
   expect(firstBox.y, "첫 거래는 시안 D-390 위치(631px)보다 내려가지 않음").toBeLessThanOrEqual(631);
@@ -165,6 +173,9 @@ test("실거래가 D안 390px: 상태 한 줄은 접힘, 찾기칸·거르기 �
   const first = rows(page).first();
   expect(await first.evaluate((row) => getComputedStyle(row).display), "1220px 이하는 카드").toBe("block");
   await expect(first.locator(".rt-tag--high")).toHaveText("신고가");
+  await expect(first.locator(".rt-name .rt-tag--high"), "딱지는 단지 이름 옆").toBeVisible();
+  await expect(first.locator(".rt-price .rt-up"), "신고가 오름 폭은 금액 옆").toHaveText("▲ 600만 앞선 최고보다");
+  expect(await first.locator("td.rt-pick").evaluate((td) => { const row = td.closest("tr").getBoundingClientRect(); const own = td.getBoundingClientRect(); return row.right - own.right < 2 && row.bottom - own.bottom < 12; }), "담기 칸은 카드 오른쪽 아래").toBe(true);
   await expect(first.locator(".rt-new .rt-tag")).toBeVisible();
   await expect(first.locator(".rt-flags .rt-only-table")).toBeHidden();
   await expect(first.locator(".rt-size")).toHaveText("84.97㎡ · 10층 · 103동");
@@ -316,6 +327,7 @@ test("실거래가 D안 PC: 1280px은 같은 순서에 찾기칸·단추가 한 
   await expect(page.locator("[data-rt-criterion]")).toBeVisible();
   await expect(page.locator("#rt-list-title")).toHaveText("새 거래 30건 보는 중", { useInnerText: true });
   await expect(page.getByRole("columnheader", { name: "담기" })).toBeVisible();
+  await expect(page.getByRole("columnheader").first(), "담기 칸은 표 맨 앞").toHaveText("담기");
   expect(await rows(page).first().evaluate((row) => getComputedStyle(row).display)).toBe("table-row");
   await expect(rows(page).first().locator(".rt-prev")).toHaveText("앞선 최고 3억 9,500만 원");
   await expect(rows(page).first().locator(".rt-price__meta .rt-mtag--new"), "표에서는 표시가 금액 아래 작은 줄(보드 63번)").toBeVisible();
@@ -356,9 +368,10 @@ test("실거래가 D안 주요 거래·다 담기: view=major 한 번(30일 매�
   await expect(page.locator("[data-rt-live]")).toHaveText("6건을 담았습니다. 해제 거래 1건은 건너뛰었습니다. 담은 거래 6건(최대 6건).");
   await expect(take).toHaveText("6건 담음");
   await expect(take).toBeDisabled();
-  await expect(rows(page).first().locator(".rt-pick")).toContainText("담을 수 없음");
-  await expect(rows(page).nth(1).locator(".rt-pick")).toContainText("✓ 담음");
+  expect(await pickState(rows(page).first()), "해제 거래는 잠긴 칸").toBe("잠김");
+  expect(await pickState(rows(page).nth(1))).toBe("✓");
   await expect(rows(page).nth(7).getByRole("checkbox"), "6건을 담으면 나머지는 잠김").toBeDisabled();
+  expect(await pickState(rows(page).nth(7))).toBe("잠김");
   await expect(page.locator("[data-rt-promo-link]")).toHaveAttribute("href", `/admin/work/realprice/promo/?ids=${firstPage.slice(0, 6).map((item) => item.tradeKey).join(",")}`);
   await page.getByRole("button", { name: "비우기" }).click();
   await expect(take).toHaveText("위에서 6건 담기");
@@ -783,14 +796,16 @@ test("P1-e 목록 담기: 해제는 못 담음, 최대 6건에서 나머지 잠�
   await expect(firstBox).toHaveAccessibleName("가상숲1단지 2026. 11. 27. 매매 홍보물에 담기");
   const label = await rows(page).first().locator(".rt-pick label").boundingBox();
   const box = await firstBox.boundingBox();
-  expect(label.height >= 44 && label.width >= 44, "담기 단추 44px").toBe(true);
-  expect(label.width - box.width <= 4 && label.height - box.height <= 4, "체크 칸이 단추 테두리 안을 다 덮음(어디를 눌러도 담김)").toBe(true);
-  await expect(rows(page).first().locator(".rt-pick")).toContainText("담기");
+  expect(label.height >= 44 && label.width >= 44, "담기 칸 44px").toBe(true);
+  expect(label.width - box.width <= 4 && label.height - box.height <= 4, "체크 칸이 담기 칸을 다 덮음(어디를 눌러도 담김)").toBe(true);
+  await expect(rows(page).first().locator(".rt-pick")).toHaveText("", { useInnerText: true });
+  expect(await pickState(rows(page).first())).toBe("빈칸");
 
   await firstBox.focus();
   await page.keyboard.press("Space");
   await expect(firstBox).toBeChecked();
-  await expect(rows(page).first().locator(".rt-pick")).toContainText("✓ 담음");
+  expect(await pickState(rows(page).first())).toBe("✓");
+  expect(await rows(page).first().locator(".rt-pick-mark").evaluate((mark) => getComputedStyle(mark).outlineStyle), "키보드 포커스는 네모에 테두리").toBe("solid");
   await rows(page).nth(1).getByRole("checkbox").check();
   await expect(bar).toBeVisible();
   await expect(page.locator("[data-rt-pick-text]")).toHaveText("담은 거래 2건");
@@ -811,7 +826,7 @@ test("P1-e 목록 담기: 해제는 못 담음, 최대 6건에서 나머지 잠�
   const cancelledBox = rows(page).first().getByRole("checkbox");
   await expect(cancelledBox).toBeDisabled();
   await expect(cancelledBox).toHaveAccessibleName(/해제된 거래라 홍보물에 담을 수 없음$/u);
-  await expect(rows(page).first().locator(".rt-pick")).toContainText("담을 수 없음");
+  expect(await pickState(rows(page).first())).toBe("잠김");
   await expect(page.locator("[data-rt-pick-text]")).toHaveText("담은 거래 5건");
   await expect(rows(page).nth(1).getByRole("checkbox")).toBeChecked();
 
@@ -828,8 +843,8 @@ test("P1-e 목록 담기: 해제는 못 담음, 최대 6건에서 나머지 잠�
 });
 
 // TU-23(TR-11 결과 54절): 980px 이상에서도 Tab으로 옮긴 포커스가 아래 막대 뒤로 숨지 않는다(막대 높이는 화면이 재서 scroll-padding-bottom에 씀).
-// 표의 '담기' 글자도 담기 칸 안에 머문다(감싸개를 벗어나 문서를 넓히지 않음, PR #80).
-test("P1-e 목록 담기 980px 이상: Tab 포커스가 아래 막대에 가리지 않고, 담기 글자는 담기 칸 안", async ({ page }) => {
+// 표의 담기 네모도 담기 칸 안에 머문다(감싸개를 벗어나 문서를 넓히지 않음, PR #80).
+test("P1-e 목록 담기 980px 이상: Tab 포커스가 아래 막대에 가리지 않고, 담기 네모는 담기 칸 안", async ({ page }) => {
   const assertNoErrors = collectErrors(page);
   await setup(page, { width: 1280, trades: () => envelope({ items: firstPage, nextCursor: null, recordHighReady: true, coverage: {}, warnings: [] }) });
   // 문서는 부드러운 스크롤이라 Tab 직후에는 아직 움직이는 중이다. 움직임 줄이기 환경(바로 스크롤)에서 같은 scroll-padding 규칙을 본다.
@@ -838,12 +853,12 @@ test("P1-e 목록 담기 980px 이상: Tab 포커스가 아래 막대에 가리�
   await expect(rows(page)).toHaveCount(30);
   // 위치 기준(offsetParent)이 칸 밖(BODY)이면 표가 감싸개 안에서 밀릴 때 글자가 감싸개에 잘리지 않고 문서를 넓힌다.
   const inside = await rows(page).first().locator("td.rt-pick").evaluate((td) => {
-    const text = td.querySelector(".admin-review-select span");
+    const text = td.querySelector(".rt-pick-mark");
     const cell = td.getBoundingClientRect();
     const box = text.getBoundingClientRect();
     return { base: td.contains(text.offsetParent), box: box.left >= cell.left && box.right <= cell.right && box.top >= cell.top && box.bottom <= cell.bottom };
   });
-  expect(inside, "1280px 표: '담기' 글자의 위치 기준과 자리가 담기 칸 안").toEqual({ base: true, box: true });
+  expect(inside, "1280px 표: 담기 네모의 위치 기준과 자리가 담기 칸 안").toEqual({ base: true, box: true });
   for (const width of [1024, 1280, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await page.evaluate(() => window.scrollTo(0, 0));
@@ -882,53 +897,83 @@ test("P1-e TK-39 홍보물 화면: ids로만 다시 읽고 카드 PNG 1080×1350
   expect(calls.trades, "목록 거르기 없이 ids만").toEqual([new URLSearchParams({ ids: idsOf(promoItems) }).toString()]);
   await expect(page.locator("[data-promo-notice]")).toBeHidden();
 
-  // D안 순서: 담은 거래 요약 → '어디에 올릴까요?'(인스타그램이 기본) → ① 그림 저장 ② 글 복사 ③ 붙여 넣기
+  // 새 모양 순서(2026-11-24 사용자 답): 담은 거래 요약 → 카드 모양 4개(처음 '기본') → 카드 그림 → 그림 저장 → 올릴 곳 단추 4개(누르면 그곳 글 복사)
   await expect(page.locator("[data-promo-picked] > li")).toHaveCount(3);
   await expect(page.getByRole("link", { name: "거래 다시 고르기" })).toHaveAttribute("href", "/admin/work/realprice/");
-  await expect(page.getByRole("radio", { name: "인스타그램" })).toBeChecked();
-  await expect(page.locator("[data-promo-step-image]")).toHaveText("카드 그림을 휴대폰에 저장합니다.");
-  await expect(page.locator("[data-promo-step-text]")).toHaveText(/^글을 복사합니다\(해시태그 \d+개 포함, 2,200자 중 [\d,]+자\)\.$/u);
-  await expect(page.locator("[data-promo-step-post]")).toHaveText(/^인스타그램 앱에서 새 게시물/u);
+  const styles = page.getByRole("radiogroup", { name: "카드 모양" }).getByRole("radio");
+  await expect(styles).toHaveCount(4);
+  for (const name of ["기본", "깔끔 카드", "잡지", "다크"]) await expect(page.getByRole("radio", { name, exact: true })).toBeVisible();
+  await expect(page.getByRole("radio", { name: "기본", exact: true })).toBeChecked();
+  const places = page.locator("[data-promo-copy]");
+  await expect(places).toHaveCount(4);
+  for (const [index, name] of ["인스타그램", "스레드", "블로그", "카카오톡"].entries()) await expect(places.nth(index)).toHaveAccessibleName(`${name} 글 복사`);
+  await expect(page.locator("[data-promo-step-post]")).toHaveText(/^그림을 저장한 뒤 올릴 곳 단추를 누르면/u);
   await expect(page.locator("[data-promo-text-fold]"), "글 미리 보기는 접혀 있음").not.toHaveAttribute("open", /.*/u);
   const download = page.locator("[data-promo-download]");
   await expect(download).toHaveCount(1);
   await expect(download).toHaveText("그림 저장");
   await expect(download).toHaveAttribute("download", "realprice-20261119.png");
-  await expect(page.locator(".rt-promo__card img")).toHaveAttribute("src", /^data:image\/png;base64,/u);
+  const card = page.locator(".rt-promo__card img");
+  await expect(card).toHaveAttribute("src", /^data:image\/png;base64,/u);
+  await expect(card).toHaveAttribute("alt", "카드 그림: 실거래 3건");
   const [file] = await Promise.all([page.waitForEvent("download"), download.click()]);
   expect(file.suggestedFilename()).toBe("realprice-20261119.png");
   const size = pngSize(readFileSync(await file.path()));
   expect(size).toEqual({ width: 1080, height: 1350, signature: "PNG" });
   await expect(download, "누른 단추에는 ✓ 표시").toHaveText("✓ 그림 저장함");
 
-  await page.locator("[data-promo-text-fold] > summary").click();
+  // 모양 바꾸기: 서버를 다시 부르지 않고 다시 그림(저장함 표시는 새 그림이라 지워짐), '기본'으로 돌아오면 같은 그림
+  const basicSrc = await card.getAttribute("src");
+  const tradeCalls = calls.trades.length;
+  await page.getByRole("radio", { name: "다크", exact: true }).check();
+  await expect(card).not.toHaveAttribute("src", basicSrc);
+  await expect(download).toHaveText("그림 저장");
+  await expect(page.locator("[data-promo-card-warn]")).toBeHidden();
+  await page.getByRole("radio", { name: "기본", exact: true }).check();
+  await expect(card).toHaveAttribute("src", basicSrc);
+  expect(calls.trades.length, "모양을 바꿔도 서버를 다시 부르지 않음").toBe(tradeCalls);
+
+  // 올릴 곳 단추: 누른 곳 글을 복사하고 그 단추만 '✓ 복사됨', 글 미리 보기도 그 곳 글
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"], { origin: new URL(page.url()).origin });
   const preview = page.locator("[data-promo-preview]");
   const texts = {};
   for (const [value, name] of [["threads", "스레드"], ["instagram", "인스타그램"], ["blog", "블로그"], ["kakao", "카카오톡"]]) {
-    await page.getByRole("radio", { name }).check();
+    const button = page.getByRole("button", { name: `${name} 글 복사` });
+    await button.click();
+    await expect(page.locator("[data-promo-status]")).toHaveText(`✓ ${name} 글을 복사했습니다.`);
+    await expect(page.locator(`[data-promo-copy="${value}"] [data-promo-copy-state]`)).toHaveText("✓ 복사됨");
+    await expect(page.locator("[data-promo-copy].is-done")).toHaveCount(1);
     await expect(page.locator("[data-promo-preview-label]")).toHaveText(`${name} 글`);
-    await expect(page.locator("[data-promo-copy]")).toHaveText(`${name} 글 복사`);
-    texts[value] = await preview.inputValue();
+    // Windows 클립보드는 줄바꿈을 CRLF로 바꿔 돌려주므로 줄바꿈만 맞춰 비교한다.
+    texts[value] = (await page.evaluate(() => navigator.clipboard.readText())).replaceAll("\r\n", "\n");
+    expect(await preview.inputValue(), `${name}: 복사한 글 = 글 미리 보기`).toBe(texts[value]);
     for (const money of ["4억 100만 원", "보증금 2,000만 / 월 85만 원", "4억 300만 원"]) expect(texts[value], `${name}: ${money}`).toContain(money);
     expect(texts[value], `${name}: 층 숫자 그대로`).toContain("지하 1층");
     expect(texts[value], `${name}: 동 번호 0`).not.toMatch(/103동/u);
     expect(texts[value], `${name}: 받은 시각(한국 12:10)`).toMatch(/11\. 19\. 12:10 받/u);
+    expect(texts[value], `${name}: 출처는 글에 그대로`).toContain("국토교통부");
     expect(texts[value]).toContain("010-2790-8675");
   }
   await expect(page.locator("[data-promo-count]")).toHaveText(/자$/u);
-  await page.getByRole("radio", { name: "인스타그램" }).check();
+  await page.getByRole("button", { name: "인스타그램 글 복사" }).click();
   await expect(page.locator("[data-promo-count]")).toHaveText(/자 \/ 2,200자 · 해시태그 \d+개$/u);
   const tags = texts.instagram.match(/#[^\s#]+/gu) ?? [];
   expect(tags.length, "해시태그 12개 안").toBeLessThanOrEqual(12);
   for (const tag of ["#대전동구", "#아파트실거래가", "#천동", "#가상숲1단지"]) expect(tags, `해시태그 ${tag}(고정·법정동·단지 이름)`).toContain(tag);
-  await expect(page.locator("[data-promo-step-text]")).toContainText(`해시태그 ${tags.length}개 포함`);
+  await expect(page.locator("[data-promo-step-post]")).toContainText(`해시태그 ${tags.length}개 포함`);
+  await expect(page.locator("[data-promo-step-post]")).toContainText("인스타그램 앱에서 새 게시물");
+  // 모양을 바꾸면 복사함 표시도 지운다(새 그림을 다시 저장해야 하므로).
+  await page.getByRole("radio", { name: "잡지", exact: true }).check();
+  await expect(page.locator("[data-promo-copy].is-done")).toHaveCount(0);
 
-  await page.context().grantPermissions(["clipboard-read", "clipboard-write"], { origin: new URL(page.url()).origin });
-  await page.getByRole("button", { name: "인스타그램 글 복사" }).click();
-  await expect(page.locator("[data-promo-status]")).toHaveText("✓ 인스타그램 글을 복사했습니다.");
-  await expect(page.locator("[data-promo-copy]")).toHaveText("✓ 인스타그램 글 복사함");
-  // Windows 클립보드는 줄바꿈을 CRLF로 바꿔 돌려주므로 줄바꿈만 맞춰 비교한다.
-  expect((await page.evaluate(() => navigator.clipboard.readText())).replaceAll("\r\n", "\n")).toBe(texts.instagram);
+  // 자동 복사가 막히면 접어 둔 글 미리 보기를 펼치고 글을 골라 둔다.
+  await page.evaluate(() => { navigator.clipboard.writeText = () => Promise.reject(new Error("시험: 복사 막힘")); });
+  await page.getByRole("button", { name: "블로그 글 복사" }).click();
+  await expect(page.locator("[data-promo-status]")).toHaveText(/^자동 복사가 막혔습니다/u);
+  await expect(page.locator("[data-promo-text-fold]")).toHaveAttribute("open", "");
+  await expect(preview).toBeFocused();
+  expect(await preview.inputValue()).toBe(texts.blog);
+  await expect(page.locator("[data-promo-copy].is-done")).toHaveCount(0);
 
   for (const width of [360, 768, 1280]) {
     await page.setViewportSize({ width, height: 900 });
@@ -938,7 +983,7 @@ test("P1-e TK-39 홍보물 화면: ids로만 다시 읽고 카드 PNG 1080×1350
   assertNoErrors();
 });
 
-test("P1-e 대장 조건 3·4: 해제로 바뀐 거래·찾지 못한 거래는 빼고 알리고, 신고가 판정을 못 하면 '신고가' 말 없이, 4건 이상은 두 장", async ({ page }) => {
+test("P1-e 대장 조건 3·4: 해제로 바뀐 거래·찾지 못한 거래는 빼고 알리고, 신고가 판정을 못 하면 '신고가' 말 없이, 5건은 두 장(3 + 2)", async ({ page }) => {
   const assertNoErrors = collectErrors(page);
   const many = [...promoItems, trade(4), trade(5, { cancelled: true, cancelledOn: "2026-11-18" }), trade(6)].map((item) => ({ ...item, recordHigh: item.kind === "sale" ? null : false, prevMaxWon: null }));
   await setup(page, { width: 1280, trades: () => promoAnswer({ items: many, missing: ["sale:202611:00000000000000000009:1"], recordHighReady: false }) });
@@ -946,11 +991,13 @@ test("P1-e 대장 조건 3·4: 해제로 바뀐 거래·찾지 못한 거래는 
   await expect(page.locator("[data-promo-main]")).toBeVisible();
   await expect(page.locator("[data-promo-notice-text]")).toHaveText(/^해제된 거래 1건을 뺐습니다\. 찾지 못한 거래 1건을 뺐습니다\..+신고가 표시 없이 만들었습니다\.$/u);
   await expect(page.locator("[data-promo-download]")).toHaveText(["1장 저장", "2장 저장"]);
-  await expect(page.locator("[data-promo-step-image]")).toHaveText("카드 그림 2장을 휴대폰에 저장합니다.");
   await expect(page.locator("[data-promo-download]").nth(1)).toHaveAttribute("download", "realprice-20261119-2.png");
+  await expect(page.locator(".rt-promo__card img")).toHaveCount(2);
   await expect(page.locator(".rt-promo__card img").first()).toHaveAttribute("alt", "카드 그림 1/2장: 실거래 5건 · 1/2장");
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"], { origin: new URL(page.url()).origin });
   for (const name of ["스레드", "인스타그램", "블로그", "카카오톡"]) {
-    await page.getByRole("radio", { name }).check();
+    await page.getByRole("button", { name: `${name} 글 복사` }).click();
+    await expect(page.locator("[data-promo-preview-label]")).toHaveText(`${name} 글`);
     const text = await page.locator("[data-promo-preview]").inputValue();
     expect(text, `${name}: 신고가 말 없음`).not.toContain("신고가");
     expect(text, `${name}: 해제 거래 없음`).not.toContain("가상숲5단지");
@@ -1003,6 +1050,62 @@ test("P1-e TK-40 인쇄: 메뉴·단추·설명은 숨기고 카드 그림만 A4
   assertNoErrors();
 });
 
+// 카드에 그린 글자를 모두 적어 둔다(시험만): 글자 왼쪽·오른쪽 끝이 그림(1080px) 안인지 본다. 흐름선 글자는 translate 안이라 변환 값을 더한다.
+const recordCardText = (page) => page.addInitScript(() => {
+  window.__cardText = [];
+  const fill = CanvasRenderingContext2D.prototype.fillText;
+  CanvasRenderingContext2D.prototype.fillText = function (text, x, y, ...rest) {
+    const value = String(text);
+    const w = this.measureText(value).width;
+    const left = (this.textAlign === "right" || this.textAlign === "end" ? x - w : this.textAlign === "center" ? x - w / 2 : x) + this.getTransform().e;
+    window.__cardText.push({ text: value, left, right: left + w, width: this.canvas.width });
+    return fill.call(this, text, x, y, ...rest);
+  };
+});
+
+test("새 카드 4건 한 장·긴 단지 이름: 4가지 모양 모두 글자가 그림 밖으로 나가지 않고 긴 이름은 '…'로 줄임, 넘침 알림 없음", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  await recordCardText(page);
+  const LONG = "가상숲리버뷰센트럴파크더퍼스트시티2단지";
+  const four = [
+    trade(1, { aptName: LONG, recordHigh: true, prevMaxWon: 395_000_000 }),
+    trade(2, { aptName: `${LONG}입주자`, kind: "presale", tradeKey: "presale:202611:00000000000000000002:1" }),
+    trade(3, { kind: "rent", priceWon: null, depositWon: 320_000_000, monthlyRentWon: 1_250_000, tradeKey: "rent:202611:00000000000000000003:1" }),
+    trade(4),
+  ];
+  await setup(page, { width: 390, trades: () => promoAnswer({ items: four }) });
+  await page.goto(`/admin/work/realprice/promo/?ids=${idsOf(four)}`);
+  const card = page.locator(".rt-promo__card img");
+  await expect(card, "4건은 한 장").toHaveCount(1);
+  await expect(card).toHaveAttribute("alt", "카드 그림: 실거래 4건");
+  await expect(page.locator("[data-promo-download]")).toHaveText("그림 저장");
+  for (const [index, name] of ["기본", "깔끔 카드", "잡지", "다크"].entries()) {
+    // 처음(기본)은 화면을 열 때 그린 글자, 그 뒤는 모양을 바꿔 다시 그린 글자만 본다.
+    if (index > 0) {
+      const before = await card.getAttribute("src");
+      await page.evaluate(() => { window.__cardText = []; });
+      await page.getByRole("radio", { name, exact: true }).check();
+      await expect(card).not.toHaveAttribute("src", before);
+    }
+    await expect.poll(() => page.evaluate(() => window.__cardText.some((entry) => entry.text.includes("받은 자료"))), name).toBe(true);
+    await expect(page.locator("[data-promo-card-warn]"), `${name}: 넘침 알림 없음`).toBeHidden();
+    const drawn = await page.evaluate(() => window.__cardText);
+    const outside = drawn.filter((entry) => entry.width === 1080 && (entry.left < 0 || entry.right > 1080)).map((entry) => entry.text);
+    expect(outside, `${name}: 그림 밖으로 나간 글자`).toEqual([]);
+    const texts = drawn.map((entry) => entry.text);
+    expect(texts.some((text) => text.startsWith("가상숲리버뷰") && text.endsWith("…")), `${name}: 긴 이름은 말줄임`).toBe(true);
+    expect(texts, `${name}: 딱지`).toEqual(expect.arrayContaining(["▲ 신고가", "분양권"]));
+    expect(texts, `${name}: 오름 폭`).toContain("▲ 600만");
+    expect(texts, `${name}: 상호 크게`).toContain("리더스시티행복한공인중개사사무소");
+    expect(texts.some((text) => text.includes("국토교통부")), `${name}: 출처 상자는 그림에서 뺌`).toBe(false);
+  }
+  // 글 4가지에는 긴 이름을 줄이지 않고 그대로 쓴다.
+  await page.locator("[data-promo-text-fold] > summary").click();
+  expect(await page.locator("[data-promo-preview]").inputValue()).toContain(LONG);
+  expect(await overflowOf(page), "390px 가로 넘침").toBeLessThanOrEqual(0);
+  assertNoErrors();
+});
+
 // ── 거래 흐름(보드 63번) ──
 
 test("거래 흐름 390px: 매매 카드마다 접힌 '흐름·직전 거래', 펼치면 흐름선·직전 거래·칸 3개, 전월세·직거래는 없음, 보이는 매매 ID만 한 번에 묻고 다시 묻지 않음", async ({ page }) => {
@@ -1027,7 +1130,7 @@ test("거래 흐름 390px: 매매 카드마다 접힌 '흐름·직전 거래', �
   await expect(fold.locator(".rt-mini3 dd")).toHaveText(["3억 9,500만", "▲ 101.5%", "3건"]);
   const pickBox = await first.locator(".rt-pick-button").boundingBox();
   const miniBox = await fold.locator(".rt-mini3").boundingBox();
-  expect(pickBox.y, "펼쳐도 '담기'가 칸 3개를 가리지 않음").toBeGreaterThan(miniBox.y + miniBox.height - 1);
+  expect(pickBox.y, "펼쳐도 담기 칸이 칸 3개를 가리지 않음").toBeGreaterThan(miniBox.y + miniBox.height - 1);
   expect(await overflowOf(page), "390px 가로 넘침").toBeLessThanOrEqual(0);
   await page.locator("[data-rt-toggle='highOnly']").click();
   await expect(rows(page)).toHaveCount(1);
@@ -1056,7 +1159,10 @@ test("거래 흐름 1280px 표: 칸 3개(흐름·직전 거래·최고가 대비
   await expect(first.locator(".rt-ratio strong")).toHaveText("▲ 101.5%");
   await expect(first.locator(".rt-ratio small")).toHaveText("앞선 최고 3억 9,500만");
   await expect(first.locator(".rt-price__meta")).toContainText("매매");
-  await expect(first.locator(".rt-price__meta .rt-mtag--high")).toHaveText("신고가");
+  await expect(first.locator(".rt-price__meta .rt-mtag--high"), "신고가 딱지는 금액 아래가 아니라 단지 이름 옆").toHaveCount(0);
+  await expect(first.locator(".rt-name .rt-tag--high")).toHaveText("신고가");
+  await expect(first.locator(".rt-price .rt-up")).toHaveText("▲ 600만 앞선 최고보다");
+  await expect(rows(page).nth(4).locator(".rt-up"), "신고가가 아니면 오름 폭 없음").toHaveCount(0);
   await expect(first.locator(".rt-name__sub")).toHaveText("천동 · 2020년");
   await expect(rows(page).nth(2).locator(".rt-price__meta")).toContainText("매매 · 직거래");
   await expect(rows(page).nth(3).locator(".rt-ratio strong")).toHaveText("첫 거래");
@@ -1179,26 +1285,37 @@ test("D-3 미리보기 칸 1280px: 담으면 ids로 한 번 다시 읽어 홍보
   expect(pngSize(readFileSync(await file.path()))).toEqual({ width: 1080, height: 1350, signature: "PNG" });
   await expect(save).toHaveText("✓ 그림 저장함");
 
-  // 글 복사: 처음은 인스타그램, 올릴 곳을 바꾸면 단추 이름이 바뀌고 ✓ 표시는 지움
+  // 올릴 곳 단추 4개: 누른 곳 글을 복사하고 그 단추만 '✓ 복사됨'
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"], { origin: new URL(page.url()).origin });
-  const copy = panel.locator("[data-rt-preview-copy]");
-  await expect(copy).toHaveAccessibleName("인스타그램 글 복사");
-  await expect(panel.locator("[data-rt-preview-copy-count]")).toContainText("해시태그");
-  await copy.click();
-  await expect(copy).toHaveAccessibleName("✓ 인스타그램 글 복사함");
+  const copies = panel.locator("[data-rt-preview-copy]");
+  await expect(copies).toHaveCount(4);
+  for (const [index, name] of ["인스타그램", "스레드", "블로그", "카카오톡"].entries()) await expect(copies.nth(index)).toHaveAccessibleName(`${name} 글 복사`);
+  await panel.getByRole("button", { name: "인스타그램 글 복사" }).click();
+  await expect(panel.locator('[data-rt-preview-copy="instagram"] [data-rt-preview-copy-state]')).toHaveText("✓ 복사됨");
+  await expect(panel.locator("[data-rt-preview-status]")).toHaveText("✓ 인스타그램 글을 복사했습니다.");
   // Windows 클립보드는 줄바꿈을 CRLF로 바꿔 돌려주므로 줄바꿈만 맞춰 비교한다(홍보물 화면 시험과 같음).
   const instagram = (await page.evaluate(() => navigator.clipboard.readText())).replaceAll("\r\n", "\n");
-  await expect(panel.locator("[data-rt-preview-post]")).toHaveText("인스타그램 앱에서 새 게시물 → 저장한 그림 고르기 → 글 붙여 넣기.");
-  await panel.getByRole("radio", { name: "스레드" }).check();
-  await expect(copy).toHaveAccessibleName("스레드 글 복사");
-  await expect(panel.locator("[data-rt-preview-status]")).toHaveText("");
-  // 고른 곳의 글을 복사한다(날개-2 깨 보기로 보탬): 스레드로 바꾸면 인스타그램 글이 아니라 스레드 글
-  await copy.click();
-  await expect(copy).toHaveAccessibleName("✓ 스레드 글 복사함");
+  await expect(panel.locator("[data-rt-preview-post]")).toContainText("해시태그");
+  await expect(panel.locator("[data-rt-preview-post]")).toContainText("인스타그램 앱에서 새 게시물 → 저장한 그림 고르기 → 글 붙여 넣기.");
+  // 다른 곳을 누르면 그 곳 글을 복사하고 앞 단추의 ✓ 표시는 지움(날개-2 깨 보기로 보탬: 스레드 글은 인스타그램 글과 다름)
+  await panel.getByRole("button", { name: "스레드 글 복사" }).click();
+  await expect(panel.locator('[data-rt-preview-copy="threads"] [data-rt-preview-copy-state]')).toHaveText("✓ 복사됨");
+  await expect(panel.locator(".rt-place.is-done")).toHaveCount(1);
   const threads = (await page.evaluate(() => navigator.clipboard.readText())).replaceAll("\r\n", "\n");
   expect(threads, "스레드 글은 인스타그램 글과 다름").not.toBe(instagram);
   await expect(panel.locator("[data-rt-preview-print]")).toHaveText("종이로 뽑기(A4)");
   const cardSrc = await image.getAttribute("src");
+
+  // 카드 모양 띠: 처음 '기본', 바꾸면 ids를 다시 읽지 않고 다시 그리고 복사함 표시는 지움, '기본'으로 돌아오면 같은 그림
+  const styles = panel.getByRole("radiogroup", { name: "카드 모양" }).getByRole("radio");
+  await expect(styles).toHaveCount(4);
+  await expect(panel.getByRole("radio", { name: "기본", exact: true })).toBeChecked();
+  await panel.getByRole("radio", { name: "다크", exact: true }).check();
+  await expect(image).not.toHaveAttribute("src", cardSrc);
+  await expect(panel.locator(".rt-place.is-done")).toHaveCount(0);
+  await panel.getByRole("radio", { name: "기본", exact: true }).check();
+  await expect(image).toHaveAttribute("src", cardSrc);
+  expect(idCalls(calls), "모양을 바꿔도 ids를 다시 읽지 않음").toHaveLength(1);
 
   // 칸: 목록 오른쪽 380px, 내려도 위 16px에 붙어 따라옴, 가로 넘침 없음
   const box = await panel.evaluate((aside) => {
@@ -1219,12 +1336,12 @@ test("D-3 미리보기 칸 1280px: 담으면 ids로 한 번 다시 읽어 홍보
   await promo.goto(`/admin/work/realprice/promo/?ids=${idsOf(picks)}`);
   await expect(promo.locator(".rt-promo__card img")).toHaveAttribute("src", cardSrc);
   expect(await promo.locator("[data-promo-preview]").inputValue()).toBe(instagram);
-  await promo.getByRole("radio", { name: "스레드" }).check();
+  await promo.getByRole("button", { name: "스레드 글 복사" }).click();
   await expect.poll(() => promo.locator("[data-promo-preview]").inputValue()).toBe(threads);
   await promo.close();
 });
 
-test("D-3 미리보기 칸: 4건 이상은 카드 2장을 세로로, 다시 읽을 때 해제로 바뀐 거래는 빼고 알림, 비우면 빈 칸", async ({ page }) => {
+test("D-3 미리보기 칸: 5건 이상은 카드 2장을 세로로, 다시 읽을 때 해제로 바뀐 거래는 빼고 알림, 비우면 빈 칸", async ({ page }) => {
   const assertNoErrors = collectErrors(page);
   const calls = await setup(page, { width: 1280, trades: previewTrades((items) => ({ items: items.map((item, index) => (index === 2 ? { ...item, cancelled: true } : item)) })) });
   await page.goto("/admin/work/realprice/");
