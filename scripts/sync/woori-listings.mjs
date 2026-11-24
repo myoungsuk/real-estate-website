@@ -1,8 +1,9 @@
 // 우리집부동산 공개 중개사 홈페이지(home.woori-house.co.kr/42957)가 화면에 쓰는 공개 매물 목록(JSON)을
 // 엑셀 가져오기와 같은 16칸 줄로 바꾼다. 그 뒤 처리(건너뛰기·형식 검사·지우기)는 src/lib/admin/woori-listing-import.mjs를 그대로 쓴다.
 // 2026-11-24 우리집부동산 회신: 개별 중개사 API는 없고, 로그인 없는 중개사 홈페이지를 안내함. 짧은 시간에 여러 번 부르면 IP를 막으므로 하루 1번만 부른다.
-// 이 목록에는 호수가 없다. 쓰는 칸은 네이버 매물번호·종류·거래·단지 이름·동 번호·광고 층·총층·면적·가격·등록일뿐이다.
-import { WOORI_LISTING_EXPECTED_HEADERS } from "../../src/lib/admin/woori-listing-import.mjs";
+// 이 목록에는 호수가 없다. 쓰는 칸은 네이버 매물번호·종류·거래·단지 이름·동 번호·광고 층·총층·면적(대지·연면적 포함)·가격·등록일과
+// 아파트·분양권 밖의 종류 제목에 쓰는 법정동·건물 꼴(BDONG_NM·BLDTYPE_NM)뿐이다. 좌표·사진 주소·설명·중개사 이름은 쓰지 않는다.
+import { WOORI_LISTING_EXPECTED_HEADERS, wooriSitePropertyType } from "../../src/lib/admin/woori-listing-import.mjs";
 
 export const WOORI_PUBLIC_HOSTS = new Set(["home.woori-house.co.kr"]);
 export const WOORI_PUBLIC_OFFICE_ID = "42957";
@@ -124,8 +125,38 @@ function priceText(row) {
   return "";
 }
 
-function areaKind(row) {
-  return text(row.RLSTTYPE_NM) === "아파트" || text(row.SUB_RLSTTYPE_NM).startsWith("아파트") ? "공급" : "계약";
+function positiveArea(value) {
+  const area = text(value).replace(/,/gu, "");
+  return /^\d+(?:\.\d+)?$/u.test(area) && Number(area) > 0 ? area : null;
+}
+
+// 면적 두 칸을 엑셀과 같은 이름표로 적는다. 2026-11-24 받은 33건(아파트·분양권·상가)은 대지(grnd_spc)·연면적(TOT_SPC)이 모두 0이었다.
+// 토지·단독 등에서 어느 칸에 값이 오는지는 아직 못 봤다(추정): 대지·토지는 grnd_spc, 없으면 SPLY_SPC / 연면적은 TOT_SPC, 없으면 EXCLS_SPC.
+const SUPPLY_AREA_TYPES = new Set(["아파트", "아파트분양권", "빌라/연립", "재건축", "재개발"]);
+const LAND_BUILDING_TYPES = new Set(["단독/다가구", "전원주택", "한옥주택", "상가주택", "건물"]);
+function areaCells(row) {
+  const type = wooriSitePropertyType(text(row.SUB_RLSTTYPE_NM));
+  if (type === "토지") return [`[토지] ${positiveArea(row.grnd_spc) ?? text(row.SPLY_SPC)}`, ""];
+  if (LAND_BUILDING_TYPES.has(type)) {
+    return [`[대지] ${positiveArea(row.grnd_spc) ?? text(row.SPLY_SPC)}`, `[연면적] ${positiveArea(row.TOT_SPC) ?? text(row.EXCLS_SPC)}`];
+  }
+  const kind = SUPPLY_AREA_TYPES.has(type) || text(row.RLSTTYPE_NM) === "아파트" ? "공급" : "계약";
+  return [`[${kind}] ${text(row.SPLY_SPC)}`, `[전용] ${text(row.EXCLS_SPC)}`];
+}
+
+// 아파트·분양권 밖의 종류는 공개 매물명이 비면 "{법정동} {건물 꼴}"(예: "천동 복합상가")을 매물명 자리에 넣는다.
+// 법정동은 소재지 자리에 "시 구 동"까지만 넣는다(지번·좌표·사진 주소·설명은 쓰지 않음).
+function neighborhood(row) {
+  const dong = text(row.BDONG_NM);
+  return /^[가-힣]{1,8}\d{0,2}[가-힣]{0,3}(?:동|가|리|읍|면)$/u.test(dong) ? dong : "";
+}
+function listingName(row) {
+  const name = text(row.BLDNM);
+  const type = wooriSitePropertyType(text(row.SUB_RLSTTYPE_NM));
+  if (name || type === "아파트" || type === "아파트분양권") return name;
+  const buildingType = text(row.BLDTYPE_NM);
+  const dong = neighborhood(row);
+  return dong && /^[가-힣]{2,8}$/u.test(buildingType) ? `${dong} ${buildingType}` : "";
 }
 
 /**
@@ -136,7 +167,10 @@ export function wooriPublicRowsToTable(rows) {
   const headers = [...WOORI_LISTING_EXPECTED_HEADERS];
   const tableRows = rows.map((row, index) => {
     const dong = text(row.DONG_NM);
-    const detail = /^\d{1,4}$/u.test(dong) ? `${dong}동 (${floorText(row)})` : "";
+    const floor = floorText(row);
+    const detail = /^\d{1,4}$/u.test(dong) ? `${dong}동 (${floor})` : floor ? `(${floor})` : "";
+    const [area1, area2] = areaCells(row);
+    const place = neighborhood(row);
     const record = {
       "번호": String(index + 1),
       "홍보방식": "",
@@ -144,11 +178,11 @@ export function wooriPublicRowsToTable(rows) {
       "네이버매물번호": text(row.naver_uid),
       "매물종류": text(row.SUB_RLSTTYPE_NM),
       "거래종류": text(row.DEALTYPE_NM),
-      "소재지": "",
-      "매물명": text(row.BLDNM),
+      "소재지": place ? [text(row.CITY_NM), text(row.GUN_NM), place].filter(Boolean).join(" ") : "",
+      "매물명": listingName(row),
       "상세주소": detail,
-      "면적1(㎡)": `[${areaKind(row)}] ${text(row.SPLY_SPC)}`,
-      "면적2(㎡)": `[전용] ${text(row.EXCLS_SPC)}`,
+      "면적1(㎡)": area1,
+      "면적2(㎡)": area2,
       "매물가": priceText(row),
       "등록": text(row.SVC_DATE_STRT),
       "진행상황": "서비스중",

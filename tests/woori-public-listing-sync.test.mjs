@@ -134,14 +134,33 @@ test("공개 매물 줄을 엑셀과 같은 16칸으로 바꾸고 상세주소�
   assert.equal(records[4]["매물가"], "23,000");
   assert.equal(records[0]["면적1(㎡)"], "[공급] 112.40");
   assert.equal(records[5]["면적1(㎡)"], "[계약] 112.40");
-  assert.equal(records[5]["상세주소"], "", "동 번호가 없으면 상세주소를 비움");
+  assert.equal(records[5]["상세주소"], "(1/22층)", "동 번호가 없으면 광고 층·총층만(2026-11-24 모든 종류 받기)");
   assert.equal(records[0]["등록"], "26.11.10");
-  // 버리는 칸은 비운다(설명·소재지·메모는 공개 카드에 쓰지 않음).
+  // 버리는 칸은 비운다(설명·메모는 공개 카드에 쓰지 않음. 법정동이 없으면 소재지도 빈 칸).
   for (const record of records) {
     assert.equal(record["소재지"], "");
     assert.equal(record["중개사메모"], "");
     assert.doesNotMatch(record["상세주소"], /호/u);
   }
+});
+
+test("아파트·분양권 밖의 종류: 법정동·건물 꼴로 매물명 자리를 채우고, 토지·단독은 대지·연면적 이름표로 넘기며 좌표·사진·설명은 쓰지 않는다", () => {
+  const secret = { MAP_X: "127.4567891", MAP_Y: "36.3456789", PHTO_PATH: "https://example.invalid/photo/9876.jpg", FETR_DESC: "가상 설명 010-0000-0000", BRKG_NM: "가상중개사무소" };
+  const where = { CITY_NM: "대전광역시", GUN_NM: "동구", BDONG_NM: "가상동" };
+  const rows = [
+    apiRow({ naver_uid: "2700000011", RLSTTYPE_NM: "상가", SUB_RLSTTYPE_NM: "상가점포", DEALTYPE_NM: "월세", DEAL_AMT: "0", WRRNT_AMT: "2,000", LEASE_AMT: "80", DONG_NM: "", BLDNM: "", BLDTYPE_NM: "복합상가", CORES_FLR_CNT: "4", TOT_FLR_CNT: "6", SPLY_SPC: "66.10", EXCLS_SPC: "50.20", ...where, ...secret }),
+    apiRow({ naver_uid: "2700000012", RLSTTYPE_NM: "토지", SUB_RLSTTYPE_NM: "토지", DONG_NM: "", BLDNM: "", CORES_FLR_CNT: "", TOT_FLR_CNT: "", SPLY_SPC: "0.00", EXCLS_SPC: "0.00", grnd_spc: "1,200.00", TOT_SPC: "0.00", ...where }),
+    apiRow({ naver_uid: "2700000013", RLSTTYPE_NM: "주택", SUB_RLSTTYPE_NM: "단독/다가구", DONG_NM: "", BLDNM: "", CORES_FLR_CNT: "2", TOT_FLR_CNT: "2", SPLY_SPC: "0.00", EXCLS_SPC: "0.00", grnd_spc: "330.00", TOT_SPC: "125.50", BDONG_NM: "" }),
+    apiRow({ naver_uid: "2700000014", RLSTTYPE_NM: "상가", SUB_RLSTTYPE_NM: "상가점포", DONG_NM: "", BLDNM: "가상프라자", BLDTYPE_NM: "복합상가", ...where }),
+  ];
+  const table = wooriPublicRowsToTable(rows);
+  const records = table.rows.map((values) => Object.fromEntries(table.headers.map((header, index) => [header, values[index]])));
+  assert.deepEqual([records[0]["매물명"], records[0]["소재지"], records[0]["상세주소"], records[0]["면적1(㎡)"], records[0]["면적2(㎡)"]], ["가상동 복합상가", "대전광역시 동구 가상동", "(4/6층)", "[계약] 66.10", "[전용] 50.20"]);
+  assert.deepEqual([records[1]["면적1(㎡)"], records[1]["면적2(㎡)"], records[1]["상세주소"]], ["[토지] 1200.00", "", ""]);
+  assert.deepEqual([records[2]["매물명"], records[2]["소재지"], records[2]["면적1(㎡)"], records[2]["면적2(㎡)"]], ["", "", "[대지] 330.00", "[연면적] 125.50"]);
+  assert.equal(records[3]["매물명"], "가상프라자", "공개 매물명이 있으면 그것");
+  const text = JSON.stringify(table);
+  for (const banned of ["127.45", "36.34", "photo", "가상 설명", "010-0000-0000", "가상중개사무소"]) assert.equal(text.includes(banned), false, banned);
 });
 
 test("총층이 있는 층은 부동산뱅크와 같은 꼴로 적고, 엑셀(총층 없음)은 지금처럼 이미 있는 값을 둔다", () => {
@@ -168,12 +187,12 @@ test("자동 받기: 새 매물을 넣고 재확인 상태를 woori로 적으며
   const { fetcher, calls } = fakeFetcher([apiBody([
     apiRow(),
     apiRow({ naver_uid: bank.id, DEAL_AMT: "99,999" }),
-    apiRow({ naver_uid: "2700000006", RLSTTYPE_NM: "상가", SUB_RLSTTYPE_NM: "상가점포", DONG_NM: "", BLDNM: "" }),
+    apiRow({ naver_uid: "2700000006", RLSTTYPE_NM: "상가", SUB_RLSTTYPE_NM: "상가점포", DONG_NM: "", BLDNM: "", BLDTYPE_NM: "복합상가", BDONG_NM: "가상동", CITY_NM: "대전광역시", GUN_NM: "동구", CORES_FLR_CNT: "1", TOT_FLR_CNT: "4" }),
   ])]);
   const result = await runWooriListingSync({ rootDir: root, fetcher, now: new Date("2026-11-14T15:40:00Z"), logger: quiet, summaryPath: null });
   assert.equal(calls.length, 1, "요청은 실행마다 1번");
-  assert.equal(result.newCount, 1);
-  assert.equal(result.skippedCount, 2, "부동산뱅크 매물과 동 번호 없는 상가는 건너뜀");
+  assert.equal(result.newCount, 2, "동 번호 없는 상가도 새 매물(2026-11-24 모든 종류 받기)");
+  assert.equal(result.skippedCount, 1, "부동산뱅크 매물만 건너뜀");
   assert.equal(result.removedCount, 0);
   const content = JSON.parse(await readFile(join(root, "src", "data", "naver-listings.json"), "utf8"));
   const review = JSON.parse(await readFile(join(root, ".github", "listing-review-state.json"), "utf8"));
@@ -183,6 +202,9 @@ test("자동 받기: 새 매물을 넣고 재확인 상태를 woori로 적으며
   assert.equal(added.floorLabel, "7/22층");
   assert.equal(added.priceLabel, "4억 1,500");
   assert.equal(added.url, "https://fin.land.naver.com/articles/2700000001");
+  const shop = content.items.find(({ id }) => id === "2700000006");
+  assert.deepEqual([shop.title, shop.propertyType, shop.floorLabel, shop.areaLabel], ["가상동 복합상가", "상가점포", "1/4층", "계약 112.4㎡ · 전용 84.91㎡"]);
+  assert.deepEqual(review.items["2700000006"], { source: "woori", lastSeenAt: "2026-11-15", lastReviewedAt: null });
   assert.deepEqual(content.items.find(({ id }) => id === bank.id), bank, "부동산뱅크 매물 값 그대로");
   assert.deepEqual(content.items.find(({ id }) => id === manual.id), manual);
   assert.deepEqual(review.items["2700000001"], { source: "woori", lastSeenAt: "2026-11-15", lastReviewedAt: null });
@@ -236,6 +258,8 @@ test("자동 받기: 응답이 비었거나 형식이 틀린 줄이 있으면 �
   await assert.rejects(run(apiBody([])), /비어 있습니다/u);
   await assert.rejects(run(apiBody([apiRow({ DEAL_AMT: "협의" })])), /형식이 맞지 않아 아무것도 바꾸지 않았습니다/u);
   await assert.rejects(run(apiBody([apiRow({ SVC_DATE_STRT: "27.01.01" })])), /형식이 맞지 않아/u);
+  // 처음 보는 매물종류가 오면 그 줄만 건너뛰지 않고 그날 전체를 멈춘다(모르는 종류 때문에 매물을 지우지 않음).
+  await assert.rejects(run(apiBody([apiRow(), apiRow({ naver_uid: "2700000009", RLSTTYPE_NM: "가상", SUB_RLSTTYPE_NM: "가상숙박시설" })])), /처음 보는 매물종류/u);
   assert.deepEqual([await readFile(contentPath, "utf8"), await readFile(reviewPath, "utf8")], before);
 });
 
