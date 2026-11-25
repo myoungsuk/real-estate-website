@@ -5,15 +5,19 @@ import { keepBlogExtras } from "../src/lib/admin-blog-extras.mjs";
 import { getAdminFieldLabel } from "../src/lib/admin-content-diff.mjs";
 import {
   BLOG_CATEGORY_MAX_LENGTH,
+  BLOG_CONTENTS_MIN_KEPT_LENGTH,
   BLOG_EXCERPT_MAX_LENGTH,
   BLOG_EXCERPT_SKIP_LABELS,
   blogPlainText,
   buildBlogExcerpt,
+  cutBlogBeforeContents,
   cutBlogExcerpt,
+  dropRepeatedBlogTitle,
   getBlogCategoryErrors,
   getBlogExcerptErrors,
   hasBuildingNumber,
   hasPriceExpression,
+  isBlogListingTitle,
   normalizeBlogCategory,
   skipBlogGreeting,
 } from "../src/lib/blog-excerpt.mjs";
@@ -63,8 +67,157 @@ test("맨 앞 인사 문장과 바로 뒤 자기소개 문장을 건너뛴다", 
   ]) {
     assert.deepEqual(skipBlogGreeting(text), { text: rest, skipped }, text);
   }
-  const noGreeting = "전세 계약을 앞둔 분들이 많이 묻습니다. 안녕하세요~ 리더스시티행복한부동산입니다.";
-  assert.deepEqual(skipBlogGreeting(noGreeting), { text: noGreeting, skipped: null }, "맨 앞이 아닌 인사는 그대로 둠");
+});
+
+test("인사 문장이 맨 앞이 아니어도 문장 시작이면 그 인사와 자기소개만 빼고 앞뒤를 잇는다", () => {
+  for (const [text, skipped, rest] of [
+    [
+      "전세 계약을 앞둔 청년이라면 대출이 가장 궁금하실 겁니다. 안녕하세요~ 대전 동구 아파트 전문 리더스시티행복한부동산입니다. 전세 계약을 진행하다 보면 문의를 자주 받습니다.",
+      "안녕하세요~ 대전 동구 아파트 전문 리더스시티행복한부동산입니다.",
+      "전세 계약을 앞둔 청년이라면 대출이 가장 궁금하실 겁니다. 전세 계약을 진행하다 보면 문의를 자주 받습니다.",
+    ],
+    ["전세 계약을 앞둔 분들이 많이 묻습니다. 안녕하세요~ 리더스시티행복한부동산입니다.", "안녕하세요~ 리더스시티행복한부동산입니다.", "전세 계약을 앞둔 분들이 많이 묻습니다."],
+    ["요즘 문의가 많네요! 안녕하세요. 오늘은 전세 이야기입니다.", "안녕하세요.", "요즘 문의가 많네요! 오늘은 전세 이야기입니다."],
+    ["날씨가 춥습니다~ 안녕하십니까 여러분! 오늘은 세금 이야기입니다.", "안녕하십니까 여러분!", "날씨가 춥습니다~ 오늘은 세금 이야기입니다."],
+    [
+      "\"지금 사도 될까요?\" 많이들 물으십니다. 안녕하세요. 리더스시티행복한부동산입니다. 오늘 정리합니다.",
+      "안녕하세요. 리더스시티행복한부동산입니다.",
+      "\"지금 사도 될까요?\" 많이들 물으십니다. 오늘 정리합니다.",
+    ],
+    [
+      "많이 묻습니다. 안녕하세요. 오늘은 전세 이야기입니다. 안녕하세요. 다시 인사드립니다.",
+      "안녕하세요.",
+      "많이 묻습니다. 오늘은 전세 이야기입니다. 안녕하세요. 다시 인사드립니다.",
+    ],
+  ]) {
+    assert.deepEqual(skipBlogGreeting(text), { text: rest, skipped }, text);
+  }
+  // 문장 시작이 아니거나 인용문 안에 있는 "안녕하세요"는 지우지 않는다.
+  for (const text of [
+    "손님들이 안녕하세요 하고 들어오시면 먼저 차를 드립니다. 오늘 이야기입니다.",
+    "손님이 문을 열며 말했습니다. \"안녕하세요. 집 보러 왔어요.\" 그날 상담 이야기입니다.",
+    "손님이 말했습니다. \"집 보러 왔어요. 안녕하세요. 소장님 계신가요?\" 그날 상담 이야기입니다.",
+    "손님이 말했습니다. “집 보러 왔어요. 안녕하세요. 소장님 계신가요?” 그날 상담 이야기입니다.",
+    "전화로 ‘어제 통화했어요. 안녕하세요.’ 하고 말씀하셨습니다.",
+    "제목 한 줄 안녕하세요. 리더스시티행복한부동산입니다.",
+  ]) {
+    assert.deepEqual(skipBlogGreeting(text), { text, skipped: null }, text);
+  }
+});
+
+test("글 앞이 제목 글자 그대로면 그 제목을 뗀다", () => {
+  const title = "리더스시티4블럭 전세계약 연장, 집주인은 언제 연락해야 할까?";
+  const rest = "리더스시티4블럭 전세 연장 시기가 다가오면서 많은 집주인분들이 비슷한 고민을 하게 됩니다.";
+  assert.equal(dropRepeatedBlogTitle(`${title} ${rest}`, title), rest);
+  assert.equal(dropRepeatedBlogTitle(`천동 리더스시티 4bl 안내 ${rest}`, "천동  리더스시티 4bl 안내 "), rest, "제목은 공백을 정리한 뒤 견준다");
+  assert.equal(dropRepeatedBlogTitle(`A &amp; B 시세 총정리 ${rest}`.replace("&amp;", "&"), "A &amp; B 시세 총정리"), rest, "제목의 엔티티도 풀어서 견준다");
+  assert.equal(dropRepeatedBlogTitle(title, title), "", "글이 제목뿐이면 빈 글자");
+
+  for (const [text, givenTitle, why] of [
+    [`리더스시티4블럭 전세계약 연장, 집주인은 언제 연락해야 할까요? ${rest}`, title, "한 글자 다름"],
+    [`리더스시티4블록 전세계약 연장, 집주인은 언제 연락해야 할까? ${rest}`, title, "가운데 한 글자 다름"],
+    [`${title}라는 질문을 자주 받습니다. ${rest}`, title, "제목 바로 뒤가 띄어쓰기가 아님"],
+    [`머리말 ${title} ${rest}`, title, "맨 앞이 아님"],
+    [`공지 드립니다. ${rest}`, "공지", "제목이 너무 짧음"],
+    [`${title} ${rest}`, null, "제목 없음"],
+  ]) {
+    assert.equal(dropRepeatedBlogTitle(text, givenTitle), text, why);
+  }
+
+  // 제목 되풀이 뒤의 인사까지 함께 빠진다(제목 → 인사 차례).
+  const result = build({ title, category: "아파트/분양권", description: `${title} 안녕하세요. 대전 동구 아파트를 안내하는 리더스시티행복한부동산입니다. ${body}` });
+  assert.deepEqual(result, { excerpt: body, reason: null, skippedGreeting: "안녕하세요. 대전 동구 아파트를 안내하는 리더스시티행복한부동산입니다." });
+  const oneOff = build({ title, category: "아파트/분양권", description: `${title}! ${body}` });
+  assert.ok(oneOff.excerpt.startsWith(`${title}! `), "한 글자 다르면 그대로 싣는다");
+});
+
+test("'목차'와 목록이 이어지면 '목차' 앞에서 끊고, 남는 글이 60자 미만이면 끊지 않는다", () => {
+  assert.equal(BLOG_CONTENTS_MIN_KEPT_LENGTH, 60);
+  const sixty = `${"가".repeat(59)}.`;
+  const fiftyNine = `${"가".repeat(58)}.`;
+  const list = "목차 1. 단지 개요 2. 단지 기본 정보 3. 평형 구성";
+  assert.deepEqual(cutBlogBeforeContents(`${sixty} ${list}`), { text: sixty, cut: true }, "60자면 끊는다");
+  assert.deepEqual(cutBlogBeforeContents(`${fiftyNine} ${list}`), { text: `${fiftyNine} ${list}`, cut: false }, "59자면 끊지 않는다");
+  assert.deepEqual(cutBlogBeforeContents(`${sixty} 목차 -전용면적과 공급면적은 어떻게 다른가요? -왜 34평형인가요?`), { text: sixty, cut: true }, "줄표 목록");
+  assert.deepEqual(cutBlogBeforeContents(`${"가".repeat(60)} 목차 ① 개요 ② 시세`), { text: "가".repeat(60), cut: true }, "문장 부호 없이 번호 목록이 이어짐");
+  assert.deepEqual(cutBlogBeforeContents(`${sixty} 목차 단지 개요부터 살펴봅니다.`), { text: sixty, cut: true }, "문장이 끝난 뒤의 낱말 '목차'");
+
+  for (const text of [
+    `${sixty} 아래 목차 순서대로 설명해 드립니다. 먼저 단지 개요입니다.`,
+    `${sixty} 세목차이와 목차별 내용은 다음과 같습니다. 1. 단지 개요`,
+    `${sixty} 차례 1. 단지 개요 2. 단지 기본 정보`,
+    body,
+  ]) {
+    assert.deepEqual(cutBlogBeforeContents(text), { text, cut: false }, text);
+  }
+
+  assert.equal(cutBlogExcerpt("오늘 정리할 내용은 아래와 같습니다.", { cleanCut: true }), "오늘 정리할 내용은 아래와 같습니다…", "가운데서 끊었으니 …를 붙이고 마지막 낱말은 버리지 않는다");
+  assert.equal(cutBlogExcerpt("오늘 정리할 내용은 아래와 같습니다.", { cleanCut: true, sourceCut: true }), "오늘 정리할 내용은 아래와 같습니다…");
+
+  assert.ok(body.length >= BLOG_CONTENTS_MIN_KEPT_LENGTH);
+  const result = build({
+    title: "천동 리더스시티 5블록 아파트 정보 & 시세 총정리",
+    category: "아파트/분양권",
+    description: `안녕하세요. 리더스시티행복한부동산입니다. ${body} 목차 1. 단지 개요 2. 단지 기본 정보 3. 평형 구성 1. 단지 개요 리더스시티 5블록은.......`,
+  });
+  assert.deepEqual(result, { excerpt: `${body.slice(0, -1)}…`, reason: null, skippedGreeting: "안녕하세요. 리더스시티행복한부동산입니다." });
+  assert.doesNotMatch(result.excerpt, /목차|단지 개요/u);
+
+  const shortLead = build({ title: "짧은 머리말", description: `${fiftyNine} ${list} ${body}` });
+  assert.ok(shortLead.excerpt.includes("목차 1. 단지 개요"), "남는 글이 59자면 지금처럼 목차까지 싣는다");
+});
+
+test("제목이 매물 소개인 글은 요약을 싣지 않는다: 급매·매물, 면적·타입 표기 + 거래 종류", () => {
+  // 2026-11-25 네이버 공식 RSS 50건의 제목 글자 그대로(번호는 RSS 차례).
+  const listingTitles = [
+    "신흥sk뷰 59A 매매 ㅣ식장산이 방에서도 보이는 고층, 조합원 세대에요", // 2
+    "대전 동구 리더스시티4블록 매매 신축 탑층 매물", // 6
+    "대전 천동 리더스시티 5블록 84㎡ 매매｜중앙광장과 보문산 조망, 5억 3천만원", // 7
+    "대전 천동 리더스시티 4블록 59A 매물 소개(거래완료)", // 11
+    "대전 천동 리더스시티 4블록 74타입, 401동 고층 조망 매물 놓치지 마세요", // 18
+    "대전 천동 리더스시티 5블록 59B타입 매매", // 26
+    "대전 천동 리더스시티 전세 매물 소개(거래완료)", // 34
+    "대전 신흥 SK뷰 84㎡ 급매(정원뷰·역세권·실거주 만족도 높은 매물)-거래완료", // 41
+    "천동 리더스시티 4bl 매물 찾는 방법", // 47
+  ];
+  const otherTitles = [
+    "대동2구역 1블록 vs 천동 리더스시티, 59㎡ 가격 비교해봤어요", // 3
+    "천동 리더스시티 5블록 아파트 정보 & 매매 시세 총정리", // 8
+    "전용면적 공급면적 차이, 아파트 평수 제대로 보는 법", // 12
+    "대전 아파트 매매 동향! 9월 1주 얼마나 움직였을까?(feat:천동 리더스 시티 · 신흥 sk 뷰)", // 15
+    "대전 롯데캐슬 더 퍼스트 59B 타입, 실거주를 생각한다면 살펴볼 포인트", // 24
+    "대전 롯데캐슬 더 퍼스트 59A타입, 실거주 만족도를 높인 실용적인 평면", // 25
+    "대전 천동 리더스시티 24평 실거래가 분석, 전세대신 매매가 나을까?", // 38
+    "지방 미분양 신축 아파트 매매하기 좋은 타이밍은?(ft. 대전 롯데캐슬 더 퍼스트-조합원 취소분)", // 40
+  ];
+  for (const title of listingTitles) {
+    assert.equal(isBlogListingTitle(title), true, title);
+    const expected = /거래완료/u.test(title) ? "deal-closed" : "listing-title";
+    assert.deepEqual(build({ title, category: "아파트/분양권", description: body }), { excerpt: null, reason: expected, skippedGreeting: null }, title);
+  }
+  for (const title of otherTitles) {
+    assert.equal(isBlogListingTitle(title), false, title);
+    assert.deepEqual(build({ title, category: "아파트/분양권", description: body }), { excerpt: body, reason: null, skippedGreeting: null }, title);
+  }
+  assert.equal(build({ title: listingTitles[2], category: "추천매물", description: body }).reason, "listing-category", "분류가 먼저");
+
+  for (const [title, expected] of [
+    ["천동 리더스시티 급매 소식", true],
+    ["리더스시티 5블록 59 타입 전세", true],
+    ["신흥 SK뷰 84 ㎡ 월세", true],
+    ["신흥 SK뷰 84m² 전세", true],
+    ["리더스시티 24평 전세", false],
+    ["리더스시티 4bl 전세 계약 주의 사항", false],
+    ["청년 전세자금 대출 2026년 한도와 금리 총정리", false],
+    ["리더스시티 401동 매매 이야기", false],
+    ["리더스시티 59A타입 평면 살펴보기", false],
+    ["1,866호 미분양과 전세 흐름", false],
+    ["", false],
+  ]) {
+    assert.equal(isBlogListingTitle(title), expected, title);
+  }
+  assert.equal(isBlogListingTitle(null), false);
+  assert.equal(isBlogListingTitle(undefined), false);
 });
 
 test("300자를 넘으면 낱말 경계에서 자르고 …를 붙인다", () => {
@@ -176,7 +329,7 @@ test("글 앞부분이 없거나 인사를 건너뛴 뒤 30자 미만이면 싣�
   );
   assert.equal(build({ title: "짧은 글", description: "가".repeat(29) }).reason, "too-short");
   assert.equal(build({ title: "짧은 글", description: "가".repeat(30) }).reason, null);
-  for (const reason of ["listing-category", "deal-closed", "too-short", "sensitive", "price", "building-number", "invalid"]) {
+  for (const reason of ["listing-category", "deal-closed", "listing-title", "too-short", "sensitive", "price", "building-number", "invalid"]) {
     assert.equal(typeof BLOG_EXCERPT_SKIP_LABELS[reason], "string", reason);
   }
 });
