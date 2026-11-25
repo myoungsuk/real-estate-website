@@ -9,6 +9,7 @@ export const ADMIN_RESOURCE_PATHS = Object.freeze({
   "home-content": "src/data/home-content.json",
   faq: "src/data/faq.json",
   reviews: "src/data/reviews.json",
+  "deal-news": "src/data/deal-news.json",
 });
 
 const encoder = new TextEncoder();

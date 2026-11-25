@@ -56,6 +56,8 @@ const UNIT_NUMBER = /(?<!\d)\d{1,4}\s*호(?!선|점|기|차)/u;
 const DONG_NUMBER = /(?<!\d)\d{1,4}\s*동(?!구)/u;
 const FLOOR_NUMBER = /(?<!\d)\d{1,3}\s*층/u;
 const MOBILE_NUMBER = /01[016789]\s*-?\s*\d{3,4}\s*-?\s*\d{4}/u;
+// 거래 완료 소식(src/lib/admin-deal-news.mjs)의 단지 이름 검사도 같은 정규식을 쓴다(두 벌로 두지 않음).
+export const DONE_NAME_PATTERNS = Object.freeze({ unit: UNIT_NUMBER, dong: DONG_NUMBER, floor: FLOOR_NUMBER, mobile: MOBILE_NUMBER });
 const AREA_INPUT = /^\d{1,3}(?:\.\d{1,2})?$/u;
 
 const fail = (code, message) => ({ ok: /** @type {const} */ (false), error: { code, message } });

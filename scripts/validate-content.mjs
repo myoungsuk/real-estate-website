@@ -13,6 +13,7 @@ const content = {
   homeContent: await readJson("../src/data/home-content.json"),
   faq: await readJson("../src/data/faq.json"),
   reviews: await readJson("../src/data/reviews.json"),
+  dealNews: await readJson("../src/data/deal-news.json"),
 };
 
 const legalRules = await readJson("../src/data/work/legal-rules.json");

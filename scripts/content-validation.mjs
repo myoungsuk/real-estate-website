@@ -4,6 +4,8 @@ import {
 } from "../src/lib/naver-listing-public-validation.mjs";
 import { matchComplexByListingTitle, normalizeComplexText } from "../src/lib/complex-matching.mjs";
 import { getBlogCategoryErrors, getBlogExcerptErrors } from "../src/lib/blog-excerpt.mjs";
+import { DEAL_NEWS_KEYS } from "../src/lib/deal-news.mjs";
+import { validateDealNews } from "../src/lib/admin-deal-news.mjs";
 
 const allowedStatuses = new Set(["draft", "published", "contracted", "ended"]);
 const allowedTradeTypes = new Set(["sale", "jeonse", "monthly-rent"]);
@@ -222,6 +224,8 @@ const publicContentSchemas = Object.freeze({
     archivedAt: valueSchema,
     updatedAt: valueSchema,
   })),
+  // 거래 완료 소식: 칸 목록·꼴 검사는 src/lib/deal-news.mjs·admin-deal-news.mjs 한 곳(금액·동·층·호수·날짜·손님 칸은 만들 수 없음).
+  dealNews: arraySchema(objectSchema(Object.fromEntries(DEAL_NEWS_KEYS.map((key) => [key, valueSchema])))),
 });
 
 const KOREA_TIME_OFFSET_MS = 9 * 60 * 60 * 1000;
@@ -1146,7 +1150,7 @@ export function validateReviews(reviews) {
   return errors;
 }
 
-export function validateContent({ office, listings, naverListings, complexes, complexOverview, externalLinks, homeContent, faq, reviews }) {
+export function validateContent({ office, listings, naverListings, complexes, complexOverview, externalLinks, homeContent, faq, reviews, dealNews }) {
   const errors = validateOffice(office);
   errors.push(...validateApprovedOfficeFacts(office));
   errors.push(...validateListings(listings));
@@ -1158,8 +1162,9 @@ export function validateContent({ office, listings, naverListings, complexes, co
   errors.push(...validateHomeContent(homeContent));
   errors.push(...validateFaq(faq));
   errors.push(...validateReviews(reviews));
+  errors.push(...validateDealNews(dealNews));
 
-  const content = { office, listings, naverListings, complexes, complexOverview, externalLinks, homeContent, faq, reviews };
+  const content = { office, listings, naverListings, complexes, complexOverview, externalLinks, homeContent, faq, reviews, dealNews };
   for (const [resource, value] of Object.entries(content)) {
     errors.push(...findUnexpectedKeys(resource, value));
   }

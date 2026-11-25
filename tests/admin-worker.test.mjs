@@ -36,6 +36,7 @@ const resourceFiles = {
   "home-content": "home-content.json",
   faq: "faq.json",
   reviews: "reviews.json",
+  "deal-news": "deal-news.json",
 };
 const currentResources = Object.fromEntries(await Promise.all(
   Object.entries(resourceFiles).map(async ([resource, file]) => [

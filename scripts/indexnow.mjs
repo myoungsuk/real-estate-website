@@ -13,6 +13,7 @@ const exactDataRoutes = new Map([
   ["src/data/faq.json", ["/faq/"]],
   ["src/data/reviews.json", ["/reviews/"]],
   ["src/data/complexes-overview.json", ["/", "/complexes/"]],
+  ["src/data/deal-news.json", ["/"]],
 ]);
 
 function normalizeRepositoryPath(value) {

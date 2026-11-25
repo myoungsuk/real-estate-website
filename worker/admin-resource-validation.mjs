@@ -17,6 +17,7 @@ import {
 } from "../scripts/content-validation.mjs";
 import { ADMIN_RESOURCE_PATHS } from "../src/lib/admin-resource-digest.mjs";
 import { validateListingReviewState } from "../src/lib/listing-review.mjs";
+import { validateDealNews } from "../src/lib/admin-deal-news.mjs";
 
 export { ADMIN_RESOURCE_PATHS };
 
@@ -30,6 +31,7 @@ export const ADMIN_RESOURCE_CONTENT_KEYS = Object.freeze({
   "home-content": "homeContent",
   faq: "faq",
   reviews: "reviews",
+  "deal-news": "dealNews",
 });
 
 export function getAdminResourcePath(resource) {
@@ -48,6 +50,7 @@ function validateSingleResource(resource, data) {
     case "home-content": return validateHomeContent(data);
     case "faq": return validateFaq(data);
     case "reviews": return validateReviews(data);
+    case "deal-news": return validateDealNews(data);
     default: return ["허용되지 않은 콘텐츠 종류입니다."];
   }
 }
