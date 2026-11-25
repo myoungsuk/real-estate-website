@@ -42,10 +42,17 @@ test("T0-115 단계 0 모듈과 화면 스크립트는 서버 요청·브라우�
     ["location call", /\blocation\.(?:assign|replace|reload)\s*\(/u],
     ["window.open", /window\.open\s*\(/u],
   ];
+  // 예외 하나(2026-11-25 사용자 결정 "추천대로"): 글 초안 '기다리던 글' 알림만 기다리던 초안 번호(UUID) 배열을 localStorage에 둔다.
+  // 이 파일이 저장소에 쓰는 자리 3곳과 넣는 값(번호 배열뿐)은 tests/work-blog-wait-view.test.mjs TK-165가 글자로 고정한다. 다른 금지 항목은 그대로 본다.
+  const allowed = new Map([["src/lib/work-blog-wait.ts", ["localStorage"]]]);
   for (const file of files) {
     const source = await readSource(file);
-    for (const [name, pattern] of forbidden) assert.doesNotMatch(source, pattern, `${file}: ${name}`);
+    for (const [name, pattern] of forbidden) {
+      if (allowed.get(file)?.includes(name)) continue;
+      assert.doesNotMatch(source, pattern, `${file}: ${name}`);
+    }
   }
+  for (const file of allowed.keys()) assert.ok(files.includes(file), `${file}: 예외 파일이 검사 대상에 있음`);
 });
 
 test("단계 0 화면은 form 제출이 없고 입력칸 자동 완성을 끈다", async () => {

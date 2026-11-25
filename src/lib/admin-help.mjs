@@ -47,8 +47,8 @@ export const ADMIN_HELP_FACTS = Object.freeze({
   // src/lib/work/blog-view.mjs BLOG_POLL_FAST_MS·BLOG_POLL_SLOW_MS·BLOG_POLL_FAST_FOR_MS(처음 1분은 5초, 그 뒤 15초)
   blogPollFastSeconds: 5,
   blogPollSlowSeconds: 15,
-  // worker/work-blog.mjs BLOG_RESULT_KEEP_MS(OpenAI가 결과를 잠시 맡아 두는 시간)
-  blogResultKeepMinutes: 10,
+  // worker/work-blog.mjs BLOG_WAIT_MAX_MS(서버가 끝나지 않는 글을 기다리는 끝, 2026-11-25 화면을 닫아도 받기)
+  blogWaitMaxMinutes: 30,
   // worker/work-blog.mjs BLOG_RETENTION_DAYS(닫은 초안 지우기·그냥 둔 초안 닫기)
   blogRetentionDays: 30,
   // src/lib/work/ledger-grid.mjs LEDGER_UNDO_LIMIT(매출장부 표에서 고친 칸을 되돌릴 수 있는 단계)
@@ -187,7 +187,7 @@ export const ADMIN_PAGE_HELP = Object.freeze({
     steps: [
       "'매물'이나 '단지 소개'에서 공개 자료 하나를 찾아 '고르기'를 누릅니다.",
       "명시사항 빈 칸(소재지·방·욕실·관리비 등)을 채우고 '다음: 글 성격'을 누릅니다. 빈 칸이 있으면 만들 수 없습니다.",
-      "'글 성격'을 고르고 '글 초안 만들기'를 누릅니다. 보통 1 ~ 3분 걸립니다.",
+      "'글 성격'을 고르고 '글 초안 만들기'를 누릅니다. 보통 1 ~ 3분 걸리고, 화면을 닫거나 휴대폰을 꺼도 서버가 받아 둡니다.",
       "글을 읽고 고친 뒤 '블로그 글 복사'나 'SNS 글 복사'를 누릅니다. 명시사항이 함께 붙습니다. 올렸으면 '다 씀'을 누릅니다.",
       "글에 붙일 그림은 '카드 그림' 칸에서 내려받습니다. 단지 소개는 카드 3장, 매물은 명시사항을 다 채우면 '표지 저장'이 나옵니다.",
       `처음 한 번은 'AI 사용 한도'에서 처음 값(하루 ${facts.blogDailyDefault}편 · 월 ${facts.blogMonthlyDefaultDollars}달러)을 확인하고 '한도 저장'을 누릅니다.`,
@@ -701,7 +701,7 @@ export const ADMIN_HELP_GUIDE = Object.freeze([
             ],
           },
           { type: "note", title: "비용과 'AI 사용 한도'", text: `AI를 한 번 부를 때마다 비용이 듭니다. 'AI 사용 한도'에 하루 만들기 편수와 월 비용 상한을 저장해야 만들 수 있습니다. 처음 값은 하루 ${facts.blogDailyDefault}편 · 월 ${facts.blogMonthlyDefaultDollars}달러이고, 비용은 앱이 계산한 추정이라 실제 청구와 다를 수 있습니다. 한도에 닿으면 다음 날(편수)이나 다음 달(비용)까지 만들 수 없습니다.` },
-          { type: "text", text: `만드는 중에 화면을 닫아도 됩니다. ${facts.blogResultKeepMinutes}분 안에 '보관 중인 초안'에서 '열기'를 누르면 결과를 받습니다. 그보다 늦으면 결과를 잃고, 다시 만들면 새 비용이 듭니다. '다 씀'·버린 초안은 ${facts.blogRetentionDays}일 뒤 지우고, 그냥 둔 초안은 만든 지 ${facts.blogRetentionDays}일에 닫힌 뒤 다시 ${facts.blogRetentionDays}일 뒤 지웁니다.` },
+          { type: "text", text: `만드는 중에 화면을 닫거나 휴대폰을 꺼도 됩니다. 다 만든 글은 서버가 받아 '보관 중인 초안'에 넣어 두고, 같은 기기에서 이 화면을 다시 열면 맨 위에서 알려 줍니다('글 열기'를 누르면 열림). ${facts.blogWaitMaxMinutes}분이 지나도 끝나지 않으면 만들지 못한 것으로 닫고, 다시 만들면 새 비용이 듭니다. '다 씀'·버린 초안은 ${facts.blogRetentionDays}일 뒤 지우고, 그냥 둔 초안은 만든 지 ${facts.blogRetentionDays}일에 닫힌 뒤 다시 ${facts.blogRetentionDays}일 뒤 지웁니다.` },
           { type: "text", text: "'소재지'는 어디에도 저장하지 않고 AI에도 보내지 않습니다. 그래서 초안을 다시 열면 소재지를 다시 넣어야 복사할 수 있습니다. 고친 글도 저장하지 않으므로, 복사하기 전에 화면을 떠나면 브라우저가 한 번 묻습니다." },
         ],
       },

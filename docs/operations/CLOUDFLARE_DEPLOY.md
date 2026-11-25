@@ -130,7 +130,7 @@ Access가 적용된 배포 환경에서 다음을 확인한다.
 
 `wrangler.jsonc`의 `triggers.crons` `*/10 * * * *`는 관리자 업무 도구 실거래가 탭(단계 P)의 자료 받기다. 같은 Worker의 `scheduled`가 10분마다 공공데이터포털 아파트 실거래가 API 4개에서 대전 동구 자료를 1개월 1종류씩 받아 D1 `WORK_DB`의 `rt_*` 표에 차이만 반영한다. 켜기 값이 없으면 D1·외부 요청 없이 끝나고 로그도 남기지 않는다(예외: 한국 시각 03:00 차례에는 원격 D1 구조 번호가 4 이상이면 글 초안 보관 정리를 먼저 한다, 아래 '중개업무 도구 글 초안' 절). 상세는 `docs/work-tools/` 설계서 22장이다.
 
-2026-11-23부터 `triggers.crons`에 `* * * * *`가 하나 더 있다(단계 4 AI 작업 조회, `worker/work-ai-cron.mjs`). `WORK_AI_ENABLED`가 없으면 D1·외부 요청·로그 없이 끝나므로, 대시보드 Triggers에 예약 2개가 보이고 1분마다 실행 기록이 남는 것이 정상이다. 이 예약에 문제가 있으면 `wrangler.jsonc`에서 `* * * * *`만 빼고 다시 배포한다(예약 글자를 보는 시험 `tests/work-ai-cron.test.mjs`도 함께 고친다). `WORK_AI_ENABLED`는 `docs/work-tools/` 진행 체크리스트 7.7절 '켜기 전' 줄을 모두 끝낸 뒤 사용자 승인을 받아 마지막에 등록한다.
+2026-11-23부터 `triggers.crons`에 `* * * * *`가 하나 더 있다(단계 4 AI 작업 조회, `worker/work-ai-cron.mjs`. 2026-11-25부터 글 초안 조회 `worker/work-blog-cron.mjs`도 같은 예약에서 돈다). 각각 `WORK_AI_ENABLED`·`WORK_BLOG_ENABLED`가 없으면 D1·외부 요청·로그 없이 끝나므로, 대시보드 Triggers에 예약 2개가 보이고 1분마다 실행 기록이 남는 것이 정상이다. 이 예약에 문제가 있으면 `wrangler.jsonc`에서 `* * * * *`만 빼고 다시 배포한다(예약 글자를 보는 시험 `tests/work-ai-cron.test.mjs`도 함께 고친다). `WORK_AI_ENABLED`는 `docs/work-tools/` 진행 체크리스트 7.7절 '켜기 전' 줄을 모두 끝낸 뒤 사용자 승인을 받아 마지막에 등록한다.
 
 - Secret: 켜기 값 `WORK_REALPRICE_ENABLED`(정확히 `true`일 때만 켜짐)와 공공데이터포털 인증키 `MOLIT_RT_SERVICE_KEY`는 Worker Secret으로만 등록한다. 일반 변수로 넣으면 다음 배포 때 지워진다. 인증키는 운영자가 대시보드 또는 자기 터미널의 `npx wrangler secret put`으로 직접 입력하고, 대화·문서·저장소에 붙이지 않는다. 켜기 값만 있고 인증키·`ADMIN_CSRF_SECRET`(32자 이상)·허용 출처·D1 binding 가운데 하나가 빠졌으면 API는 503 `REALPRICE_CONFIG_MISSING`이고 Cron은 고정 코드 경고 로그만 남긴다.
 - 인증키 교체: 공공데이터포털에서 재발급한 뒤 운영자가 같은 이름의 Secret을 덮어쓴다. 키가 거부되면 받기를 모든 종류 1시간씩 미루므로, 교체 뒤 실거래가 화면의 다시 받기(`POST /api/admin/v1/work/realprice/refresh`)로 미룸을 지우고 최근 4개월(3종류 12건, 약 2시간)을 다시 받는다.
@@ -146,7 +146,7 @@ Access가 적용된 배포 환경에서 다음을 확인한다.
 
 ## 중개업무 도구 글 초안(단계 P P3, OpenAI)
 
-관리자 업무 도구 '글 초안'(`/admin/work/blog/`)은 공개 매물·단지 1건으로 Worker가 OpenAI Responses API(background, `store:false`)에 블로그 글 초안을 요청한다. 초안은 D1 `WORK_DB`의 `blog_drafts`(마이그레이션 `0004`, 구조 번호 4)에만 두고 공개 산출물에 넣지 않는다. 새 Cron은 없다(결과는 브라우저가 받아 감). 상세는 `docs/work-tools/` 설계서 22.11·22.15절이다.
+관리자 업무 도구 '글 초안'(`/admin/work/blog/`)은 공개 매물·단지 1건으로 Worker가 OpenAI Responses API(background, `store:false`)에 블로그 글 초안을 요청한다. 초안은 D1 `WORK_DB`의 `blog_drafts`(마이그레이션 `0004`, 구조 번호 4)에만 두고 공개 산출물에 넣지 않는다. 새 Cron은 없다. 결과는 화면이 열려 있으면 브라우저가 받아 가고, 2026-11-25부터는 화면을 닫아도 1분 예약(`* * * * *`)이 `WORK_BLOG_ENABLED`가 켜져 있을 때 열린 초안을 조회해 D1에 받아 둔다(열린 초안이 없으면 D1 문장 1개로 끝, 만든 지 30분이 지나도 끝나지 않으면 `failed`·`AI_WAIT_TIMEOUT`으로 닫음. 로그 이벤트 `blog_poll_cron`, 경고 코드 `BLOG_CRON_CONFIG`·`BLOG_CRON_SCHEMA`·`BLOG_CRON_INTERNAL`). 상세는 `docs/work-tools/` 설계서 22.11·22.15절이다.
 
 - Secret: 켜기 값 `WORK_BLOG_ENABLED`(정확히 `true`일 때만 켜짐), OpenAI 키 `OPENAI_API_KEY`(운영자가 직접 입력, 2026-11-19 입력함), 설정 `OPENAI_MODEL`·`OPENAI_REASONING_EFFORT`·`OPENAI_MAX_OUTPUT_TOKENS`(1,000 ~ 200,000)·`OPENAI_PRICES_JSON`(모델별 100만 토큰당 마이크로달러 `input`·`output`), 선택 `OPENAI_MODEL_BLOG`(비우면 `OPENAI_MODEL`). 모두 Worker Secret으로 등록한다(일반 변수는 다음 배포 때 지워짐). 켜기 값만 있고 설정 하나가 빠지거나 틀리면 글 초안 API와 업무 세션이 503 `BLOG_CONFIG_MISSING`이다. 키는 대화·문서·저장소에 붙이지 않는다.
 - AI 사용 한도: 하루 편수·월 예상 비용 상한은 Secret이 아니라 D1 `settings` 행이고, 마이그레이션이 넣지 않는다. 켜기 값을 켠 뒤 글 초안 화면 한도 칸에서 저장한다(처음 값 하루 10편·월 10달러, 운영자 결정 2026-11-20 15:36:44). 저장 전 만들기는 409 `AI_LIMITS_MISSING`으로 OpenAI를 부르지 않는다. OpenAI 프로젝트 예산 상한(월 20달러)이 그 뒤의 보호선이다.
