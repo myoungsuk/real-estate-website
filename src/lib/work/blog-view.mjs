@@ -76,6 +76,8 @@ export function missingText(keys) {
 export function whereLabel(where) {
   if (where === "title") return "제목";
   if (where === "sns") return "SNS 짧은 글";
+  if (where === "instagram") return "인스타그램 글";
+  if (where === "threads") return "스레드 글";
   if (where === "tags") return "해시태그";
   if (where === "check") return CHECKLIST_HEADING;
   const heading = String(where).match(/^h(\d+)$/u);
