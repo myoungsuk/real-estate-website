@@ -722,7 +722,7 @@
     },
     "promo-pick": {
       "route": "/admin/work/realprice/",
-      "sources": "bbf3a47af8660ef6694bfeae7da8a0fc28a33a22cd33588902a00493d504da1a",
+      "sources": "a8d0559dceaaad471b089245f90bc816febe7d6407140ee71cd1d8cd644c0d8b",
       "shots": {
         "promo-phone-1-pick": {
           "width": 780,
@@ -747,8 +747,8 @@
         "promo-wide-1-pick": {
           "width": 1520,
           "height": 619,
-          "bytes": 46432,
-          "sha256": "936e6e74091bf0ad0dfe980accc7a9dcb3b8f3620573aa2919ebbe4a9ed7c6b9",
+          "bytes": 47670,
+          "sha256": "c1eebfd3868843e52ab2ff16dd22ac8b81979bd08bd799933d00ed31e529552e",
           "marks": [
             [
               0.0234,
@@ -764,9 +764,9 @@
             ],
             [
               0.6945,
-              0.793,
+              0.7424,
               0.9648,
-              0.8922
+              0.8416
             ]
           ]
         }
@@ -774,13 +774,13 @@
     },
     "promo-make": {
       "route": "/admin/work/realprice/promo/",
-      "sources": "718d79d8554cbf50fa2c0f1733be61e1904fc1a0c0d2bd9296be313197c42892",
+      "sources": "05dacf38eefdc34ded433b2d3fda4404c6c14c90049d06f5ace51c2c1b718d31",
       "shots": {
         "promo-phone-2-card": {
           "width": 780,
           "height": 1318,
-          "bytes": 43858,
-          "sha256": "6ad43d2462aacb99e455120ae43d414a081e7073f522f30cb6876f7f747cdad8",
+          "bytes": 51412,
+          "sha256": "a45cf6813667687b9c6cc216096d484b484300d72d20f4c0b1b75a14cb7f539a",
           "marks": [
             [
               0.0949,
@@ -813,8 +813,8 @@
         "promo-wide-2-card": {
           "width": 1520,
           "height": 1138,
-          "bytes": 44450,
-          "sha256": "cb42aa7a9a25c539e66e8ef5d528380928900a44b34f754d6ef95e5105ade880",
+          "bytes": 51942,
+          "sha256": "b4f43895de2b68d0284551ee56d1c0c44510d1a96864710f43a96c43f6c67194",
           "marks": [
             [
               0.0101,

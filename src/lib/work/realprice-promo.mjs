@@ -231,9 +231,23 @@ export function hashtags(items) {
 }
 const tradeBlock = (item) => [`${item.aptName}(${item.umdName}) ${kindLabel(item)} ${priceText(item)}`, metaLine(item), ...(isHigh(item) ? [`신고가 · ${prevText(item)}`] : [])];
 const compactLine = (item) => `- ${item.aptName} ${kindLabel(item)} ${priceText(item)}, 전용 ${areaText(item.areaM2)} ${floorText(item.floor)}, 계약 ${shortDate(item.dealDate)}${isHigh(item) ? " 신고가" : ""}`;
+// 스레드 글이 500자를 넘을 때만 쓰는 더 짧은 거래 줄: '전용'·'계약' 낱말만 빼고 숫자는 그대로 둔다(2026-11-25).
+const tightLine = (item) => `- ${item.aptName} ${kindLabel(item)} ${priceText(item)}, ${areaText(item.areaM2)} ${floorText(item.floor)}, ${shortDate(item.dealDate)}${isHigh(item) ? " 신고가" : ""}`;
 const headLine = (items) => `[${promoAreaLabel(items)}] ${items.length === 1 ? promoTitle(items) : `${promoTitle(items)}(${monthsText(items)})`}`;
 
 // ── 글 4가지 ──
+
+// 올릴 곳마다 글 끝에 붙일 것(2026-11-25 사용자 요청 "출처랑 명함부분은 한군데만 나오면 되니까 표에만 나오게끔 고쳐줘").
+// source: 출처·받은 시각·계약일 기준 안내 줄과 흐름 기준 줄, office: 사무소 명시사항. false면 그 글에는 넣지 않는다(카드 그림 아래 칸에는 늘 있다, promoCards).
+// 스레드만 뺐다. 나머지 세 곳도 빼려면 이 표의 그 줄만 false로 바꾼다. 신고가 판정 기준 줄은 이 표와 상관없이 신고가 거래가 있으면 글에 남는다.
+export const PROMO_TEXT_TAIL = Object.freeze({
+  threads: Object.freeze({ source: false, office: false }),
+  instagram: Object.freeze({ source: true, office: true }),
+  blog: Object.freeze({ source: true, office: true }),
+  kakao: Object.freeze({ source: true, office: true }),
+});
+// 짧은 출처 줄(카카오톡 글, 그리고 표에서 켰을 때의 스레드 글). 카드 그림은 연도까지 적은 두 줄을 따로 쓴다(promoCards의 source).
+const shortSource = (receivedAt) => `출처: ${PROMO_SOURCE}, ${shortReceived(receivedAt)}. ${PROMO_NOTICE_SHORT}`;
 
 // 흐름 기준 줄(TR-11 PR #156 검토 권함 2, 2026-11-25): 카드 그림에 흐름(흐름선·직전·최고가 대비·3개월)을 그린 거래가 있을 때만,
 // 카드와 같은 promoFlow·promoBasisLine으로 실제로 그린 항목만 적는다. 흐름을 받지 못했거나 매매가 없으면 빈 배열(줄 없음).
@@ -243,36 +257,40 @@ function basisLines(items, insights) {
   return basis ? [`${PROMO_BASIS_LABEL}: ${basis}`] : [];
 }
 
-function fullText({ items, receivedAt, office, insights }) {
+function fullText({ items, receivedAt, office, insights }, tail) {
   const lines = [headLine(items), ""];
   items.forEach((item, index) => {
     if (index) lines.push("");
     lines.push(...tradeBlock(item));
   });
-  lines.push("", `출처: ${PROMO_SOURCE}, ${receivedText(receivedAt)} 받은 자료`, PROMO_NOTICE, ...basisLines(items, insights));
-  if (anyHigh(items)) lines.push(PROMO_HIGH_RULE);
-  lines.push("", ...disclosureLines(office));
+  const notes = [...(tail.source ? [`출처: ${PROMO_SOURCE}, ${receivedText(receivedAt)} 받은 자료`, PROMO_NOTICE, ...basisLines(items, insights)] : []), ...(anyHigh(items) ? [PROMO_HIGH_RULE] : [])];
+  if (notes.length > 0) lines.push("", ...notes);
+  if (tail.office) lines.push("", ...disclosureLines(office));
   return lines.join("\n");
 }
 
-// 스레드: 1건은 자세히, 여러 건은 한 줄씩. 그래도 500자를 넘으면 거래 줄 대신 "그림에 정리" 한 줄로 줄인다.
-// 흐름 기준 줄은 거래 줄보다 뒤로 미룬다: 각 단계에서 기준 줄을 넣어 500자 안이면 넣고, 넘으면 그 단계는 기준 줄 없이 본다(기준 줄 때문에 거래 줄이 줄지 않음).
-function threadsText(input) {
+// 스레드: 머리 줄 → 빈 줄 → 1건은 자세히, 여러 건은 한 줄씩. 500자를 넘으면 거래 줄을 짧게(tightLine), 그래도 넘으면 거래 줄 대신 "그림에 정리" 한 줄로 줄인다.
+// 2026-11-25부터 출처·흐름 기준·사무소 명시사항은 글에 넣지 않고 카드 그림에만 둔다(PROMO_TEXT_TAIL.threads). 그래서 6건도 한 줄씩 들어간다.
+// 표를 다시 켰을 때: 흐름 기준 줄은 거래 줄보다 뒤로 미룬다(각 단계에서 기준 줄을 넣어 500자 안이면 넣고, 넘으면 그 단계는 기준 줄 없이 본다).
+function threadsText(input, tail) {
   const { items, receivedAt, office } = input;
   const fits = (text) => [...text].length <= PROMO_LIMITS.threads;
   const plain = { ...input, insights: undefined };
-  const tail = (from) => ["", `출처: ${PROMO_SOURCE}, ${shortReceived(receivedAt)}. ${PROMO_NOTICE_SHORT}`, ...basisLines(items, from.insights), ...(anyHigh(items) ? [PROMO_HIGH_RULE_SHORT] : []), "", ...disclosureLines(office)];
-  const compact = (from) => [headLine(items), ...items.map(compactLine), ...tail(from)].join("\n");
-  const summary = (from) => [headLine(items), `거래 ${items.length}건(${dealRange(items)})은 그림에 정리했습니다.`, ...tail(from)].join("\n");
-  const tries = [...(items.length === 1 ? [fullText(input), fullText(plain)] : []), compact(input), compact(plain), summary(input)];
+  const end = (from) => {
+    const notes = [...(tail.source ? [shortSource(receivedAt), ...basisLines(items, from.insights)] : []), ...(anyHigh(items) ? [PROMO_HIGH_RULE_SHORT] : [])];
+    return [...(notes.length > 0 ? ["", ...notes] : []), ...(tail.office ? ["", ...disclosureLines(office)] : [])];
+  };
+  const compact = (from, line = compactLine) => [headLine(items), "", ...items.map(line), ...end(from)].join("\n");
+  const summary = (from) => [headLine(items), `거래 ${items.length}건(${dealRange(items)})은 그림에 정리했습니다.`, ...end(from)].join("\n");
+  const tries = [...(items.length === 1 ? [fullText(input, tail), fullText(plain, tail)] : []), compact(input), compact(plain), compact(plain, tightLine), summary(input)];
   return tries.find(fits) ?? summary(plain);
 }
 
-function instagramText(input) {
-  return [fullText(input), "", hashtags(input.items).join(" ")].join("\n");
+function instagramText(input, tail) {
+  return [fullText(input, tail), "", hashtags(input.items).join(" ")].join("\n");
 }
 
-function blogText({ items, receivedAt, office, insights }) {
+function blogText({ items, receivedAt, office, insights }, tail) {
   const head = items.length === 1
     ? `${promoPlace(items)} ${items[0].aptName} ${kindLabel(items[0])}${isHigh(items[0]) ? " 신고가" : ""} ${priceText(items[0])}(${monthsText(items)})`
     : `${promoPlace(items)} 아파트 ${promoTitle(items)}(${monthsText(items)})`;
@@ -284,13 +302,14 @@ function blogText({ items, receivedAt, office, insights }) {
     lines.push("");
   }
   if (anyHigh(items)) lines.push(PROMO_HIGH_RULE, "");
-  lines.push(`출처: ${PROMO_SOURCE}, ${receivedText(receivedAt)} 받은 자료`, PROMO_NOTICE, ...basisLines(items, insights), "");
-  lines.push(...PROMO_DISCLOSURE_FIELDS.map(([key, label]) => `${label}: ${office[key]}`));
+  if (tail.source) lines.push(`출처: ${PROMO_SOURCE}, ${receivedText(receivedAt)} 받은 자료`, PROMO_NOTICE, ...basisLines(items, insights), "");
+  if (tail.office) lines.push(...PROMO_DISCLOSURE_FIELDS.map(([key, label]) => `${label}: ${office[key]}`));
+  while (lines.at(-1) === "") lines.pop();
   return lines.join("\n");
 }
 
 // 카카오톡: 1:1 채팅에 붙여 넣는 짧은 글(2026-11-20 운영자 답 "권하는 대로").
-function kakaoText({ items, receivedAt, office, insights }) {
+function kakaoText({ items, receivedAt, office, insights }, tail) {
   const lines = [`[${promoAreaLabel(items)}] ${promoTitle(items)}`];
   if (items.length === 1) {
     const item = items[0];
@@ -299,9 +318,9 @@ function kakaoText({ items, receivedAt, office, insights }) {
   } else {
     lines.push(...items.map(compactLine));
   }
-  lines.push(`출처: ${PROMO_SOURCE}, ${shortReceived(receivedAt)}. ${PROMO_NOTICE_SHORT}`, ...basisLines(items, insights));
+  if (tail.source) lines.push(shortSource(receivedAt), ...basisLines(items, insights));
   if (anyHigh(items)) lines.push(PROMO_HIGH_RULE_SHORT);
-  lines.push(`${office.legalName} · 대표 ${office.representative} · ${office.address} · ${office.mobile} · 등록번호 ${office.registrationNumber}`);
+  if (tail.office) lines.push(`${office.legalName} · 대표 ${office.representative} · ${office.address} · ${office.mobile} · 등록번호 ${office.registrationNumber}`);
   return lines.join("\n");
 }
 
@@ -340,10 +359,11 @@ export function promoSteps(kind, { cardCount = 1, counted }) {
   return { image, text, post: posts[kind] ?? posts.instagram };
 }
 
-// 글 4가지. 만들 수 없으면(promoBlockReason) null. input.insights(거래 ID → 거래 흐름 응답, 없어도 됨)가 있으면 출처 줄 아래에 흐름 기준 줄을 붙인다.
-export function promoTexts(input) {
+// 글 4가지. 만들 수 없으면(promoBlockReason) null. input.insights(거래 ID → 거래 흐름 응답, 없어도 됨)가 있으면 출처 줄 아래에 흐름 기준 줄을 붙인다(출처 줄을 넣는 글만).
+// tails는 올릴 곳마다 글 끝에 붙일 것(PROMO_TEXT_TAIL). 화면은 넘기지 않고, 시험이 표의 다른 값을 볼 때만 넘긴다.
+export function promoTexts(input, tails = PROMO_TEXT_TAIL) {
   if (promoBlockReason(input)) return null;
-  return { threads: threadsText(input), instagram: instagramText(input), blog: blogText(input), kakao: kakaoText(input) };
+  return { threads: threadsText(input, tails.threads), instagram: instagramText(input, tails.instagram), blog: blogText(input, tails.blog), kakao: kakaoText(input, tails.kakao) };
 }
 
 // 글자 수(한글 한 자 = 1자, 코드 포인트 기준)와 상한 넘음 여부.
@@ -396,9 +416,10 @@ export function promoUpText(item) {
   return `▲ ${formatKoreanWon(item.priceWon - item.prevMaxWon).replace(/ 원$/u, "")}`;
 }
 
-// 장마다 그림 자료. 여러 장이면 제목 끝에 " · 1/2장". 그림에는 출처 상자를 두지 않고(2026-11-24 사용자 답 "완전히 뺌") 받은 시각과
-// 사무소 명시사항 5항목만 둔다. 출처·신고 기한 안내·신고가 판정 기준은 글 4가지에 그대로 남는다(P1-e 받은 시각 막기도 그대로).
-// 그림에서 뺀 흐름 기준 줄(basis)도 2026-11-25부터 글 4가지 출처 줄 아래에 붙는다(basisLines).
+// 장마다 그림 자료. 여러 장이면 제목 끝에 " · 1/2장". 아래 칸에는 사무소 명시사항 5항목과, 그 위 작은 글로 출처 두 줄(source: 출처·받은 시각 /
+// 계약일 기준·신고 기한 안내·해제 거래 제외)과 흐름 기준 줄(basis, 그 장에 흐름을 그린 거래가 있을 때만)을 장마다 둔다(2026-11-25 사용자 요청
+// "출처랑 명함부분은 … 표에만 나오게끔". 2026-11-24 "완전히 뺌"으로 뺐던 출처 상자와 같은 날 뺀 흐름 기준 줄을 작은 글로 되돌림).
+// 신고가 판정 기준은 그림에 넣지 않고 글 4가지에 남는다(P1-e 받은 시각 막기도 그대로). 글의 흐름 기준 줄(basisLines)은 PROMO_TEXT_TAIL을 따른다.
 // insights: 거래 ID → 거래 흐름 응답 한 개(없거나 못 받았으면 빈 값). basis는 그 장에 실제로 그린 흐름 항목만 적는다.
 export function promoCards({ items, receivedAt, office, insights = {}, style = PROMO_STYLE_DEFAULT }) {
   if (promoBlockReason({ items, receivedAt, office })) return [];
@@ -412,6 +433,7 @@ export function promoCards({ items, receivedAt, office, insights = {}, style = P
       areaLabel: promoAreaLabel(items),
       range: dealRange(pageItems),
       items: cardItems,
+      source: [`출처: ${PROMO_SOURCE}, ${receivedText(receivedAt)} 받음.`, PROMO_NOTICE_SHORT],
       basis: promoBasisLine(cardItems.map((item) => item.flow)),
       style: isPromoStyle(style) ? style : PROMO_STYLE_DEFAULT,
       // 사무소 명시사항 5항목(DEC-WT-23): 상호는 크게, 대표·등록번호·주소는 작은 글, 연락처는 크게 그린다(2026-11-24 사용자 답 "상호를 크게").

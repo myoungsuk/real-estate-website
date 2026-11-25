@@ -2,7 +2,7 @@
 // canvas 1080×1350에 그리고 toDataURL('image/png')로 내려받는다(설계서 22.10절). 그림 자료는 src/lib/work/realprice-promo.mjs의
 // promoCards()가 만들고, 이 파일은 그리기만 한다(서버 요청·브라우저 저장 없음). 신고가는 색만이 아니라 "▲ 신고가" 글자로 알린다.
 // 모양: 기본(흰 바탕·남색 줄) · 깔끔 카드(회색 바탕에 흰 둥근 칸) · 잡지(위 띠가 로고 산호색) · 다크(남색 바탕·밝은 산호색 금액).
-import { PROMO_CARD_SIZE, priceSplit } from "./work/realprice-promo.mjs";
+import { PROMO_BASIS_LABEL, PROMO_CARD_SIZE, priceSplit } from "./work/realprice-promo.mjs";
 import { sparkGeometry } from "./work/realprice-insight-view.mjs";
 // 줄 나누기·글·가로줄·로고 자르기는 업무 카드 공통 파일(보드 45번 C)에서 가져온다.
 import { CARD_COLORS, font, hline, loadLogo, text, width, type Logo, type Pen } from "./work-card-draw";
@@ -27,6 +27,7 @@ export type PromoCard = {
   areaLabel: string;
   range: string;
   items: CardItem[];
+  source: string[];
   basis: string;
   style: PromoStyle;
   office: Office;
@@ -41,6 +42,8 @@ const MAXW = W - PAD * 2;
 const C = CARD_COLORS;
 const HIGH_LABEL = "▲ 신고가";
 const PRESALE_LABEL = "분양권";
+const NOTE_PX = 24; // 아래 칸 위 출처·흐름 기준 줄: 카드에서 가장 작은 글(소재지)과 같은 크기
+const NOTE_GAP = 16; // 출처·흐름 기준 줄과 아래 칸 회색 선 사이
 const BAND_YELLOW = "#FFEFB8"; // 잡지 머리 띠: 연한 노랑(2026-11-24 사용자 요청 "바탕색은 좀더 연하거나 노란색 계열", 그 전 산호 #F06951)
 
 type Theme = {
@@ -335,7 +338,9 @@ function markOf(logo: Logo): Mark {
 }
 
 // 아래 칸: 집 모양 + 상호(크고 굵게) / 대표·등록번호(작게) + 연락처(크게) / 소재지(작게). 사무소 명시사항 5항목이 모두 들어간다.
-// 출처 상자는 두지 않는다(2026-11-24 사용자 답 "완전히 뺌"). 본문 글자를 줄여도 아래 칸 글자는 줄이지 않는다.
+// 그 위(회색 선 위)에 작은 글로 출처 두 줄(출처·받은 시각 / 계약일 기준·신고 기한·해제 제외)과 흐름 기준 줄(그 장에 흐름을 그린 거래가 있을 때만)을 둔다
+// (2026-11-25 사용자 요청 "출처랑 명함부분은 … 표에만 나오게끔". 2026-11-24 "완전히 뺌"으로 뺐던 출처 상자·흐름 기준 줄을 상자 없이 작은 글로 되돌림).
+// 글자는 카드에서 가장 작은 글(소재지 24px)과 같고 길면 줄을 나눈다(자르지 않음). 본문 글자를 줄여도 아래 칸 글자는 줄이지 않는다. 돌려주는 값은 작은 글의 위 끝이다.
 function foot(pen: Pen, card: PromoCard, t: Theme, logo: Logo) {
   const o = card.office;
   const markW = 76;
@@ -359,11 +364,15 @@ function foot(pen: Pen, card: PromoCard, t: Theme, logo: Logo) {
     }
     return y;
   };
+  const notes = (y0: number) => [...card.source, card.basis ? `${PROMO_BASIS_LABEL}: ${card.basis}` : ""].filter(Boolean)
+    .reduce((y, value) => text(pen, value, PAD, y, { px: NOTE_PX, color: t.soft, lh: 1.4 }), y0);
   const h = measure(pen, () => body(0));
   const top = H - BOTTOM - h;
+  const noteTop = top - NOTE_GAP - measure(pen, () => notes(0));
+  notes(noteTop);
   if (pen.draw) { pen.ctx.fillStyle = t.panel ? "#D7DCE1" : t.edge; pen.ctx.fillRect(PAD, top, MAXW, 2); }
   body(top);
-  return top;
+  return noteTop;
 }
 
 export type CardResult = { dataUrl: string; overflow: boolean; minBodyPx: number };
