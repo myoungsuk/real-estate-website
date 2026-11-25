@@ -704,23 +704,23 @@
     },
     "promo-pick": {
       "route": "/admin/work/realprice/",
-      "sources": "e7f76ba4fc85390b6ed29ec14b11af18b2a1e636ddcb2fe97130115ba1b993f6",
+      "sources": "bbf3a47af8660ef6694bfeae7da8a0fc28a33a22cd33588902a00493d504da1a",
       "shots": {
         "promo-phone-1-pick": {
           "width": 780,
           "height": 1800,
-          "bytes": 56998,
-          "sha256": "12cc68f9a9fc5ddcb354b26b24c72eb61fe28b7fb20930ddb3d8ecdc3b81ef72",
+          "bytes": 58618,
+          "sha256": "4b578911b9622468b38945f46d8673c73bef6e9c7266b9ceda2ba2819b1fd258",
           "marks": [
             [
               0.8513,
-              0.2691,
+              0.2658,
               0.9641,
-              0.318
+              0.3147
             ],
             [
               0.4641,
-              0.9667,
+              0.9633,
               0.7637,
               1
             ]
@@ -728,27 +728,27 @@
         },
         "promo-wide-1-pick": {
           "width": 1520,
-          "height": 566,
-          "bytes": 44146,
-          "sha256": "3f06ae733707cc033ac057c9b5c4fdd34b37eafe257770e0d044f2b04c4f7cd1",
+          "height": 619,
+          "bytes": 46432,
+          "sha256": "936e6e74091bf0ad0dfe980accc7a9dcb3b8f3620573aa2919ebbe4a9ed7c6b9",
           "marks": [
             [
               0.0234,
-              0.6118,
+              0.6674,
               0.0516,
-              0.6873
+              0.7365
             ],
             [
               0.7125,
-              0.3063,
+              0.2803,
               0.9469,
-              1
+              0.9988
             ],
             [
               0.6945,
-              0.8665,
+              0.793,
               0.9648,
-              0.9748
+              0.8922
             ]
           ]
         }
@@ -756,7 +756,7 @@
     },
     "promo-make": {
       "route": "/admin/work/realprice/promo/",
-      "sources": "7057a0040090ab690ef3bbf6a12a13aa8e68f8e22767e2aab02021eea189ba40",
+      "sources": "718d79d8554cbf50fa2c0f1733be61e1904fc1a0c0d2bd9296be313197c42892",
       "shots": {
         "promo-phone-2-card": {
           "width": 780,

@@ -1,11 +1,15 @@
 // 단계 P 실거래가 저장(worker/realprice-store.mjs) 시험: 받을 차례 고르기, 한 달 차이 반영 batch, 덜 온 응답 보류, 처음 받은 행 표시, 갱신 상태.
-// 진짜 SQLite(node:sqlite)에 migrations/work 0001 ~ 0003을 적용해 D1처럼 쓴다. 자료는 모두 가상이다.
+// 진짜 SQLite(node:sqlite)에 migrations/work를 모두(0008까지) 적용해 D1처럼 쓴다. 자료는 모두 가상이다.
+// 0008부터 달 상태·거래 행에 구 코드(lawd_cd)가 있다. 따로 적지 않은 시험은 동구(30110) 한 곳만 쓴다.
 // rows_written은 시험 도구의 흉내 값(바뀐 행 수, 색인 쓰기 못 셈)이라 실제 D1 쓰기량 판정에 쓰지 않는다(TK-11 실측은 로컬·원격 D1).
 import test from "node:test";
 import assert from "node:assert/strict";
 import { REALPRICE_RETRY_POLICY } from "../worker/realprice-fetch.mjs";
 import { parseRealpriceXml } from "../worker/realprice-parse.mjs";
 import {
+  REALPRICE_DAILY_CALL_BUDGET,
+  REALPRICE_LAWDS,
+  REALPRICE_MONTHS_PER_RUN,
   REALPRICE_NEVER,
   REALPRICE_START_MONTHS,
   applyRealpriceMonth,
@@ -17,6 +21,7 @@ import {
   parseHold,
   pickDueMonths,
   readRealpriceStatus,
+  recordHighReadyLawds,
   refreshStatements,
   refreshTier,
   saleCoveredThrough,
@@ -30,22 +35,22 @@ const HOUR = 60 * 60 * 1000;
 const iso = (ms) => new Date(ms).toISOString();
 
 // 파서를 거친 항목(받기 결과와 같은 모양).
-function fetchedOf(items, { dealYmd = "202610" } = {}) {
+function fetchedOf(items, { dealYmd = "202610", lawdCd = "30110" } = {}) {
   const parsed = parseRealpriceXml(realpriceXml({ items }));
-  return { ok: true, api: "sale", dealYmd, totalCount: parsed.totalCount, items: parsed.items, calls: 1 };
+  return { ok: true, api: "sale", lawdCd, dealYmd, totalCount: parsed.totalCount, items: parsed.items, calls: 1 };
 }
 
 const saleItems = (count, start = 0) => Array.from({ length: count }, (_, index) => saleDetailItem(start + index));
 
-async function seedMonth(db, kind = "sale", dealYmd = "202610") {
-  await seedMonthsStatement(db, [[kind, dealYmd]], NOW).run();
+async function seedMonth(db, kind = "sale", dealYmd = "202610", lawdCd = "30110") {
+  await seedMonthsStatement(db, [[lawdCd, kind, dealYmd]], NOW).run();
 }
 
-const monthRow = (database, kind = "sale", dealYmd = "202610") =>
-  rows(database, "SELECT * FROM rt_fetch_months WHERE kind = ? AND deal_ymd = ?", kind, dealYmd)[0];
+const monthRow = (database, kind = "sale", dealYmd = "202610", lawdCd = "30110") =>
+  rows(database, "SELECT * FROM rt_fetch_months WHERE lawd_cd = ? AND kind = ? AND deal_ymd = ?", lawdCd, kind, dealYmd)[0];
 
-async function apply(db, database, items, { nowMs = NOW, kind = "sale", dealYmd = "202610" } = {}) {
-  return applyRealpriceMonth(db, { month: monthRow(database, kind, dealYmd), fetched: fetchedOf(items, { dealYmd }), nowMs, apiCalls: 1 });
+async function apply(db, database, items, { nowMs = NOW, kind = "sale", dealYmd = "202610", lawdCd = "30110" } = {}) {
+  return applyRealpriceMonth(db, { month: monthRow(database, kind, dealYmd, lawdCd), fetched: fetchedOf(items, { dealYmd, lawdCd }), nowMs, apiCalls: 1 });
 }
 
 test("달 계산: 한국 시각 기준 이번 달, 시작 달부터 이번 달까지, 다시 받는 주기 경계(6시간·7일·30일·다시 받지 않음)", () => {
@@ -66,7 +71,7 @@ test("달 계산: 한국 시각 기준 이번 달, 시작 달부터 이번 달�
 test("TK-19 받을 차례: 최근 4개월 → 처음 채우기(매매 → 분양권 → 전월세, 종류 안에서 최근 달부터) → 5 ~ 12개월(7일) → 13 ~ 36개월(30일), 37개월보다 오래된 달은 다시 받지 않음", () => {
   const done = iso(NOW - 40 * 24 * HOUR);
   const due = iso(NOW - 1000);
-  const row = (kind, dealYmd, { success = done, nextDue = due, attempts = 0 } = {}) => ({ kind, deal_ymd: dealYmd, status: "ok", row_count: 1, dropped_count: 0, held_count: null, attempts, last_error: null, last_success_at: success, next_due_at: nextDue });
+  const row = (kind, dealYmd, { success = done, nextDue = due, attempts = 0, lawd = "30110" } = {}) => ({ lawd_cd: lawd, kind, deal_ymd: dealYmd, status: "ok", row_count: 1, dropped_count: 0, held_count: null, attempts, last_error: null, last_success_at: success, next_due_at: nextDue });
   const months = [
     row("rent", "202508"), // 나이 15(13 ~ 36개월) 30일
     row("sale", "202606"), // 나이 5(5 ~ 12개월) 7일
@@ -86,11 +91,17 @@ test("TK-19 받을 차례: 최근 4개월 → 처음 채우기(매매 → 분양
     "sale:202606",
     "rent:202508",
   ]);
-  assert.equal(pickDueMonths(months, { nowMs: NOW }).picked.length, 1, "무료 플랜은 1회 1개월 1종류");
+  assert.equal(REALPRICE_MONTHS_PER_RUN, 12);
+  assert.equal(pickDueMonths(months, { nowMs: NOW }).picked.length, 8, "1회 12달까지(유료 플랜, 2026-11-25 대전 5개 구)");
+  assert.equal(pickDueMonths(months, { nowMs: NOW, limit: 3 }).picked.length, 3);
   // TK-20 쓰기 예산을 넘으면 최근 4개월만, TK-54 읽기 첫 상한을 넘으면 처음 채우기만 뺌.
   const writeLimited = pickDueMonths(months, { nowMs: NOW, limit: 100, writeBudgetExceeded: true });
   assert.deepEqual(writeLimited.picked.map((month) => `${month.kind}:${month.deal_ymd}`), ["sale:202608", "rent:202611"]);
   assert.equal(writeLimited.blocked.writeBudget, 6);
+  // 하루 호출 예산(8,000번, 공공데이터포털 API마다 하루 10,000번 아래)을 넘어도 최근 4개월만.
+  const callLimited = pickDueMonths(months, { nowMs: NOW, limit: 100, callBudgetExceeded: true });
+  assert.deepEqual(callLimited.picked.map((month) => `${month.kind}:${month.deal_ymd}`), ["sale:202608", "rent:202611"]);
+  assert.equal(callLimited.blocked.callBudget, 6);
   const readLimited = pickDueMonths(months, { nowMs: NOW, limit: 100, readSoftExceeded: true });
   assert.deepEqual(readLimited.picked.map((month) => `${month.kind}:${month.deal_ymd}`), ["sale:202608", "rent:202611", "sale:202606", "rent:202508"]);
   assert.equal(readLimited.blocked.readBudget, 4);
@@ -262,8 +273,8 @@ test("빈 면적·빈 단지명 행은 버리고 dropped_count에 세며, 버린
   await apply(db, database, items);
   assert.deepEqual([monthRow(database).row_count, monthRow(database).dropped_count], [94, 6]);
   const status = await readRealpriceStatus(db, { nowMs: NOW, retryPolicy: REALPRICE_RETRY_POLICY });
-  assert.deepEqual(status.warnings.find((warning) => warning.code === "RT_DROPPED_ROWS"), { code: "RT_DROPPED_ROWS", count: 1, months: ["sale:202610"] });
-  const edge = [{ kind: "sale", deal_ymd: "202610", status: "ok", row_count: 95, dropped_count: 5, attempts: 0 }];
+  assert.deepEqual(status.warnings.find((warning) => warning.code === "RT_DROPPED_ROWS"), { code: "RT_DROPPED_ROWS", count: 1, months: ["30110:sale:202610"] });
+  const edge = [{ lawd_cd: "30110", kind: "sale", deal_ymd: "202610", status: "ok", row_count: 95, dropped_count: 5, attempts: 0 }];
   const usage = { rows_written: 0, rows_read: 0 };
   assert.equal(buildRealpriceWarnings({ monthRows: edge, usage, hold: parseHold(null), countCheck: null, nowMs: NOW, retryPolicy: REALPRICE_RETRY_POLICY }).length, 0, "정확히 5%는 경고 없음");
 });
@@ -271,41 +282,87 @@ test("빈 면적·빈 단지명 행은 버리고 dropped_count에 세며, 버린
 test("갱신 상태: 받은 범위·처음 채우기 진행·신고가 준비·오늘 사용량·경고(읽기 80%·첫 상한·끝 상한·쓰기 예산·3번 끊김·종류 단위 미룸)를 읽기만으로 돌려줌", async () => {
   const { database, db } = freshDb({ d1Meta: true });
   const status0 = await readRealpriceStatus(db, { nowMs: NOW, retryPolicy: REALPRICE_RETRY_POLICY });
-  assert.deepEqual(Object.keys(status0), ["lastSuccessAt", "coveredThrough", "backfill", "recordHighReady", "lastError", "warnings", "today", "unmatchedSaleRows", "runs"]);
-  assert.deepEqual(status0.backfill, { sale: { done: 0, total: 251 }, rent: { done: 0, total: 191 }, presale: { done: 0, total: 234 } });
-  assert.deepEqual([status0.lastSuccessAt, status0.coveredThrough, status0.recordHighReady, status0.lastError, status0.unmatchedSaleRows], [null, null, false, null, 0]);
-  assert.deepEqual(status0.today, { apiCalls: 0, rowsWritten: 0, rowsRead: 0, writeBudget: 40000, readSoftLimit: 1500000, readHardLimit: 2500000 });
+  assert.deepEqual(Object.keys(status0), ["lastSuccessAt", "coveredThrough", "backfill", "backfillRegions", "recordHighReady", "recordHighLawds", "lastError", "warnings", "today", "unmatchedSaleRows", "runs"]);
+  assert.deepEqual(status0.backfill, { sale: { done: 0, total: 251 * 5 }, rent: { done: 0, total: 191 * 5 }, presale: { done: 0, total: 234 * 5 } }, "5개 구 합계");
+  assert.deepEqual(status0.backfillRegions.map((region) => region.lawdCd), [...REALPRICE_LAWDS]);
+  assert.deepEqual(status0.backfillRegions[2], { lawdCd: "30170", sale: { done: 0, total: 251 }, presale: { done: 0, total: 234 }, rent: { done: 0, total: 191 }, recordHighReady: false });
+  assert.deepEqual([status0.lastSuccessAt, status0.coveredThrough, status0.recordHighReady, status0.recordHighLawds, status0.lastError, status0.unmatchedSaleRows], [null, null, false, [], null, 0]);
+  assert.deepEqual(status0.today, { apiCalls: 0, rowsWritten: 0, rowsRead: 0, writeBudget: 300000, readSoftLimit: 6000000, readHardLimit: 10000000, callBudget: REALPRICE_DAILY_CALL_BUDGET });
+  assert.equal(REALPRICE_DAILY_CALL_BUDGET, 8000);
   const auditBefore = rows(database, "SELECT COUNT(*) AS n FROM audit_events")[0].n;
   assert.equal(db.stats.batches.length, 0, "상태 보기는 쓰지 않음");
   assert.equal(rows(database, "SELECT COUNT(*) AS n FROM audit_events")[0].n, auditBefore);
 
   const months = [
-    { kind: "sale", deal_ymd: "202611", status: "ok", row_count: 3, dropped_count: 0, attempts: 0, last_success_at: iso(NOW) },
-    { kind: "sale", deal_ymd: "202610", status: "ok", row_count: 3, dropped_count: 0, attempts: 0, last_success_at: iso(NOW) },
-    { kind: "sale", deal_ymd: "202608", status: "failed", row_count: 0, dropped_count: 0, attempts: 3, last_success_at: iso(NOW) },
+    { lawd_cd: "30110", kind: "sale", deal_ymd: "202611", status: "ok", row_count: 3, dropped_count: 0, attempts: 0, last_success_at: iso(NOW) },
+    { lawd_cd: "30110", kind: "sale", deal_ymd: "202610", status: "ok", row_count: 3, dropped_count: 0, attempts: 0, last_success_at: iso(NOW) },
+    { lawd_cd: "30110", kind: "sale", deal_ymd: "202608", status: "failed", row_count: 0, dropped_count: 0, attempts: 3, last_success_at: iso(NOW) },
   ];
-  assert.equal(saleCoveredThrough(months, "202611"), "2026-10", "빠진 달(202609) 앞까지");
+  assert.equal(saleCoveredThrough(months, "202611", ["30110"]), "2026-10", "빠진 달(202609) 앞까지");
+  assert.equal(saleCoveredThrough(months, "202611"), null, "5개 구가 모두 받은 달까지만 셈(다른 구는 이번 달도 아직)");
   const warn = (usage, hold = parseHold(null), countCheck = null) => buildRealpriceWarnings({ monthRows: months, usage, hold, countCheck, nowMs: NOW, retryPolicy: REALPRICE_RETRY_POLICY }).map((w) => w.code + (w.level ? `:${w.level}` : ""));
   assert.deepEqual(warn({ rows_written: 0, rows_read: 0 }), ["RT_ABORTED"]);
-  assert.deepEqual(warn({ rows_written: 40000, rows_read: 1_200_000 }), ["RT_ABORTED", "RT_WRITE_BUDGET", "RT_READ_BUDGET_NEAR"]);
-  assert.deepEqual(warn({ rows_written: 0, rows_read: 1_500_000 }), ["RT_ABORTED", "RT_READ_BUDGET:soft"]);
-  assert.deepEqual(warn({ rows_written: 0, rows_read: 2_500_000 }), ["RT_ABORTED", "RT_READ_BUDGET:hard"]);
+  assert.deepEqual(warn({ rows_written: 300_000, rows_read: 4_800_000 }), ["RT_ABORTED", "RT_WRITE_BUDGET", "RT_READ_BUDGET_NEAR"]);
+  assert.deepEqual(warn({ rows_written: 299_999, rows_read: 4_799_999 }), ["RT_ABORTED"]);
+  assert.deepEqual(warn({ rows_written: 0, rows_read: 6_000_000 }), ["RT_ABORTED", "RT_READ_BUDGET:soft"]);
+  assert.deepEqual(warn({ rows_written: 0, rows_read: 10_000_000 }), ["RT_ABORTED", "RT_READ_BUDGET:hard"]);
   const holds = parseHold(JSON.stringify({ all: { until: iso(NOW + HOUR), code: "RT_KEY_INVALID" }, kinds: { presale: { until: iso(NOW + HOUR), code: "RT_ACCESS_DENIED" }, rent: { until: iso(NOW - 1), code: "RT_SERVICE_GONE" } } }));
   assert.deepEqual(warn({ rows_written: 0, rows_read: 0 }, holds), ["RT_ABORTED", "RT_ACCESS_DENIED"], "키 단위는 경고 아님(22.4절 표), 지난 미룸은 보이지 않음");
   assert.deepEqual(warn({ rows_written: 0, rows_read: 0 }, parseHold(null), { checkedAt: iso(NOW), diffs: [{ dealYmd: "202610", basic: 4, detail: 3 }] }), ["RT_ABORTED", "RT_COUNT_DIFF"]);
+  const countWarning = (diffs) => buildRealpriceWarnings({ monthRows: [], usage: { rows_written: 0, rows_read: 0 }, hold: parseHold(null), countCheck: { checkedAt: iso(NOW), diffs }, nowMs: NOW, retryPolicy: REALPRICE_RETRY_POLICY })[0].months;
+  assert.deepEqual(countWarning([{ dealYmd: "202610", basic: 4, detail: 3 }, { lawdCd: "30170", dealYmd: "202609", basic: 2, detail: 1 }]), ["30110:sale:202610", "30170:sale:202609"], "0008 전 대조 결과(구 없음)는 동구로 읽음");
 });
 
-test("TK-29 지금 다시 받기 문장: 최근 4개월 3종류 12행을 지금 차례로(없는 달은 넣음) 바꾸고 미룸을 풀며, 예상 시간은 12 × 10분", async () => {
+test("TK-29 지금 다시 받기 문장: 최근 4개월 3종류 5개 구 60행을 지금 차례로(없는 달은 넣음) 바꾸고 미룸을 풀며, 예상 시간은 60 ÷ 12 × 10분", async () => {
   const { database, db } = freshDb({ d1Meta: true });
-  await seedMonthsStatement(db, [["sale", "202611"], ["sale", "202001"]], NOW).run();
+  await seedMonthsStatement(db, [["30110", "sale", "202611"], ["30110", "sale", "202001"]], NOW).run();
   database.prepare("UPDATE rt_fetch_months SET next_due_at = ? ").run(iso(NOW + 5 * HOUR));
   database.prepare("INSERT INTO settings (key, value_json, updated_at) VALUES ('realprice_fetch_hold', ?, ?)").run(JSON.stringify({ all: { until: iso(NOW + HOUR), code: "RT_KEY_INVALID" } }), iso(NOW));
   const later = NOW + HOUR;
   const refresh = refreshStatements(db, later);
-  assert.deepEqual([refresh.queuedMonths, refresh.estimatedMinutes, refresh.statements.length], [12, 120, 2]);
+  assert.deepEqual([refresh.queuedMonths, refresh.estimatedMinutes, refresh.statements.length], [60, 50, 2]);
   await db.batch(refresh.statements);
-  const due = rows(database, "SELECT kind, deal_ymd FROM rt_fetch_months WHERE next_due_at = ? ORDER BY kind, deal_ymd", iso(later)).map((row) => `${row.kind}:${row.deal_ymd}`);
-  assert.deepEqual(due, ["presale:202608", "presale:202609", "presale:202610", "presale:202611", "rent:202608", "rent:202609", "rent:202610", "rent:202611", "sale:202608", "sale:202609", "sale:202610", "sale:202611"]);
+  const due = rows(database, "SELECT lawd_cd, kind, deal_ymd FROM rt_fetch_months WHERE next_due_at = ? ORDER BY lawd_cd, kind, deal_ymd", iso(later));
+  assert.equal(due.length, 60);
+  assert.deepEqual(due.filter((row) => row.lawd_cd === "30110").map((row) => `${row.kind}:${row.deal_ymd}`), ["presale:202608", "presale:202609", "presale:202610", "presale:202611", "rent:202608", "rent:202609", "rent:202610", "rent:202611", "sale:202608", "sale:202609", "sale:202610", "sale:202611"]);
+  for (const lawd of REALPRICE_LAWDS) assert.equal(due.filter((row) => row.lawd_cd === lawd).length, 12, lawd);
   assert.equal(monthRow(database, "sale", "202001").next_due_at, iso(NOW + 5 * HOUR), "오래된 달은 그대로");
   assert.equal(rows(database, "SELECT COUNT(*) AS n FROM settings WHERE key = 'realprice_fetch_hold'")[0].n, 0);
+});
+
+// ── 대전 5개 구(0008, 2026-11-25 사용자 결정 "대전만 하면 될 것 같아") ──
+
+test("TK-132: 한 구의 달을 반영해도 같은 종류·같은 달의 다른 구 거래는 읽지도 지우지도 않는다", async () => {
+  const { database, db } = freshDb({ d1Meta: true });
+  await seedMonth(db, "sale", "202610", "30110");
+  await seedMonth(db, "sale", "202610", "30170");
+  const seoItems = (count) => saleItems(count).map((item) => ({ ...item, sggCd: "30170", aptSeq: item.aptSeq.replace("30110", "30170") }));
+  await apply(db, database, saleItems(30));
+  await apply(db, database, seoItems(25), { lawdCd: "30170" });
+  const count = (lawd) => rows(database, "SELECT COUNT(*) AS n FROM rt_trades WHERE lawd_cd = ?", lawd)[0].n;
+  assert.deepEqual([count("30110"), count("30170")], [30, 25]);
+  // 서구 같은 달에 0건이 두 번 오면 서구 거래만 모두 지움(보류 뒤 확정). 동구 30건은 그대로.
+  await apply(db, database, [], { lawdCd: "30170", nowMs: NOW + HOUR });
+  const cleared = await apply(db, database, [], { lawdCd: "30170", nowMs: NOW + 2 * HOUR });
+  assert.deepEqual([cleared.outcome, cleared.deleted], ["ok", 25]);
+  assert.deepEqual([count("30110"), count("30170")], [30, 0]);
+  // 동구를 다시 받아도 서구 줄은 건드리지 않음(다시 넣은 서구 1건이 남음).
+  await apply(db, database, seoItems(1), { lawdCd: "30170", nowMs: NOW + 3 * HOUR });
+  const again = await apply(db, database, saleItems(30), { nowMs: NOW + 4 * HOUR });
+  assert.deepEqual([again.inserted, again.updated, again.deleted], [0, 0, 0]);
+  assert.deepEqual([count("30110"), count("30170")], [30, 1]);
+  assert.deepEqual([monthRow(database).row_count, monthRow(database, "sale", "202610", "30170").row_count], [30, 1]);
+});
+
+test("TK-133: 차례 고르기는 같은 순서·같은 달이면 동구 → 중구 → 서구 → 유성구 → 대덕구, 신고가 준비는 구마다 따로 본다", () => {
+  const due = iso(NOW - 1000);
+  const months = [...REALPRICE_LAWDS].reverse().map((lawd) => ({ lawd_cd: lawd, kind: "sale", deal_ymd: "202001", status: "pending", row_count: 0, dropped_count: 0, held_count: null, attempts: 0, last_error: null, last_success_at: null, next_due_at: due }));
+  assert.deepEqual(pickDueMonths(months, { nowMs: NOW }).picked.map((month) => month.lawd_cd), ["30110", "30140", "30170", "30200", "30230"]);
+  const done = iso(NOW - HOUR);
+  const saleMonths = (lawd) => expectedMonths("sale", "202611").map((dealYmd) => ({ lawd_cd: lawd, kind: "sale", deal_ymd: dealYmd, last_success_at: done }));
+  assert.deepEqual(recordHighReadyLawds(saleMonths("30110"), "202611"), ["30110"], "동구만 다 받음");
+  const partial = [...saleMonths("30110"), ...saleMonths("30170").slice(1)];
+  assert.deepEqual(recordHighReadyLawds(partial, "202611"), ["30110"], "서구는 한 달 빠짐");
+  assert.deepEqual(recordHighReadyLawds(REALPRICE_LAWDS.flatMap(saleMonths), "202611"), [...REALPRICE_LAWDS]);
+  assert.equal(saleCoveredThrough(REALPRICE_LAWDS.flatMap(saleMonths), "202611"), "2006-01");
 });

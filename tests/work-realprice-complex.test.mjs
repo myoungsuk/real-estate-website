@@ -11,7 +11,7 @@ import {
   typeMaxOf,
 } from "../worker/realprice-complex.mjs";
 import { REALPRICE_COMPARABLE_WHERE } from "../worker/realprice-query.mjs";
-import { REALPRICE_KINDS, expectedMonths, kstMonth } from "../worker/realprice-store.mjs";
+import { REALPRICE_KINDS, REALPRICE_LAWDS, expectedMonths, kstMonth } from "../worker/realprice-store.mjs";
 import { FAKE_SERVICE_KEY } from "./realprice-fixtures.mjs";
 import { NOW, freshDb, rows, work, workEnv } from "./work-test-kit.mjs";
 
@@ -26,20 +26,20 @@ const kstToday = new Date(NOW + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
 const kstYm = kstToday.slice(0, 7);
 
 function markAllMonthsOk(database) {
-  const insert = database.prepare("INSERT OR REPLACE INTO rt_fetch_months (kind, deal_ymd, status, row_count, attempts, last_success_at, next_due_at) VALUES (?, ?, 'ok', 0, 0, ?, ?)");
-  for (const kind of REALPRICE_KINDS) for (const ymd of expectedMonths(kind, kstMonth(NOW))) insert.run(kind, ymd, iso(NOW - DAY), iso(NOW + DAY));
+  const insert = database.prepare("INSERT OR REPLACE INTO rt_fetch_months (lawd_cd, kind, deal_ymd, status, row_count, attempts, last_success_at, next_due_at) VALUES (?, ?, ?, 'ok', 0, 0, ?, ?)");
+  for (const lawd of REALPRICE_LAWDS) for (const kind of REALPRICE_KINDS) for (const ymd of expectedMonths(kind, kstMonth(NOW))) insert.run(lawd, kind, ymd, iso(NOW - DAY), iso(NOW + DAY));
 }
 
 let keyCounter = 0;
-function insertTrade(database, { kind = "sale", date, aptSeq = "A1", cmpSeq, area = 8497, price = 300_000_000, dealing = "broker", cancelled = 0, floor = 10, buildYear = 2020 }) {
+function insertTrade(database, { kind = "sale", date, aptSeq = "A1", cmpSeq, area = 8497, price = 300_000_000, dealing = "broker", cancelled = 0, floor = 10, buildYear = 2020, lawd = "30110" }) {
   keyCounter += 1;
   const ymd = date.slice(0, 4) + date.slice(5, 7);
   const key = `${kind}:${ymd}:${String(keyCounter).padStart(20, "0")}:1`;
   database.prepare(`INSERT INTO rt_trades (trade_key, kind, deal_ymd, deal_date, umd_nm, jibun, apt_seq, cmp_seq, apt_nm, area_x100, floor, build_year,
-    price_won, deposit_won, monthly_rent_won, dealing_gbn, cancelled, cancelled_on, registered_on, apt_dong, extra_json, is_backfill, first_seen_at, updated_at)
-    VALUES (?, ?, ?, ?, '가상동', '1', ?, ?, '가상숲1단지', ?, ?, ?, ?, ?, NULL, ?, ?, NULL, NULL, NULL, '{}', 1, ?, ?)`).run(
+    price_won, deposit_won, monthly_rent_won, dealing_gbn, cancelled, cancelled_on, registered_on, apt_dong, extra_json, is_backfill, first_seen_at, updated_at, lawd_cd)
+    VALUES (?, ?, ?, ?, '가상동', '1', ?, ?, '가상숲1단지', ?, ?, ?, ?, ?, NULL, ?, ?, NULL, NULL, NULL, '{}', 1, ?, ?, ?)`).run(
     key, kind, ymd, date, aptSeq, cmpSeq === undefined ? aptSeq : cmpSeq, area, floor, buildYear,
-    kind === "rent" ? null : price, kind === "rent" ? 100_000_000 : null, kind === "rent" ? null : dealing, cancelled, iso(NOW - 30 * DAY), iso(NOW - 30 * DAY),
+    kind === "rent" ? null : price, kind === "rent" ? 100_000_000 : null, kind === "rent" ? null : dealing, cancelled, iso(NOW - 30 * DAY), iso(NOW - 30 * DAY), lawd,
   );
   return key;
 }
@@ -70,7 +70,7 @@ test("단지 상세: 면적 목록(넓이 순)·고른 면적의 최근 거래·
   assert.equal(response.headers.get("Cache-Control"), "no-store");
   const data = json.data;
   assert.equal(data.available, true);
-  assert.deepEqual(data.complex, { aptSeq: "A1", aptName: "가상숲1단지", umdName: "가상동", buildYear: 2020, households: null });
+  assert.deepEqual(data.complex, { aptSeq: "A1", aptName: "가상숲1단지", umdName: "가상동", lawdCd: null, buildYear: 2020, households: null }, "고유번호가 구 코드로 시작하지 않으면 구를 모름(0008)");
   assert.deepEqual(data.areas.map((area) => [area.areaM2, area.tradeCount]), [[59.92, 1], [84.97, 6], [84.98, 1]], "해제는 세지 않고 직거래는 셈");
   const area = data.area;
   assert.equal(area.areaM2, 84.97);
@@ -155,18 +155,18 @@ test("단지 상세 읽기 한도: 사용량을 더하고 감사 0, 첫 상한·
   assert.ok(readNow(database) > 1_000);
   assert.equal(auditCount(database), auditBefore, "보기 요청은 감사 0");
 
-  setRead(database, 1_500_000);
+  setRead(database, 6_000_000);
   const soft = await detail(env, "apt=A1");
   assert.deepEqual([soft.status, soft.json.data.available, soft.json.data.reason, soft.json.data.warnings], [200, false, "budget", [{ code: "RT_READ_BUDGET", level: "soft" }]]);
   assert.equal(soft.json.data.area, undefined, "막히면 자료를 읽지 않음");
 
-  setRead(database, 2_500_000);
+  setRead(database, 10_000_000);
   const hard = await detail(env, "apt=A1");
   assert.deepEqual([hard.status, hard.json.error.code], [429, "RT_READ_BUDGET"]);
-  assert.equal(readNow(database), 2_500_000, "거절한 조회는 더하지 않음");
+  assert.equal(readNow(database), 10_000_000, "거절한 조회는 더하지 않음");
 
   setRead(database, 0);
-  database.prepare("DELETE FROM rt_fetch_months WHERE kind = 'sale' AND deal_ymd = '200601'").run();
+  database.prepare("DELETE FROM rt_fetch_months WHERE lawd_cd = '30110' AND kind = 'sale' AND deal_ymd = '200601'").run();
   const pending = await detail(env, "apt=A1");
   assert.deepEqual([pending.status, pending.json.data.reason, pending.json.data.recordHighReady], [200, "pending", false]);
 });
@@ -208,4 +208,19 @@ test("단지 상세 순수 함수: 고를 면적·이 면적 최고(같은 값�
   assert.equal(typeMaxOf([]), null);
   assert.deepEqual(bandMaxOf(areaRows, 8497), { bandM2: 84, bandMaxWon: 700, bandTypes: 2 });
   assert.deepEqual(bandMaxOf([{ area_x100: 5992, max_won: null }], 5992), { bandM2: 59, bandMaxWon: null, bandTypes: 1 });
+});
+
+test("TK-139 단지 상세의 구는 단지 고유번호 앞 5자리: 서구 단지는 lawdCd 30170, 판정 준비는 그 구만 본다(서구 매매 한 달이 빠지면 서구 단지만 pending)", async () => {
+  const { database, db } = freshDb({ d1Meta: true });
+  markAllMonthsOk(database);
+  insertTrade(database, { date: `${monthsAgo(1)}-01`, aptSeq: "30170-77", price: 500_000_000, lawd: "30170" });
+  insertTrade(database, { date: `${monthsAgo(1)}-01`, aptSeq: "30110-77", price: 500_000_000 });
+  const env = stagePEnv(db);
+  const west = await detail(env, "apt=30170-77");
+  assert.deepEqual([west.json.data.available, west.json.data.complex.lawdCd, west.json.data.recordHighReady], [true, "30170", true]);
+  database.prepare("UPDATE rt_fetch_months SET status = 'pending', last_success_at = NULL WHERE lawd_cd = '30170' AND kind = 'sale' AND deal_ymd = '201005'").run();
+  const pending = await detail(env, "apt=30170-77");
+  assert.deepEqual([pending.json.data.available, pending.json.data.reason, pending.json.data.recordHighReady], [false, "pending", false]);
+  const east = await detail(env, "apt=30110-77");
+  assert.deepEqual([east.json.data.available, east.json.data.complex.lawdCd, east.json.data.recordHighReady], [true, "30110", true], "동구 단지는 서구 빠짐과 상관없음");
 });

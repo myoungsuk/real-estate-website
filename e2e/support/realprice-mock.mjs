@@ -9,6 +9,14 @@ export const okStatus = {
   lastSuccessAt: "2026-11-19T03:10:00Z",
   coveredThrough: "2026-11",
   backfill: { sale: { done: 251, total: 251 }, presale: { done: 234, total: 234 }, rent: { done: 191, total: 191 } },
+  // 구마다 채우기(0008, 대전 5개 구). 가상 값이다.
+  backfillRegions: [
+    { lawdCd: "30110", sale: { done: 251, total: 251 }, presale: { done: 234, total: 234 }, rent: { done: 191, total: 191 }, recordHighReady: true },
+    { lawdCd: "30140", sale: { done: 251, total: 251 }, presale: { done: 234, total: 234 }, rent: { done: 191, total: 191 }, recordHighReady: true },
+    { lawdCd: "30170", sale: { done: 251, total: 251 }, presale: { done: 234, total: 234 }, rent: { done: 191, total: 191 }, recordHighReady: true },
+    { lawdCd: "30200", sale: { done: 120, total: 251 }, presale: { done: 0, total: 234 }, rent: { done: 0, total: 191 }, recordHighReady: false },
+    { lawdCd: "30230", sale: { done: 0, total: 251 }, presale: { done: 0, total: 234 }, rent: { done: 0, total: 191 }, recordHighReady: false },
+  ],
   recordHighReady: true,
   lastError: null,
   warnings: [],
@@ -24,6 +32,7 @@ export function trade(index, extra = {}) {
   return {
     tradeKey: `sale:202611:${String(index).padStart(20, "0")}:1`,
     kind: "sale",
+    lawdCd: "30110",
     dealDate: `2026-11-${String(28 - (index % 27)).padStart(2, "0")}`,
     umdName: "천동",
     jibun: "1",
@@ -51,7 +60,10 @@ export const firstPage = [
   trade(1, { recordHigh: true, prevMaxWon: 395_000_000, isNew: true, aptDong: "103" }),
   trade(2, { kind: "rent", priceWon: null, depositWon: 20_000_000, monthlyRentWon: 850_000, umdName: "신흥동" }),
   trade(3, { dealingGbn: "direct", floor: -1 }),
-  ...Array.from({ length: 27 }, (_, index) => trade(index + 4)),
+  ...Array.from({ length: 25 }, (_, index) => trade(index + 4)),
+  // 다른 구 거래 2건(0008): 줄마다 '서구 · 갈마동'처럼 구 이름이 보이는지, 구 단추로 거르는지 본다.
+  trade(29, { lawdCd: "30170", umdName: "갈마동", aptName: "가상서쪽마을" }),
+  trade(30, { lawdCd: "30200", umdName: "봉명동", aptName: "가상유성숲" }),
 ];
 export const secondPage = Array.from({ length: 5 }, (_, index) => trade(index + 31));
 export const cancelledTrade = trade(99, { cancelled: true, cancelledOn: "2026-11-15" });
@@ -133,7 +145,9 @@ export async function setup(page, { width = 390, session = { realpriceEnabled: t
     const params = new URL(route.request().url()).searchParams;
     calls.trades.push(params.toString());
     if (trades) return route.fulfill(trades(params, calls.trades.length));
-    const items = params.get("cursor") === "c2" ? secondPage : params.get("cancelled") === "include" ? [cancelledTrade, ...firstPage] : firstPage;
+    const all = params.get("cursor") === "c2" ? secondPage : params.get("cancelled") === "include" ? [cancelledTrade, ...firstPage] : firstPage;
+    const lawd = params.get("lawd");
+    const items = lawd ? all.filter((item) => item.lawdCd === lawd) : all;
     return route.fulfill(envelope({ items, nextCursor: params.get("cursor") ? null : "c2", recordHighReady: true, coverage: {}, warnings: [] }));
   });
   await page.route(`${WORK}/realprice/insights**`, (route) => {
@@ -168,7 +182,7 @@ export async function setup(page, { width = 390, session = { realpriceEnabled: t
   });
   await page.route(`${WORK}/realprice/refresh`, (route) => {
     calls.refresh.push({ body: route.request().postDataJSON(), headers: route.request().headers() });
-    return route.fulfill(refresh ?? envelope({ queuedMonths: 12, estimatedMinutes: 120 }));
+    return route.fulfill(refresh ?? envelope({ queuedMonths: 60, estimatedMinutes: 50 }));
   });
   return calls;
 }
@@ -188,7 +202,7 @@ export const rows = (page) => page.locator("[data-rt-rows] > tr");
 // 누르는 곳 44px: 거르기 단추 6개·찾기·다 담기·첫 줄 담기 칸(찾기칸은 48px). 담기 칸은 글자 없는 체크칸이라 '담기 칸'으로 부른다.
 export const tapSizes = (page) => page.evaluate(() => [...document.querySelectorAll(".rt-chip, .rt-find__go, .rt-take, [data-rt-rows] > tr:first-child .rt-pick-button")]
   .filter((element) => element.getClientRects().length > 0)
-  .map((element) => { const box = element.getBoundingClientRect(); return { name: (element.querySelector("[data-rt-chip-text]") ?? element).textContent.trim() || "담기 칸", width: box.width, height: box.height }; }));
+  .map((element) => { const box = element.getBoundingClientRect(); return { name: (element.querySelector("[data-rt-chip-text], [data-rt-region-text]") ?? element).textContent.trim() || "담기 칸", width: box.width, height: box.height }; }));
 // 담기 체크칸이 보이는 모양: 담음 "✓"(남색 네모 안 흰 ✓), 빈칸, 잠김(해제·다 참). 진짜 체크 칸 상태와 보이는 네모가 같아야 한다.
 export const pickState = (row) => row.locator(".rt-pick-button").evaluate((label) => {
   const input = label.querySelector("input");

@@ -4,6 +4,8 @@
 //   이유별 수를 돌려준다(2026-11-19 D-5). totalCount 대조는 버리기 전 건수로, 보류 판정은 버린 뒤 건수로 한다(P1-b).
 // - 길이 제한은 0003 CHECK와 같은 값을 아래 상수 한 곳에 둔다. 화면용 apt_dong·extra_json이 넘으면 행은 두고 값만 비운다.
 // - cmp_seq·is_backfill·first_seen_at·updated_at은 D1 반영 때(P1-b) 채운다.
+// - 지역(lawd_cd, 0008): 받은 구 코드를 행마다 넣는다. 항목의 sggCd가 그 구와 다르면 버린다(otherRegion).
+import { REALPRICE_BASE_LAWD, isRealpriceLawd } from "../src/lib/work/realprice-regions.mjs";
 
 // 0003_public_realprice.sql CHECK와 같은 길이(코드 포인트 수, SQLite length()와 같음). umd_nm은 명세 크기 30(전월세)에 맞춤.
 export const REALPRICE_ROW_LIMITS = Object.freeze({
@@ -24,7 +26,7 @@ const EXTRA_FIELDS = Object.freeze({
   presale: Object.freeze(["ownershipGbn"]),
 });
 
-const DROP_REASONS = Object.freeze(["invalidDate", "outOfMonth", "missingArea", "missingAptNm", "invalidPrice", "tooLong"]);
+const DROP_REASONS = Object.freeze(["invalidDate", "outOfMonth", "missingArea", "missingAptNm", "invalidPrice", "tooLong", "otherRegion"]);
 
 const textLength = (value) => [...value].length;
 
@@ -95,7 +97,10 @@ function emptyDropped() {
 }
 
 // 항목 하나 → { row } 또는 { drop: 이유 }. row에는 trade_key가 아직 없다.
-function convertItem(kind, dealYmd, item, cleared) {
+function convertItem(kind, dealYmd, lawdCd, item, cleared) {
+  // 요청한 구가 아닌 항목(응답에 sggCd가 있을 때만 대조, 없으면 요청한 구로 본다). 다른 구 거래가 이 구 이름으로 저장되지 않게 한다.
+  const sggCd = text(item.sggCd);
+  if (sggCd !== null && sggCd !== lawdCd) return { drop: "otherRegion" };
   const dealDate = toDealDate(item.dealYear, item.dealMonth, item.dealDay);
   if (!dealDate) return { drop: "invalidDate" };
   // 조회 API의 달 창(realprice-query.mjs tradeMonthWindows)이 "거래 ID의 달 = 계약일의 달"인 이 규칙에 기댄다. 바꾸면 달 창 조회도 함께 고친다.
@@ -148,6 +153,7 @@ function convertItem(kind, dealYmd, item, cleared) {
   return {
     row: {
       kind,
+      lawd_cd: lawdCd,
       deal_ymd: dealYmd,
       deal_date: dealDate,
       umd_nm: umdNm,
@@ -174,10 +180,14 @@ const normalizePart = (value) => String(value ?? "").normalize("NFKC").replace(/
 
 // 서명 원문(설계서 22.6절 1): 종류|계약일|단지 고유번호(없으면 법정동+지번+단지명)|area_x100|floor|금액
 // 금액은 매매·분양권 price_won, 전월세 deposit_won|monthly_rent_won. 나중에 바뀔 수 있는 칸(해제·등기·동·중개 구분·extra_json)은 넣지 않는다.
+// 동구(30110) 밖의 구는 맨 앞에 구 코드를 붙인다(0008). 동구는 붙이지 않아 이미 저장한 동구 거래 ID가 그대로다(다시 받아도 넣기·지우기가 생기지 않음).
+// 단지 고유번호는 구 코드로 시작해 구끼리 겹치지 않지만, 고유번호가 없는 옛 행은 법정동+지번+단지명이라 법정동 이름이 같은 구(오동·대동 등)에서 겹칠 수 있다.
+// 거래 ID는 종류·연월 범위 하나에 모든 구가 함께 들어가므로, 구 코드를 붙여 서로 다른 구의 거래가 같은 ID가 되지 않게 한다.
 export function tradeSignatureSource(row) {
   const complex = row.apt_seq ?? `${normalizePart(row.umd_nm)}+${normalizePart(row.jibun)}+${normalizePart(row.apt_nm)}`;
   const amount = row.kind === "rent" ? [row.deposit_won, row.monthly_rent_won] : [row.price_won];
-  return [row.kind, row.deal_date, complex, row.area_x100, row.floor, ...amount].map(normalizePart).join("|");
+  const region = row.lawd_cd && row.lawd_cd !== REALPRICE_BASE_LAWD ? [row.lawd_cd] : [];
+  return [...region, row.kind, row.deal_date, complex, row.area_x100, row.floor, ...amount].map(normalizePart).join("|");
 }
 
 async function sha256Hex(value) {
@@ -205,16 +215,17 @@ function variableFieldsKey(row) {
 }
 
 // 받은 항목 목록 → { rows, droppedCount, dropped: { 이유: 수 }, cleared: { aptDong, extraJson } }.
-// rows는 trade_key 순서로 정렬해 돌려준다. kind: "sale" | "rent" | "presale"(매매 일반은 저장하지 않음).
-export async function buildTradeRows({ kind, dealYmd, items }) {
+// rows는 trade_key 순서로 정렬해 돌려준다. kind: "sale" | "rent" | "presale"(매매 일반은 저장하지 않음). lawdCd: 받은 구 코드.
+export async function buildTradeRows({ kind, dealYmd, lawdCd, items }) {
   if (!REALPRICE_ROW_KINDS.includes(kind)) throw new TypeError("realprice: 저장하는 종류는 sale·rent·presale뿐입니다.");
+  if (!isRealpriceLawd(lawdCd)) throw new TypeError("realprice: 허용하지 않은 지역 코드입니다.");
   if (typeof dealYmd !== "string" || !/^\d{4}(?:0[1-9]|1[0-2])$/u.test(dealYmd)) throw new TypeError("realprice: 계약 연월은 YYYYMM 형식이어야 합니다.");
   if (!Array.isArray(items)) throw new TypeError("realprice: 항목 목록이 필요합니다.");
   const dropped = emptyDropped();
   const cleared = { aptDong: 0, extraJson: 0 };
   const groups = new Map();
   for (const item of items) {
-    const converted = convertItem(kind, dealYmd, item ?? {}, cleared);
+    const converted = convertItem(kind, dealYmd, lawdCd, item ?? {}, cleared);
     if (converted.drop) {
       dropped[converted.drop] += 1;
       continue;

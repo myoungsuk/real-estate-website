@@ -93,7 +93,7 @@ test("TK-04 단계 2만 켜면 /work/session과 단계 2 경로는 지금 그대
   const session = await work(env, "/session");
   assert.equal(session.status, 200);
   assert.deepEqual(Object.keys(session.json.data), ["enabled", "filesEnabled", "aiEnabled", "administrator", "csrfToken", "schemaVersion", "aiWarnings"]);
-  assert.deepEqual([session.json.data.enabled, session.json.data.schemaVersion], [true, 7]);
+  assert.deepEqual([session.json.data.enabled, session.json.data.schemaVersion], [true, 8]);
   const customer = await work(env, "/customers", { method: "POST", body: { displayName: "가상 손님" } });
   assert.equal(customer.status, 201, JSON.stringify(customer.json));
   assert.equal((await work(env, "/customers")).status, 200);
@@ -117,7 +117,7 @@ test("TK-05 단계 P만 켜면 /work/realprice/* 동작, 단계 2 경로는 503 
   assert.deepEqual([session.status, session.json.data.enabled, session.json.data.csrfToken], [200, false, null]);
   const tools = await work(env, "/public-tools/session");
   assert.equal(tools.status, 200);
-  assert.deepEqual([tools.json.data.realpriceEnabled, tools.json.data.blogEnabled, tools.json.data.schemaVersion], [true, false, 7]);
+  assert.deepEqual([tools.json.data.realpriceEnabled, tools.json.data.blogEnabled, tools.json.data.schemaVersion], [true, false, 8]);
   assert.match(tools.json.data.csrfToken, /^[0-9]+\.[A-Za-z0-9_-]+$/u);
   assert.equal((await work(env, "/blog/drafts")).json.error.code, "BLOG_DISABLED", "글 초안 켜기 값이 없으면 꺼짐");
   for (const path of ["/public-tools", "/public-tools/other", "/realprice", "/realprice/other"]) {
@@ -159,7 +159,7 @@ test("TK-06 지금 다시 받기에 Origin 틀림·CSRF 없음·틀림·콘텐�
 });
 
 test("TK-07 구조 번호 2(0003 적용 전)·3(0004 적용 전)·4(0005 적용 전)·5(0006 적용 전)·6(0007 적용 전)·8(앞선 코드로 되돌림)이면 단계 P API는 503 WORK_SCHEMA_OUTDATED·AHEAD이고 신원 있는 거부로 남음", async () => {
-  for (const [value, code] of [["2", "WORK_SCHEMA_OUTDATED"], ["3", "WORK_SCHEMA_OUTDATED"], ["4", "WORK_SCHEMA_OUTDATED"], ["5", "WORK_SCHEMA_OUTDATED"], ["6", "WORK_SCHEMA_OUTDATED"], ["8", "WORK_SCHEMA_AHEAD"]]) {
+  for (const [value, code] of [["2", "WORK_SCHEMA_OUTDATED"], ["3", "WORK_SCHEMA_OUTDATED"], ["4", "WORK_SCHEMA_OUTDATED"], ["5", "WORK_SCHEMA_OUTDATED"], ["6", "WORK_SCHEMA_OUTDATED"], ["7", "WORK_SCHEMA_OUTDATED"], ["9", "WORK_SCHEMA_AHEAD"]]) {
     const { database, db } = freshDb();
     database.exec(`UPDATE settings SET value_json = '${value}' WHERE key = 'schema_version'`);
     for (const path of ["/realprice/status", "/public-tools/session"]) {
@@ -199,18 +199,18 @@ test("TK-08 Access JWT 없음·깨짐·위조·만료·허용 목록 밖 이메�
 
 test("갱신 상태는 읽기만(감사·사용량 쓰기 0) 하고 설계서 22.9절 모양, 읽기 끝 상한을 넘은 날에도 200", async () => {
   const { database, db } = freshDb({ d1Meta: true });
-  database.prepare("INSERT INTO rt_daily_usage (day_utc, rows_read) VALUES ('2026-11-17', 2600000)").run();
+  database.prepare("INSERT INTO rt_daily_usage (day_utc, rows_read) VALUES ('2026-11-17', 10400000)").run();
   const result = await work(stagePEnv(db), "/realprice/status");
   assert.equal(result.status, 200);
-  assert.deepEqual(Object.keys(result.json.data), ["lastSuccessAt", "coveredThrough", "backfill", "recordHighReady", "lastError", "warnings", "today", "unmatchedSaleRows", "runs"]);
-  assert.deepEqual(result.json.data.warnings, [{ code: "RT_READ_BUDGET", level: "hard", count: 2600000, months: [] }]);
+  assert.deepEqual(Object.keys(result.json.data), ["lastSuccessAt", "coveredThrough", "backfill", "backfillRegions", "recordHighReady", "recordHighLawds", "lastError", "warnings", "today", "unmatchedSaleRows", "runs"]);
+  assert.deepEqual(result.json.data.warnings, [{ code: "RT_READ_BUDGET", level: "hard", count: 10400000, months: [] }]);
   assert.equal(db.stats.batches.length, 0);
   assert.deepEqual(auditRows(database), [], "보기 요청은 감사 기록 없음(22.12절)");
-  assert.equal(rows(database, "SELECT rows_read FROM rt_daily_usage")[0].rows_read, 2600000, "상태 보기 읽기는 사용량에 더하지 않음");
+  assert.equal(rows(database, "SELECT rows_read FROM rt_daily_usage")[0].rows_read, 10400000, "상태 보기 읽기는 사용량에 더하지 않음");
   assert.equal(result.response.headers.get("Cache-Control"), "no-store");
 });
 
-test("TK-29 지금 다시 받기: 외부 요청 0번, 최근 4개월 12행이 지금 차례, estimatedMinutes 120(다른 달이 5건 기다려도 최근 달이 먼저라 같음), 감사 realprice.refresh 1건, 다음 Cron부터 1건씩", async () => {
+test("TK-29 지금 다시 받기: 외부 요청 0번, 5개 구 × 최근 4개월 × 3종류 60행이 지금 차례, estimatedMinutes 50(한 번에 12달, 다른 달이 5건 기다려도 최근 달이 먼저라 같음), 감사 realprice.refresh 1건, 다음 Cron부터 12달씩", async () => {
   const { database, db } = freshDb({ d1Meta: true });
   const env = stagePEnv(db);
   // 외부 요청 0번: 다시 받기 요청이 도는 동안 전역 fetch를 가로채 센다(PR #76 TR-11 49.4: 예전 assert는 늘 참이었음).
@@ -228,22 +228,26 @@ test("TK-29 지금 다시 받기: 외부 요청 0번, 최근 4개월 12행이 �
   }
   assert.deepEqual(outbound, [], "다시 받기 요청은 외부 요청을 보내지 않음");
   assert.equal(empty.status, 200, JSON.stringify(empty.json));
-  assert.deepEqual(empty.json.data, { queuedMonths: 12, estimatedMinutes: 120 });
-  assert.equal(rows(database, "SELECT COUNT(*) AS n FROM rt_fetch_months WHERE next_due_at = ?", iso(NOW))[0].n, 12);
-  assert.deepEqual(auditRows(database), [{ action: "realprice.refresh", outcome: "ok", reason: "queued_months=12" }]);
+  assert.deepEqual(empty.json.data, { queuedMonths: 60, estimatedMinutes: 50 });
+  assert.equal(rows(database, "SELECT COUNT(*) AS n FROM rt_fetch_months WHERE next_due_at = ?", iso(NOW))[0].n, 60);
+  assert.deepEqual(rows(database, "SELECT lawd_cd, COUNT(*) AS n FROM rt_fetch_months GROUP BY lawd_cd ORDER BY lawd_cd").map((row) => [row.lawd_cd, row.n]),
+    [["30110", 12], ["30140", 12], ["30170", 12], ["30200", 12], ["30230", 12]]);
+  assert.deepEqual(auditRows(database), [{ action: "realprice.refresh", outcome: "ok", reason: "queued_months=60" }]);
 
   for (const ymd of ["202001", "202002", "202003", "202004", "202005"]) {
-    database.prepare("INSERT INTO rt_fetch_months (kind, deal_ymd, next_due_at) VALUES ('sale', ?, ?)").run(ymd, iso(NOW - HOUR));
+    database.prepare("INSERT INTO rt_fetch_months (lawd_cd, kind, deal_ymd, next_due_at) VALUES ('30110', 'sale', ?, ?)").run(ymd, iso(NOW - HOUR));
   }
   const later = NOW + HOUR;
   const queued = await work(env, "/realprice/refresh", { method: "POST", body: {}, now: later });
-  assert.deepEqual(queued.json.data, { queuedMonths: 12, estimatedMinutes: 120 });
+  assert.deepEqual(queued.json.data, { queuedMonths: 60, estimatedMinutes: 50 });
   const bad = await work(env, "/realprice/refresh", { method: "POST", body: { months: 99 }, now: later });
   assert.deepEqual([bad.status, bad.json.error.code], [400, "VALIDATION_FAILED"]);
 
   const { fetcher, calls } = recordingFetcher(() => new Response("<response><header><resultCode>03</resultCode><resultMsg>NO DATA</resultMsg></header></response>", { status: 200 }));
   await runRealpriceCron(env, { now: () => later + 60_000, fetcher, log: () => {}, randomUUID: nextUuid });
-  assert.equal(calls.length, 1, "다음 Cron에서 1건");
-  const picked = new URL(calls[0].url).searchParams.get("DEAL_YMD");
-  assert.ok(["202611", "202610", "202609", "202608"].includes(picked), `최근 달이 먼저(${picked})`);
+  assert.equal(calls.length, 12, "다음 Cron에서 12달");
+  for (const call of calls) {
+    const picked = new URL(call.url).searchParams.get("DEAL_YMD");
+    assert.ok(["202611", "202610", "202609", "202608"].includes(picked), `최근 달이 먼저(${picked})`);
+  }
 });

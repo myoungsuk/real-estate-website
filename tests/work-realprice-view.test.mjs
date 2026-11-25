@@ -16,6 +16,7 @@ import { REALPRICE_DAILY_READ_HARD } from "../worker/realprice-store.mjs";
 import {
   DEFAULT_REALPRICE_FILTERS,
   DONG_GU_UMD_NAMES,
+  REALPRICE_LAWD_OPTIONS,
   REALPRICE_PERIODS,
   REALPRICE_VIEW_HIGH_PAGE_SIZE,
   REALPRICE_VIEW_MAJOR_DAYS,
@@ -25,6 +26,7 @@ import {
   REALPRICE_VIEW_QUERY_MAX,
   REALPRICE_VIEW_WATCH_MAX,
   activeFilterLine,
+  activeFilterParts,
   apiErrorText,
   backfillBars,
   chipText,
@@ -45,7 +47,11 @@ import {
   sizeText,
   statusProblem,
   statusView,
+  tradeRegionText,
   tradesQuery,
+  umdSelectGroups,
+  umdSelectValue,
+  parseUmdSelect,
   usageView,
   watchPutItems,
 } from "../src/lib/work/realprice-view.mjs";
@@ -77,14 +83,16 @@ test("거르기 → 목록 요청 매개변수: 기본값은 아무것도 보내
   assert.equal(tradesQuery({ ...DEFAULT_REALPRICE_FILTERS }, { todayKst: TODAY }), "");
   assert.equal(
     tradesQuery(
-      { ...DEFAULT_REALPRICE_FILTERS, period: "12", kind: "rent", area: "middle", price: "to5", umd: "천동", excludeCancelled: false, excludeDirect: true },
+      { ...DEFAULT_REALPRICE_FILTERS, period: "12", kind: "rent", area: "middle", price: "to5", lawd: "30110", umd: "천동", excludeCancelled: false, excludeDirect: true },
       { watch: true, cursor: "abc", todayKst: TODAY },
     ),
-    `from=2025-12&kind=rent&watch=1&areaMin=60.01&areaMax=85&priceMin=300000001&priceMax=500000000&umd=${encodeURIComponent("천동")}&cancelled=include&direct=exclude&cursor=abc`,
+    `from=2025-12&kind=rent&watch=1&areaMin=60.01&areaMax=85&priceMin=300000001&priceMax=500000000&lawd=30110&umd=${encodeURIComponent("천동")}&cancelled=include&direct=exclude&cursor=abc`,
   );
   assert.equal(tradesQuery({ ...DEFAULT_REALPRICE_FILTERS, period: "1" }, { todayKst: "2026-01-05" }), "from=2026-01", "최근 1개월 = 이번 달");
   assert.equal(tradesQuery({ ...DEFAULT_REALPRICE_FILTERS, period: "36" }, { todayKst: TODAY }), "from=2023-12", "최근 3년 = 36개월");
   assert.equal(tradesQuery({ ...DEFAULT_REALPRICE_FILTERS, umd: "없는동" }, { todayKst: TODAY }), "", "목록에 없는 법정동은 보내지 않음");
+  assert.equal(tradesQuery({ ...DEFAULT_REALPRICE_FILTERS, umd: "천동" }, { todayKst: TODAY }), "", "구를 고르지 않은 법정동은 보내지 않음(0008)");
+  assert.equal(tradesQuery({ ...DEFAULT_REALPRICE_FILTERS, lawd: "30170", umd: "천동" }, { todayKst: TODAY }), "lawd=30170", "고른 구에 없는 법정동은 보내지 않음");
   assert.ok(!tradesQuery({ ...DEFAULT_REALPRICE_FILTERS, period: "6" }, { todayKst: TODAY }).includes("to="));
 });
 
@@ -156,6 +164,9 @@ test("자료 받기 상태: 정상·받기 전·처음 채우는 중·받기 멈
   assert.equal(stopView.problem.label, "인증키 연장 필요");
   assert.equal(statusProblem({ ...stopped, lastSuccessAt: "2026-11-17T02:00:00Z" }), null, "멈춘 뒤 다시 받았으면 알리지 않음");
   assert.equal(statusProblem({ ...readyStatus, lastError: { code: "RT_UPSTREAM_FAILED", at: "2026-11-19T04:00:00Z" } }), null, "일시 오류는 다음 차례에 저절로 다시 받음");
+  // TK-154: 구 코드가 다른 응답은 저장하지 않고 그 종류를 6시간 미루므로 멈춤으로 쉬운 말로 알린다.
+  const regionProblem = statusProblem({ ...readyStatus, warnings: [{ code: "RT_REGION_MISMATCH", count: 1, months: [], kind: "sale" }] });
+  assert.deepEqual([regionProblem.stop, regionProblem.label, regionProblem.message], [true, "구 코드 다름", "받은 자료의 구 코드가 요청한 구와 달라 저장하지 않았습니다. 6시간 뒤 다시 받습니다. 계속되면 홈페이지 담당자에게 알려 주세요."]);
 
   assert.equal(statusProblem({ ...readyStatus, warnings: [{ code: "RT_READ_BUDGET", level: "soft" }, { code: "RT_READ_BUDGET_NEAR" }] }), null, "읽기 첫 상한·가까움은 목록 알림으로만");
   const counted = statusView({ ...readyStatus, warnings: [{ code: "RT_COUNT_DIFF", count: 1 }] }, { nowMs: NOW, todayKst: TODAY });
@@ -212,21 +223,21 @@ test("오류 문장과 설정 화면 숫자", () => {
   assert.deepEqual(runOutcome({ outcome: "failed", errorCode: "RT_UPSTREAM_FAILED" }), { tone: "warning", text: "실패" });
 });
 
-test("지금 다시 받기 알림(TK-29): 끝 상한을 넘은 날은 Cron이 한국 09시(UTC 0시)까지 받지 않으므로 '약 2시간 안에'라고 쓰지 않는다", () => {
-  const queued = { queuedMonths: 12, estimatedMinutes: 120 };
+test("지금 다시 받기 알림(TK-29): 끝 상한을 넘은 날은 Cron이 한국 09시(UTC 0시)까지 받지 않으므로 '약 50분 안에'라고 쓰지 않는다", () => {
+  const queued = { queuedMonths: 60, estimatedMinutes: 50 };
   const usageOf = (rowsRead) => ({ today: { rowsRead, readSoftLimit: 1_500_000, readHardLimit: REALPRICE_DAILY_READ_HARD } });
   assert.deepEqual(refreshDoneView(queued, usageOf(REALPRICE_DAILY_READ_HARD - 1), { nowMs: NOW, statusAtMs: NOW }), {
-    notice: "다시 받기를 차례에 넣었습니다. 최근 자료 12건(4개월 × 3종류)을 약 2시간 안에 모두 다시 받습니다. 그동안 목록은 지금 자료로 볼 수 있습니다.",
-    button: "다시 받는 중(약 2시간)",
+    notice: "다시 받기를 차례에 넣었습니다. 최근 자료 60건(5개 구 × 4개월 × 3종류)을 약 50분 안에 모두 다시 받습니다. 그동안 목록은 지금 자료로 볼 수 있습니다.",
+    button: "다시 받는 중(약 50분)",
   }, "평소 날");
   assert.deepEqual(refreshDoneView(queued, usageOf(REALPRICE_DAILY_READ_HARD), { nowMs: NOW, statusAtMs: NOW }), {
-    notice: "다시 받기를 차례에 넣었습니다. 하루 조회 한도를 넘어 한국 시각 내일 오전 9시부터 다시 받습니다. 최근 자료 12건(4개월 × 3종류)은 그 뒤 약 2시간 안에 모두 받습니다. 목록과 단지 찾기도 오전 9시부터 다시 볼 수 있습니다.",
+    notice: "다시 받기를 차례에 넣었습니다. 하루 조회 한도를 넘어 한국 시각 내일 오전 9시부터 다시 받습니다. 최근 자료 60건(5개 구 × 4개월 × 3종류)은 그 뒤 약 50분 안에 모두 받습니다. 목록과 단지 찾기도 오전 9시부터 다시 볼 수 있습니다.",
     button: "오전 9시부터 다시 받음",
   }, "끝 상한 날 한국 14시 → 내일 09시");
   const kst0800 = Date.parse("2026-11-18T23:00:00Z");
   assert.match(refreshDoneView(queued, usageOf(REALPRICE_DAILY_READ_HARD + 5), { nowMs: kst0800, statusAtMs: kst0800 }).notice, /한국 시각 오늘 오전 9시부터/u, "한국 08시 → 오늘 09시");
-  assert.equal(refreshDoneView(queued, usageOf(REALPRICE_DAILY_READ_HARD), { nowMs: Date.parse("2026-11-19T00:10:00Z"), statusAtMs: Date.parse("2026-11-18T23:50:00Z") }).button, "다시 받는 중(약 2시간)", "화면을 연 뒤 UTC 날이 바뀌었으면 한도가 풀려 평소 문장");
-  assert.equal(refreshDoneView(queued, null, { nowMs: NOW, statusAtMs: NOW }).button, "다시 받는 중(약 2시간)", "상태를 모르면 평소 문장");
+  assert.equal(refreshDoneView(queued, usageOf(REALPRICE_DAILY_READ_HARD), { nowMs: Date.parse("2026-11-19T00:10:00Z"), statusAtMs: Date.parse("2026-11-18T23:50:00Z") }).button, "다시 받는 중(약 50분)", "화면을 연 뒤 UTC 날이 바뀌었으면 한도가 풀려 평소 문장");
+  assert.equal(refreshDoneView(queued, null, { nowMs: NOW, statusAtMs: NOW }).button, "다시 받는 중(약 50분)", "상태를 모르면 평소 문장");
 });
 
 test("P1-f 화면 상수는 서버와 같다(주요 거래 30일·상위 10건, 신고가만은 한 번에 100건 = 서버 상한)", () => {
@@ -240,10 +251,10 @@ test("P1-f 목록 요청: 찾는 말 q, 신고가만은 limit=100, 주요 거래
   assert.equal(tradesQuery({ ...DEFAULT_REALPRICE_FILTERS, highOnly: true }, { todayKst: TODAY }), "limit=100", "신고가만은 화면에서 거르므로 한 번에 100건");
   assert.equal(tradesQuery({ ...DEFAULT_REALPRICE_FILTERS }, { todayKst: TODAY, major: true }), "view=major");
   const major = new URLSearchParams(tradesQuery(
-    { ...DEFAULT_REALPRICE_FILTERS, q: "가상숲", period: "36", kind: "presale", excludeCancelled: false, excludeDirect: true, area: "middle", price: "over7", umd: "천동", highOnly: true },
+    { ...DEFAULT_REALPRICE_FILTERS, q: "가상숲", period: "36", kind: "presale", excludeCancelled: false, excludeDirect: true, area: "middle", price: "over7", lawd: "30110", umd: "천동", highOnly: true },
     { todayKst: TODAY, major: true, watch: true, cursor: "c1" },
   ));
-  assert.deepEqual([...major.keys()], ["view", "q", "watch", "areaMin", "areaMax", "priceMin", "umd"], "기간·종류·해제·직거래·cursor·limit은 보내지 않음(서버가 400으로 막는 매개변수)");
+  assert.deepEqual([...major.keys()], ["view", "q", "watch", "areaMin", "areaMax", "priceMin", "lawd", "umd"], "기간·종류·해제·직거래·cursor·limit은 보내지 않음(서버가 400으로 막는 매개변수)");
   assert.equal(major.get("q"), "가상숲");
 });
 
@@ -275,4 +286,29 @@ test("P1-f 0건 안내: 까닭에 맞는 첫 단추(신고가만 끄기·기간 
   assert.deepEqual(actions(emptyView({ ...DEFAULT_REALPRICE_FILTERS, q: "가상숲", period: "36" })), ["q-clear"], "이미 가장 긴 기간이면 기간 단추 없음");
   assert.deepEqual(actions(emptyView({ ...DEFAULT_REALPRICE_FILTERS, q: "가상숲" }, { major: true })), ["q-clear"], "주요 거래는 기간을 바꾸지 않음");
   assert.deepEqual(actions(emptyView({ ...DEFAULT_REALPRICE_FILTERS, umd: "천동" })), ["reset"]);
+});
+
+test("TK-144 구 거르기(0008): 단추는 전체 + 5개 구, 처음 값 전체, 법정동 목록은 구마다 묶고 값은 '구|법정동', 거래 줄은 '서구 · 갈마동'", () => {
+  assert.deepEqual(REALPRICE_LAWD_OPTIONS.map((option) => [option.value, option.label]), [["", "전체"], ["30110", "동구"], ["30140", "중구"], ["30170", "서구"], ["30200", "유성구"], ["30230", "대덕구"]]);
+  assert.equal(DEFAULT_REALPRICE_FILTERS.lawd, "", "처음 값 '전체'(2026-11-25 사용자 결정)");
+  assert.equal(tradesQuery({ ...DEFAULT_REALPRICE_FILTERS, lawd: "30200" }, { todayKst: TODAY }), "lawd=30200");
+  assert.equal(tradesQuery({ ...DEFAULT_REALPRICE_FILTERS, lawd: "11110" }, { todayKst: TODAY }), "", "5개 구 밖 코드는 보내지 않음");
+  const all = umdSelectGroups("");
+  assert.deepEqual(all.map((group) => group.label), ["동구", "중구", "서구", "유성구", "대덕구"]);
+  assert.ok(all[2].options.some((option) => option.value === "30170|갈마동" && option.label === "갈마동"));
+  const west = umdSelectGroups("30170");
+  assert.deepEqual([west.length, west[0].label, west[0].options.every((option) => option.value.startsWith("30170|"))], [1, null, true]);
+  assert.deepEqual(parseUmdSelect("30170|갈마동", ""), { lawd: "30170", umd: "갈마동" }, "전체에서 법정동을 고르면 구도 그 구로");
+  assert.deepEqual(parseUmdSelect("", "30170"), { lawd: "30170", umd: "" }, "'전체 법정동'은 구를 그대로 둠");
+  for (const bad of ["30170|천동", "11110|갈마동", "갈마동", "30170|갈마동|x"]) assert.equal(parseUmdSelect(bad, ""), null, bad);
+  assert.equal(umdSelectValue({ ...DEFAULT_REALPRICE_FILTERS, lawd: "30110", umd: "대동" }), "30110|대동");
+  assert.equal(umdSelectValue({ ...DEFAULT_REALPRICE_FILTERS, lawd: "", umd: "대동" }), "");
+  assert.deepEqual(activeFilterParts({ ...DEFAULT_REALPRICE_FILTERS, lawd: "30170", umd: "갈마동" }), ["서구", "갈마동"]);
+  assert.equal(filterSummary({ ...DEFAULT_REALPRICE_FILTERS, lawd: "30230" }), "최근 3개월 · 대덕구 · 해제 빼기");
+  assert.equal(isDefaultFilters({ ...DEFAULT_REALPRICE_FILTERS, lawd: "30110" }), false);
+  assert.deepEqual([
+    tradeRegionText({ lawdCd: "30170", umdName: "갈마동" }), tradeRegionText({ lawdCd: "30110", umdName: "천동" }),
+    tradeRegionText({ umdName: "천동" }), tradeRegionText({ lawdCd: "30200", umdName: "" }),
+  ], ["서구 · 갈마동", "동구 · 천동", "천동", "유성구"]);
+  assert.equal(usageView({ today: { apiCalls: 400, callBudget: 8_000 } }).calls, "400회 / 예산 8,000회");
 });

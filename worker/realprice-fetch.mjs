@@ -6,6 +6,7 @@
 // - Cron(worker/work-scheduled.mjs)이 부른다. D1 반영은 worker/realprice-store.mjs다(P1-b).
 
 import { parseRealpriceXml, readRealpriceBody, RealpriceResponseError } from "./realprice-parse.mjs";
+import { REALPRICE_LAWD_CODES, isRealpriceLawd } from "../src/lib/work/realprice-regions.mjs";
 
 const API_BASE = "https://apis.data.go.kr/1613000/";
 
@@ -18,7 +19,8 @@ export const REALPRICE_APIS = Object.freeze({
 });
 export const REALPRICE_ENDPOINTS = Object.freeze(Object.values(REALPRICE_APIS).map((api) => api.url));
 
-export const REALPRICE_LAWD_CD = "30110"; // 대전 동구(공개 법정동 코드)
+// 받는 구(LAWD_CD)는 대전 5개 구만(src/lib/work/realprice-regions.mjs, 2026-11-25 사용자 결정 "대전만 하면 될 것 같아"). 그 밖의 코드는 주소를 만들지 않는다.
+export { REALPRICE_LAWD_CODES };
 export const REALPRICE_PAGE_SIZE = 1000;
 export const REALPRICE_REQUEST_TIMEOUT_MS = 15_000;
 // 한 달 받기의 쪽 수 상한(설계 선택). numOfRows가 공공데이터포털에서 1,000보다 작게 막혀 있어도 다 받도록 넉넉히 두되,
@@ -34,6 +36,8 @@ export const RT_ACCESS_DENIED = "RT_ACCESS_DENIED";
 export const RT_KEY_INVALID = "RT_KEY_INVALID";
 export const RT_KEY_EXPIRED = "RT_KEY_EXPIRED";
 export const RT_DAILY_LIMIT = "RT_DAILY_LIMIT";
+// 한 달 응답에서 요청한 구와 sggCd가 다른 항목이 받은 항목의 절반을 넘음(0008, realprice-store.mjs). 받기 오류가 아니라 반영 전 검사에서 정한다.
+export const RT_REGION_MISMATCH = "RT_REGION_MISMATCH";
 
 // 공공데이터포털 결과·오류 코드(두 자리로 맞춘 값) → 바꾼 코드(설계서 22.4절 표, 2026-11-19 D-6으로 29 보탬).
 // "00"은 정상, "03"은 자료 없음(정상 0건). 표에 없는 코드는 RT_UPSTREAM_FAILED.
@@ -91,6 +95,8 @@ export const REALPRICE_RETRY_POLICY = Object.freeze({
   [RT_REQUEST_INVALID]: Object.freeze({ scope: "kind", delayMinutes: 6 * 60, warning: true }),
   [RT_SERVICE_GONE]: Object.freeze({ scope: "kind", delayMinutes: 24 * 60, warning: true }),
   [RT_ACCESS_DENIED]: Object.freeze({ scope: "kind", delayMinutes: 60, warning: true }),
+  // sggCd 글자 꼴이 예상과 다르면 같은 종류의 모든 구·달이 똑같이 걸리므로 그 종류를 6시간 미루고 알린다(30분마다 다시 부르지 않게).
+  [RT_REGION_MISMATCH]: Object.freeze({ scope: "kind", delayMinutes: 6 * 60, warning: true }),
   [RT_KEY_INVALID]: Object.freeze({ scope: "all", delayMinutes: 60, warning: false }),
   [RT_KEY_EXPIRED]: Object.freeze({ scope: "all", delayMinutes: 60, warning: false }),
   [RT_DAILY_LIMIT]: Object.freeze({ scope: "all", nextKstTime: "00:10", warning: false }),
@@ -121,6 +127,10 @@ function assertDealYmd(dealYmd) {
   if (!match || month < 1 || month > 12) throw new TypeError("realprice: 계약 연월은 YYYYMM 형식이어야 합니다.");
 }
 
+function assertLawdCd(lawdCd) {
+  if (!isRealpriceLawd(lawdCd)) throw new TypeError("realprice: 허용하지 않은 지역 코드입니다.");
+}
+
 function apiOf(name) {
   if (typeof name !== "string" || !Object.hasOwn(REALPRICE_APIS, name)) throw new TypeError("realprice: 허용하지 않은 API 종류입니다.");
   return REALPRICE_APIS[name];
@@ -128,15 +138,16 @@ function apiOf(name) {
 
 // 요청 주소를 만든다. Decoding 키를 넣어야 URLSearchParams가 한 번만 인코딩한다.
 // 오류 메시지에는 키를 넣지 않는다.
-export function buildRealpriceRequestUrl({ api, serviceKey, dealYmd, pageNo = 1, numOfRows = REALPRICE_PAGE_SIZE }) {
+export function buildRealpriceRequestUrl({ api, serviceKey, lawdCd, dealYmd, pageNo = 1, numOfRows = REALPRICE_PAGE_SIZE }) {
   const { url } = apiOf(api);
   if (typeof serviceKey !== "string" || serviceKey.trim() === "") throw new TypeError("realprice: 인증키가 없습니다.");
+  assertLawdCd(lawdCd);
   assertDealYmd(dealYmd);
   if (!Number.isInteger(pageNo) || pageNo < 1 || pageNo > 9999) throw new TypeError("realprice: 쪽 번호가 올바르지 않습니다.");
   if (!Number.isInteger(numOfRows) || numOfRows < 1 || numOfRows > 9999) throw new TypeError("realprice: 쪽 크기가 올바르지 않습니다.");
   const params = new URLSearchParams({
     serviceKey,
-    LAWD_CD: REALPRICE_LAWD_CD,
+    LAWD_CD: lawdCd,
     DEAL_YMD: dealYmd,
     pageNo: String(pageNo),
     numOfRows: String(numOfRows),
@@ -205,11 +216,12 @@ function interpretPage(page) {
 
 const failed = (code, httpStatus, calls) => ({ ok: false, code, httpStatus, calls });
 
-// 한 달치를 모두 받는다.
-// 성공: { ok: true, api, dealYmd, totalCount, items: [{ 칸 이름: 값|null }], calls }
+// 한 구의 한 달치를 모두 받는다.
+// 성공: { ok: true, api, lawdCd, dealYmd, totalCount, items: [{ 칸 이름: 값|null }], calls }
 // 실패: { ok: false, code, httpStatus, calls } — 쪽 하나라도 실패하거나 모은 수가 totalCount와 다르면 실패.
 export async function fetchRealpriceMonth({
   api,
+  lawdCd,
   dealYmd,
   serviceKey,
   fetcher = fetch,
@@ -218,14 +230,14 @@ export async function fetchRealpriceMonth({
   maxPages = REALPRICE_MAX_PAGES,
 }) {
   // 입력 검사를 요청 전에 끝낸다(잘못된 값이면 바깥 요청 없이 던짐).
-  buildRealpriceRequestUrl({ api, serviceKey, dealYmd, pageNo: 1, numOfRows });
+  buildRealpriceRequestUrl({ api, serviceKey, lawdCd, dealYmd, pageNo: 1, numOfRows });
   let calls = 0;
   let totalCount = null;
   const items = [];
   let firstItems = null;
   let firstItemsText = null;
   for (let pageNo = 1; pageNo <= maxPages; pageNo += 1) {
-    const requestUrl = buildRealpriceRequestUrl({ api, serviceKey, dealYmd, pageNo, numOfRows });
+    const requestUrl = buildRealpriceRequestUrl({ api, serviceKey, lawdCd, dealYmd, pageNo, numOfRows });
     calls += 1;
     const fetched = await fetchPage(fetcher, requestUrl, timeoutMs);
     if (fetched.failure) return failed(fetched.failure.code, fetched.failure.httpStatus, calls);
@@ -237,7 +249,7 @@ export async function fetchRealpriceMonth({
       return failed(RT_RESPONSE_INVALID, fetched.httpStatus, calls);
     }
     if (pageNo === 1) {
-      if (page.outcome === "empty") return { ok: true, api, dealYmd, totalCount: 0, items: [], calls };
+      if (page.outcome === "empty") return { ok: true, api, lawdCd, dealYmd, totalCount: 0, items: [], calls };
       totalCount = page.totalCount;
       firstItems = page.items;
       // 요청한 쪽 크기로도 상한 안에 다 받을 수 없으면 더 부르지 않는다.
@@ -256,16 +268,16 @@ export async function fetchRealpriceMonth({
     if (items.length >= totalCount) break;
   }
   if (items.length !== totalCount) return failed(RT_COUNT_MISMATCH, null, calls);
-  return { ok: true, api, dealYmd, totalCount, items, calls };
+  return { ok: true, api, lawdCd, dealYmd, totalCount, items, calls };
 }
 
 // 건수만 받는다(매일 03시 매매 일반 API 건수 대조, 설계서 22.7절 DEC-WT-32). numOfRows=1로 1번 부른다.
 // 성공: { ok: true, api, dealYmd, totalCount, calls: 1 } / 실패: { ok: false, code, httpStatus, calls: 1 }
-export async function fetchRealpriceTotalCount({ api, dealYmd, serviceKey, fetcher = fetch, timeoutMs = REALPRICE_REQUEST_TIMEOUT_MS }) {
-  const requestUrl = buildRealpriceRequestUrl({ api, serviceKey, dealYmd, pageNo: 1, numOfRows: 1 });
+export async function fetchRealpriceTotalCount({ api, lawdCd, dealYmd, serviceKey, fetcher = fetch, timeoutMs = REALPRICE_REQUEST_TIMEOUT_MS }) {
+  const requestUrl = buildRealpriceRequestUrl({ api, serviceKey, lawdCd, dealYmd, pageNo: 1, numOfRows: 1 });
   const fetched = await fetchPage(fetcher, requestUrl, timeoutMs);
   if (fetched.failure) return failed(fetched.failure.code, fetched.failure.httpStatus, 1);
   const page = interpretPage(fetched.page);
   if (page.outcome === "error") return failed(page.code, fetched.httpStatus, 1);
-  return { ok: true, api, dealYmd, totalCount: page.outcome === "empty" ? 0 : page.totalCount, calls: 1 };
+  return { ok: true, api, lawdCd, dealYmd, totalCount: page.outcome === "empty" ? 0 : page.totalCount, calls: 1 };
 }

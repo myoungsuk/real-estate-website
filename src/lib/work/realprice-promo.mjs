@@ -6,6 +6,7 @@ import { formatKoreanWon } from "./work-format.mjs";
 import { OFFICE_DISCLOSURE_FIELDS, officeFieldsMissing, officeLines } from "./ad-disclosure.mjs";
 import { areaText, dateText, floorText, kindLabel, priceParts } from "./realprice-view.mjs";
 import { promoBasisLine, promoFlow } from "./realprice-insight-view.mjs";
+import { REALPRICE_BASE_LAWD, regionFullName, regionName } from "./realprice-regions.mjs";
 
 // 서버 상수와 같은 값(tests/work-realprice-promo.test.mjs가 worker 상수와 대조한다).
 export const PROMO_IDS_MAX = 6; // REALPRICE_IDS_MAX
@@ -31,7 +32,18 @@ export const PROMO_STYLES = Object.freeze([
 export const PROMO_STYLE_DEFAULT = "basic";
 export const isPromoStyle = (value) => PROMO_STYLES.some(([key]) => key === value);
 
-export const PROMO_AREA_LABEL = "대전 동구 아파트 실거래가";
+// 지역 말(0008, 대전 5개 구): 그 전에 '대전 동구'로 고정돼 있던 자리만 고른 거래의 구로 바꾼다. 구 이름을 새 자리에 넣지는 않는다
+// (2026-11-25 사용자 결정 "홍보물에는 안 넣어도 돼"). 고른 거래가 모두 한 구면 '대전 서구'처럼, 여러 구가 섞이면 '대전'만 쓴다.
+// 구 코드가 없는 거래(0008 전 응답 모양)는 동구로 본다(0008이 기존 거래를 30110으로 읽는 것과 같음).
+export function promoRegion(items) {
+  const codes = new Set((items ?? []).map((item) => item?.lawdCd ?? REALPRICE_BASE_LAWD));
+  return codes.size === 1 ? [...codes][0] : null;
+}
+const promoPlace = (items) => {
+  const code = promoRegion(items);
+  return code ? regionFullName(code) : "대전";
+};
+export const promoAreaLabel = (items) => `${promoPlace(items)} 아파트 실거래가`;
 export const PROMO_SOURCE = "국토교통부 실거래가 공개 자료(공공데이터포털)";
 export const PROMO_NOTICE = "계약일 기준입니다. 신고 기한(계약 후 30일) 때문에 최근 거래는 늘어날 수 있고, 해제된 거래는 뺐습니다.";
 export const PROMO_NOTICE_SHORT = "계약일 기준, 최근 거래는 신고 기한(30일) 때문에 늘어날 수 있음, 해제 거래 제외.";
@@ -194,7 +206,12 @@ export const disclosureLines = officeLines;
 // 해시태그(P1-f, 2026-11-20 운영자 답 "10개 안팎·단지 이름 넣음"): 고정 4개 → 거래 종류 → #신고가(있을 때) → 법정동 최대 3개 →
 // 전용면적 최대 2개(#전용84, ㎡ 소수점 버림) → 단지 이름 최대 3개(띄어쓰기·기호 뺌). 겹치면 하나, 모두 PROMO_HASHTAGS_MAX개 안.
 // 개수가 넘치면 단지 이름은 지키고 전용면적 → 법정동 순으로 줄인다. 동 번호는 넣지 않는다.
-export const PROMO_HASHTAGS_BASE = Object.freeze(["#대전동구", "#동구아파트", "#대전아파트", "#아파트실거래가"]);
+// 고정 4개 중 앞 2개는 구 해시태그(한 구면 '#대전서구'·'#서구아파트', 여러 구가 섞이면 넣지 않음, 0008).
+export const PROMO_HASHTAGS_BASE = Object.freeze(["#대전아파트", "#아파트실거래가"]);
+export function promoRegionTags(items) {
+  const name = regionName(promoRegion(items) ?? "");
+  return name ? [`#대전${name}`, `#${name}아파트`] : [];
+}
 export const PROMO_HASHTAGS_MAX = 12; // 운영자 "10개 안팎"(11-20 13:18:32)에 맞춰 15 → 12(11-20 운영자 "추천하는 대로")
 const tagWord = (text) => String(text ?? "").normalize("NFKC").replace(/[^\p{L}\p{N}]/gu, "");
 const kindTag = (item) => {
@@ -204,7 +221,7 @@ const kindTag = (item) => {
 };
 const firstTags = (words, count) => [...new Set(words.filter(Boolean).map((word) => `#${word}`))].slice(0, Math.max(0, count));
 export function hashtags(items) {
-  const must = [...PROMO_HASHTAGS_BASE, ...new Set(items.map(kindTag)), ...(anyHigh(items) ? ["#신고가"] : [])];
+  const must = [...promoRegionTags(items), ...PROMO_HASHTAGS_BASE, ...new Set(items.map(kindTag)), ...(anyHigh(items) ? ["#신고가"] : [])];
   const names = firstTags(items.map((item) => tagWord(item.aptName)), 3);
   let room = PROMO_HASHTAGS_MAX - must.length - names.length;
   const dongs = firstTags(items.map((item) => tagWord(item.umdName)), Math.min(3, room));
@@ -214,7 +231,7 @@ export function hashtags(items) {
 }
 const tradeBlock = (item) => [`${item.aptName}(${item.umdName}) ${kindLabel(item)} ${priceText(item)}`, metaLine(item), ...(isHigh(item) ? [`신고가 · ${prevText(item)}`] : [])];
 const compactLine = (item) => `- ${item.aptName} ${kindLabel(item)} ${priceText(item)}, 전용 ${areaText(item.areaM2)} ${floorText(item.floor)}, 계약 ${shortDate(item.dealDate)}${isHigh(item) ? " 신고가" : ""}`;
-const headLine = (items) => `[${PROMO_AREA_LABEL}] ${items.length === 1 ? promoTitle(items) : `${promoTitle(items)}(${monthsText(items)})`}`;
+const headLine = (items) => `[${promoAreaLabel(items)}] ${items.length === 1 ? promoTitle(items) : `${promoTitle(items)}(${monthsText(items)})`}`;
 
 // ── 글 4가지 ──
 
@@ -257,9 +274,9 @@ function instagramText(input) {
 
 function blogText({ items, receivedAt, office, insights }) {
   const head = items.length === 1
-    ? `대전 동구 ${items[0].aptName} ${kindLabel(items[0])}${isHigh(items[0]) ? " 신고가" : ""} ${priceText(items[0])}(${monthsText(items)})`
-    : `대전 동구 아파트 ${promoTitle(items)}(${monthsText(items)})`;
-  const lines = [`제목: ${head}`, "", "국토교통부 실거래가 공개 자료에서 대전 동구 아파트 거래를 정리했습니다.", ""];
+    ? `${promoPlace(items)} ${items[0].aptName} ${kindLabel(items[0])}${isHigh(items[0]) ? " 신고가" : ""} ${priceText(items[0])}(${monthsText(items)})`
+    : `${promoPlace(items)} 아파트 ${promoTitle(items)}(${monthsText(items)})`;
+  const lines = [`제목: ${head}`, "", `국토교통부 실거래가 공개 자료에서 ${promoPlace(items)} 아파트 거래를 정리했습니다.`, ""];
   for (const item of items) {
     lines.push(`■ ${item.aptName}(${item.umdName}) ${kindLabel(item)}${isHigh(item) ? " · 신고가" : ""}`);
     lines.push(`- 금액: ${priceText(item)}`, `- 전용면적: ${areaText(item.areaM2)}`, `- 층: ${floorText(item.floor)}`, `- 계약일: ${dateText(item.dealDate)}`);
@@ -274,7 +291,7 @@ function blogText({ items, receivedAt, office, insights }) {
 
 // 카카오톡: 1:1 채팅에 붙여 넣는 짧은 글(2026-11-20 운영자 답 "권하는 대로").
 function kakaoText({ items, receivedAt, office, insights }) {
-  const lines = [`[${PROMO_AREA_LABEL}] ${promoTitle(items)}`];
+  const lines = [`[${promoAreaLabel(items)}] ${promoTitle(items)}`];
   if (items.length === 1) {
     const item = items[0];
     lines.push(`${priceText(item)} · ${metaLine(item)}`);
@@ -392,7 +409,7 @@ export function promoCards({ items, receivedAt, office, insights = {}, style = P
     return {
       title: pages.length > 1 ? `${title} · ${index + 1}/${pages.length}장` : title,
       allHigh: pages.length === 1 && allHigh(pageItems), // 한 장에 모두 신고가면 제목에 "신고가"가 있어 줄마다 표를 달지 않음
-      areaLabel: PROMO_AREA_LABEL,
+      areaLabel: promoAreaLabel(items),
       range: dealRange(pageItems),
       items: cardItems,
       basis: promoBasisLine(cardItems.map((item) => item.flow)),

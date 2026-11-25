@@ -1,6 +1,7 @@
 // 실거래가·실거래가 설정 화면(P1-d)이 쓰는 순수 함수. 서버 요청·브라우저 저장·주소 변경은 하지 않는다(src/lib/work 공통 규칙, T0-115).
 // 서버 응답 모양은 설계서 22.9절(worker/realprice-query.mjs·realprice-store.mjs)을 따른다.
 import { formatKoreanAmount, formatKoreanWon } from "./work-format.mjs";
+import { REALPRICE_LAWD_CODES, REALPRICE_REGIONS, isRealpriceLawd, realpriceRegion, regionName } from "./realprice-regions.mjs";
 
 // 서버 상수와 같은 값(tests/work-realprice-view.test.mjs가 worker 상수와 대조한다).
 export const REALPRICE_VIEW_PAGE_SIZE = 30; // REALPRICE_TRADES_LIMIT_DEFAULT
@@ -39,17 +40,47 @@ export const REALPRICE_PRICE_OPTIONS = Object.freeze([
   { value: "to7", label: "5억 초과 ~ 7억 이하", chip: "5 ~ 7억", min: 500_000_001, max: 700_000_000 },
   { value: "over7", label: "7억 초과", chip: "7억 초과", min: 700_000_001 },
 ]);
-// 대전 동구 법정동 45개(가나다순). 국토교통부 자료의 법정동 이름과 정확히 같아야 거를 수 있다.
-export const DONG_GU_UMD_NAMES = Object.freeze([
-  "가양동", "가오동", "구도동", "낭월동", "내탑동", "대동", "대별동", "대성동", "마산동", "비룡동",
-  "사성동", "삼괴동", "삼성동", "삼정동", "상소동", "성남동", "세천동", "소제동", "소호동", "신상동",
-  "신안동", "신촌동", "신하동", "신흥동", "오동", "용계동", "용운동", "용전동", "원동", "이사동",
-  "인동", "자양동", "장척동", "정동", "주산동", "주촌동", "중동", "직동", "천동", "추동",
-  "판암동", "하소동", "홍도동", "효동", "효평동",
+// 대전 동구 법정동 45개(가나다순). 5개 구의 법정동은 realprice-regions.mjs 한 곳에 있다(0008).
+export const DONG_GU_UMD_NAMES = realpriceRegion("30110").umdNames;
+
+// 구 거르기 단추(0008, 대전 5개 구). 처음 값은 '전체'(2026-11-25 사용자 결정 "처음 값은 전체로 해줘").
+export const REALPRICE_LAWD_OPTIONS = Object.freeze([
+  { value: "", label: "전체" },
+  ...REALPRICE_REGIONS.map((region) => ({ value: region.code, label: region.name })),
 ]);
+
+// 법정동 고르기 목록. 이름이 같은 법정동이 다른 구에 있어(대동·오동 등) 값은 늘 "구 코드|법정동"이다.
+// 구를 고르지 않았으면(전체) 구마다 묶음(optgroup)으로, 고른 구가 있으면 그 구 것만 보인다. 법정동을 고르면 구도 그 구로 바뀐다.
+/** @param {string} lawd @returns {{ label: string | null, options: { value: string, label: string }[] }[]} */
+export function umdSelectGroups(lawd) {
+  const regions = isRealpriceLawd(lawd) ? [realpriceRegion(lawd)] : REALPRICE_REGIONS;
+  return regions.map((region) => ({
+    label: isRealpriceLawd(lawd) ? null : region.name,
+    options: region.umdNames.map((name) => ({ value: `${region.code}|${name}`, label: name })),
+  }));
+}
+export const umdSelectValue = (filters) => (umdValid(filters) ? `${filters.lawd}|${filters.umd}` : "");
+// 법정동 목록에서 고른 값 → { lawd, umd }. 빈 값은 법정동만 끄고 구는 그대로 둔다. 모르는 값은 null.
+/** @param {string} value @param {string} currentLawd */
+export function parseUmdSelect(value, currentLawd) {
+  if (value === "") return { lawd: isRealpriceLawd(currentLawd) ? currentLawd : "", umd: "" };
+  const [lawd, umd, extra] = String(value).split("|");
+  if (extra !== undefined || !isRealpriceLawd(lawd) || !realpriceRegion(lawd).umdNames.includes(umd)) return null;
+  return { lawd, umd };
+}
+// 법정동 거르기는 고른 구의 법정동일 때만 보낸다(구를 고르지 않은 법정동은 보내지 않음).
+const umdValid = (filters) => isRealpriceLawd(filters.lawd) && typeof filters.umd === "string" && realpriceRegion(filters.lawd).umdNames.includes(filters.umd);
+
+// 거래 한 줄의 구·법정동("서구 · 갈마동", 2026-11-25 사용자 결정 "구 이름도 줄마다 보이게 해줘"). 구를 모르면 법정동만.
+/** @param {{ lawdCd?: string | null, umdName?: string | null }} item */
+export function tradeRegionText(item) {
+  return [regionName(item?.lawdCd ?? ""), item?.umdName ?? ""].filter(Boolean).join(" · ");
+}
+export { REALPRICE_LAWD_CODES, regionName };
 
 // q: 찾기칸(단지 이름·법정동 이름), highOnly: '신고가만'(화면에서 거름). 둘 다 '모두 끄기'·'거르기 초기화'로 함께 끈다(P1-f).
 export const DEFAULT_REALPRICE_FILTERS = Object.freeze({
+  lawd: "",
   period: "3",
   kind: "all",
   area: "",
@@ -70,6 +101,7 @@ export function isDefaultFilters(filters) {
 // 휴대폰에서 접힌 거르기 줄에 보일 지금 조건(기본값과 다른 것 + 기간·해제 빼기는 늘).
 export function filterSummary(filters) {
   const parts = [optionOf(REALPRICE_PERIODS, filters.period).label];
+  if (isRealpriceLawd(filters.lawd)) parts.push(regionName(filters.lawd));
   if (filters.kind !== "all") parts.push(optionOf(REALPRICE_KIND_OPTIONS, filters.kind).label);
   if (filters.area) parts.push(optionOf(REALPRICE_AREA_OPTIONS, filters.area).label);
   if (filters.price) parts.push(optionOf(REALPRICE_PRICE_OPTIONS, filters.price).label);
@@ -104,7 +136,8 @@ export function tradesQuery(filters, { watch = false, cursor = null, todayKst, m
     const majorPrice = optionOf(REALPRICE_PRICE_OPTIONS, filters.price);
     if (majorPrice.min) params.set("priceMin", String(majorPrice.min));
     if (majorPrice.max) params.set("priceMax", String(majorPrice.max));
-    if (filters.umd && DONG_GU_UMD_NAMES.includes(filters.umd)) params.set("umd", filters.umd);
+    if (isRealpriceLawd(filters.lawd)) params.set("lawd", String(filters.lawd));
+    if (umdValid(filters)) params.set("umd", String(filters.umd));
     return params.toString();
   }
   const period = optionOf(REALPRICE_PERIODS, filters.period);
@@ -117,7 +150,8 @@ export function tradesQuery(filters, { watch = false, cursor = null, todayKst, m
   const price = optionOf(REALPRICE_PRICE_OPTIONS, filters.price);
   if (price.min) params.set("priceMin", String(price.min));
   if (price.max) params.set("priceMax", String(price.max));
-  if (filters.umd && DONG_GU_UMD_NAMES.includes(filters.umd)) params.set("umd", filters.umd);
+  if (isRealpriceLawd(filters.lawd)) params.set("lawd", String(filters.lawd));
+  if (umdValid(filters)) params.set("umd", String(filters.umd));
   if (!filters.excludeCancelled) params.set("cancelled", "include");
   if (filters.excludeDirect) params.set("direct", "exclude");
   if (q) params.set("q", q);
@@ -142,6 +176,7 @@ export function activeFilterParts(filters, { major = false } = {}) {
   const parts = [];
   const q = cleanComplexQuery(filters.q);
   if (q) parts.push(`'${q}'`);
+  if (isRealpriceLawd(filters.lawd)) parts.push(regionName(filters.lawd));
   if (!major && filters.period !== DEFAULT_REALPRICE_FILTERS.period) parts.push(optionOf(REALPRICE_PERIODS, filters.period).label);
   if (!major && filters.kind === "presale") parts.push("분양권만");
   else if (!major && filters.kind !== "all") parts.push(optionOf(REALPRICE_KIND_OPTIONS, filters.kind).label);
@@ -182,7 +217,7 @@ export function emptyView(filters, { major = false, loaded = 0, highUnavailable 
     actions.push({ action: "q-clear", label: "찾는 말 지우기" });
     return { title: `'${q}' 거래가 ${where}에는 없습니다`, body: major ? "주요 거래는 최근 30일 매매만 봅니다. '새 거래'에서 기간을 늘려 찾아보세요." : "기간을 늘리거나 찾는 말을 줄여 보세요.", actions };
   }
-  return { title: "조건에 맞는 거래가 없습니다.", body: "기간을 늘리거나 거래 종류·법정동·금액 조건을 바꿔 보세요.", actions: [{ action: "reset", label: "거르기 초기화" }] };
+  return { title: "조건에 맞는 거래가 없습니다.", body: "기간을 늘리거나 구·거래 종류·법정동·금액 조건을 바꿔 보세요.", actions: [{ action: "reset", label: "거르기 초기화" }] };
 }
 
 // ── 거래 한 줄 표시 ──
@@ -246,7 +281,7 @@ export function daysAgo(iso, nowMs) {
 // ── 자료 받기 상태(GET /work/realprice/status) ──
 
 // 받기를 멈추게 하는 마지막 오류(키·한도·권한). 일시 오류(RT_UPSTREAM_FAILED 등)는 다음 차례에 저절로 다시 받으므로 알리지 않는다.
-const STOP_CODES = new Set(["RT_KEY_EXPIRED", "RT_KEY_INVALID", "RT_DAILY_LIMIT", "RT_ACCESS_DENIED", "RT_SERVICE_GONE", "RT_REQUEST_INVALID"]);
+const STOP_CODES = new Set(["RT_KEY_EXPIRED", "RT_KEY_INVALID", "RT_DAILY_LIMIT", "RT_ACCESS_DENIED", "RT_SERVICE_GONE", "RT_REQUEST_INVALID", "RT_REGION_MISMATCH"]);
 
 // 상태 코드 → 쉬운 말(짧은 이름, 할 일). 설계서 22.9절 끝.
 export const REALPRICE_CODE_TEXT = Object.freeze({
@@ -256,6 +291,7 @@ export const REALPRICE_CODE_TEXT = Object.freeze({
   RT_ACCESS_DENIED: { label: "활용 신청 확인 필요", message: "이 자료의 활용 신청이 승인되지 않았습니다. 공공데이터포털에서 활용 신청 상태를 확인해 주세요." },
   RT_SERVICE_GONE: { label: "자료 서비스 바뀜", message: "국토교통부 자료 서비스가 바뀌었거나 없어졌습니다. 홈페이지 담당자에게 알려 주세요." },
   RT_REQUEST_INVALID: { label: "요청 형식 문제", message: "자료 요청 형식에 문제가 있습니다. 홈페이지 담당자에게 알려 주세요." },
+  RT_REGION_MISMATCH: { label: "구 코드 다름", message: "받은 자료의 구 코드가 요청한 구와 달라 저장하지 않았습니다. 6시간 뒤 다시 받습니다. 계속되면 홈페이지 담당자에게 알려 주세요." },
   RT_ABORTED: { label: "받기가 자꾸 끊김", message: "같은 달 받기가 3번 연속 끝나지 못했습니다. 계속되면 홈페이지 담당자에게 알려 주세요." },
   RT_INTERNAL: { label: "처리 오류 반복", message: "같은 달을 처리하다 오류가 3번 연속 났습니다. 홈페이지 담당자에게 알려 주세요." },
   RT_HELD_DROP: { label: "건수 크게 줄어 보류", message: "새로 받은 건수가 크게 줄어든 달을 지우지 않고 한 번 보류했습니다. 다음 받기에서 다시 확인합니다." },
@@ -301,6 +337,16 @@ export function backfillBars(status) {
     { kind: "presale", label: "분양권", ...presale, note: note(presale, "매매를 다 채운 뒤 시작") },
     { kind: "rent", label: "전월세", ...rent, note: note(rent, "분양권 다음") },
   ].map((bar) => ({ ...bar, percent: bar.total > 0 ? Math.floor((bar.done / bar.total) * 100) : 0 }));
+}
+
+// 설정 화면의 구마다 채우기 줄(0008, status.backfillRegions). 세 종류 합계 비율과 신고가 표시 준비 여부.
+/** @param {any} status @returns {{ lawdCd: string, name: string, percent: number, text: string }[]} */
+export function regionBackfillRows(status) {
+  return (status?.backfillRegions ?? []).filter((row) => isRealpriceLawd(row?.lawdCd)).map((row) => {
+    const totals = backfillTotals(row);
+    const high = row.recordHighReady === true ? "신고가 표시 됨" : "신고가는 매매를 다 채운 뒤";
+    return { lawdCd: row.lawdCd, name: regionName(row.lawdCd), percent: totals.percent, text: `${totals.complete ? "다 채움" : `${totals.percent}% 채움`} · ${high}` };
+  });
 }
 
 // 979px 이하 상태 줄 아래 한 줄(막대 3개는 '자세히' 안, 날개대장 검토 2026-11-19). 다 채운 종류는 빼고, 지금 채우는 종류만 쓴다
@@ -358,7 +404,9 @@ export function rowsText(rows) {
 export function usageView(status) {
   const today = status?.today ?? {};
   return {
-    calls: `${Number(today.apiCalls ?? 0).toLocaleString("ko-KR")}회`,
+    calls: Number.isSafeInteger(today.callBudget)
+      ? `${Number(today.apiCalls ?? 0).toLocaleString("ko-KR")}회 / 예산 ${today.callBudget.toLocaleString("ko-KR")}회`
+      : `${Number(today.apiCalls ?? 0).toLocaleString("ko-KR")}회`,
     writes: `${rowsText(today.rowsWritten)} / 예산 ${rowsText(today.writeBudget)}`,
     reads: `${rowsText(today.rowsRead)} / 첫 상한 ${rowsText(today.readSoftLimit)}`,
     unmatched: `${Number(status?.unmatchedSaleRows ?? 0).toLocaleString("ko-KR")}건`,
@@ -372,7 +420,7 @@ export function usageView(status) {
 export function refreshDoneView(data, status, { nowMs, statusAtMs }) {
   const minutes = Number(data?.estimatedMinutes) || 0;
   const time = minutes >= 60 ? `약 ${Math.round(minutes / 60)}시간` : `약 ${minutes}분`;
-  const months = `최근 자료 ${data?.queuedMonths ?? 0}건(4개월 × 3종류)`;
+  const months = `최근 자료 ${data?.queuedMonths ?? 0}건(${REALPRICE_LAWD_CODES.length}개 구 × 4개월 × 3종류)`;
   const today = status?.today ?? {};
   const sameUtcDay = new Date(nowMs).toISOString().slice(0, 10) === new Date(statusAtMs).toISOString().slice(0, 10);
   const hard = sameUtcDay && Number.isFinite(today.readHardLimit) && Number(today.rowsRead) >= today.readHardLimit;

@@ -44,13 +44,13 @@ export interface ComplexArea {
 export interface ComplexResponse {
   available: boolean;
   reason?: "budget" | "pending";
-  complex?: { aptSeq: string; aptName: string | null; umdName: string | null; buildYear: number | null; households: number | null } | null;
+  complex?: { aptSeq: string; aptName: string | null; umdName: string | null; lawdCd?: string | null; buildYear: number | null; households: number | null } | null;
   areas?: { areaM2: number; tradeCount: number; lastDealDate: string }[];
   area?: ComplexArea | null;
   warnings: { code: string; level?: string }[];
 }
 // 목록에서 누른 거래(단지 이름·동네는 자료가 없을 때 머리에 쓰는 값).
-export interface DetailSource { tradeKey: string; aptSeq: string; aptName: string | null; umdName: string; areaM2: number }
+export interface DetailSource { tradeKey: string; aptSeq: string; aptName: string | null; umdName: string; lawdCd?: string | null; areaM2: number }
 
 interface Options {
   dialog: HTMLDialogElement;
@@ -112,7 +112,7 @@ export function setupComplexDetail({ dialog, preview, previewShown, pick }: Opti
   }
 
   function head(data: ComplexResponse | null) {
-    const view = complexHead(data?.complex ?? null, { aptName: source?.aptName ?? null, umdName: source?.umdName ?? null });
+    const view = complexHead(data?.complex ?? null, { aptName: source?.aptName ?? null, umdName: source?.umdName ?? null, lawdCd: source?.lawdCd ?? null, aptSeq: source?.aptSeq ?? null });
     title.textContent = view.name;
     sub.textContent = view.sub;
     sub.hidden = view.sub === "";

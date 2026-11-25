@@ -23,9 +23,12 @@ import { writeFile } from "node:fs/promises";
 import { resolve, relative, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
 import { REALPRICE_APIS, REALPRICE_REQUEST_TIMEOUT_MS, buildRealpriceRequestUrl, classifyResultCode, normalizeResultCode } from "../worker/realprice-fetch.mjs";
+import { REALPRICE_BASE_LAWD } from "../src/lib/work/realprice-regions.mjs";
 import { readRealpriceBody, readXmlTree, parseRealpriceXml } from "../worker/realprice-parse.mjs";
 
 export const PROBE_KEY_ENV = "MOLIT_RT_SERVICE_KEY";
+// 첫 확인은 동구 한 곳만 잰다(응답 모양은 구마다 같다고 보고 호출 수를 늘리지 않음).
+const PROBE_LAWD_CD = REALPRICE_BASE_LAWD;
 const REPO_ROOT = fileURLToPath(new URL("../", import.meta.url));
 
 // 값 목록을 그대로 남겨도 되는 구분 칸(짧은 공개 구분값)과 형식 모양만 남기는 칸.
@@ -122,7 +125,7 @@ async function probeOne(step, { serviceKey, fetcher, timeoutMs, itemsByLabel }) 
   if (pageNo !== 1) result.requestedPage = pageNo;
   let response;
   try {
-    response = await fetcher(buildRealpriceRequestUrl({ api: step.api, serviceKey, dealYmd: step.dealYmd, pageNo, numOfRows: step.numOfRows }), {
+    response = await fetcher(buildRealpriceRequestUrl({ api: step.api, serviceKey, lawdCd: PROBE_LAWD_CD, dealYmd: step.dealYmd, pageNo, numOfRows: step.numOfRows }), {
       method: "GET",
       redirect: "manual",
       headers: { Accept: "application/xml" },
@@ -183,7 +186,7 @@ export async function runRealpriceProbe({ serviceKey, fetcher = fetch, plan, now
   const results = [];
   const itemsByLabel = new Map();
   for (const step of steps) results.push(await probeOne(step, { serviceKey, fetcher, timeoutMs, itemsByLabel }));
-  const report = { probedAt: now.toISOString(), lawdCd: "30110", calls: steps.length, results };
+  const report = { probedAt: now.toISOString(), lawdCd: PROBE_LAWD_CD, calls: steps.length, results };
   const serialized = JSON.stringify(report);
   if (serialized.includes(serviceKey) || serialized.includes(encodeURIComponent(serviceKey)) || /serviceKey=/iu.test(serialized)) {
     throw new Error("결과에 인증키가 섞여 있어 남기지 않고 멈춥니다.");

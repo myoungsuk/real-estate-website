@@ -47,7 +47,7 @@ test("단지 상세 1280px: 줄을 누르면 미리보기 칸 자리에 겹쳐 �
   expect(await preview.evaluate((element) => element.inert), "겹친 동안 미리보기는 누를 수 없음").toBe(true);
   await expect(page.locator("#rt-detail-title")).toBeFocused();
   await expect(page.locator("#rt-detail-title")).toHaveText("가상숲1단지");
-  await expect(page.locator("[data-rt-detail-sub]")).toHaveText("천동 · 2020년 준공 · 2,135세대");
+  await expect(page.locator("[data-rt-detail-sub]")).toHaveText("동구 · 천동 · 2020년 준공 · 2,135세대");
   const tabs = detail(page).locator("[data-rt-detail-area]");
   await expect(tabs).toHaveText(["59.92㎡41건", "84.97㎡128건"]);
   await expect(tabs.nth(1)).toHaveAttribute("aria-pressed", "true");
@@ -114,7 +114,7 @@ test("단지 상세 390px: 키보드로 열면 화면 전체 칸(아래 막대·
   const box = await detail(page).boundingBox();
   expect([box.x, box.y, box.width, box.height]).toEqual([0, 0, 390, 844]);
   expect(await page.evaluate(() => document.elementFromPoint(195, 830)?.closest("[data-rt-detail]") !== null), "맨 아래(막대·아래 탭 자리)도 칸").toBe(true);
-  await expect(page.locator("[data-rt-detail-sub]"), "세대수가 없으면 뺌").toHaveText("천동 · 2020년 준공");
+  await expect(page.locator("[data-rt-detail-sub]"), "세대수가 없으면 뺌").toHaveText("동구 · 천동 · 2020년 준공");
   const sizes = await page.evaluate(() => [...document.querySelectorAll("[data-rt-detail] .rt-detail__tab, [data-rt-detail] .rt-detail__x, [data-rt-detail] .rt-detail__act button")]
     .map((element) => { const rect = element.getBoundingClientRect(); return [element.textContent.trim(), rect.width, rect.height]; }));
   expect(sizes.filter(([, width, height]) => width < 44 || height < 44), "44px보다 작은 단추").toEqual([]);

@@ -1257,6 +1257,13 @@
 @media (min-width: 980px) {
   .rt-top { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: start; }
   .rt-chips { flex-wrap: nowrap; }
+  /* 구 단추 줄(0008, 대전 5개 구)은 찾기칸·거르기 단추 줄 아래 한 줄을 다 쓰고, 거르기 줄의 구 고르기 단추는 숨긴다. */
+  .rt-top .rt-region { grid-column: 1 / -1; grid-row: 2; margin-top: -6px; }
+  .rt-region-pick { display: none; }
+}
+/* 979px 이하는 구 단추 줄 대신 거르기 줄 맨 앞 '전체 구' 고르기 단추 하나(390px 첫 화면에 첫 거래가 다 들어오게). */
+@media (max-width: 979px) {
+  .rt-region { display: none; }
 }
 
 /* 목록: 패널 테두리 없이 위 남색 선의 'n건 보는 중' 줄(켜짐 줄·모두 끄기·다 담기)부터 시작한다. */
@@ -1482,6 +1489,10 @@ html:has(.rt-pick-bar:not([hidden])) { scroll-padding-bottom: calc(var(--rt-pick
 .rt-backfill { display: grid; gap: 14px; margin-top: 16px; }
 .rt-backfill h2 { margin: 0; color: var(--ds-navy); font-size: 1.25rem; font-weight: 800; }
 .rt-backfill--inline { margin-top: 0; }
+/* 설정 화면 구마다 채우기 줄(0008) */
+.rt-region-fill { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.rt-region-fill li { display: grid; grid-template-columns: 4em minmax(0, 1fr); gap: 0 4px; overflow-wrap: anywhere; word-break: keep-all; }
+.rt-region-fill strong { color: var(--ds-navy); }
 .rt-progress { display: grid; gap: 6px; }
 .rt-progress__head { display: flex; justify-content: space-between; font-weight: 800; }
 .rt-progress__head strong { font-variant-numeric: tabular-nums; }

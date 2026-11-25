@@ -30,8 +30,8 @@ export const ADMIN_HELP_FACTS = Object.freeze({
   realpriceSearchYears: 3,
   // worker/realprice-store.mjs REALPRICE_RECENT_MONTHS
   realpriceRefreshMonths: 4,
-  // worker/realprice-store.mjs refreshStatements의 estimatedMinutes(4개월 × 3종류 ÷ REALPRICE_MONTHS_PER_RUN × 10분) / 60
-  realpriceRefreshHours: 2,
+  // worker/realprice-store.mjs refreshStatements의 estimatedMinutes(5개 구 × 4개월 × 3종류 ÷ REALPRICE_MONTHS_PER_RUN × 10분, 0008)
+  realpriceRefreshMinutes: 50,
   // worker/realprice-query.mjs nextReadBudgetReset(다음 UTC 0시 = 한국 오전 9시)
   realpriceReadResetTime: "오전 9시",
   // worker/realprice-query.mjs REALPRICE_NEW_DAYS('새로 들어옴' 표시 기간)
@@ -143,7 +143,7 @@ export const ADMIN_PAGE_HELP = Object.freeze({
   "/admin/work/realprice/": {
     anchor: "work-realprice",
     steps: [
-      `'새 거래'는 동구 전체, '주요 거래'는 최근 ${facts.realpriceMajorDays}일 매매의 신고가와 금액 상위 ${facts.realpriceMajorTop}건, '관심 단지'는 설정에서 고른 단지의 거래입니다.`,
+      `구 단추(전체·동구·중구·서구·유성구·대덕구, 처음은 전체)로 구를 고릅니다. '새 거래'는 고른 구의 모든 거래, '주요 거래'는 최근 ${facts.realpriceMajorDays}일 매매의 신고가와 금액 상위 ${facts.realpriceMajorTop}건, '관심 단지'는 설정에서 고른 단지의 거래입니다.`,
       "단지 이름이나 동 이름을 넣고 '찾기'를 누릅니다. 기간·평형·금액은 단추를 눌러 고르고, 거래 종류·법정동은 '더 보기'에 있습니다.",
       "'신고가'는 같은 단지·같은 전용면적의 앞선 매매 최고가보다 비싼 매매입니다. 매매에는 12개월 흐름선·직전 거래·최고가 대비·3개월 거래 수가 붙고, 휴대폰은 '흐름·직전 거래'를 눌러 펼칩니다.",
       `거래 줄(단지 이름)을 누르면 그 단지의 면적별 최근 거래·최고가·36개월 흐름이 열리고, '홍보물에 담기'로 담을 수 있습니다. 더 지난 거래는 '${facts.realpricePageSize}건 더 보기'를 누릅니다.`,
@@ -175,7 +175,7 @@ export const ADMIN_PAGE_HELP = Object.freeze({
       "'단지 찾기'에 단지명을 넣고 '찾기'를 누릅니다. 비어 있을 때는 '홈페이지 단지 이름으로 찾기' 단추도 됩니다.",
       `맞는 단지의 '넣기'를 누르면 바로 저장됩니다(최대 ${facts.realpriceWatchMax}곳). 뺄 때는 '빼기'를 누릅니다.`,
       "'과거 채우기와 최근 실행'에서 받기 진행과 최근 결과를 봅니다.",
-      `최근 자료가 이상하면 '지금 다시 받기'를 누릅니다. 최근 ${facts.realpriceRefreshMonths}개월을 약 ${facts.realpriceRefreshHours}시간 안에 다시 받습니다.`,
+      `최근 자료가 이상하면 '지금 다시 받기'를 누릅니다. 최근 ${facts.realpriceRefreshMonths}개월을 약 ${facts.realpriceRefreshMinutes}분 안에 다시 받습니다.`,
     ],
     cautions: [
       "국토교통부 단지명은 홈페이지와 표기가 달라(예: 블록 → BL) 자동으로 맞히지 않습니다. 법정동·거래 수를 보고 골라 주세요.",
@@ -577,12 +577,13 @@ export const ADMIN_HELP_GUIDE = Object.freeze([
         title: "실거래가",
         screens: ["/admin/work/realprice/"],
         blocks: [
-          { type: "text", text: `국토교통부가 공개하는 대전 동구 아파트 실거래 신고 자료(매매·전월세·분양권)를 ${facts.realpriceFetchMinutes}분마다 조금씩 받아 둔 것을 봅니다. 업무 도구 안에서만 보이고 홈페이지에는 나오지 않습니다.` },
+          { type: "text", text: `국토교통부가 공개하는 대전 5개 구(동구·중구·서구·유성구·대덕구) 아파트 실거래 신고 자료(매매·전월세·분양권)를 ${facts.realpriceFetchMinutes}분마다 조금씩 받아 둔 것을 봅니다. 업무 도구 안에서만 보이고 홈페이지에는 나오지 않습니다.` },
           {
             type: "steps",
             items: [
               "화면 위 메뉴 줄의 '실거래가'를 누릅니다(줄에 안 보이면 줄을 옆으로 넘깁니다).",
-              `'새 거래'(동구 전체), '주요 거래'(최근 ${facts.realpriceMajorDays}일 매매의 신고가와 금액 상위 ${facts.realpriceMajorTop}건), '관심 단지'(설정에서 고른 단지) 가운데 하나를 고릅니다.`,
+              "찾기칸 아래 구 단추로 구를 고릅니다. 처음은 전체(대전 5개 구)이고, 한 구를 누르면 그 구 거래만 보입니다. 거래 줄마다 구와 법정동이 함께 나옵니다(예: 서구 · 갈마동).",
+              `'새 거래'(고른 구의 모든 거래), '주요 거래'(최근 ${facts.realpriceMajorDays}일 매매의 신고가와 금액 상위 ${facts.realpriceMajorTop}건), '관심 단지'(설정에서 고른 단지) 가운데 하나를 고릅니다.`,
               "단지 이름이나 동 이름 일부를 넣고 '찾기'(또는 Enter)를 누릅니다. 띄어쓰기는 무시하고, 칸을 비우면 다시 전체를 봅니다.",
               "기간·평형·금액(전월세는 보증금)은 단추를 눌러 고르고, '신고가만'·'분양권만'은 눌러 켜고 끕니다. 거래 종류·법정동·'해제 빼기'(처음부터 켜짐)·'직거래 빼기'는 '더 보기'에 있습니다. 켠 거르기는 목록 위 줄에 나오고 '모두 끄기'로 한 번에 끕니다.",
               `목록은 계약일 최근순입니다. 더 지난 거래는 '${facts.realpricePageSize}건 더 보기'를 누릅니다.`,
@@ -634,7 +635,7 @@ export const ADMIN_HELP_GUIDE = Object.freeze([
             head: ["글", "쓰임"],
             rows: [
               ["스레드", "500자 안. 여러 건이면 한 줄씩, 그래도 길면 거래는 그림에 맡기고 줄입니다"],
-              ["인스타그램", "자세한 글과 해시태그 12개 안(#대전동구 같은 고정 4개, 거래 종류·신고가·법정동·평형·단지 이름. 인스타그램 상한 2,200자·30개 안)"],
+              ["인스타그램", "자세한 글과 해시태그 12개 안(#대전아파트 같은 고정 해시태그. 한 구의 거래만 담으면 #대전서구처럼 그 구 해시태그 2개가 앞에 붙고, 여러 구가 섞이면 구 해시태그 없이. 거래 종류·신고가·법정동·평형·단지 이름. 인스타그램 상한 2,200자·30개 안)"],
               ["블로그", "제목·거래별 항목·출처와 사무소 명시사항 5줄"],
               ["카카오톡", "1:1 채팅에 붙여 넣는 짧은 글"],
             ],
@@ -654,7 +655,7 @@ export const ADMIN_HELP_GUIDE = Object.freeze([
             type: "steps",
             items: [
               "'실거래가' 화면의 '설정·다시 받기'를 누릅니다(휴대폰은 위쪽 '자세히'를 먼저 누름).",
-              `'단지 찾기'에 단지명 일부를 넣고 '찾기'를 누릅니다. 최근 ${facts.realpriceSearchYears}년 안에 매매가 있었던 동구 단지가 거래 많은 순으로 나옵니다. 관심 단지가 비어 있으면 '홈페이지 단지 이름으로 찾기' 아래 단추로도 찾을 수 있습니다.`,
+              `'단지 찾기'에 단지명 일부를 넣고 '찾기'를 누릅니다. 최근 ${facts.realpriceSearchYears}년 안에 매매가 있었던 대전 5개 구 단지가 거래 많은 순으로 나옵니다. 관심 단지가 비어 있으면 '홈페이지 단지 이름으로 찾기' 아래 단추로도 찾을 수 있습니다.`,
               `법정동과 거래 수를 보고 맞는 단지의 '넣기'를 누릅니다. 바로 저장되고 최대 ${facts.realpriceWatchMax}곳까지 넣을 수 있습니다.`,
               "뺄 단지는 '빼기'를 누릅니다. 이것도 바로 저장됩니다.",
             ],
@@ -665,7 +666,7 @@ export const ADMIN_HELP_GUIDE = Object.freeze([
             type: "list",
             items: [
               "'과거 채우기와 최근 실행'에서 매매·분양권·전월세의 과거 자료 채우기 진행과 최근 실행 10번 결과를 봅니다.",
-              `최근 자료가 이상하거나 빠진 것 같으면 '지금 다시 받기'를 누릅니다. 최근 ${facts.realpriceRefreshMonths}개월 자료(3종류)를 약 ${facts.realpriceRefreshHours}시간 안에 다시 받고, 그동안 목록은 지금 자료로 볼 수 있습니다.`,
+              `최근 자료가 이상하거나 빠진 것 같으면 '지금 다시 받기'를 누릅니다. 최근 ${facts.realpriceRefreshMonths}개월 자료(5개 구 × 3종류)를 약 ${facts.realpriceRefreshMinutes}분 안에 다시 받고, 그동안 목록은 지금 자료로 볼 수 있습니다.`,
               "'받기 멈춤'이 보이면 함께 나온 할 일(예: 인증키 연장)을 하거나 홈페이지 담당자에게 화면을 캡처해 보내 주세요.",
             ],
           },

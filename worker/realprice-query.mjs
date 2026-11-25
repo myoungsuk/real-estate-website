@@ -15,7 +15,10 @@
 //   기간·종류·해제·직거래·커서·쪽 크기는 정해져 있어 함께 보내면 400. q·단지·법정동·면적·금액·관심 단지 거르기는 함께 쓴다.
 //   q·view가 없으면 문장에 NULL만 더 넘겨 응답이 이전과 글자 하나까지 같다(시험 P1-f).
 // - SQL은 모두 이 파일의 고정 문장이고 값은 bind로만 넘긴다(입력값을 SQL에 이어 붙이지 않음).
+// - lawd(0008, 대전 5개 구): 구 하나만 볼 때 그 구 코드. 없으면 5개 구 모두(처음 값 '전체', 2026-11-25 사용자 결정 "처음 값은 전체로 해줘").
+//   목록은 여전히 기본 키 범위로 읽고 구는 거르기 조건 하나로 더한다(구 색인 없음, 설계서 22.5절). 신고가 판정 준비는 구마다 따로 본다.
 import complexes from "../src/data/complexes.json" with { type: "json" };
+import { isRealpriceLawd } from "../src/lib/work/realprice-regions.mjs";
 import { getComplexMatchCandidates, normalizeComplexText } from "../src/lib/complex-matching.mjs";
 import { auditStatement, runBatch } from "./work-audit.mjs";
 import { invalid } from "./work-input.mjs";
@@ -24,12 +27,14 @@ import {
   REALPRICE_DAILY_READ_HARD,
   REALPRICE_DAILY_READ_SOFT,
   REALPRICE_KINDS,
+  REALPRICE_LAWDS,
   REALPRICE_START_MONTHS,
   addUsageStatement,
-  expectedMonths,
   kstMonth,
+  monthId,
   readMonthsStatement,
   readUsageStatement,
+  recordHighReadyLawds,
   rowsReadOf,
   saleCoveredThrough,
 } from "./realprice-store.mjs";
@@ -48,9 +53,9 @@ export const REALPRICE_WATCH_VERSION_SETTING = "realprice_watch_version";
 export const REALPRICE_IDS_MAX = 6; // 홍보물에 고를 수 있는 거래 수(설계서 22.10)
 export const REALPRICE_MAJOR_DAYS = 30; // 주요 거래: 오늘(한국 날짜)을 넣어 최근 30일 계약(P1-f)
 export const REALPRICE_MAJOR_TOP = 10; // 주요 거래: 금액 상위 10건(신고가는 모두 더함)
-export const REALPRICE_MAJOR_SCAN_MAX = 2000; // 주요 거래가 읽는 최근 30일 매매 행의 상한(평소 약 250건). 넘으면 warnings RT_MAJOR_PARTIAL
+export const REALPRICE_MAJOR_SCAN_MAX = 6000; // 주요 거래가 읽는 최근 30일 매매 행의 상한(동구만 평소 약 250건, 5개 구는 약 2,000건 추정, 0008에서 2,000 → 6,000). 넘으면 warnings RT_MAJOR_PARTIAL
 // ids와 함께 보내면 400인 목록 매개변수. 조용히 무시하면 어느 쪽이 적용됐는지 헷갈리므로 거절한다(날개대장 조건, P1-e).
-const TRADES_LIST_PARAMS = Object.freeze(["kind", "from", "to", "watch", "apt", "umd", "areaMin", "areaMax", "priceMin", "priceMax", "cancelled", "direct", "cursor", "limit", "q", "view"]);
+const TRADES_LIST_PARAMS = Object.freeze(["kind", "from", "to", "watch", "apt", "umd", "lawd", "areaMin", "areaMax", "priceMin", "priceMax", "cancelled", "direct", "cursor", "limit", "q", "view"]);
 // view=major와 함께 보내면 400인 매개변수(주요 거래가 정해 둔 조건).
 const MAJOR_FIXED_PARAMS = Object.freeze(["kind", "from", "to", "cancelled", "direct", "cursor", "limit"]);
 const COVERAGE_PENDING_MAX = 12;
@@ -75,7 +80,7 @@ const PUBLISHED_SLUGS = new Set(PUBLISHED_COMPLEXES.map((complex) => complex.slu
 // 목록: ?1 ~ ?6 종류별 기본 키 범위 3개(안 보는 종류는 빈 범위), ?7 해제 포함(1)·빼기(0), ?8 직거래 빼기(1),
 // ?9 단지 번호, ?10 법정동, ?11·?12 전용면적(㎡ × 100) 아래·위, ?13·?14 금액 아래·위(매매·분양권 거래 금액, 전월세 보증금),
 // ?15 관심 단지만(1), ?16·?17 커서(계약일, 거래 ID), ?18 갈래마다 LIMIT(채울 수),
-// ?19 찾는 말(띄어쓰기 뺀 소문자, P1-f), ?20 이 계약일부터(주요 거래, P1-f).
+// ?19 찾는 말(띄어쓰기 뺀 소문자, P1-f), ?20 이 계약일부터(주요 거래, P1-f), ?21 구 코드(0008, 없으면 5개 구 모두).
 const TRADE_FILTER = `(?7 = 1 OR cancelled = 0)
     AND (?8 = 0 OR dealing_gbn IS NULL OR dealing_gbn <> 'direct')
     AND (?9 IS NULL OR apt_seq = ?9)
@@ -85,12 +90,13 @@ const TRADE_FILTER = `(?7 = 1 OR cancelled = 0)
     AND (?15 = 0 OR apt_seq IN (SELECT apt_seq FROM rt_watch_complexes))
     AND (?16 IS NULL OR deal_date < ?16 OR (deal_date = ?16 AND trade_key < ?17))
     AND (?19 IS NULL OR instr(replace(lower(apt_nm), ' ', ''), ?19) > 0 OR instr(replace(lower(umd_nm), ' ', ''), ?19) > 0)
-    AND (?20 IS NULL OR deal_date >= ?20)`;
+    AND (?20 IS NULL OR deal_date >= ?20)
+    AND (?21 IS NULL OR lawd_cd = ?21)`;
 const TRADE_BRANCH = (from, to) => `SELECT * FROM (SELECT * FROM rt_trades WHERE trade_key >= ${from} AND trade_key < ${to}
     AND ${TRADE_FILTER}
     ORDER BY deal_date DESC, trade_key DESC LIMIT ?18)`;
 export const REALPRICE_TRADES_SQL = `SELECT trade_key, kind, deal_date, umd_nm, jibun, apt_seq, apt_nm, area_x100, floor, build_year, price_won, deposit_won,
-  monthly_rent_won, dealing_gbn, cancelled, cancelled_on, registered_on, apt_dong, extra_json, is_backfill, first_seen_at, cmp_seq
+  monthly_rent_won, dealing_gbn, cancelled, cancelled_on, registered_on, apt_dong, extra_json, is_backfill, first_seen_at, cmp_seq, lawd_cd
 FROM (
   ${TRADE_BRANCH("?1", "?2")}
   UNION ALL
@@ -103,7 +109,7 @@ LIMIT ?18`;
 
 // 고른 거래 다시 읽기(홍보물 화면, P1-e): ?1 = 거래 ID JSON 배열(1 ~ 6개). 기본 키로만 찾는다(표를 훑지 않음).
 export const REALPRICE_TRADES_BY_IDS_SQL = `SELECT trade_key, kind, deal_date, umd_nm, jibun, apt_seq, apt_nm, area_x100, floor, build_year, price_won, deposit_won,
-  monthly_rent_won, dealing_gbn, cancelled, cancelled_on, registered_on, apt_dong, extra_json, is_backfill, first_seen_at, cmp_seq
+  monthly_rent_won, dealing_gbn, cancelled, cancelled_on, registered_on, apt_dong, extra_json, is_backfill, first_seen_at, cmp_seq, lawd_cd
 FROM rt_trades
 WHERE trade_key IN (SELECT value FROM json_each(?1))`;
 
@@ -131,7 +137,8 @@ FROM g JOIN rt_trades p ON p.kind = 'sale' AND p.cmp_seq = g.cmp_seq AND p.area_
 WHERE ${REALPRICE_COMPARABLE_WHERE}`;
 
 // 단지 찾기: 최근 36개월 매매 범위(?1 ~ ?2)에서 띄어쓰기를 뺀 단지명에 찾는 말(?3)이 든 단지. 이름·법정동은 가장 최근 거래의 값.
-export const REALPRICE_COMPLEXES_SQL = `SELECT apt_seq, apt_nm, umd_nm, COUNT(*) AS trade_count, MAX(deal_date) AS last_deal_date
+// 구(lawd_cd)는 단지 고유번호가 같으면 늘 같다(고유번호가 구 코드로 시작).
+export const REALPRICE_COMPLEXES_SQL = `SELECT apt_seq, apt_nm, umd_nm, lawd_cd, COUNT(*) AS trade_count, MAX(deal_date) AS last_deal_date
 FROM rt_trades
 WHERE trade_key >= ?1 AND trade_key < ?2 AND apt_seq IS NOT NULL AND instr(replace(lower(apt_nm), ' ', ''), ?3) > 0
 GROUP BY apt_seq
@@ -255,8 +262,11 @@ export function parseTradesQuery(params, nowMs) {
     if (limit < 1 || limit > REALPRICE_TRADES_LIMIT_MAX) throw invalid(["limit"]);
   }
   const qText = params.get("q");
+  const lawd = params.get("lawd");
+  if (lawd !== null && lawd !== "" && !isRealpriceLawd(lawd)) throw invalid(["lawd"]);
   return {
     kinds: kind === "all" ? [...REALPRICE_KINDS] : [kind],
+    lawd: lawd === null || lawd === "" ? null : lawd,
     fromYmd,
     toYmd,
     watch: watch === "1",
@@ -416,6 +426,7 @@ export function tradeView(row, { recordHighEnabled, nowMs }) {
     cancelledOn: row.cancelled_on,
     registeredOn: row.registered_on,
     aptDong: row.apt_dong,
+    lawdCd: row.lawd_cd,
     extra: parseExtra(row.extra_json),
     recordHigh,
     prevMaxWon: recordHighEnabled && row.prev_max_won !== undefined ? row.prev_max_won : null,
@@ -423,21 +434,27 @@ export function tradeView(row, { recordHighEnabled, nowMs }) {
   };
 }
 
-// 고른 기간·종류의 받은 범위. pending은 아직 한 번도 받지 못한 달(최대 12개).
+// 거르는 구(구 하나 또는 5개 구 모두).
+export const queryLawds = (query) => (query.lawd ? [query.lawd] : [...REALPRICE_LAWDS]);
+
+// 고른 기간·종류·구의 받은 범위. monthsTotal·monthsDone은 구·종류·달 한 줄씩 센다. pending은 고른 구 가운데 하나라도 아직 받지 못한 종류·달(최대 12개).
 export function tradesCoverage(monthRows, query, currentYmd) {
-  const done = new Set(monthRows.filter((row) => row.last_success_at).map((row) => `${row.kind}:${row.deal_ymd}`));
+  const lawds = queryLawds(query);
+  const done = new Set(monthRows.filter((row) => row.last_success_at).map(monthId));
   const months = [];
   for (let index = monthIndex(query.fromYmd); index <= monthIndex(query.toYmd); index += 1) months.push(ymdFromIndex(index));
   const wanted = query.kinds.flatMap((kind) => months.filter((ymd) => ymd >= REALPRICE_START_MONTHS[kind]).map((ymd) => `${kind}:${ymd}`));
-  const pending = wanted.filter((key) => !done.has(key));
+  const total = wanted.length * lawds.length;
+  const doneCount = wanted.reduce((sum, key) => sum + lawds.filter((lawd) => done.has(`${lawd}:${key}`)).length, 0);
+  const pending = wanted.filter((key) => lawds.some((lawd) => !done.has(`${lawd}:${key}`)));
   return {
     from: dashed(query.fromYmd),
     to: dashed(query.toYmd),
     kinds: query.kinds,
-    monthsTotal: wanted.length,
-    monthsDone: wanted.length - pending.length,
+    monthsTotal: total,
+    monthsDone: doneCount,
     pending: pending.slice(0, COVERAGE_PENDING_MAX).map((key) => `${key.split(":")[0]}:${dashed(key.split(":")[1])}`),
-    saleCoveredThrough: saleCoveredThrough(monthRows, currentYmd),
+    saleCoveredThrough: saleCoveredThrough(monthRows, currentYmd, lawds),
   };
 }
 
@@ -470,10 +487,10 @@ export function parseTradeIds(params) {
 // 고른 거래들이 속한 달(거래 ID의 종류·연월)의 마지막 성공 시각 가운데 가장 이른 것(설계서 22.10 '자료를 받은 시각').
 // 받은 기록이 없는 달이 섞이거나 거래가 없으면 null(모르는 시각을 지어내지 않음).
 export function tradesReceivedAt(monthRows, tradeRows) {
-  const success = new Map(monthRows.map((row) => [`${row.kind}:${row.deal_ymd}`, row.last_success_at]));
+  const success = new Map(monthRows.map((row) => [monthId(row), row.last_success_at]));
   let earliest = null;
   for (const row of tradeRows) {
-    const at = success.get(row.trade_key.split(":", 2).join(":"));
+    const at = success.get(`${row.lawd_cd}:${row.trade_key.split(":", 2).join(":")}`);
     if (!at) return null;
     if (earliest === null || at < earliest) earliest = at;
   }
@@ -481,6 +498,8 @@ export function tradesReceivedAt(monthRows, tradeRows) {
 }
 
 // 목록과 고른 거래 다시 읽기가 함께 쓰는 앞부분: 하루 읽기 끝 상한(429)·첫 상한, 받은 달 기록, 신고가 판정 준비.
+// 신고가 판정 준비는 구마다 본다(recordHighLawds). recordHighReady는 5개 구 모두 준비됐는지, enabledFor(구 코드)는 그 구 거래를 지금 판정하는지.
+// recordHighEnabled는 5개 구 모두 판정할 수 있을 때만 참이다(구를 모르는 곳에서 쓰는 옛 이름).
 export async function readTradesContext(db, nowMs) {
   const usage = await readTodayUsage(db, nowMs);
   if (usage.rowsRead >= REALPRICE_DAILY_READ_HARD) throw readBudgetExceededError(nowMs);
@@ -488,10 +507,15 @@ export async function readTradesContext(db, nowMs) {
   const currentYmd = kstMonth(nowMs);
   const monthsResult = await readMonthsStatement(db).all();
   const monthRows = monthsResult.results ?? [];
-  const saleDone = new Set(monthRows.filter((row) => row.kind === "sale" && row.last_success_at).map((row) => row.deal_ymd));
-  const recordHighReady = expectedMonths("sale", currentYmd).every((ymd) => saleDone.has(ymd));
-  return { readSoftExceeded, currentYmd, monthsResult, monthRows, recordHighReady, recordHighEnabled: recordHighReady && !readSoftExceeded };
+  const recordHighLawds = recordHighReadyLawds(monthRows, currentYmd);
+  const ready = new Set(recordHighLawds);
+  const recordHighReady = ready.size === REALPRICE_LAWDS.length;
+  const enabledFor = (lawd) => !readSoftExceeded && ready.has(lawd);
+  return { readSoftExceeded, currentYmd, monthsResult, monthRows, recordHighReady, recordHighLawds, enabledFor, recordHighEnabled: recordHighReady && !readSoftExceeded };
 }
+
+// 판정할 수 있는 구의 행만 신고가 묶음에 넣는다.
+const judgeable = (rows, context) => rows.filter((row) => context.enabledFor(row.lawd_cd));
 
 // GET /work/realprice/trades?ids= (홍보물 화면, P1-e). 돌려주는 값: { items(보낸 순서), missing(못 찾은 ID), receivedAt, recordHighReady, warnings }
 // 해제로 바뀐 거래도 cancelled: true로 그대로 돌려준다(빼는 것은 화면이 알리며 한다). receivedAt은 해제가 아닌 거래의 달만 본다.
@@ -501,7 +525,7 @@ async function readRealpriceTradesByIds(db, ids, { nowMs }) {
   let rowsRead = rowsReadOf(result);
   const byKey = new Map((result.results ?? []).map((row) => [row.trade_key, row]));
   const found = ids.filter((id) => byKey.has(id)).map((id) => byKey.get(id));
-  const groups = context.recordHighEnabled ? recordHighGroups(found) : [];
+  const groups = recordHighGroups(judgeable(found, context));
   if (groups.length > 0) {
     const prior = await db.prepare(REALPRICE_PRIOR_SQL).bind(JSON.stringify(groups)).all();
     rowsRead += rowsReadOf(prior);
@@ -511,11 +535,12 @@ async function readRealpriceTradesByIds(db, ids, { nowMs }) {
   await addReadUsage(db, nowMs, 1 + rowsReadOf(context.monthsResult) + rowsRead);
   const warnings = [];
   if (context.readSoftExceeded) warnings.push({ code: "RT_READ_BUDGET", level: "soft" });
+  // recordHighReady: 고른 거래의 구가 모두 판정 준비를 마쳤는지(홍보물의 '신고가' 말은 거래마다 recordHigh로 정함).
   return {
-    items: found.map((row) => tradeView(row, { recordHighEnabled: context.recordHighEnabled, nowMs })),
+    items: found.map((row) => tradeView(row, { recordHighEnabled: context.enabledFor(row.lawd_cd), nowMs })),
     missing: ids.filter((id) => !byKey.has(id)),
     receivedAt: tradesReceivedAt(context.monthRows, found.filter((row) => Number(row.cancelled) === 0)),
-    recordHighReady: context.recordHighReady,
+    recordHighReady: found.every((row) => context.recordHighLawds.includes(row.lawd_cd)),
     warnings,
   };
 }
@@ -526,7 +551,10 @@ export async function listRealpriceTrades(db, params, { nowMs }) {
   if (ids) return readRealpriceTradesByIds(db, ids, { nowMs });
   const major = parseTradesView(params) === "major";
   const query = major ? parseMajorQuery(params, nowMs) : parseTradesQuery(params, nowMs);
-  const { readSoftExceeded, currentYmd, monthsResult, monthRows, recordHighReady, recordHighEnabled } = await readTradesContext(db, nowMs);
+  const context = await readTradesContext(db, nowMs);
+  const { readSoftExceeded, currentYmd, monthsResult, monthRows } = context;
+  // 고른 구(또는 5개 구 모두)가 모두 신고가 판정 준비를 마쳤는지. 거래마다의 판정은 그 거래의 구로 정한다.
+  const recordHighReady = queryLawds(query).every((lawd) => context.recordHighLawds.includes(lawd));
 
   // 최근 달 창부터 읽어 돌려줄 수 + 1건이 차면 멈춘다(36개월이면 창 6개, 문장 최대 6번).
   const rowsAll = [];
@@ -548,6 +576,7 @@ export async function listRealpriceTrades(db, params, { nowMs }) {
       query.limit + 1 - rowsAll.length,
       query.q,
       query.dealDateFrom,
+      query.lawd,
     ).all();
     rowsRead += rowsReadOf(result);
     rowsAll.push(...(result.results ?? []));
@@ -557,7 +586,7 @@ export async function listRealpriceTrades(db, params, { nowMs }) {
   const last = scanned.at(-1);
   // 신고가: 돌려줄 쪽의 판정 대상 매매 행이 있을 때만 묶음별 비교 자료를 한 번 더 읽는다(전월세·분양권만이면 읽지 않음).
   // 주요 거래는 읽은 최근 30일 매매 전부를 판정한 뒤 고른다.
-  const groups = recordHighEnabled ? recordHighGroups(scanned) : [];
+  const groups = recordHighGroups(judgeable(scanned, context));
   if (groups.length > 0) {
     const prior = await db.prepare(REALPRICE_PRIOR_SQL).bind(JSON.stringify(groups)).all();
     rowsRead += rowsReadOf(prior);
@@ -571,9 +600,10 @@ export async function listRealpriceTrades(db, params, { nowMs }) {
   if (readSoftExceeded) warnings.push({ code: "RT_READ_BUDGET", level: "soft" });
   if (major && rowsAll.length > query.limit) warnings.push({ code: "RT_MAJOR_PARTIAL" });
   const result = {
-    items: page.map((row) => tradeView(row, { recordHighEnabled, nowMs })),
+    items: page.map((row) => tradeView(row, { recordHighEnabled: context.enabledFor(row.lawd_cd), nowMs })),
     nextCursor: !major && rowsAll.length > query.limit && last ? encodeTradeCursor(last.deal_date, last.trade_key) : null,
     recordHighReady,
+    recordHighLawds: context.recordHighLawds,
     coverage: tradesCoverage(monthRows, query, currentYmd),
     warnings,
   };
@@ -615,6 +645,7 @@ export async function searchRealpriceComplexes(db, params, { nowMs }) {
       aptSeq: row.apt_seq,
       aptName: row.apt_nm,
       umdName: row.umd_nm,
+      lawdCd: row.lawd_cd,
       tradeCount: Number(row.trade_count),
       lastDealDate: row.last_deal_date,
       suggestedSlug: suggestComplexSlug(row.apt_nm),

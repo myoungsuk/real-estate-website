@@ -170,8 +170,9 @@ export async function readRealpriceInsights(db, params, { nowMs }) {
   const found = ids.filter((id) => byKey.has(id)).map((id) => byKey.get(id));
   const warnings = [];
   if (context.readSoftExceeded) warnings.push({ code: "RT_READ_BUDGET", level: "soft" });
-  const blocked = !context.recordHighEnabled ? (context.readSoftExceeded ? "budget" : "pending") : null;
-  const targets = blocked ? [] : found.filter((row) => insightSkipReason(row) === null);
+  // 신고가와 같이 구마다 판정 준비를 본다(0008). 준비 전 구의 거래는 pending, 하루 읽기 첫 상한을 넘은 날은 budget.
+  const blockedOf = (row) => (context.enabledFor(row.lawd_cd) ? null : context.readSoftExceeded ? "budget" : "pending");
+  const targets = found.filter((row) => blockedOf(row) === null && insightSkipReason(row) === null);
 
   let entries = new Map();
   let prevMaxList = [];
@@ -194,7 +195,7 @@ export async function readRealpriceInsights(db, params, { nowMs }) {
 
   const targetKeys = new Set(targets.map((row) => row.trade_key));
   const items = found.map((row) => {
-    if (blocked) return { tradeKey: row.trade_key, available: false, reason: blocked };
+    if (blockedOf(row)) return { tradeKey: row.trade_key, available: false, reason: blockedOf(row) };
     if (!targetKeys.has(row.trade_key)) return { tradeKey: row.trade_key, available: false, reason: insightSkipReason(row) };
     const entry = entries.get(groupKey(row.cmp_seq, row.area_x100)) ?? { max: null, last: null, win: [] };
     return { tradeKey: row.trade_key, available: true, ...insightFor(row, entry, prevMaxList[targets.indexOf(row)]), households: households.get(row.apt_seq) ?? null };
@@ -203,7 +204,7 @@ export async function readRealpriceInsights(db, params, { nowMs }) {
     items,
     missing: ids.filter((id) => !byKey.has(id)),
     basis: { months: REALPRICE_INSIGHT_MONTHS, recentMonths: REALPRICE_INSIGHT_RECENT_MONTHS },
-    recordHighReady: context.recordHighReady,
+    recordHighReady: found.every((row) => context.recordHighLawds.includes(row.lawd_cd)),
     warnings,
   };
 }
