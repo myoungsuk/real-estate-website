@@ -222,7 +222,7 @@ export const ADMIN_HELP_FIGURES = Object.freeze({
   "blog-draft": {
     section: "work-blog",
     route: "/admin/work/blog/",
-    sources: ["src/pages/admin/work/blog.astro", "src/lib/work-blog-card.ts", "src/lib/work/blog-view.mjs", "src/lib/work/blog-checks.mjs", "src/lib/work/blog-cards.mjs", "src/lib/work/blog-places.mjs", "src/lib/work/blog-style-view.mjs"],
+    sources: ["src/pages/admin/work/blog.astro", "src/lib/work-blog-card.ts", "src/lib/work/blog-view.mjs", "src/lib/work/blog-checks.mjs", "src/lib/work/blog-cards.mjs", "src/lib/work/blog-places.mjs", "src/lib/work/blog-style-view.mjs", "src/lib/work/blog-set-view.mjs", "src/lib/work-blog-backgrounds.ts", "src/lib/work/blog-backgrounds-view.mjs"],
     title: "단지 소개 글 초안 만들기",
     note: "그림 속 글은 예시입니다. 매물 글은 2단계에서 명시사항 빈 칸을 다 채워야 만들 수 있습니다.",
     phone: [
@@ -232,9 +232,14 @@ export const ADMIN_HELP_FIGURES = Object.freeze({
         pins: ["무엇을 쓸지('매물'·'단지 소개') 고릅니다.", "쓸 자료의 '고르기'를 누릅니다."],
       },
       {
+        shot: "blog-phone-2-style",
+        alt: "글 초안 3단계 윗부분. 묶음 넷으로 나뉜 글 성격 단추들(자료에 맞지 않는 것은 줄이 그어져 잠김)과 메모 칸 위 '빠르게 넣기' 단추 줄이 있다.",
+        pins: ["글 성격을 하나 고릅니다. 줄이 그어진 것은 이 자료에 맞지 않아 잠긴 것입니다.", "글에 넣을 사실을 메모 칸에 적습니다. '빠르게 넣기' 단추를 누르면 머리말이 들어갑니다."],
+      },
+      {
         shot: "blog-phone-2-make",
-        alt: "글 초안 3단계. 묶음 넷으로 나뉜 글 성격 단추들(자료에 맞지 않는 것은 줄이 그어져 잠김), 메모 칸 위 '빠르게 넣기' 단추 줄, 오늘 만든 편수 안내, '글 초안 만들기' 단추가 있다.",
-        pins: ["글 성격을 하나 고릅니다. 줄이 그어진 것은 이 자료에 맞지 않아 잠긴 것입니다.", "글에 넣을 사실을 메모 칸에 적습니다. '빠르게 넣기' 단추를 누르면 머리말이 들어갑니다.", "'글 초안 만들기'를 누릅니다. 1 ~ 3분 걸립니다."],
+        alt: "글 초안 3단계 아랫부분. '몇 편' 단추 둘('3편 같이 만들기'가 골라져 있음, '1편만'), 쓸 한도·오늘 남은 편수·예상 비용을 적은 한 줄, '글 초안 만들기' 단추가 있다.",
+        pins: ["몇 편 만들지 고릅니다. 처음은 '3편 같이 만들기'(첫 문장·짜임만 다른 3편, 한도 3편 몫)이고, 한 편만 필요하면 '1편만'을 고릅니다.", "단추 위 한 줄에서 쓸 한도와 예상 비용을 확인하고 '글 초안 만들기'를 누릅니다. 1 ~ 3분 걸립니다."],
       },
       {
         shot: "blog-phone-3-result",
@@ -254,9 +259,14 @@ export const ADMIN_HELP_FIGURES = Object.freeze({
         pins: ["무엇을 쓸지('매물'·'단지 소개') 고릅니다.", "쓸 자료의 '고르기'를 누릅니다."],
       },
       {
+        shot: "blog-wide-2-style",
+        alt: "글 초안 3단계 윗부분. 묶음 넷으로 나뉜 글 성격 단추들(자료에 맞지 않는 것은 줄이 그어져 잠김)과 메모 칸 위 '빠르게 넣기' 단추 줄이 있다.",
+        pins: ["글 성격을 하나 고릅니다. 줄이 그어진 것은 이 자료에 맞지 않아 잠긴 것입니다.", "글에 넣을 사실을 메모 칸에 적습니다. '빠르게 넣기' 단추를 누르면 머리말이 들어갑니다."],
+      },
+      {
         shot: "blog-wide-2-make",
-        alt: "글 초안 3단계. 묶음 넷으로 나뉜 글 성격 단추들(자료에 맞지 않는 것은 줄이 그어져 잠김), 메모 칸 위 '빠르게 넣기' 단추 줄, 오늘 만든 편수 안내, '글 초안 만들기' 단추가 있다.",
-        pins: ["글 성격을 하나 고릅니다. 줄이 그어진 것은 이 자료에 맞지 않아 잠긴 것입니다.", "글에 넣을 사실을 메모 칸에 적습니다. '빠르게 넣기' 단추를 누르면 머리말이 들어갑니다.", "'글 초안 만들기'를 누릅니다. 1 ~ 3분 걸립니다."],
+        alt: "글 초안 3단계 아랫부분. '몇 편' 단추 둘('3편 같이 만들기'가 골라져 있음, '1편만'), 쓸 한도·오늘 남은 편수·예상 비용을 적은 한 줄, '글 초안 만들기' 단추가 있다.",
+        pins: ["몇 편 만들지 고릅니다. 처음은 '3편 같이 만들기'(첫 문장·짜임만 다른 3편, 한도 3편 몫)이고, 한 편만 필요하면 '1편만'을 고릅니다.", "단추 위 한 줄에서 쓸 한도와 예상 비용을 확인하고 '글 초안 만들기'를 누릅니다. 1 ~ 3분 걸립니다."],
       },
       {
         shot: "blog-wide-3-result",

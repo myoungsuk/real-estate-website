@@ -116,11 +116,15 @@ test("글 초안 단지 소개: 만들기 → 5초마다 확인 → 결과, 입�
   await expect(step(page, 3)).toHaveClass(/bl-step--open/u);
   await expect(page.locator("input[name='bl-style'][value='plain']")).toBeChecked();
   await expect(page.locator("input[name='bl-style'][value='urgent']"), "단지 소개 글에는 급매를 잠금").toBeDisabled();
-  await expect(page.locator("[data-bl-make-note]")).toHaveText("만들면 오늘 3 / 10편이 됩니다. 1 ~ 3분 걸립니다.");
+  // 몇 편: 처음 값은 3편(2026-11-25 사용자 결정 4). 단추 위 한 줄에 한도 몫·남은 편수·예상 비용을 보인다. 이 시험은 1편 길을 본다.
+  await expect(page.locator("input[name='bl-count'][value='3']")).toBeChecked();
+  await expect(page.locator("[data-bl-make-note]")).toHaveText("한도 3편 몫을 씁니다 · 오늘 남은 8편 · 예상 비용 약 0.10 ~ 0.15달러(추정, 이번 달 남은 9.58달러). 3편을 같이 만듭니다. 1 ~ 3분 걸리고, 먼저 끝난 편부터 보입니다.");
+  await page.locator("input[name='bl-count'][value='1']").check();
+  await expect(page.locator("[data-bl-make-note]")).toHaveText("한도 1편 몫을 씁니다 · 오늘 남은 8편 · 예상 비용 약 0.03 ~ 0.05달러(추정, 이번 달 남은 9.58달러). 1 ~ 3분 걸립니다.");
 
   await page.getByRole("button", { name: "글 초안 만들기" }).click();
   await expect(page.locator("[data-bl-wait]")).toBeVisible();
-  expect(calls.creates).toEqual([{ source: { type: "complex", id: "zz-forest" }, style: "plain", inputs: {}, emphasis: "" }]);
+  expect(calls.creates).toEqual([{ source: { type: "complex", id: "zz-forest" }, style: "plain", inputs: {}, emphasis: "", count: 1 }]);
   await expect(page.locator("[data-bl-wait-text]")).toContainText("11. 20. 15:00에 보냄");
 
   await page.clock.runFor(5_000);
@@ -458,7 +462,8 @@ test("글 초안 카드 그림: 지금 막힌 자료의 초안(sourcePublic fals
 });
 
 // 날개-2 2026-11-23 깨 보기 보탬(C14·C17): 소재지 100자(입력 상한)로 표지 글이 카드에 넘치는 경우.
-test("글 초안 카드 그림 360px: 매물 소재지가 100자로 표지에 다 들어가지 않으면 그림을 내보내지 않고 까닭을 보인다", async ({ page }) => {
+// 2026-11-25 방향 A(사용자 결정 7)에서는 위 칸 상자·띠가 없어 100자도 표지에 들어간다(글자를 0.8배까지 줄이는 규칙은 그대로). 넘치면 내보내지 않는 장치는 그대로다.
+test("글 초안 카드 그림 360px: 매물 소재지가 100자(입력 상한)여도 방향 A 표지에는 들어가 그림을 만든다", async ({ page }) => {
   const assertNoErrors = collectErrors(page);
   const result = { title: "가상숲1단지 매매", paragraphs: ["전용 84.97㎡, 10층 남향입니다."], hashtags: ["천동"], snsShort: "가상숲1단지", factsUsed: [] };
   await setup(page, { width: 360, drafts: [draftOf(listing, { result })] });
@@ -470,10 +475,12 @@ test("글 초안 카드 그림 360px: 매물 소재지가 100자로 표지에 �
   await expect(panel.locator("img"), "짧은 소재지는 표지를 그림").toHaveCount(1);
   const long = `${LOCATION} ${"가상로 가상길 ".repeat(20)}`.slice(0, 100);
   expect(long.length).toBe(100);
+  const short = await panel.locator("img").getAttribute("src");
   await page.locator("#bl-reloc").fill(long);
-  await expect(panel.locator("[data-bl-cardset-status]")).toHaveText("내용이 길어 카드에 다 들어가지 않아 만들지 않았습니다.");
-  await expect(panel.locator("img")).toHaveCount(0);
-  await expect(panel.locator("[data-bl-cardset-save]")).toBeHidden();
+  await expect.poll(() => panel.locator("img").getAttribute("src"), "긴 소재지로 다시 그림").not.toBe(short);
+  await expect(panel.locator("img")).toHaveCount(1);
+  await expect(panel.locator("[data-bl-cardset-status]")).toHaveText("");
+  await expect(panel.locator("[data-bl-cardset-save]")).toHaveText("표지 저장");
   expect(await overflowOf(page)).toBeLessThanOrEqual(0);
   assertNoErrors();
 });
@@ -712,7 +719,7 @@ test("글 초안 글 성격·빠르게 넣기 360px: 묶음 넷에 21가지가 �
   // 만들기 요청에는 고른 성격의 id와 메모가 간다(머리말만 있는 '학교: ' 줄은 빼고 보냄). 메모는 브라우저 저장소·주소에 남지 않는다.
   await page.getByRole("button", { name: "글 초안 만들기" }).click();
   await expect(page.locator("[data-bl-wait]")).toBeVisible();
-  expect(calls.creates).toEqual([{ source: { type: "complex", id: "zz-forest" }, style: "story", inputs: {}, emphasis: "직접 본 것: 오후에 놀이터 쪽이 조용함" }]);
+  expect(calls.creates).toEqual([{ source: { type: "complex", id: "zz-forest" }, style: "story", inputs: {}, emphasis: "직접 본 것: 오후에 놀이터 쪽이 조용함", count: 3 }]);
   const stored = await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage }, url: location.href }));
   expect(stored.includes("놀이터"), "메모는 브라우저 저장소·주소에 없음").toBe(false);
   assertNoErrors();

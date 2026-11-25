@@ -67,7 +67,11 @@ export interface BlogDraft {
   createdAt: string;
   updatedAt: string;
   closedAt: string | null;
+  // 같이 만든 3편 묶음(2026-11-25). ids는 편 순서. 1편으로 만든 초안은 null.
+  set?: BlogDraftSet | null;
 }
+
+export interface BlogDraftSet { n: number; of: number; ids: string[] }
 
 export interface BlogDraftListItem {
   id: string;
@@ -76,6 +80,7 @@ export interface BlogDraftListItem {
   closed: BlogDraft["closed"];
   errorCode: string | null;
   title: string | null;
+  set?: BlogDraftSet | null;
   createdAt: string;
   closedAt: string | null;
 }
@@ -85,6 +90,23 @@ export interface BlogDraftCreate {
   style: string;
   inputs: Record<string, unknown>;
   emphasis: string;
+  // 1 또는 3(2026-11-25 사용자 결정 4: 처음 값 3편). 3이면 응답에 drafts(편 순서)가 같이 온다.
+  count?: 1 | 3;
+}
+
+// 카드 배경 그림(설계서 22.22절). 그림은 이번 응답에만 있고 화면 메모리에만 둔다(서버 저장·브라우저 저장소·blob 주소·화면 주소 없음).
+export type BlogImageStyle = "watercolor" | "photo" | "pastel" | "pencil";
+export type BlogImageQuality = "medium" | "high";
+export interface BlogBackgroundsCreate { description: string; style: BlogImageStyle; quality: BlogImageQuality }
+export interface BlogBackgrounds {
+  images: { format: "jpeg"; width: number; height: number; base64: string }[];
+  model: string;
+  style: BlogImageStyle;
+  quality: BlogImageQuality;
+  defaultDescriptionUsed: boolean;
+  costMicroUsd: number;
+  costIsEstimate: boolean;
+  usage: { inputTokens: number; outputTokens: number } | null;
 }
 
 export const readBlogSources = () => readWork<{ items: BlogSource[]; styles: BlogStyle[] }>("/blog/sources");
@@ -92,5 +114,6 @@ export const readBlogLimits = () => readWork<BlogLimits>("/blog/limits");
 export const saveBlogLimits = (body: { version: number; dailyCreateLimit: number; monthlyCostLimitMicroUsd: number }) => writeWork<BlogLimits>("/blog/limits", "PUT", body);
 export const listBlogDrafts = () => readWork<{ items: BlogDraftListItem[] }>("/blog/drafts");
 export const readBlogDraft = (id: string) => readWork<{ draft: BlogDraft }>(`/blog/drafts/${encodeURIComponent(id)}`);
-export const createBlogDraft = (body: BlogDraftCreate) => writeWork<{ draft: BlogDraft }>("/blog/drafts", "POST", body);
+export const createBlogDraft = (body: BlogDraftCreate) => writeWork<{ draft: BlogDraft; drafts?: BlogDraft[] }>("/blog/drafts", "POST", body);
+export const createBlogBackgrounds = (body: BlogBackgroundsCreate) => writeWork<BlogBackgrounds>("/blog/backgrounds", "POST", body);
 export const closeBlogDraft = (id: string, action: "confirm" | "cancel") => writeWork<{ draft: BlogDraft }>(`/blog/drafts/${encodeURIComponent(id)}/${action}`, "POST", {});

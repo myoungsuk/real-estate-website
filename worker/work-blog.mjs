@@ -35,8 +35,10 @@ import {
   parseLimitsBody,
   readAiLimits,
   readAiUsage,
+  refundManyStatement,
   refundStatement,
   reserveAiBudget,
+  reserveAiBudgetMany,
   saveLimitsStatements,
   settleUsageStatement,
 } from "./work-ai-budget.mjs";
@@ -170,14 +172,23 @@ export const BLOG_RESULT_SCHEMA = Object.freeze({
   },
 });
 
-export function buildOpenAiRequest(config, payload) {
+// 같은 자료로 3편을 같이 만들 때(2026-11-25 사용자 결정 "전부 추천대로" 4·5: 처음 값 3편, 첫 문장·짜임만 다르게) 편마다 지시문 끝에 붙이는 한 줄.
+// 1편만 만들 때는 붙이지 않는다(지시문이 그 전과 글자까지 같음). 사실·숫자 검사는 편마다 받은 뒤 코드가 그대로 한다.
+export const BLOG_SET_SIZES = Object.freeze([1, 3]);
+export const BLOG_SET_LINES = Object.freeze([
+  "같은 자료로 쓰는 3편 중 1편이다. 사실·숫자는 다른 편과 같게 두고, 첫 문장은 가장 중요한 사실로 바로 시작한다.",
+  "같은 자료로 쓰는 3편 중 2편이다. 사실·숫자는 다른 편과 같게 두고, 첫 문장은 읽는 사람이 궁금해할 물음으로 시작해 묻고 답하듯 짠다.",
+  "같은 자료로 쓰는 3편 중 3편이다. 사실·숫자는 다른 편과 같게 두고, 첫 문장은 한 줄 요약으로 시작해 좋은 점 다음에 따져 볼 점을 둔다.",
+]);
+
+export function buildOpenAiRequest(config, payload, setNo = null) {
   return {
     model: config.model,
     reasoning: { effort: config.effort },
     max_output_tokens: config.maxOutputTokens,
     background: true,
     store: false,
-    instructions: BLOG_INSTRUCTIONS,
+    instructions: setNo ? `${BLOG_INSTRUCTIONS}\n${BLOG_SET_LINES[setNo - 1]}` : BLOG_INSTRUCTIONS,
     input: [{ role: "user", content: [{ type: "input_text", text: JSON.stringify(payload) }] }],
     text: { format: { type: "json_schema", name: "blog_draft", strict: true, schema: BLOG_RESULT_SCHEMA } },
   };
@@ -214,6 +225,14 @@ const parseJson = (text) => {
   }
 };
 
+// 3편 묶음 표시. 새 표 없이 disclosure_json의 set에 { n, of, ids }(같이 만든 편의 초안 ID, 편 순서)를 둔다. 1편이면 null.
+function setOf(stored) {
+  const set = stored?.set;
+  if (!isPlainObject(set) || !Number.isInteger(set.n) || !Number.isInteger(set.of) || !Array.isArray(set.ids)) return null;
+  if (set.of !== set.ids.length || set.n < 1 || set.n > set.of || !set.ids.every(isUuid)) return null;
+  return { n: set.n, of: set.of, ids: [...set.ids] };
+}
+
 export function draftView(row, sources = SOURCES) {
   const stored = parseJson(row.disclosure_json) ?? {};
   const source = findBlogSource(sources, row.source_type, row.source_id);
@@ -227,6 +246,7 @@ export function draftView(row, sources = SOURCES) {
     errorCode: row.error_code,
     inputs: stored.inputs ?? {},
     emphasisNumbers: stored.emphasisNumbers ?? "",
+    set: setOf(stored),
     needsLocation: row.source_type !== "complex",
     result: parseJson(row.result_json),
     checks: parseJson(row.check_json),
@@ -249,6 +269,7 @@ function listItemView(row) {
     closed: row.closed,
     errorCode: row.error_code,
     title: typeof result?.title === "string" ? result.title : null,
+    set: setOf(parseJson(row.disclosure_json)),
     createdAt: row.created_at,
     closedAt: row.closed_at,
   };
@@ -264,7 +285,9 @@ async function readDraftRow(db, id) {
 // ── 만들기 본문 검사(D1·감사·OpenAI 0회) ──
 
 export function parseDraftCreate(body) {
-  if (!isPlainObject(body) || Object.keys(body).some((key) => !["source", "style", "inputs", "emphasis"].includes(key))) throw invalid(["body"]);
+  if (!isPlainObject(body) || Object.keys(body).some((key) => !["source", "style", "inputs", "emphasis", "count"].includes(key))) throw invalid(["body"]);
+  // count는 1 또는 3(없으면 1, 그 전 화면과 같음).
+  if (body.count !== undefined && !BLOG_SET_SIZES.includes(body.count)) throw invalid(["count"]);
   const { source: ref } = body;
   if (!isPlainObject(ref) || Object.keys(ref).some((key) => key !== "type" && key !== "id")
     || !BLOG_SOURCE_TYPES.includes(ref.type) || typeof ref.id !== "string" || ref.id.length < 1 || ref.id.length > 80) throw invalid(["source"]);
@@ -277,7 +300,7 @@ export function parseDraftCreate(body) {
   if (personal.length > 0) {
     throw new WorkApiError("PERSONAL_DATA_PATTERN", "주민등록번호·전화번호·이메일·호수처럼 보이는 글자는 넣을 수 없습니다.", 400, false, personal);
   }
-  return { ref, style: body.style, inputs: checked.inputs, emphasis: emphasis.emphasis };
+  return { ref, style: body.style, inputs: checked.inputs, emphasis: emphasis.emphasis, count: body.count ?? 1 };
 }
 
 // 공개 자료 확인 → 성격 → 명시사항. 돌려주는 값: { source, disclosure }.
@@ -317,38 +340,67 @@ function logOpenAi(auditLog, entry) {
 }
 
 // POST /work/blog/drafts
+// count 3(2026-11-25 사용자 결정 4: 처음 값 3편)은 같은 자료로 초안 행 3개를 만들고 OpenAI 요청 3개를 같이 보낸다.
+// 한도는 판 1 시안 추천 4("3편은 한도 3편 몫과 예상 비용을 단추 위에 보임")대로 하루 편수 3편 몫 + 3편 예상 비용 합계를 한 번에 예약한다(전부 아니면 0).
+// 편마다 OpenAI가 확실히 받지 않았으면(4xx) 그 편 몫만 되돌리고, 하나라도 만들어지면 201로 그 편들을 준다(셋 다 안 되면 첫 오류).
 export async function createBlogDraft(context, body) {
-  const { db, env, actor, requestId, now, auditLog, randomUUID, openaiFetch } = context;
+  const { db, env, actor, requestId, now, randomUUID } = context;
   const parsed = parseDraftCreate(body);
   const { source } = checkDraftReady(parsed, sourcesOf(context));
   const config = readOpenAiTaskConfig(env, "blog");
   if (!config) throw configMissing();
 
+  const { count } = parsed;
   const payload = buildBlogPromptPayload({ source, inputs: parsed.inputs, emphasis: parsed.emphasis, style: parsed.style });
-  const request = buildOpenAiRequest(config, payload);
-  const reservedCostMicroUsd = estimateCostMicroUsd(config.prices, estimateInputTokens(request), config.maxOutputTokens);
-  const { day } = await reserveAiBudget(db, { nowMs: now, reservedCostMicroUsd });
+  const requests = Array.from({ length: count }, (_, index) => buildOpenAiRequest(config, payload, count === 1 ? null : index + 1));
+  const costs = requests.map((request) => estimateCostMicroUsd(config.prices, estimateInputTokens(request), config.maxOutputTokens));
+  const totalCostMicroUsd = costs.reduce((sum, cost) => sum + cost, 0);
+  const { day } = count === 1
+    ? await reserveAiBudget(db, { nowMs: now, reservedCostMicroUsd: totalCostMicroUsd })
+    : await reserveAiBudgetMany(db, { nowMs: now, count, reservedCostMicroUsd: totalCostMicroUsd });
 
-  const id = randomUUID();
+  const ids = requests.map(() => randomUUID());
   const at = iso(now);
   // 소재지는 넣지 않는다. 강조점은 숫자 표기만.
   const { location: _location, ...storedInputs } = parsed.inputs;
-  const disclosureJson = JSON.stringify({ inputs: storedInputs, emphasisNumbers: emphasisNumbersOf(parsed.emphasis) });
+  const stored = { inputs: storedInputs, emphasisNumbers: emphasisNumbersOf(parsed.emphasis) };
+  const disclosureJsonOf = (index) => JSON.stringify(count === 1 ? stored : { ...stored, set: { n: index + 1, of: count, ids } });
   try {
-    await runBatch(db, [
-      db.prepare(DRAFT_INSERT_SQL).bind(id, source.type, source.id, source.title.slice(0, 120), config.model, config.effort, disclosureJson, day, reservedCostMicroUsd, at),
-      auditStatement(db, { at, actorEmail: actor.email, action: "blog.create", targetType: "blog_draft", targetId: id, requestId, outcome: "ok", reason: `source_type=${source.type}` }),
-    ]);
+    await runBatch(db, ids.flatMap((id, index) => [
+      db.prepare(DRAFT_INSERT_SQL).bind(id, source.type, source.id, source.title.slice(0, 120), config.model, config.effort, disclosureJsonOf(index), day, costs[index], at),
+      auditStatement(db, { at, actorEmail: actor.email, action: "blog.create", targetType: "blog_draft", targetId: id, requestId, outcome: "ok",
+        reason: count === 1 ? `source_type=${source.type}` : `source_type=${source.type};set=${index + 1}/${count}` }),
+    ]));
   } catch (error) {
     // 초안을 넣지 못했으면 OpenAI를 부르지 않고 미리 더한 것을 되돌린다(초안 행이 없으므로 조건 없이 1번).
     try {
-      await db.prepare(REFUND_UNCONDITIONAL_SQL).bind(day, reservedCostMicroUsd).run();
+      if (count === 1) await db.prepare(REFUND_UNCONDITIONAL_SQL).bind(day, totalCostMicroUsd).run();
+      else await refundManyStatement(db, { day, count, reservedCostMicroUsd: totalCostMicroUsd }).run();
     } catch {
       // 되돌리기 실패는 한도를 실제보다 많이 센 쪽이라 그대로 둔다.
     }
     throw error;
   }
 
+  const sources = sourcesOf(context);
+  if (count === 1) {
+    const code = await startDraftResponse(context, { id: ids[0], day, request: requests[0], reservedCostMicroUsd: costs[0], config });
+    if (code) throw aiErrorResponse(code);
+    return { status: 201, data: { draft: draftView(await readDraftRow(db, ids[0]), sources) } };
+  }
+  // 응답 ID를 적다가 실패한 편은 queued로 남고 다음 조회 때 unknown으로 보인다(1편과 같음).
+  const settled = await Promise.allSettled(ids.map((id, index) => startDraftResponse(context, { id, day, request: requests[index], reservedCostMicroUsd: costs[index], config })));
+  const codes = settled.map((item) => (item.status === "fulfilled" ? item.value : "AI_STATE_UNKNOWN"));
+  const firstMade = codes.findIndex((code) => code === null);
+  if (firstMade < 0) throw aiErrorResponse(codes[0]);
+  const drafts = [];
+  for (const id of ids) drafts.push(draftView(await readDraftRow(db, id), sources));
+  return { status: 201, data: { draft: drafts[firstMade], drafts } };
+}
+
+// OpenAI 백그라운드 요청 1개를 보내고 그 초안 행을 고친다. 돌려주는 값: null(만들어짐) 또는 화면에 줄 오류 코드.
+async function startDraftResponse(context, { id, day, request, reservedCostMicroUsd, config }) {
+  const { db, env, requestId, now, auditLog, openaiFetch } = context;
   const started = Date.now();
   let created;
   try {
@@ -368,14 +420,14 @@ export async function createBlogDraft(context, body) {
     } catch {
       // 상태 기록 실패: 초안은 queued로 남고 다음 조회 때 응답 ID가 없어 unknown으로 보인다.
     }
-    throw aiErrorResponse(code);
+    return code;
   }
   logOpenAi(auditLog, { requestId, upstreamRequestId: created.upstreamRequestId, model: config.model, effort: config.effort, status: created.status, ms: Date.now() - started });
   const status = created.status === "in_progress" ? "in_progress" : "queued";
   await runBatch(db, [
     db.prepare("UPDATE blog_drafts SET openai_response_id = ?2, status = ?3, updated_at = ?4 WHERE id = ?1 AND status = 'queued'").bind(id, created.id, status, iso(now)),
   ]);
-  return { status: 201, data: { draft: draftView(await readDraftRow(db, id), sourcesOf(context)) } };
+  return null;
 }
 
 // ── 결과 받기 ──

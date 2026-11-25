@@ -2,6 +2,7 @@
 // 2026-11-24 시험 파일에서 그대로 옮김. 매물·단지 이름·주소·글은 모두 지어낸 값이고 OpenAI는 부르지 않는다.
 import { readFileSync } from "node:fs";
 import { expect } from "@playwright/test";
+import sharp from "sharp";
 import { BLOG_STYLES, validateBlogInputs } from "../../src/lib/work/blog-checks.mjs";
 import { listBlogSources } from "../../src/lib/work/blog-sources.mjs";
 
@@ -70,13 +71,35 @@ export function draftOf(source, extra = {}) {
     ...extra,
   };
 }
-export const listItem = (draft) => ({ id: draft.id, source: draft.source, status: draft.status, closed: draft.closed, errorCode: draft.errorCode, title: draft.result?.title ?? null, createdAt: draft.createdAt, closedAt: draft.closedAt });
+export const listItem = (draft) => ({ id: draft.id, source: draft.source, status: draft.status, closed: draft.closed, errorCode: draft.errorCode, title: draft.result?.title ?? null, set: draft.set ?? null, createdAt: draft.createdAt, closedAt: draft.closedAt });
+
+// 같이 만든 3편 묶음(2026-11-25). 편마다 id와 set만 다르게 붙인다.
+export const SET_IDS = ["zz-set-1", "zz-set-2", "zz-set-3"];
+export const setDraftOf = (source, n, extra = {}) => draftOf(source, { id: SET_IDS[n - 1], set: { n, of: 3, ids: SET_IDS }, ...extra });
+
+// 가짜 AI 배경 그림(1024×1280 JPEG). 실제 그림 모델은 부르지 않고, 하늘·언덕 색만 다른 SVG를 sharp로 JPEG로 바꾼다.
+const BACKGROUND_COLORS = [["#F6D5DE", "#9CC59A", "#E58FA8"], ["#F7C99B", "#7FA36B", "#D9774E"], ["#BFD8F2", "#C7A15A", "#D46A3A"]];
+export async function fakeBackgroundImages() {
+  return Promise.all(BACKGROUND_COLORS.map(async ([sky, hill, accent]) => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1280"><defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="${sky}"/></linearGradient></defs>`
+      + `<rect width="1024" height="1280" fill="url(#s)"/><circle cx="760" cy="300" r="120" fill="${accent}" opacity="0.55"/>`
+      + `<path d="M0 900 Q 260 760 520 880 T 1024 840 V 1280 H 0 Z" fill="${hill}"/><path d="M0 1040 Q 300 960 600 1060 T 1024 1020 V 1280 H 0 Z" fill="${hill}" opacity="0.7"/></svg>`;
+    const buffer = await sharp(Buffer.from(svg)).jpeg({ quality: 80 }).toBuffer();
+    return { format: "jpeg", width: 1024, height: 1280, base64: buffer.toString("base64") };
+  }));
+}
+export const backgroundsResult = (images, extra = {}) => ({
+  images, model: "gpt-image-2.6-flare", style: "watercolor", quality: "medium", defaultDescriptionUsed: false,
+  costMicroUsd: 141_300, costIsEstimate: false, usage: { inputTokens: 60, outputTokens: 4_700 }, ...extra,
+});
 
 export const envelope = (data) => ({ json: { ok: true, data, requestId: "test" } });
 
 // 늘 같은 시각에서 시작하고(시계는 그 뒤 흐름), 실제 서버는 부르지 않는다(맞지 않는 관리 API는 503).
 // 클립보드는 가짜로 바꿔 복사한 글을 시험 쪽에서 읽는다.
-export async function setup(page, { width = 390, limits = savedLimits, drafts = [], draftReads = {}, create } = {}) {
+// create(body): 만들기 응답. 초안 하나를 돌려주면 { draft }로, { draft, drafts }를 돌려주면 그대로 보낸다(3편).
+// backgrounds(body): 배경 그림 응답 data 또는 { status, error }(실패). 없으면 그 경로는 404.
+export async function setup(page, { width = 390, limits = savedLimits, drafts = [], draftReads = {}, create, backgrounds } = {}) {
   await page.clock.install({ time: NOW });
   await page.setViewportSize({ width, height: 900 });
   await page.addInitScript(() => {
@@ -88,11 +111,11 @@ export async function setup(page, { width = 390, limits = savedLimits, drafts = 
     });
   });
   page.on("dialog", (dialog) => dialog.accept());
-  const calls = { requests: [], limitPuts: [], creates: [], closes: [], reads: {} };
+  const calls = { requests: [], limitPuts: [], creates: [], closes: [], reads: {}, backgrounds: [] };
   let limitState = limits;
   await page.route("**/api/admin/**", (route) => route.fulfill({ status: 503, json: { ok: false, error: { code: "TEST_OFFLINE", message: "시험 오류", retryable: false }, requestId: "test" } }));
   await page.route("**/api/admin/v1/work/public-tools/session", (route) => route.fulfill(envelope({ blogEnabled: true, realpriceEnabled: false, administrator: "시험 관리자", csrfToken: "test-csrf", schemaVersion: 4 })));
-  await page.route(BLOG, (route) => {
+  await page.route(BLOG, async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const body = request.postData() ?? "";
@@ -109,10 +132,19 @@ export async function setup(page, { width = 390, limits = savedLimits, drafts = 
     }
     if (path === "/drafts") {
       if (request.method() === "POST") {
-        calls.creates.push(request.postDataJSON());
-        return route.fulfill(envelope({ draft: create() }));
+        const sent = request.postDataJSON();
+        calls.creates.push(sent);
+        const made = create(sent);
+        return route.fulfill(envelope(made && made.drafts ? made : { draft: made }));
       }
       return route.fulfill(envelope({ items: drafts.map(listItem) }));
+    }
+    if (path === "/backgrounds" && request.method() === "POST" && backgrounds) {
+      const sent = request.postDataJSON();
+      calls.backgrounds.push({ body: sent, csrf: request.headers()["x-admin-csrf"] });
+      const answer = await backgrounds(sent, calls.backgrounds.length);
+      if (answer?.error) return route.fulfill({ status: answer.status ?? 502, json: { ok: false, error: { retryable: false, message: "시험 오류", ...answer.error }, requestId: "test" } });
+      return route.fulfill(envelope(answer));
     }
     const match = path.match(/^\/drafts\/([^/]+)(?:\/(confirm|cancel))?$/u);
     if (match && match[2]) {
@@ -141,7 +173,8 @@ export function collectErrors(page) {
 export const overflowOf = (page) => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 // 보이는 명시사항 선택 단추(.bl-seg)마다 글자 노드가 놓인 줄 수를 세어 두 줄 이상인 단추 이름을 돌려준다.
 // 좁은 폭에서 '다세대주택'·'위반건축물'이 두 줄로 꺾이면 단추가 높아져 아래 칸이 밀린다.
-export const twoLineChoices = (page) => page.evaluate(() => [...document.querySelectorAll(".bl-seg .work-choice")].filter((choice) => choice.offsetParent).flatMap((choice) => {
+// 설명 줄이 붙은 단추(.bl-seg--noted: 몇 편·그림체·품질)는 일부러 두 줄(이름 + 작은 설명)이라 세지 않는다.
+export const twoLineChoices = (page) => page.evaluate(() => [...document.querySelectorAll(".bl-seg:not(.bl-seg--noted) .work-choice")].filter((choice) => choice.offsetParent).flatMap((choice) => {
   const walker = document.createTreeWalker(choice, NodeFilter.SHOW_TEXT);
   const tops = new Set();
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
@@ -155,7 +188,7 @@ export const twoLineChoices = (page) => page.evaluate(() => [...document.querySe
 // 고르기 전에 한 번, 보이는 단추를 하나씩 고를 때마다 한 번 잰다. 누른 단추 이름을 돌려준다.
 export async function expectOneLineChoices(page, label) {
   expect(await twoLineChoices(page), `${label}: 고르기 전 두 줄 단추`).toEqual([]);
-  const choices = page.locator(".bl-seg .work-choice:visible");
+  const choices = page.locator(".bl-seg:not(.bl-seg--noted) .work-choice:visible");
   const names = [];
   for (let index = 0; index < await choices.count(); index++) {
     const choice = choices.nth(index);
