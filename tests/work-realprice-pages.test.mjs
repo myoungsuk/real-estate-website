@@ -7,7 +7,7 @@ import { REALPRICE_VIEW_PAGE_SIZE } from "../src/lib/work/realprice-view.mjs";
 
 const readSource = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 const PAGES = ["src/pages/admin/work/realprice/index.astro", "src/pages/admin/work/realprice/settings.astro", "src/pages/admin/work/realprice/promo.astro"];
-const SCRIPTS = ["src/lib/work-realprice-client.ts", "src/lib/work-realprice-dom.ts", "src/lib/work/realprice-view.mjs", "src/lib/work-realprice-card.ts", "src/lib/work/realprice-promo.mjs", "src/lib/work-card-draw.ts"];
+const SCRIPTS = ["src/lib/work-realprice-client.ts", "src/lib/work-realprice-dom.ts", "src/lib/work/realprice-view.mjs", "src/lib/work-realprice-card.ts", "src/lib/work/realprice-promo.mjs", "src/lib/work-card-draw.ts", "src/lib/work-realprice-detail.ts", "src/lib/work/realprice-complex-view.mjs"];
 // 미디어 덩어리 하나(@media … { … })를 잘라 낸다. 안쪽 괄호가 한 겹인 이 파일의 규칙 모양을 기준으로 한다.
 const mediaBlocks = (css, query) => {
   const blocks = [];

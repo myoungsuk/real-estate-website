@@ -60,7 +60,7 @@ const monthIndex = (date) => Number(date.slice(0, 4)) * 12 + Number(date.slice(5
 const ymOf = (index) => `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, "0")}`;
 
 // 공개 단지 slug → 세대수(facts '규모'의 "n세대"). 읽지 못하면 넣지 않는다.
-const HOUSEHOLDS = new Map(complexes
+export const HOUSEHOLDS = new Map(complexes
   .filter((complex) => complex?.status === "published")
   .map((complex) => {
     const scale = (complex.facts ?? []).find((fact) => fact?.label === "규모")?.value ?? "";

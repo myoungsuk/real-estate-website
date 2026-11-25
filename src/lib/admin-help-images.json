@@ -704,13 +704,13 @@
     },
     "promo-pick": {
       "route": "/admin/work/realprice/",
-      "sources": "1be579ea5755c58a697f241c424807a59b3009b34fa1e2466765974dba513ed1",
+      "sources": "e7f76ba4fc85390b6ed29ec14b11af18b2a1e636ddcb2fe97130115ba1b993f6",
       "shots": {
         "promo-phone-1-pick": {
           "width": 780,
           "height": 1800,
-          "bytes": 56940,
-          "sha256": "72932e2e3864b1e83b21ddf9fd20e11c345ac2a7868ba1799824d1cb52acbf16",
+          "bytes": 56998,
+          "sha256": "12cc68f9a9fc5ddcb354b26b24c72eb61fe28b7fb20930ddb3d8ecdc3b81ef72",
           "marks": [
             [
               0.8513,

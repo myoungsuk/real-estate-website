@@ -58,7 +58,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const MONTH_PATTERN = /^(\d{4})-(0[1-9]|1[0-2])$/u;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
 export const TRADE_KEY_PATTERN = /^(sale|rent|presale):\d{6}:[0-9a-f]{20}:\d{1,4}$/u;
-const APT_SEQ_PATTERN = /^[0-9A-Za-z-]{1,20}$/u;
+export const APT_SEQ_PATTERN = /^[0-9A-Za-z-]{1,20}$/u;
 const AREA_PATTERN = /^\d{1,4}(?:\.\d{1,2})?$/u;
 const PRICE_PATTERN = /^\d{1,13}$/u;
 const CONTROL_PATTERN = /[\u0000-\u001F\u007F]/u;
@@ -197,7 +197,7 @@ export function decodeTradeCursor(value) {
   return { dealDate: parsed.d, tradeKey: parsed.k };
 }
 
-function parseArea(value, field) {
+export function parseArea(value, field) {
   if (value === null || value === "") return null;
   if (!AREA_PATTERN.test(value)) throw invalid([field]);
   const x100 = Math.round(Number(value) * 100);
