@@ -3,6 +3,7 @@ import {
   getUnexpectedNaverListingKeys,
 } from "../src/lib/naver-listing-public-validation.mjs";
 import { matchComplexByListingTitle, normalizeComplexText } from "../src/lib/complex-matching.mjs";
+import { getBlogCategoryErrors, getBlogExcerptErrors } from "../src/lib/blog-excerpt.mjs";
 
 const allowedStatuses = new Set(["draft", "published", "contracted", "ended"]);
 const allowedTradeTypes = new Set(["sale", "jeonse", "monthly-rent"]);
@@ -186,6 +187,8 @@ const publicContentSchemas = Object.freeze({
     status: valueSchema,
     title: valueSchema,
     summary: valueSchema,
+    excerpt: valueSchema,
+    category: valueSchema,
     url: valueSchema,
     publishedAt: valueSchema,
     thumbnail: imageSchema,
@@ -930,6 +933,16 @@ export function validateExternalLinks(externalLinks) {
     if (!allowedExternalContentStatuses.has(link.status)) errors.push(`${path}.status: draft 또는 published만 허용합니다.`);
     for (const key of ["title", "summary"]) {
       if (!isNonEmptyString(link[key])) errors.push(`${path}.${key}: 공개 문구가 필요합니다.`);
+    }
+    // 글 앞부분 요약(excerpt)·네이버 분류(category)는 블로그 글에만 두는 선택 칸이다(2026-11-25 사용자 승인).
+    // 형식 규칙(1 ~ 300자·1 ~ 30자, 줄바꿈·앞뒤 공백·HTML·엔티티 없음)은 src/lib/blog-excerpt.mjs 한 곳에 둔다.
+    for (const [key, getErrors] of [["excerpt", getBlogExcerptErrors], ["category", getBlogCategoryErrors]]) {
+      if (link[key] === undefined) continue;
+      if (link.type !== "blog") {
+        errors.push(`${path}.${key}: 블로그 콘텐츠에만 사용할 수 있습니다.`);
+        continue;
+      }
+      for (const message of getErrors(link[key])) errors.push(`${path}.${key}: ${message}`);
     }
     try {
       const url = new URL(link.url);

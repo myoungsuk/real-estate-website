@@ -397,6 +397,68 @@ test("블로그와 유튜브 콘텐츠는 공개 상태와 자체 이미지 경�
   assert.match(validateExternalLinks([{ ...links[0], youtubeFormat: "video" }]).join("\n"), /블로그 콘텐츠/);
 });
 
+test("글 앞부분 요약·분류 칸은 블로그 글에만 두고 형식을 검증한다", () => {
+  const blog = {
+    id: "naver-blog-224999999999",
+    type: "blog",
+    status: "published",
+    title: "임대차 계약 신고 정리",
+    summary: "공개 승인 요약",
+    excerpt: "전세나 월세 계약을 마친 뒤에도 꼭 확인해야 하는 절차가 있습니다…",
+    category: "아파트/분양권",
+    url: "https://blog.naver.com/PostView.naver?blogId=p5468300&logNo=224999999999",
+    publishedAt: "2026-08-26",
+    thumbnail: null,
+  };
+  const { excerpt, category, ...plain } = blog;
+  const youtube = { ...plain, id: "youtube-short-1", type: "youtube", youtubeFormat: "short", url: "https://www.youtube.com/watch?v=I05mw0iCFnM" };
+  const instagram = { ...plain, id: "instagram-2026-08-26", type: "instagram", url: "https://www.instagram.com/p/ABCdef_12-3/", thumbnail: { src: "/images/content/instagram/a.webp", alt: "사진" } };
+  for (const links of [[blog], [plain], [{ ...plain, excerpt }], [{ ...plain, category }], [youtube], [instagram]]) {
+    assert.deepEqual(validateExternalLinks(links), []);
+    assert.deepEqual(findUnexpectedKeys("externalLinks", links), []);
+    assert.deepEqual(validateAdminResource("external-links", links), []);
+  }
+
+  for (const other of [youtube, instagram]) {
+    const errors = validateExternalLinks([{ ...other, excerpt, category }]).join("\n");
+    assert.match(errors, /externalLinks\[0\]\.excerpt: 블로그 콘텐츠에만 사용할 수 있습니다/u, other.type);
+    assert.match(errors, /externalLinks\[0\]\.category: 블로그 콘텐츠에만 사용할 수 있습니다/u, other.type);
+    assert.match(validateAdminResource("external-links", [{ ...other, category }]).join("\n"), /category: 블로그 콘텐츠에만/u, `${other.type}: 관리자 저장도 막음`);
+  }
+
+  for (const [value, pattern] of [
+    ["", /excerpt: 1 ~ 300자/u],
+    ["가".repeat(301), /excerpt: 1 ~ 300자/u],
+    ["첫 줄\n둘째 줄", /excerpt: 줄바꿈/u],
+    [" 앞 공백", /excerpt: 앞뒤 공백/u],
+    ["뒤 공백 ", /excerpt: 앞뒤 공백/u],
+    ["<b>굵게</b>", /excerpt: HTML 태그/u],
+    ["&quot;따옴표&quot;", /excerpt: HTML 엔티티/u],
+    [null, /excerpt: 문자열/u],
+    [["글"], /excerpt: 문자열/u],
+  ]) {
+    assert.match(validateExternalLinks([{ ...blog, excerpt: value }]).join("\n"), pattern, JSON.stringify(value));
+  }
+  assert.deepEqual(validateExternalLinks([{ ...blog, excerpt: "가".repeat(300) }]), []);
+  for (const [value, pattern] of [
+    ["", /category: 1 ~ 30자/u],
+    ["가".repeat(31), /category: 1 ~ 30자/u],
+    ["분류\n둘", /category: 줄바꿈/u],
+    ["<i>분류</i>", /category: HTML 태그/u],
+    [7, /category: 문자열/u],
+  ]) {
+    assert.match(validateExternalLinks([{ ...blog, category: value }]).join("\n"), pattern, JSON.stringify(value));
+  }
+
+  // 태그 칸은 두지 않는다(쓸 화면이 없음). 새 칸에도 민감 문자열 검사는 그대로 걸린다.
+  assert.match(findUnexpectedKeys("externalLinks", [{ ...blog, tags: ["대전"] }]).join("\n"), /externalLinks\[0\]\.tags: 허용되지 않은 필드/u);
+  assert.match(validateAdminResource("external-links", [{ ...blog, tags: ["대전"] }]).join("\n"), /tags: 허용되지 않은 필드/u);
+  for (const text of ["문의 010-1111-2222", "이번 집은 1203호입니다", "someone@example.com 으로 주세요"]) {
+    assert.match(findSensitiveStrings([{ ...blog, excerpt: text }], { path: "externalLinks" }).join("\n"), /externalLinks\[0\]\.excerpt/u, text);
+    assert.notDeepEqual(validateAdminResource("external-links", [{ ...blog, excerpt: text }]), [], text);
+  }
+});
+
 test("인스타그램 콘텐츠는 게시물 주소(/p/·/reel/)·썸네일 필수·youtubeFormat 금지를 검증한다", async () => {
   const post = {
     id: "instagram-2026-11-19",

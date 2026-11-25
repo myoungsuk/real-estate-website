@@ -188,6 +188,22 @@ test("관리자 인스타그램: 메뉴 이름에 인스타그램을 넣고, 콘
   assert.match(editor, /idField\.required = !isInstagram/u, "인스타그램은 ID 칸을 비워도 저장 단계로 넘어감");
 });
 
+test("관리자 블로그 카드 저장: 입력 칸이 없는 글 앞부분 요약·분류를 다시 조립할 때 그대로 넘긴다", async () => {
+  const editor = await readSource("src/pages/admin/external-links/index.astro");
+  assert.match(editor, /import \{ keepBlogExtras \} from "\.\.\/\.\.\/\.\.\/lib\/admin-blog-extras\.mjs";/u);
+  assert.match(
+    editor,
+    /const existing = resource\.data\.find\(\(item\) => item\.id === originalId\);/u,
+    "고치는 중인 저장 항목",
+  );
+  assert.match(
+    editor,
+    /summary: field\("summary"\)!\.value\.trim\(\), \.\.\.keepBlogExtras\(existing, \{ type, url: field\("url"\)!\.value\.trim\(\) \}\), url: /u,
+    "저장 항목을 다시 조립할 때 요약 → 분류를 summary 뒤에 그대로 넘김",
+  );
+  assert.doesNotMatch(editor, /name="excerpt"|name="category"/u, "요약·분류를 고치는 입력 칸은 아직 없음(다음 단계)");
+});
+
 test("관리자 인스타그램: 계정 이름이 들어간 게시물 주소는 저장 전에 /p/·/reel/ 주소로 바꾼다", async () => {
   const { normalizeInstagramUrl } = await import("../src/lib/admin-instagram-url.mjs");
   const editor = await readSource("src/pages/admin/external-links/index.astro");

@@ -18,6 +18,7 @@ import {
 } from "./sync/external-content.mjs";
 import { ExternalSyncSourceUnavailableError, ExternalSyncTrustError } from "./sync/errors.mjs";
 import { fetchXml, prepareWebpThumbnail } from "./sync/http.mjs";
+import { BLOG_EXCERPT_SKIP_LABELS } from "../src/lib/blog-excerpt.mjs";
 
 const BLOG_FEED_HOSTS = new Set(["rss.blog.naver.com"]);
 const YOUTUBE_FEED_HOSTS = new Set(["www.youtube.com"]);
@@ -222,6 +223,10 @@ export async function runExternalContentSync({
   const youtubeCandidates = youtubeSource.xml === null ? [] : parseYouTubeFeed(youtubeSource.xml, { channelId: youtubeChannelId });
   const newCandidates = planNewExternalContent(current, [...blogCandidates, ...youtubeCandidates], { blogId });
   const warnings = [blogSource.warning, youtubeSource.warning].filter(Boolean);
+  // 요약을 싣지 않는 새 블로그 글(매물 소개·금액·동 번호·민감 문자열 등)은 요약 없이 넣고 실행을 계속한다. 까닭만 기록한다.
+  const blogWithoutExcerpt = newCandidates
+    .filter((candidate) => candidate.type === "blog" && !candidate.excerpt)
+    .map((candidate) => ({ id: candidate.id, reason: candidate.excerptSkipReason }));
   const prepared = await mapWithConcurrency(newCandidates, 4, (candidate) => prepareCandidate(candidate, {
     rootDir: absoluteRoot,
     fetcher,
@@ -254,6 +259,7 @@ export async function runExternalContentSync({
     },
     blogNew: newCandidates.filter((candidate) => candidate.type === "blog").length,
     youtubeNew: newCandidates.filter((candidate) => candidate.type === "youtube").length,
+    blogWithoutExcerpt,
     assetCount: assets.length,
     contentChanged,
     keepaliveChanged,
@@ -264,6 +270,9 @@ export async function runExternalContentSync({
   logger.log(`YouTube source: ${result.sourceStatus.youtube}`);
   logger.log(`Blog new: ${result.blogNew}`);
   logger.log(`YouTube new: ${result.youtubeNew}`);
+  for (const { id, reason } of blogWithoutExcerpt) {
+    logger.log(`Blog without excerpt: ${id} (${BLOG_EXCERPT_SKIP_LABELS[reason] ?? reason})`);
+  }
   logger.log(`${dryRun ? "Would add" : "Added"} assets: ${result.assetCount}`);
   logger.log(`Keepalive: ${keepaliveChanged ? (dryRun ? "would refresh" : "refreshed") : "unchanged"}`);
   for (const warning of warnings) logger.warn(`${process.env.GITHUB_ACTIONS === "true" ? "::warning::" : "Warning: "}${warning}`);
