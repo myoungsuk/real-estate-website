@@ -48,6 +48,7 @@ Cloudflare에서 DNS를 관리한다면 Domain 속성의 DNS TXT 인증을 우�
 - 실행 조건: `master` push의 CI 성공 → 변경 URL 계획 → Cloudflare Production marker의 `source.commit`이 그 커밋이거나 후속 커밋 → 공개키 확인 → 네이버 IndexNow 제출
 - 2026-11-19 변경: 전에는 `search` scope 값이 같아야 통과했습니다. 매일 매물 동기화처럼 뒤 커밋이 먼저 배포되면 앞 커밋 알림이 30분 뒤 실패하고 그 몫의 주소가 제출되지 않았습니다(2026-11-19 실행 44335176806, 주소 15개). 지금은 운영이 그 커밋을 포함하면 제출합니다.
 - 2026-11-20 변경: 관리자 전용 경로(`src/lib/work/`, `src/lib/work-*`, `src/lib/admin/`, `src/lib/admin-*`, `src/components/admin/`, `src/data/work/`, `src/layouts/AdminLayout.astro`, `src/styles/admin.css`)만 바뀐 커밋은 공개 주소를 제출하지 않습니다(전에는 `src/lib`·`src/styles` 변경을 모두 공통 변경으로 보고 공개 주소 전체를 제출). 공개 화면 코드가 이 경로를 가져다 쓰면 `tests/indexnow.test.mjs`가 실패합니다. 같은 날 실행 묶음(concurrency)을 커밋마다 따로 두어, 짧은 사이에 여러 번 병합해도 가운데 커밋의 알림이 취소되지 않게 했습니다.
+- 2026-11-25 변경: `src/data/deal-news.json`(거래 완료 소식)이 바뀐 커밋은 홈(`/`)을 제출합니다.
 - 권한: GitHub `contents: read`만 사용하며 Secret이나 쓰기 토큰을 사용하지 않음
 - 공개키가 사이트 루트의 기본 위치에 있으므로 제출 본문에는 선택 항목인 `keyLocation`을 넣지 않습니다. 공개키 확인 단계는 실제 루트 URL을 직접 검사합니다.
 

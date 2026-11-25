@@ -1,5 +1,5 @@
 // 업무 도구 단계 P(공개 자료 도구) API. work-api.mjs의 handleWorkApi()가 단계 2 켜기 값 확인 **전에** 이 파일로 넘긴다(설계서 22.2절).
-// - 경로: /work/public-tools/session, /work/realprice/*(status·refresh·trades·insights·complex·complexes·watch), /work/blog/*(sources·drafts·limits, P3 글 초안, 처리는 work-blog.mjs).
+// - 경로: /work/public-tools/session, /work/realprice/*(status·refresh·trades·insights·complex·deal-count·complexes·watch), /work/blog/*(sources·drafts·limits, P3 글 초안, 처리는 work-blog.mjs).
 // - 순서: 단계 P 켜기 값 → 구조 번호 → (쓰기) Origin·CSRF → 입력 → 처리 → 감사(쓰기인 realprice.refresh·realprice.watch.update, blog.create·confirm·cancel·settings.update).
 // - 꺼진 기능의 거부는 D1에 쓰지 않고 Worker 로그에 HMAC 작업자 ID만 남긴다(단계 2와 같음).
 // - work-api.mjs와 서로 import한다. 서로의 내보내기는 요청을 처리할 때만 쓰므로(모듈을 읽을 때 쓰지 않음) 순환 import가 문제되지 않는다.
@@ -10,6 +10,7 @@ import { REALPRICE_RETRY_POLICY } from "./realprice-fetch.mjs";
 import { listRealpriceTrades, readRealpriceWatch, saveRealpriceWatch, searchRealpriceComplexes } from "./realprice-query.mjs";
 import { readRealpriceInsights } from "./realprice-insights.mjs";
 import { readRealpriceComplex } from "./realprice-complex.mjs";
+import { readDealCount } from "./realprice-deal-count.mjs";
 import { readRealpriceStatus, refreshStatements } from "./realprice-store.mjs";
 import { WorkApiError, createWorkCsrfToken, hasD1, validateWorkJsonWrite } from "./work-security.mjs";
 import { writeBatchWithAudit } from "./work-audit.mjs";
@@ -176,6 +177,11 @@ async function handleRealprice(context) {
     if (route === "/realprice/complex") {
       if (method !== "GET") throw methodNotAllowed("GET");
       return workSuccess(await readRealpriceComplex(db, new URL(request.url).searchParams, { nowMs: now }), requestId);
+    }
+    // 거래 완료 소식에 단지 이름을 쓸 수 있는지 볼 건수(읽기만, 건수 하나만 돌려줌. worker/realprice-deal-count.mjs).
+    if (route === "/realprice/deal-count") {
+      if (method !== "GET") throw methodNotAllowed("GET");
+      return workSuccess(await readDealCount(db, new URL(request.url).searchParams, { nowMs: now }), requestId);
     }
     if (route === "/realprice/complexes") {
       if (method !== "GET") throw methodNotAllowed("GET");

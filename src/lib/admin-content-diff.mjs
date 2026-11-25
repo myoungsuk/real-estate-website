@@ -8,6 +8,7 @@ const RESOURCE_LABELS = Object.freeze({
   office: "사무소",
   faq: "자주 묻는 질문",
   reviews: "후기",
+  "deal-news": "거래 완료 소식",
 });
 
 const FIELD_LABELS = Object.freeze({
@@ -46,6 +47,12 @@ const FIELD_LABELS = Object.freeze({
   relatedContentIds: "연결 콘텐츠",
   question: "질문",
   answer: "답변",
+  placeKind: "이름 종류(단지·동네)",
+  umdName: "동네",
+  complexName: "단지 이름",
+  propertyKind: "건물 종류",
+  dealType: "거래 종류",
+  areaBand: "전용면적대(㎡)",
 });
 
 const EXACT_LABELS = Object.freeze({
@@ -68,6 +75,8 @@ const EXACT_LABELS = Object.freeze({
   "external-links:items[].category": "외부 콘텐츠 · 네이버 분류",
   "complexes:items[].seo.title": "지역·단지 · 검색 제목",
   "complexes:items[].seo.description": "지역·단지 · 검색 설명",
+  "deal-news:items[]": "거래 완료 소식 · 소식 한 건",
+  "deal-news:items[].id": "거래 완료 소식 · 소식 번호",
 });
 
 const SENSITIVE_KEY_PATTERN = /(?:password|passwd|secret|token|authorization|cookie|accessjwt|privatekey|privateNote|internalNote|customer(?:Name|Phone|Email)?)/iu;
