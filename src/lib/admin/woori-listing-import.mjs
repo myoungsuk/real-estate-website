@@ -138,11 +138,21 @@ function isSafeListingName(value) {
 }
 
 // 아파트·분양권이 아닌 매물의 처음 제목: 공개 매물명 → "{동네} {종류 말}" → "{종류 말} 매물".
-export function buildWooriOtherTitle({ name, neighborhood, propertyType }) {
+// 공개 면적 글(areaLabel)이 있으면 끝 면적(전용·연면적, 하나뿐이면 그 값)의 정수를 붙인다(예: "천동 복합상가 168㎡").
+// 같은 건물·같은 동네 상가가 여러 건이면 제목이 모두 같아 목록에서 구별되지 않아서다(2026-11-25 사용자 지시 "제목 바꾸기도 같이 해").
+export function buildWooriOtherTitle({ name, neighborhood, propertyType, areaLabel = null }) {
   const cleanName = normalizeBankListingText(name);
-  if (isSafeListingName(cleanName)) return cleanName;
   const word = titleWords.get(propertyType) ?? propertyType;
-  return neighborhood ? `${neighborhood} ${word}` : `${word} 매물`;
+  const base = isSafeListingName(cleanName) ? cleanName : neighborhood ? `${neighborhood} ${word}` : `${word} 매물`;
+  const area = titleAreaText(areaLabel);
+  return area ? `${base} ${area}` : base;
+}
+
+// "계약 299.04㎡ · 전용 168.8㎡" → "168㎡", "토지 1200㎡" → "1,200㎡". 읽지 못하면 null(면적 없이 제목만).
+function titleAreaText(areaLabel) {
+  const matches = [...String(areaLabel ?? "").matchAll(/(\d+(?:\.\d+)?)㎡/gu)];
+  const area = Math.trunc(Number(matches.at(-1)?.[1]));
+  return Number.isFinite(area) && area > 0 ? `${area.toLocaleString("en-US")}㎡` : null;
 }
 
 // 엑셀에는 광고 층 하나만 있다. 총층이 없으므로 "7층"·"고층" 꼴로 적는다. 이미 같은 층으로 시작하는 "7/22층" 꼴이 있으면 그 값을 둔다.
@@ -254,8 +264,8 @@ function normalizeWooriRow(row, existing, reviewSource, checkedAt) {
     title = (complexName && address.building ? `${complexName} ${address.building}동` : null) ?? existing?.title ?? null;
     if (!title) return { naverId, skip: "동 번호가 없어 안전한 공개 제목을 만들 수 없습니다. 직접 등록으로 넣어 주세요." };
   } else {
-    // 그 밖의 종류는 이미 있는 제목(직접 등록에서 넘어온 매물 포함)을 두고, 처음이면 공개 매물명 또는 "{동네} {종류 말}".
-    title = existing?.title ?? buildWooriOtherTitle({ name: row["매물명"], neighborhood: parseWooriNeighborhood(row["소재지"]), propertyType });
+    // 그 밖의 종류는 이미 있는 제목(직접 등록에서 넘어온 매물 포함)을 두고, 처음이면 공개 매물명 또는 "{동네} {종류 말}" 뒤에 면적.
+    title = existing?.title ?? buildWooriOtherTitle({ name: row["매물명"], neighborhood: parseWooriNeighborhood(row["소재지"]), propertyType, areaLabel });
   }
 
   const listing = {
