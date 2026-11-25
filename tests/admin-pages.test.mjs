@@ -283,7 +283,7 @@ test("관리자 저장 화면은 공통 변경 요약·사전 검증과 이탈 �
 });
 
 test("외부 콘텐츠는 블로그와 유튜브를 나누고 일반 영상을 기본으로 Shorts를 전환한다", async () => {
-  const [component, home, blog, youtube, privacy, headers, contentSource, rawData] = await Promise.all([
+  const [component, home, blog, youtube, privacy, headers, contentSource, rawData, hoverPreview] = await Promise.all([
     readSource("src/components/ExternalContentList.astro"),
     readSource("src/pages/index.astro"),
     readSource("src/pages/blog.astro"),
@@ -292,6 +292,8 @@ test("외부 콘텐츠는 블로그와 유튜브를 나누고 일반 영상을 �
     readSource("public/_headers"),
     readSource("src/lib/content.ts"),
     readSource("src/data/external-links.json"),
+    // 미리 재생 코드는 2026-11-25 홈 유튜브 칸과 같이 쓰려고 ExternalContentList.astro에서 이 부품으로 옮겼다(동작 그대로).
+    readSource("src/components/YoutubeHoverPreview.astro"),
   ]);
   const items = JSON.parse(rawData);
   const blogs = items.filter((item) => item.type === "blog");
@@ -316,11 +318,13 @@ test("외부 콘텐츠는 블로그와 유튜브를 나누고 일반 영상을 �
   assert.match(component, /aria-pressed="true"[^>]*data-content-filter="video"/);
   assert.match(component, /data-content-filter="short">Shorts 보기/);
   assert.match(component, /showPage\(0\)/);
-  assert.match(component, /\(hover: hover\) and \(pointer: fine\)/);
+  assert.match(component, /\{items\.length > 0 && hoverPreview && hasYoutubeItems && <YoutubeHoverPreview \/>\}/);
   assert.match(component, /prefers-reduced-motion: reduce/);
-  assert.match(component, /media\.closest<HTMLElement>\("\[data-content-item\]"\)/);
-  assert.match(component, /youtube-nocookie\.com\/embed/);
-  assert.match(component, /}, 300\)/);
+  assert.match(hoverPreview, /\(hover: hover\) and \(pointer: fine\)/);
+  assert.match(hoverPreview, /prefers-reduced-motion: reduce/);
+  assert.match(hoverPreview, /media\.closest<HTMLElement>\("\[data-content-item\]"\)/);
+  assert.match(hoverPreview, /youtube-nocookie\.com\/embed/);
+  assert.match(hoverPreview, /}, 300\)/);
   assert.match(home, /homeBlogContents[^]*pageSize=\{9\}[^]*paginate=\{false\}/);
   assert.match(home, /homeYoutubeContents[^]*pageSize=\{6\}[^]*paginate=\{false\}[^]*hoverPreview/);
   assert.doesNotMatch(home, /youtubeFilters/);

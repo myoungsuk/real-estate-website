@@ -580,6 +580,66 @@
   content: "· ";
 }
 
+/* 유튜브 칸: 블로그 칸 짜임 그대로에 재생 표시와 미리 재생 칸만 더한다(2026-11-25).
+   재생 표시는 썸네일의 가격 글자를 가리지 않게 왼쪽 아래 모서리에 둔다. 꾸밈이라 누르는 곳이 아니다 */
+.home-yt__media {
+  position: relative;
+}
+
+.home-yt__play {
+  position: absolute;
+  z-index: 1;
+  bottom: 12px;
+  left: 12px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(19, 42, 62, 0.82);
+  pointer-events: none;
+}
+
+.home-yt__play::after {
+  content: "";
+  position: absolute;
+  top: 14px;
+  left: 19px;
+  border-top: 10px solid transparent;
+  border-bottom: 10px solid transparent;
+  border-left: 15px solid #ffffff;
+}
+
+.home-blog__row .home-yt__play {
+  bottom: 5px;
+  left: 5px;
+  width: 24px;
+  height: 24px;
+}
+
+.home-blog__row .home-yt__play::after {
+  top: 6px;
+  left: 9px;
+  border-top-width: 6px;
+  border-bottom-width: 6px;
+  border-left-width: 9px;
+}
+
+/* 미리 재생 표시가 칸 누름 영역을 가로막지 않게 */
+.home-yt .content-card__preview-label {
+  pointer-events: none;
+}
+
+/* "음소거 미리보기" 표시는 큰 영상이 실제로 재생되는 동안에만 보인다.
+   목록 썸네일(128px)은 표시가 썸네일 대부분을 덮어 보이지 않고, 미리 재생 화면만 뜬다 */
+@media (hover: hover) and (pointer: fine) {
+  .home-yt .content-card__preview-label {
+    display: none;
+  }
+
+  .home-yt .home-blog__lead .is-previewing .content-card__preview-label {
+    display: inline-flex;
+  }
+}
+
 /* 상담 구역 */
 .home-contact__box {
   display: grid;

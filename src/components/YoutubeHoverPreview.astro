@@ -1,0 +1,77 @@
+---
+// 유튜브 카드에 마우스를 올리면 소리 없이 미리 재생한다(/youtube/·홈 유튜브 칸이 함께 쓴다).
+// 규칙(DESIGN.md "움직임"): 정밀 포인터가 카드에 0.3초 머물 때만 youtube-nocookie 영상 하나를 음소거로 띄우고,
+// 카드에서 벗어나거나 쪽을 넘기거나 창을 떠나면 지운다. 휴대폰(정밀 포인터 없음)·움직임 줄이기 환경에서는 실행하지 않는다.
+// 2026-11-25 홈 유튜브 칸(큰 영상 1개 + 목록 5개)도 쓰게 ExternalContentList.astro에서 이 부품으로 옮겼다(동작은 그대로).
+// 스크립트만 있는 부품이다. 다른 파일을 import하지 않아야 Astro가 HTML 안에 그대로 넣는다(따로 받는 .js 요청이 생기면 홈 LCP가 늦어짐).
+// 한 쪽에 여러 번 넣어도 스크립트는 한 번만 들어간다.
+//
+// 표시 약속: 묶음 칸에 data-youtube-hover-preview="true", 카드에 data-content-item,
+// 썸네일 칸에 data-youtube-preview-media="true"·data-youtube-video-id·data-youtube-preview-title, 그 안에 [data-youtube-preview-frame].
+---
+
+<script>
+  let stopActivePreview: (() => void) | null = null;
+  let windowListenersReady = false;
+
+  function setupYoutubeHoverPreview() {
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const canHoverPreview = window.matchMedia("(hover: hover) and (pointer: fine)").matches
+      && !prefersReducedMotion;
+    if (!canHoverPreview) return;
+
+    document.querySelectorAll<HTMLElement>("[data-youtube-hover-preview='true']").forEach((pager) => {
+      if (pager.dataset.youtubePreviewReady === "true") return;
+      pager.querySelectorAll<HTMLElement>("[data-youtube-preview-media='true']").forEach((media) => {
+        const previewTrigger = media.closest<HTMLElement>("[data-content-item]");
+        const previewFrame = media.querySelector<HTMLElement>("[data-youtube-preview-frame]");
+        const videoId = media.dataset.youtubeVideoId;
+        const title = media.dataset.youtubePreviewTitle ?? "YouTube 영상";
+        let previewTimer: number | null = null;
+
+        const stopPreview = () => {
+          if (previewTimer !== null) window.clearTimeout(previewTimer);
+          previewTimer = null;
+          previewFrame?.replaceChildren();
+          if (previewFrame) previewFrame.hidden = true;
+          media.classList.remove("is-previewing");
+          if (stopActivePreview === stopPreview) stopActivePreview = null;
+        };
+
+        previewTrigger?.addEventListener("mouseenter", () => {
+          if (!previewFrame || !videoId) return;
+          previewTimer = window.setTimeout(() => {
+            stopActivePreview?.();
+            const embedUrl = new URL(`https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}`);
+            embedUrl.searchParams.set("autoplay", "1");
+            embedUrl.searchParams.set("mute", "1");
+            embedUrl.searchParams.set("playsinline", "1");
+            embedUrl.searchParams.set("controls", "0");
+            embedUrl.searchParams.set("rel", "0");
+            embedUrl.searchParams.set("origin", window.location.origin);
+            const iframe = document.createElement("iframe");
+            iframe.src = embedUrl.toString();
+            iframe.title = `${title} 음소거 미리보기`;
+            iframe.allow = "autoplay; encrypted-media; picture-in-picture";
+            iframe.referrerPolicy = "strict-origin-when-cross-origin";
+            iframe.tabIndex = -1;
+            previewFrame.replaceChildren(iframe);
+            previewFrame.hidden = false;
+            media.classList.add("is-previewing");
+            stopActivePreview = stopPreview;
+          }, 300);
+        });
+        previewTrigger?.addEventListener("mouseleave", stopPreview);
+        pager.addEventListener("content-page-change", stopPreview);
+      });
+      pager.dataset.youtubePreviewReady = "true";
+    });
+
+    if (windowListenersReady) return;
+    windowListenersReady = true;
+    window.addEventListener("blur", () => stopActivePreview?.());
+    document.addEventListener("visibilitychange", () => { if (document.hidden) stopActivePreview?.(); });
+  }
+
+  setupYoutubeHoverPreview();
+</script>

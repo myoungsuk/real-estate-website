@@ -5,6 +5,8 @@ import {
   type ExternalContent,
 } from "../lib/content";
 import { getBlogCardCategory, getBlogCardSummary } from "../lib/blog-card.mjs";
+import { getYoutubeCardSummary, getYoutubeCardTitle, getYoutubeFormatLabel, getYoutubeVideoId } from "../lib/youtube-card.mjs";
+import YoutubeHoverPreview from "./YoutubeHoverPreview.astro";
 
 interface Props {
   items?: ExternalContent[];
@@ -41,18 +43,9 @@ const initiallyFilteredItems = showYoutubeFilters
   : items;
 const initiallyVisibleIds = new Set(initiallyFilteredItems.slice(0, safePageSize).map((item) => item.id));
 
-function getYoutubeVideoId(item: ExternalContent) {
-  if (item.type !== "youtube") return null;
-  try {
-    const url = new URL(item.url);
-    if (url.hostname === "youtu.be") return url.pathname.split("/").filter(Boolean)[0] ?? null;
-    if (url.pathname === "/watch") return url.searchParams.get("v");
-    const segments = url.pathname.split("/").filter(Boolean);
-    return ["shorts", "live"].includes(segments[0]) ? segments[1] ?? null : null;
-  } catch {
-    return null;
-  }
-}
+// 유튜브 카드는 제목 끝 해시태그를 떼고, 틀 문장 설명은 그리지 않는다(2026-11-25, 규칙은 youtube-card.mjs). 블로그 요약 규칙은 blog-card.mjs.
+const cardTitle = (item: ExternalContent): string => getYoutubeCardTitle(item);
+const cardSummary = (item: ExternalContent): string | null => (item.type === "youtube" ? getYoutubeCardSummary(item) : getBlogCardSummary(item));
 ---
 
 {items.length > 0 ? (
@@ -79,14 +72,14 @@ function getYoutubeVideoId(item: ExternalContent) {
             class="content-card__media"
             data-youtube-preview-media={hoverPreview && item.type === "youtube" && getYoutubeVideoId(item) ? "true" : undefined}
             data-youtube-video-id={hoverPreview ? getYoutubeVideoId(item) : undefined}
-            data-youtube-preview-title={hoverPreview && item.type === "youtube" ? item.title : undefined}
+            data-youtube-preview-title={hoverPreview && item.type === "youtube" ? cardTitle(item) : undefined}
           >
             <a
               class="content-card__thumbnail"
               href={item.url}
               target="_blank"
               rel="noopener noreferrer"
-              aria-label={isNote ? undefined : `${item.title} 원문 보기`}
+              aria-label={isNote ? undefined : `${cardTitle(item)} 원문 보기`}
               tabindex={isNote ? "-1" : undefined}
               aria-hidden={isNote ? "true" : undefined}
             >
@@ -106,13 +99,18 @@ function getYoutubeVideoId(item: ExternalContent) {
           {isNote ? (
             <>
               {/* 썸네일 링크는 키보드·읽기 프로그램에서 숨기고, 제목 링크 하나가 카드 전체 누름 영역을 덮는다 */}
-              <a class="content-note__title" href={item.url} target="_blank" rel="noopener noreferrer">{item.title}</a>
+              <a class="content-note__title" href={item.url} target="_blank" rel="noopener noreferrer">{cardTitle(item)}</a>
               {formatContentDate(item.publishedAt) && <time datetime={item.publishedAt!}>{formatContentDate(item.publishedAt)}</time>}
             </>
           ) : (
             <div class="content-card__body">
               {/* 블로그 글에 분류가 있으면 출처 이름표 옆에 분류 딱지를 둔다. 요약은 글 앞부분 요약 → 옛 요약 순서이고, 틀 문장뿐이면 줄을 그리지 않는다(규칙은 blog-card.mjs) */}
-              {getBlogCardCategory(item) ? (
+              {/* 유튜브는 출처 이름표 대신 '일반 영상'/'Shorts' 딱지를 둔다(2026-11-25 사용자 승인 "유튜브 전부 추천대로") */}
+              {getYoutubeFormatLabel(item) ? (
+                <div class="content-card__labels">
+                  <span class="content-card__category">{getYoutubeFormatLabel(item)}</span>
+                </div>
+              ) : getBlogCardCategory(item) ? (
                 <div class="content-card__labels">
                   <p class="content-card__source">NAVER BLOG</p>
                   <span class="content-card__category"><span class="sr-only">분류 </span>{getBlogCardCategory(item)}</span>
@@ -120,9 +118,9 @@ function getYoutubeVideoId(item: ExternalContent) {
               ) : (
                 <p class="content-card__source">{item.type === "blog" ? "NAVER BLOG" : item.type === "instagram" ? "INSTAGRAM" : item.youtubeFormat === "short" ? "YOUTUBE SHORTS" : "YOUTUBE VIDEO"}</p>
               )}
-              <h3><a href={item.url} target="_blank" rel="noopener noreferrer">{item.title}</a></h3>
+              <h3><a href={item.url} target="_blank" rel="noopener noreferrer">{cardTitle(item)}</a></h3>
               {formatContentDate(item.publishedAt) && <time datetime={item.publishedAt!}>{formatContentDate(item.publishedAt)}</time>}
-              {getBlogCardSummary(item) && <p>{getBlogCardSummary(item)}</p>}
+              {cardSummary(item) && <p>{cardSummary(item)}</p>}
               <a class="content-card__link" href={item.url} target="_blank" rel="noopener noreferrer">원문에서 보기 <span aria-hidden="true">↗</span></a>
             </div>
           )}
@@ -152,6 +150,9 @@ function getYoutubeVideoId(item: ExternalContent) {
     <div><h3>{emptyLabel}</h3><p>승인된 링크와 썸네일이 등록되면 이곳에 카드로 표시됩니다.</p></div>
   </div>
 )}
+
+{/* 마우스를 올리면 소리 없이 미리 재생(규칙·코드는 YoutubeHoverPreview.astro, 홈 유튜브 칸과 같이 씀) */}
+{items.length > 0 && hoverPreview && hasYoutubeItems && <YoutubeHoverPreview />}
 
 <script>
   const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -225,59 +226,4 @@ function getYoutubeVideoId(item: ExternalContent) {
     pager.dataset.paginationReady = "true";
     showPage(0);
   });
-
-  const canHoverPreview = window.matchMedia("(hover: hover) and (pointer: fine)").matches
-    && !prefersReducedMotion;
-
-  if (canHoverPreview) {
-    let stopActivePreview: (() => void) | null = null;
-    document.querySelectorAll<HTMLElement>("[data-content-pager][data-youtube-hover-preview='true']").forEach((pager) => {
-      if (pager.dataset.youtubePreviewReady === "true") return;
-      pager.querySelectorAll<HTMLElement>("[data-youtube-preview-media='true']").forEach((media) => {
-        const previewTrigger = media.closest<HTMLElement>("[data-content-item]");
-        const previewFrame = media.querySelector<HTMLElement>("[data-youtube-preview-frame]");
-        const videoId = media.dataset.youtubeVideoId;
-        const title = media.dataset.youtubePreviewTitle ?? "YouTube 영상";
-        let previewTimer: number | null = null;
-
-        const stopPreview = () => {
-          if (previewTimer !== null) window.clearTimeout(previewTimer);
-          previewTimer = null;
-          previewFrame?.replaceChildren();
-          if (previewFrame) previewFrame.hidden = true;
-          media.classList.remove("is-previewing");
-          if (stopActivePreview === stopPreview) stopActivePreview = null;
-        };
-
-        previewTrigger?.addEventListener("mouseenter", () => {
-          if (!previewFrame || !videoId) return;
-          previewTimer = window.setTimeout(() => {
-            stopActivePreview?.();
-            const embedUrl = new URL(`https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}`);
-            embedUrl.searchParams.set("autoplay", "1");
-            embedUrl.searchParams.set("mute", "1");
-            embedUrl.searchParams.set("playsinline", "1");
-            embedUrl.searchParams.set("controls", "0");
-            embedUrl.searchParams.set("rel", "0");
-            embedUrl.searchParams.set("origin", window.location.origin);
-            const iframe = document.createElement("iframe");
-            iframe.src = embedUrl.toString();
-            iframe.title = `${title} 음소거 미리보기`;
-            iframe.allow = "autoplay; encrypted-media; picture-in-picture";
-            iframe.referrerPolicy = "strict-origin-when-cross-origin";
-            iframe.tabIndex = -1;
-            previewFrame.replaceChildren(iframe);
-            previewFrame.hidden = false;
-            media.classList.add("is-previewing");
-            stopActivePreview = stopPreview;
-          }, 300);
-        });
-        previewTrigger?.addEventListener("mouseleave", stopPreview);
-        pager.addEventListener("content-page-change", stopPreview);
-      });
-      pager.dataset.youtubePreviewReady = "true";
-    });
-    window.addEventListener("blur", () => stopActivePreview?.());
-    document.addEventListener("visibilitychange", () => { if (document.hidden) stopActivePreview?.(); });
-  }
 </script>

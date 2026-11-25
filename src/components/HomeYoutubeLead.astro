@@ -1,0 +1,79 @@
+---
+// 홈 "블로그·유튜브 새 글"의 유튜브 칸: 최신 일반 영상 1개를 크게, 그다음 5개는 줄 목록(블로그 칸과 같은 짜임, 2026-11-25 사용자 승인 "유튜브 추천대로"·"유튜브 전부 추천대로").
+// 제목은 끝 해시태그를 뗀 것, 딱지는 /youtube/와 같은 '일반 영상'/'Shorts'이고, 설명·요약은 넣지 않는다(규칙은 youtube-card.mjs).
+// 칸 하나에 누르는 곳은 제목 링크 하나이고 칸 전체를 덮는다. 썸네일은 꾸밈이라 대체 글을 비운다(홈 블로그 칸과 같음).
+// 마우스를 올리면 소리 없이 미리 재생하는 기능은 큰 영상·목록 모두에 둔다(규칙·코드는 YoutubeHoverPreview.astro). 스타일은 src/styles/home.css(홈 전용).
+import { formatContentDate, type ExternalContent } from "../lib/content";
+import { formatShortContentDate } from "../lib/blog-card.mjs";
+import { getYoutubeCardTitle, getYoutubeFormatLabel, getYoutubeVideoId } from "../lib/youtube-card.mjs";
+import YoutubeHoverPreview from "./YoutubeHoverPreview.astro";
+
+interface Props {
+  items: ExternalContent[];
+}
+
+const { items } = Astro.props;
+const [lead, ...rest] = items;
+const baseYear = lead?.publishedAt?.slice(0, 4);
+const media = (item: ExternalContent) => ({ title: getYoutubeCardTitle(item) as string, videoId: getYoutubeVideoId(item) as string | null });
+const leadMedia = lead ? media(lead) : null;
+---
+
+{lead && leadMedia && (
+  <div class="home-blog home-yt" data-youtube-hover-preview="true">
+    <article class="home-blog__lead" data-content-item>
+      <div class="home-blog__media home-yt__media" data-youtube-preview-media={leadMedia.videoId ? "true" : undefined} data-youtube-video-id={leadMedia.videoId ?? undefined} data-youtube-preview-title={leadMedia.title}>
+        {lead.thumbnail ? <img src={lead.thumbnail.src} alt="" width="960" height="540" loading="lazy" decoding="async" /> : <span aria-hidden="true">{"▶︎"}</span>}
+        {lead.thumbnail && <span class="home-yt__play" aria-hidden="true"></span>}
+        {leadMedia.videoId && (
+          <>
+            <div class="content-card__preview" data-youtube-preview-frame aria-hidden="true" hidden></div>
+            <span class="content-card__preview-label" aria-hidden="true">음소거 미리보기</span>
+          </>
+        )}
+      </div>
+      <div class="home-blog__body">
+        {(getYoutubeFormatLabel(lead) || formatContentDate(lead.publishedAt)) && (
+          <p class="home-blog__meta">
+            {getYoutubeFormatLabel(lead) && <span class="home-blog__tag">{getYoutubeFormatLabel(lead)}</span>}
+            {formatContentDate(lead.publishedAt) && <time datetime={lead.publishedAt!}>{formatContentDate(lead.publishedAt)}</time>}
+          </p>
+        )}
+        <a class="home-blog__title" href={lead.url} target="_blank" rel="noopener noreferrer">{leadMedia.title}</a>
+      </div>
+    </article>
+    {rest.length > 0 && (
+      <ul class="home-blog__rows">
+        {rest.map((item) => {
+          const row = media(item);
+          return (
+            <li class="home-blog__row" data-content-item>
+              <div class="home-blog__media home-yt__media" data-youtube-preview-media={row.videoId ? "true" : undefined} data-youtube-video-id={row.videoId ?? undefined} data-youtube-preview-title={row.title}>
+                {item.thumbnail ? <img src={item.thumbnail.src} alt="" width="960" height="540" loading="lazy" decoding="async" /> : <span aria-hidden="true">{"▶︎"}</span>}
+                {item.thumbnail && <span class="home-yt__play" aria-hidden="true"></span>}
+                {row.videoId && (
+                  <>
+                    <div class="content-card__preview" data-youtube-preview-frame aria-hidden="true" hidden></div>
+                    <span class="content-card__preview-label" aria-hidden="true">음소거 미리보기</span>
+                  </>
+                )}
+              </div>
+              <div class="home-blog__text">
+                <a class="home-blog__row-title" href={item.url} target="_blank" rel="noopener noreferrer">{row.title}</a>
+                {(getYoutubeFormatLabel(item) || formatShortContentDate(item.publishedAt, baseYear)) && (
+                  <p class="home-blog__row-meta">
+                    {getYoutubeFormatLabel(item) && <span>{getYoutubeFormatLabel(item)}</span>}
+                    {formatShortContentDate(item.publishedAt, baseYear) && <time datetime={item.publishedAt!}>{formatShortContentDate(item.publishedAt, baseYear)}</time>}
+                  </p>
+                )}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    )}
+  </div>
+)}
+
+{/* 마우스를 올리면 소리 없이 미리 재생(/youtube/와 같은 규칙·코드) */}
+{items.length > 0 && <YoutubeHoverPreview />}
