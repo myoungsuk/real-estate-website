@@ -22,7 +22,7 @@ import { handleWorkDashboard } from "./work-dashboard.mjs";
 export { withViewAudit, writeBatchWithAudit };
 
 export const WORK_API_ROOT = "/api/admin/v1/work";
-export const WORK_SCHEMA_VERSION = 7; // migrations/work 0007(단계 2 휴지통)까지. 단계 2와 단계 P가 같은 번호를 쓴다
+export const WORK_SCHEMA_VERSION = 8; // migrations/work 0008(실거래가 대전 5개 구)까지. 단계 2와 단계 P가 같은 번호를 쓴다
 export const MAX_WORK_JSON_BYTES = 256 * 1024;
 const WRITE_METHODS = new Set(["POST", "PATCH", "PUT", "DELETE"]);
 const RAY_ID_PATTERN = /^[A-Za-z0-9-]{1,64}$/u;

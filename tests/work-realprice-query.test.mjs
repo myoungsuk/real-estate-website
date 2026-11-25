@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { handleAdminApi } from "../worker/admin-api.mjs";
 import { createCsrfToken } from "../worker/admin-security.mjs";
 import { REALPRICE_COMPLEXES_SQL, REALPRICE_PRIOR_SQL, REALPRICE_TRADES_BY_IDS_SQL, REALPRICE_TRADES_SQL, decodeTradeCursor, encodeTradeCursor, nextReadBudgetReset, suggestComplexSlug, tradeMonthWindows } from "../worker/realprice-query.mjs";
-import { REALPRICE_KINDS, expectedMonths, kstMonth } from "../worker/realprice-store.mjs";
+import { REALPRICE_KINDS, REALPRICE_LAWDS, expectedMonths, kstMonth } from "../worker/realprice-store.mjs";
 import { createWorkCsrfToken } from "../worker/work-security.mjs";
 import { FAKE_SERVICE_KEY } from "./realprice-fixtures.mjs";
 import { NOW, ORIGIN, OWNER, SECRET, authenticate, freshDb, nextUuid, rows, signToken, work, workEnv } from "./work-test-kit.mjs";
@@ -21,25 +21,25 @@ const auditRows = (database) => rows(database, "SELECT action, outcome, reason F
 
 // 받은 달 기록: 세 종류의 모든 달을 한 번 이상 ok로(신고가 판정 준비 끝).
 function markAllMonthsOk(database, nowMs = NOW) {
-  const insert = database.prepare("INSERT OR REPLACE INTO rt_fetch_months (kind, deal_ymd, status, row_count, attempts, last_success_at, next_due_at) VALUES (?, ?, 'ok', 0, 0, ?, ?)");
-  for (const kind of REALPRICE_KINDS) for (const ymd of expectedMonths(kind, kstMonth(nowMs))) insert.run(kind, ymd, iso(nowMs - DAY), iso(nowMs + DAY));
+  const insert = database.prepare("INSERT OR REPLACE INTO rt_fetch_months (lawd_cd, kind, deal_ymd, status, row_count, attempts, last_success_at, next_due_at) VALUES (?, ?, ?, 'ok', 0, 0, ?, ?)");
+  for (const lawd of REALPRICE_LAWDS) for (const kind of REALPRICE_KINDS) for (const ymd of expectedMonths(kind, kstMonth(nowMs))) insert.run(lawd, kind, ymd, iso(nowMs - DAY), iso(nowMs + DAY));
 }
 
 let keyCounter = 0;
 // 가상 거래 1건. 거래 ID는 실제 모양({kind}:{YYYYMM}:{20자}:{순번})을 따른다.
 function insertTrade(database, {
   kind = "sale", date, aptSeq = "A1", cmpSeq, aptNm = "가상리더스시티5블록", umd = "천동", area = 8497, price = null, deposit = null, rent = null,
-  dealing = "broker", cancelled = 0, isBackfill = 1, firstSeenAt = iso(NOW - 30 * DAY), floor = 10,
+  dealing = "broker", cancelled = 0, isBackfill = 1, firstSeenAt = iso(NOW - 30 * DAY), floor = 10, lawd = "30110",
 }) {
   keyCounter += 1;
   const ymd = date.slice(0, 4) + date.slice(5, 7);
   const key = `${kind}:${ymd}:${String(keyCounter).padStart(20, "0")}:1`;
   const won = kind === "rent" ? null : (price ?? 300_000_000);
   database.prepare(`INSERT INTO rt_trades (trade_key, kind, deal_ymd, deal_date, umd_nm, jibun, apt_seq, cmp_seq, apt_nm, area_x100, floor, build_year,
-    price_won, deposit_won, monthly_rent_won, dealing_gbn, cancelled, cancelled_on, registered_on, apt_dong, extra_json, is_backfill, first_seen_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, '1', ?, ?, ?, ?, ?, 2020, ?, ?, ?, ?, ?, NULL, NULL, NULL, '{}', ?, ?, ?)`).run(
+    price_won, deposit_won, monthly_rent_won, dealing_gbn, cancelled, cancelled_on, registered_on, apt_dong, extra_json, is_backfill, first_seen_at, updated_at, lawd_cd)
+    VALUES (?, ?, ?, ?, ?, '1', ?, ?, ?, ?, ?, 2020, ?, ?, ?, ?, ?, NULL, NULL, NULL, '{}', ?, ?, ?, ?)`).run(
     key, kind, ymd, date, umd, aptSeq, cmpSeq === undefined ? aptSeq : cmpSeq, aptNm, area, floor,
-    won, kind === "rent" ? (deposit ?? 100_000_000) : null, kind === "rent" ? rent : null, kind === "rent" ? null : dealing, cancelled, isBackfill, firstSeenAt, firstSeenAt,
+    won, kind === "rent" ? (deposit ?? 100_000_000) : null, kind === "rent" ? rent : null, kind === "rent" ? null : dealing, cancelled, isBackfill, firstSeenAt, firstSeenAt, lawd,
   );
   return key;
 }
@@ -123,16 +123,17 @@ test("TK-25 앞선 최고가 거래가 나중에 해제되면 다음 조회부�
 test("TK-26 매매 2006-01부터 이번 달까지 한 달이라도 받지 못했으면 recordHighReady false, 모든 항목 recordHigh·prevMaxWon null, status에 매매 채우기 진행", async () => {
   const { database, db } = freshDb();
   markAllMonthsOk(database);
-  database.prepare("UPDATE rt_fetch_months SET status = 'pending', last_success_at = NULL WHERE kind = 'sale' AND deal_ymd = '200603'").run();
+  database.prepare("UPDATE rt_fetch_months SET status = 'pending', last_success_at = NULL WHERE lawd_cd = '30110' AND kind = 'sale' AND deal_ymd = '200603'").run();
   insertTrade(database, { date: "2026-09-01", price: 400_000_000 });
   insertTrade(database, { date: "2026-10-01", price: 500_000_000 });
   const env = stagePEnv(db);
   const result = await trades(env);
   assert.equal(result.json.data.recordHighReady, false);
+  assert.deepEqual(result.json.data.recordHighLawds, REALPRICE_LAWDS.filter((lawd) => lawd !== "30110"), "빠진 달이 있는 동구만 준비 전(0008, 구마다 판정)");
   assert.deepEqual(result.json.data.items.map((item) => [item.recordHigh, item.prevMaxWon]), [[null, null], [null, null]]);
   assert.equal(result.json.data.coverage.saleCoveredThrough, "2006-04", "이번 달부터 거꾸로 빠짐없이 받은 가장 오래된 달");
   const status = await work(env, "/realprice/status");
-  const total = expectedMonths("sale", CURRENT).length;
+  const total = expectedMonths("sale", CURRENT).length * REALPRICE_LAWDS.length;
   assert.deepEqual([status.json.data.recordHighReady, status.json.data.backfill.sale], [false, { done: total - 1, total }]);
 });
 
@@ -186,8 +187,8 @@ test("TK-27 기본값은 최근 3개월·해제 빼기, kind=all은 세 종류�
   assert.equal(first.status, 200);
   assert.equal(first.response.headers.get("Cache-Control"), "no-store");
   assert.deepEqual(first.json.data.coverage, {
-    from: "2026-09", to: "2026-11", kinds: ["sale", "presale", "rent"], monthsTotal: 9, monthsDone: 9, pending: [], saleCoveredThrough: "2006-01",
-  });
+    from: "2026-09", to: "2026-11", kinds: ["sale", "presale", "rent"], monthsTotal: 9 * REALPRICE_LAWDS.length, monthsDone: 9 * REALPRICE_LAWDS.length, pending: [], saleCoveredThrough: "2006-01",
+  }, "받은 달 수는 구·종류·달 한 줄씩 센다(0008)");
   const keys = first.json.data.items.map((item) => item.tradeKey);
   assert.equal(keys.includes(old), false, "기본 기간은 최근 3개월(2026-09 ~ 2026-11)");
   assert.equal(keys.includes(cancelled), false, "기본은 해제 빼기");
@@ -215,7 +216,7 @@ test("TK-27 기본값은 최근 3개월·해제 빼기, kind=all은 세 종류�
   assert.equal(withCancelled.json.data.items.find((item) => item.tradeKey === cancelled).cancelled, true);
   const saleOnly = await trades(env, "?kind=sale");
   assert.deepEqual(new Set(saleOnly.json.data.items.map((item) => item.kind)), new Set(["sale"]));
-  assert.equal(saleOnly.json.data.coverage.monthsTotal, 3);
+  assert.equal(saleOnly.json.data.coverage.monthsTotal, 3 * REALPRICE_LAWDS.length);
 });
 
 test("trades 거르기: 단지·법정동·전용면적·금액(전월세는 보증금)·직거래 빼기·관심 단지만, 값은 SQL에 이어 붙이지 않음", async () => {
@@ -238,6 +239,49 @@ test("trades 거르기: 단지·법정동·전용면적·금액(전월세는 보
   assert.deepEqual(await keysOf("?watch=1"), [a2, rent].sort());
   const rentItem = byKey((await trades(env, "?kind=rent")).json)[rent];
   assert.deepEqual([rentItem.priceWon, rentItem.depositWon, rentItem.monthlyRentWon, rentItem.recordHigh, rentItem.areaM2], [null, 200_000_000, 500_000, false, 59]);
+});
+
+test("TK-137 lawd: 구 하나만(같은 법정동 이름이 다른 구에 있어도 섞이지 않음), 빈 값은 5개 구 모두, 대전 5개 구 밖·모양이 틀린 값은 400, 받은 달 수는 고른 구만", async () => {
+  const { database, db } = freshDb();
+  markAllMonthsOk(database);
+  const east = insertTrade(database, { date: "2026-10-01", aptSeq: "30110-1", umd: "가상동", price: 500_000_000 });
+  const west = insertTrade(database, { date: "2026-10-02", aptSeq: "30170-1", umd: "가상동", price: 600_000_000, lawd: "30170" });
+  const yuseong = insertTrade(database, { date: "2026-10-03", aptSeq: "30200-1", umd: "봉명동", price: 700_000_000, lawd: "30200" });
+  const env = stagePEnv(db);
+  const keysOf = async (query) => (await trades(env, query)).json.data.items.map((item) => item.tradeKey).sort();
+  assert.deepEqual(await keysOf(""), [east, west, yuseong].sort(), "처음 값 '전체'(2026-11-25 사용자 결정)");
+  assert.deepEqual(await keysOf("?lawd="), await keysOf(""), "빈 lawd는 보내지 않은 것과 같음");
+  assert.deepEqual(await keysOf("?lawd=30170"), [west]);
+  assert.deepEqual(await keysOf(`?lawd=30170&umd=${encodeURIComponent("가상동")}`), [west], "서구 가상동만, 동구 가상동은 빠짐");
+  assert.deepEqual(await keysOf(`?umd=${encodeURIComponent("가상동")}`), [east, west].sort(), "구를 고르지 않으면 같은 이름 동이 함께 나옴");
+  assert.deepEqual(await keysOf("?lawd=30230"), []);
+  const item = byKey((await trades(env, "?lawd=30200")).json)[yuseong];
+  assert.equal(item.lawdCd, "30200");
+  const one = await trades(env, "?lawd=30170");
+  assert.deepEqual([one.json.data.coverage.monthsTotal, one.json.data.coverage.monthsDone], [9, 9], "3개월 × 3종류, 고른 구만");
+  for (const value of ["11110", "3011", "30110 ", "abcde", "30110,30170"]) {
+    const result = await trades(env, `?lawd=${encodeURIComponent(value)}`);
+    assert.deepEqual([result.status, result.json.error.code, result.json.error.details], [400, "VALIDATION_FAILED", ["lawd"]], value);
+  }
+});
+
+test("TK-138 신고가 판정 준비는 구마다: 서구 매매 한 달이 빠지면 서구 거래만 recordHigh null, 동구 거래는 판정, 전체 보기 recordHighReady false·동구만 보면 true", async () => {
+  const { database, db } = freshDb();
+  markAllMonthsOk(database);
+  database.prepare("UPDATE rt_fetch_months SET status = 'pending', last_success_at = NULL WHERE lawd_cd = '30170' AND kind = 'sale' AND deal_ymd = '201005'").run();
+  insertTrade(database, { date: "2026-09-01", aptSeq: "30110-1", cmpSeq: "C1", price: 400_000_000 });
+  const eastHigh = insertTrade(database, { date: "2026-10-01", aptSeq: "30110-1", cmpSeq: "C1", price: 500_000_000 });
+  insertTrade(database, { date: "2026-09-01", aptSeq: "30170-1", cmpSeq: "C2", price: 400_000_000, lawd: "30170" });
+  const westHigh = insertTrade(database, { date: "2026-10-01", aptSeq: "30170-1", cmpSeq: "C2", price: 500_000_000, lawd: "30170" });
+  const env = stagePEnv(db);
+  const all = await trades(env);
+  const items = byKey(all.json);
+  assert.deepEqual([items[eastHigh].recordHigh, items[eastHigh].prevMaxWon], [true, 400_000_000]);
+  assert.deepEqual([items[westHigh].recordHigh, items[westHigh].prevMaxWon], [null, null]);
+  assert.equal(all.json.data.recordHighReady, false);
+  assert.deepEqual(all.json.data.recordHighLawds, REALPRICE_LAWDS.filter((lawd) => lawd !== "30170"));
+  assert.equal((await trades(env, "?lawd=30110")).json.data.recordHighReady, true);
+  assert.equal((await trades(env, "?lawd=30170")).json.data.recordHighReady, false);
 });
 
 test("TK-55 isNew: 처음 채우기 행은 최근 달이어도 false, 그 뒤 새 거래는 first_seen_at 7일 안이면 true, 7일이 지나면 false", async () => {
@@ -263,21 +307,21 @@ test("TK-54(API) 읽기 80%는 그대로, 첫 상한은 recordHigh null·warning
   const setRead = (value, day = iso(NOW).slice(0, 10)) => database.prepare("INSERT INTO rt_daily_usage (day_utc, rows_read) VALUES (?, ?) ON CONFLICT(day_utc) DO UPDATE SET rows_read = excluded.rows_read").run(day, value);
   const readNow = () => rows(database, "SELECT rows_read FROM rt_daily_usage WHERE day_utc = ?", iso(NOW).slice(0, 10))[0]?.rows_read ?? 0;
 
-  setRead(1_200_000);
+  setRead(4_800_000);
   const near = await trades(env);
   assert.deepEqual([near.status, byKey(near.json)[target].recordHigh, near.json.data.warnings], [200, true, []]);
   // 읽은 양(흉내 값 = 돌려준 행 수)을 더함: 사용량 1 + 받은 달 기록 + 목록 2행 + 신고가 비교 자료 2행(앞선 최고가 1행·사이 거래 1행).
   const monthRows = rows(database, "SELECT COUNT(*) AS n FROM rt_fetch_months")[0].n;
-  assert.equal(readNow(), 1_200_000 + 1 + monthRows + 2 + 2);
+  assert.equal(readNow(), 4_800_000 + 1 + monthRows + 2 + 2);
 
-  setRead(1_500_000);
+  setRead(6_000_000);
   const soft = await trades(env);
   assert.equal(soft.status, 200);
   assert.deepEqual(soft.json.data.items.map((item) => item.recordHigh), [null, null]);
   assert.equal(soft.json.data.recordHighReady, true, "판정 준비는 끝났지만 읽기 첫 상한이라 계산하지 않음");
   assert.deepEqual(soft.json.data.warnings, [{ code: "RT_READ_BUDGET", level: "soft" }]);
 
-  setRead(2_500_000);
+  setRead(10_000_000);
   const auditBefore = auditRows(database).length;
   for (const path of ["/realprice/trades", "/realprice/complexes?q=%EB%A6%AC%EB%8D%94%EC%8A%A4"]) {
     const hard = await work(env, path);
@@ -286,7 +330,7 @@ test("TK-54(API) 읽기 80%는 그대로, 첫 상한은 recordHigh null·warning
     assert.equal(hard.response.headers.get("Retry-After"), String((Date.parse("2026-11-18T00:00:00.000Z") - NOW) / 1000));
     assert.equal(hard.response.headers.get("Cache-Control"), "no-store");
   }
-  assert.equal(readNow(), 2_500_000, "거절한 조회는 읽기만(사용량 1행) 하고 더하지 않음");
+  assert.equal(readNow(), 10_000_000, "거절한 조회는 읽기만(사용량 1행) 하고 더하지 않음");
   assert.equal((await work(env, "/realprice/status")).status, 200);
   assert.equal((await work(env, "/realprice/watch")).status, 200);
   assert.equal((await work(env, "/realprice/watch", { method: "PUT", body: { version: 0, items: [] } })).status, 200, "관심 단지 저장도 막지 않음");
@@ -324,7 +368,7 @@ test("단지 찾기: 띄어쓰기·대소문자 무시, 매매 최근 36개월 �
   const result = await work(env, `/realprice/complexes?q=${encodeURIComponent(" 리더스 시티 ")}`);
   assert.equal(result.status, 200);
   assert.deepEqual(result.json.data.items.map((item) => [item.aptSeq, item.tradeCount, item.suggestedSlug]), [["L5", 3, "leaders-city-5"], ["L4", 1, "leaders-city-4"], ["LX", 1, null]]);
-  assert.deepEqual(result.json.data.items[0], { aptSeq: "L5", aptName: "천동리더스시티5블록", umdName: "천동", tradeCount: 3, lastDealDate: "2026-03-10", suggestedSlug: "leaders-city-5" });
+  assert.deepEqual(result.json.data.items[0], { aptSeq: "L5", aptName: "천동리더스시티5블록", umdName: "천동", lawdCd: "30110", tradeCount: 3, lastDealDate: "2026-03-10", suggestedSlug: "leaders-city-5" });
   const sk = await work(env, `/realprice/complexes?q=${encodeURIComponent("sk뷰")}`);
   assert.deepEqual(sk.json.data.items.map((item) => [item.aptSeq, item.suggestedSlug]), [["SK", "sinheung-sk-view"]]);
   for (const query of ["", "?q=", `?q=${encodeURIComponent("   ")}`, `?q=${"가".repeat(31)}`]) {
@@ -492,12 +536,12 @@ test("P1-e ids를 보내지 않으면 목록 응답은 ids를 더하기 전과 �
   const result = await rawGet(env, "/realprice/trades");
   if (process.env.P1E_CAPTURE) console.log(`CAPTURE<<${result.text}>>`);
   assert.equal(result.status, 200);
-  assert.equal(result.text, IDS_BASELINE_BODY);
+  assert.equal(asBefore0008(result.text), IDS_BASELINE_BODY);
 });
 
 test("P1-e ids: 보낸 순서로 돌려주고 같은 ID는 합침, 못 찾은 ID는 missing, 해제로 바뀐 거래는 cancelled true 그대로, receivedAt은 해제 아닌 거래 달의 마지막 성공 시각 가운데 가장 이른 것", async () => {
   const { database, db, keys } = idsFixture();
-  const setSuccess = (kind, ymd, at) => database.prepare("UPDATE rt_fetch_months SET last_success_at = ? WHERE kind = ? AND deal_ymd = ?").run(at, kind, ymd);
+  const setSuccess = (kind, ymd, at) => database.prepare("UPDATE rt_fetch_months SET last_success_at = ? WHERE lawd_cd = '30110' AND kind = ? AND deal_ymd = ?").run(at, kind, ymd);
   setSuccess("sale", "202610", "2026-11-17T01:10:00.000Z");
   setSuccess("rent", "202610", "2026-11-16T23:40:00.000Z");
   setSuccess("sale", "202611", "2026-11-10T00:00:00.000Z"); // 해제 거래의 달: receivedAt에 넣지 않음
@@ -568,21 +612,38 @@ test("P1-e ids 읽기 양: 사용량 1 + 받은 달 기록 + 고른 거래 6행 
   assert.equal(auditRows(database).length, auditBefore, "보기 요청은 감사 0");
   assert.equal(result.response.headers.get("Cache-Control"), "no-store");
 
-  setRead(1_500_000);
+  setRead(6_000_000);
   const soft = await trades(env, `?ids=${keys.high}`);
   assert.deepEqual([soft.status, soft.json.data.items[0].recordHigh, soft.json.data.items[0].prevMaxWon, soft.json.data.warnings], [200, null, null, [{ code: "RT_READ_BUDGET", level: "soft" }]]);
 
-  setRead(2_500_000);
+  setRead(10_000_000);
   const hard = await trades(env, `?ids=${keys.high}`);
   assert.deepEqual([hard.status, hard.json.error.code, hard.json.error.retryAt], [429, "RT_READ_BUDGET", "2026-11-18T00:00:00.000Z"]);
-  assert.equal(readNow(), 2_500_000, "거절한 조회는 더하지 않음");
+  assert.equal(readNow(), 10_000_000, "거절한 조회는 더하지 않음");
 
   setRead(0);
-  database.prepare("DELETE FROM rt_fetch_months WHERE kind = 'sale' AND deal_ymd = '200601'").run();
+  database.prepare("DELETE FROM rt_fetch_months WHERE lawd_cd = '30110' AND kind = 'sale' AND deal_ymd = '200601'").run();
   const pending = await trades(env, `?ids=${keys.high}`);
   assert.deepEqual([pending.json.data.recordHighReady, pending.json.data.items[0].recordHigh, pending.json.data.items[0].prevMaxWon], [false, null, null], "판정 준비 전");
 });
 // ids를 더하기 전 코드(master 753d22f)로 위 자료를 부른 응답 본문(P1E_CAPTURE=1로 뽑음). 목록 응답 모양이 바뀌면 이 시험이 알려 준다.
+// 0008(대전 5개 구)이 더한 것만 걷어 낸 본문: 거래마다 lawdCd(여기서는 모두 동구), data.recordHighLawds(5개 구 모두 준비),
+// coverage의 달 수(구마다 한 줄씩이라 5배). 이것을 걷어 낸 나머지는 0008 전과 글자 하나까지 같아야 한다.
+function asBefore0008(text) {
+  const body = JSON.parse(text);
+  const data = body.data;
+  for (const item of data.items) {
+    assert.equal(item.lawdCd, "30110");
+    delete item.lawdCd;
+  }
+  assert.deepEqual(data.recordHighLawds, [...REALPRICE_LAWDS]);
+  delete data.recordHighLawds;
+  for (const key of ["monthsTotal", "monthsDone"]) {
+    assert.equal(data.coverage[key] % REALPRICE_LAWDS.length, 0);
+    data.coverage[key] /= REALPRICE_LAWDS.length;
+  }
+  return JSON.stringify(body);
+}
 const IDS_BASELINE_BODY = "{\"ok\":true,\"data\":{\"items\":[{\"tradeKey\":\"presale:202611:00000000000000000905:1\",\"kind\":\"presale\",\"dealDate\":\"2026-11-03\",\"umdName\":\"천동\",\"jibun\":\"1\",\"aptSeq\":\"C3\",\"aptName\":\"가상들마을\",\"areaM2\":101.62,\"floor\":22,\"buildYear\":2020,\"priceWon\":610000000,\"depositWon\":null,\"monthlyRentWon\":null,\"dealingGbn\":\"broker\",\"cancelled\":false,\"cancelledOn\":null,\"registeredOn\":null,\"aptDong\":null,\"extra\":{},\"recordHigh\":false,\"prevMaxWon\":null,\"isNew\":false},{\"tradeKey\":\"rent:202610:00000000000000000903:1\",\"kind\":\"rent\",\"dealDate\":\"2026-10-05\",\"umdName\":\"천동\",\"jibun\":\"1\",\"aptSeq\":\"B2\",\"aptName\":\"가상숲2단지\",\"areaM2\":59.98,\"floor\":7,\"buildYear\":2020,\"priceWon\":null,\"depositWon\":300000000,\"monthlyRentWon\":0,\"dealingGbn\":null,\"cancelled\":false,\"cancelledOn\":null,\"registeredOn\":null,\"aptDong\":null,\"extra\":{},\"recordHigh\":false,\"prevMaxWon\":null,\"isNew\":false},{\"tradeKey\":\"sale:202610:00000000000000000902:1\",\"kind\":\"sale\",\"dealDate\":\"2026-10-01\",\"umdName\":\"천동\",\"jibun\":\"1\",\"aptSeq\":\"A1\",\"aptName\":\"가상리더스시티5블록\",\"areaM2\":84.97,\"floor\":10,\"buildYear\":2020,\"priceWon\":500000000,\"depositWon\":null,\"monthlyRentWon\":null,\"dealingGbn\":\"broker\",\"cancelled\":false,\"cancelledOn\":null,\"registeredOn\":null,\"aptDong\":null,\"extra\":{},\"recordHigh\":true,\"prevMaxWon\":400000000,\"isNew\":false},{\"tradeKey\":\"sale:202609:00000000000000000901:1\",\"kind\":\"sale\",\"dealDate\":\"2026-09-01\",\"umdName\":\"천동\",\"jibun\":\"1\",\"aptSeq\":\"A1\",\"aptName\":\"가상리더스시티5블록\",\"areaM2\":84.97,\"floor\":10,\"buildYear\":2020,\"priceWon\":400000000,\"depositWon\":null,\"monthlyRentWon\":null,\"dealingGbn\":\"broker\",\"cancelled\":false,\"cancelledOn\":null,\"registeredOn\":null,\"aptDong\":null,\"extra\":{},\"recordHigh\":false,\"prevMaxWon\":null,\"isNew\":false}],\"nextCursor\":null,\"recordHighReady\":true,\"coverage\":{\"from\":\"2026-09\",\"to\":\"2026-11\",\"kinds\":[\"sale\",\"presale\",\"rent\"],\"monthsTotal\":9,\"monthsDone\":9,\"pending\":[],\"saleCoveredThrough\":\"2006-01\"},\"warnings\":[]},\"requestId\":\"REQ\"}";
 
 // ── P1-f: 찾는 말(q)·주요 거래(view=major) ──
@@ -626,7 +687,7 @@ test("P1-f q·view를 보내지 않는 목록 요청 13가지는 q·view를 더�
   const cursor = JSON.parse(bodies["?limit=3"]).data.nextCursor;
   assert.notEqual(cursor, null);
   bodies["?limit=3&cursor"] = (await rawGet(env, `/realprice/trades?limit=3&cursor=${cursor}`)).text;
-  const hashes = Object.fromEntries(Object.entries(bodies).map(([query, text]) => [query, sha256(text)]));
+  const hashes = Object.fromEntries(Object.entries(bodies).map(([query, text]) => [query, sha256(asBefore0008(text))]));
   if (process.env.P1F_CAPTURE) console.log(`CAPTURE<<${JSON.stringify(hashes)}>>`);
   assert.deepEqual(hashes, P1F_BASELINE_SHA256);
 });
@@ -707,15 +768,15 @@ test("P1-f view=major: 신고가 판정 준비 전·첫 상한을 넘은 날은 
   const auditBefore = auditRows(database).length;
   const top10 = [keys.spaced, keys.high, ...keys.many.slice(4)].sort();
   const setRead = (value) => database.prepare("INSERT INTO rt_daily_usage (day_utc, rows_read) VALUES (?, ?) ON CONFLICT(day_utc) DO UPDATE SET rows_read = excluded.rows_read").run(iso(NOW).slice(0, 10), value);
-  setRead(1_500_000);
+  setRead(6_000_000);
   const soft = await trades(env, "?view=major");
   assert.deepEqual(soft.json.data.items.map((item) => item.tradeKey).sort(), top10);
   assert.equal(soft.json.data.items.every((item) => item.recordHigh === null), true);
-  setRead(2_500_000);
+  setRead(10_000_000);
   const hard = await trades(env, "?view=major");
   assert.deepEqual([hard.status, hard.json.error.code], [429, "RT_READ_BUDGET"]);
   setRead(0);
-  database.prepare("DELETE FROM rt_fetch_months WHERE kind = 'sale' AND deal_ymd = '200601'").run();
+  database.prepare("DELETE FROM rt_fetch_months WHERE lawd_cd = '30110' AND kind = 'sale' AND deal_ymd = '200601'").run();
   const pending = await trades(env, "?view=major");
   assert.deepEqual([pending.json.data.recordHighReady, pending.json.data.items.map((item) => item.tradeKey).sort()], [false, top10]);
   assert.equal(auditRows(database).length, auditBefore, "보기 요청은 감사 0");

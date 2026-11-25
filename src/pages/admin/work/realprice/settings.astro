@@ -84,6 +84,8 @@ const publishedComplexes = complexes
         </div>
         <p class="admin-inline-notice rt-notice rt-notice--warn" data-rt-problem hidden><span aria-hidden="true">!</span><span data-rt-problem-text></span></p>
         <div class="rt-backfill rt-backfill--inline" data-rt-bars></div>
+        <h3 class="rt-sub" id="rt-region-fill-title" data-rt-region-fill-title hidden>구마다 채우기(대전 5개 구)</h3>
+        <ul class="rt-region-fill" aria-labelledby="rt-region-fill-title" data-rt-region-fill hidden></ul>
         <dl class="rt-usage">
           <div><dt>오늘 호출</dt><dd data-rt-usage="calls"></dd></div>
           <div><dt>오늘 쓰기</dt><dd data-rt-usage="writes"></dd></div>
@@ -113,7 +115,7 @@ const publishedComplexes = complexes
         <div class="rt-refresh">
           <div>
             <h3 class="rt-sub">지금 다시 받기</h3>
-            <p>최근 4개월 자료(매매·전월세·분양권)를 다시 받을 차례에 넣습니다. 10분마다 하나씩 받아 약 2시간 안에 끝납니다. 받는 동안 목록은 지금 자료로 볼 수 있습니다.</p>
+            <p>최근 4개월 자료(매매·전월세·분양권)를 대전 5개 구 모두 다시 받을 차례에 넣습니다. 10분마다 나눠 받아 약 50분 안에 끝납니다. 받는 동안 목록은 지금 자료로 볼 수 있습니다.</p>
           </div>
           <button class="admin-primary-button" type="button" data-rt-refresh>지금 다시 받기</button>
         </div>
@@ -131,16 +133,19 @@ const publishedComplexes = complexes
       dateText,
       kstShort,
       refreshDoneView,
+      regionBackfillRows,
       runOutcome,
       seedWords,
       statusProblem,
       usageView,
+      tradeRegionText,
       watchPutItems,
     } from "../../../../lib/work/realprice-view.mjs";
+    import { lawdOfAptSeq, regionName } from "../../../../lib/work/realprice-regions.mjs";
 
     interface WatchItem { aptSeq: string; displayName: string; complexSlug: string | null }
     interface WatchResponse { version: number; items: WatchItem[] }
-    interface ComplexResult { aptSeq: string; aptName: string; umdName: string; tradeCount: number; lastDealDate: string; suggestedSlug: string | null }
+    interface ComplexResult { aptSeq: string; aptName: string; umdName: string; lawdCd?: string | null; tradeCount: number; lastDealDate: string; suggestedSlug: string | null }
     interface Run { startedAt: string; monthsDone: number; apiCalls: number; inserted: number; updated: number; deleted: number; rowsWritten: number; outcome: string; errorCode: string | null }
 
     const root = document.querySelector<HTMLElement>("[data-rt-settings]");
@@ -221,7 +226,9 @@ const publishedComplexes = complexes
           const remove = button("빼기", "admin-secondary-button rt-remove", `${item.displayName} 관심 단지에서 빼기`);
           remove.disabled = saving;
           remove.addEventListener("click", () => void saveWatch({ removeAptSeq: item.aptSeq }, item.displayName));
-          li.append(nameBlock(item.displayName, home ? `홈페이지 단지: ${home.name}` : ""), remove);
+          // 구 이름(단지 고유번호 앞 5자리, 0008, 2026-11-25 사용자 결정 "구 이름도 줄마다 보이게 해줘")을 작은 줄 맨 앞에.
+          const region = regionName(lawdOfAptSeq(item.aptSeq) ?? "");
+          li.append(nameBlock(item.displayName, [region, home ? `홈페이지 단지: ${home.name}` : ""].filter(Boolean).join(" · ")), remove);
           return li;
         }));
         show(watchList, watch.items.length > 0);
@@ -239,7 +246,7 @@ const publishedComplexes = complexes
         results.replaceChildren(...lastResults.items.map((item) => {
           const li = document.createElement("li");
           li.className = "rt-result";
-          const detail = `${item.umdName} · 최근 3년 매매 ${item.tradeCount.toLocaleString("ko-KR")}건 · 마지막 계약 ${dateText(item.lastDealDate)}`;
+          const detail = `${tradeRegionText({ lawdCd: item.lawdCd ?? lawdOfAptSeq(item.aptSeq), umdName: item.umdName })} · 최근 3년 매매 ${item.tradeCount.toLocaleString("ko-KR")}건 · 마지막 계약 ${dateText(item.lastDealDate)}`;
           li.append(nameBlock(item.aptName, detail));
           if (watched.has(item.aptSeq)) {
             const done = document.createElement("span");
@@ -342,6 +349,16 @@ const publishedComplexes = complexes
         const problem = statusProblem(status);
         setNotice(pick("[data-rt-problem]"), problem ? `${problem.stop ? "받기 멈춤" : "확인 필요"} · ${problem.label}. ${problem.message}` : "");
         renderBackfillBars(pick("[data-rt-bars]"), status);
+        const regionRows = regionBackfillRows(status);
+        pick("[data-rt-region-fill]").replaceChildren(...regionRows.map((row) => {
+          const li = document.createElement("li");
+          const name = document.createElement("strong");
+          name.textContent = row.name;
+          li.append(name, ` ${row.text}`);
+          return li;
+        }));
+        show(pick("[data-rt-region-fill]"), regionRows.length > 0);
+        show(pick("[data-rt-region-fill-title]"), regionRows.length > 0);
         const usage = usageView(status);
         for (const [key, text] of Object.entries(usage)) pick(`[data-rt-usage="${key}"]`).textContent = text;
         const runs = (status.runs ?? []).slice(0, 10);

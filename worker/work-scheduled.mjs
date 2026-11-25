@@ -13,20 +13,26 @@ import {
   REALPRICE_ABORT_RETRY_MS,
   REALPRICE_COUNT_CHECK_MONTHS,
   REALPRICE_COUNT_CHECK_SETTING,
+  REALPRICE_DAILY_CALL_BUDGET,
   REALPRICE_DAILY_READ_HARD,
   REALPRICE_DAILY_READ_SOFT,
   REALPRICE_DAILY_WRITE_BUDGET,
   REALPRICE_HOLD_SETTING,
   REALPRICE_KINDS,
+  REALPRICE_LAWDS,
   REALPRICE_LEASE_MS,
   REALPRICE_LEASE_NAME,
   REALPRICE_MONTHS_PER_RUN,
+  REALPRICE_RECENT_MONTHS,
+  REALPRICE_RUN_TIME_BUDGET_MS,
   REALPRICE_RUNS_KEEP_DAYS,
   addUsageStatement,
   applyRealpriceMonth,
   expectedMonths,
   hasMeta,
   kstMonth,
+  monthAge,
+  monthId,
   parseHold,
   pickDueMonths,
   readMonthsStatement,
@@ -76,14 +82,15 @@ const RELEASE_SQL = "UPDATE worker_leases SET lease_until = ?1 WHERE name = ?2 A
 // 시작 표시가 남은 달(이전 실행이 끝나지 못함)을 RT_ABORTED로 적고 30분 뒤 차례로 둔다. attempts는 그대로 두어 연속 횟수를 센다.
 // 조건(attempts > 0 AND last_error IS NULL)을 다시 걸어, 미리 읽은 뒤 그 실행이 끝냈으면 아무것도 바꾸지 않는다.
 const MARK_ABORTED_SQL = `UPDATE rt_fetch_months SET status = 'failed', last_error = 'RT_ABORTED', next_due_at = ?2
-WHERE (kind, deal_ymd) IN (SELECT json_extract(value, '$[0]'), json_extract(value, '$[1]') FROM json_each(?1)) AND attempts > 0 AND last_error IS NULL`;
+WHERE (lawd_cd, kind, deal_ymd) IN (SELECT json_extract(value, '$[0]'), json_extract(value, '$[1]'), json_extract(value, '$[2]') FROM json_each(?1)) AND attempts > 0 AND last_error IS NULL`;
 // 받기 시작 표시(attempts + 1, last_error 비움). 끝나면 반영·실패 문장이 attempts를 0으로 되돌린다.
+// 0008부터 한 실행이 여러 달을 받으므로 달마다 받기 바로 전에 표시한다(시간·예산 때문에 받지 않고 넘긴 달에 시작 표시가 남지 않게).
 const START_MONTH_SQL = `UPDATE rt_fetch_months SET attempts = attempts + 1, last_error = NULL
-WHERE kind = ?1 AND deal_ymd = ?2 AND next_due_at <= ?3 AND NOT (attempts > 0 AND last_error IS NULL)`;
-const FAIL_MONTH_SQL = "UPDATE rt_fetch_months SET status = 'failed', attempts = 0, last_error = ?1, next_due_at = ?2 WHERE kind = ?3 AND deal_ymd = ?4";
+WHERE lawd_cd = ?4 AND kind = ?1 AND deal_ymd = ?2 AND next_due_at <= ?3 AND NOT (attempts > 0 AND last_error IS NULL)`;
+const FAIL_MONTH_SQL = "UPDATE rt_fetch_months SET status = 'failed', attempts = 0, last_error = ?1, next_due_at = ?2 WHERE lawd_cd = ?5 AND kind = ?3 AND deal_ymd = ?4";
 // 처리 중 예외: 끊김(RT_ABORTED)과 같은 규칙으로 attempts를 그대로 두어 연속 횟수를 센다. 같은 달이 3번 연속이면 갱신 상태 경고
 // RT_INTERNAL이 된다(2026-11-19 PR #76 TR-11 49.3 ③). 다음 실행의 시작 표시가 attempts를 1 더 올리고, 성공·받기 오류로 끝나면 0이 된다.
-const INTERNAL_FAIL_MONTH_SQL = "UPDATE rt_fetch_months SET status = 'failed', last_error = 'RT_INTERNAL', next_due_at = ?1 WHERE kind = ?2 AND deal_ymd = ?3";
+const INTERNAL_FAIL_MONTH_SQL = "UPDATE rt_fetch_months SET status = 'failed', last_error = 'RT_INTERNAL', next_due_at = ?1 WHERE lawd_cd = ?4 AND kind = ?2 AND deal_ymd = ?3";
 const FINISH_RUN_SQL = `UPDATE rt_fetch_runs SET finished_at = ?2, months_done = ?3, api_calls = ?4, inserted = ?5, updated = ?6, deleted = ?7,
 rows_written = ?8, outcome = ?9, error_code = ?10 WHERE seq = ?1`;
 // 사용량 보정(실제 meta − 이미 더한 추정, 아직 더하지 않은 읽기·호출). 쓰기 행은 0 아래로 내려가지 않는다.
@@ -99,21 +106,23 @@ function mergeHold(hold, plan, kind) {
   return next;
 }
 
-// 매일 03시: 매매 일반 API(15126469)로 최근 3개월 totalCount만 받아 상세 자료의 받은 건수(저장 + 버림)와 비교한다. 저장하지 않는다.
+// 매일 03시: 매매 일반 API(15126469)로 구마다 최근 3개월 totalCount만 받아(5개 구 15번) 상세 자료의 받은 건수(저장 + 버림)와 비교한다. 저장하지 않는다.
 async function runCountCheck({ env, fetcher, monthRows, nowMs }) {
   const currentYmd = kstMonth(nowMs);
   const recent = expectedMonths("sale", currentYmd).slice(-REALPRICE_COUNT_CHECK_MONTHS).reverse();
-  const stored = new Map(monthRows.filter((row) => row.kind === "sale" && row.last_success_at).map((row) => [row.deal_ymd, row]));
+  const stored = new Map(monthRows.filter((row) => row.kind === "sale" && row.last_success_at).map((row) => [monthId(row), row]));
   const diffs = [];
   let calls = 0;
-  for (const dealYmd of recent) {
-    const result = await fetchRealpriceTotalCount({ api: "saleBasic", dealYmd, serviceKey: env.MOLIT_RT_SERVICE_KEY.trim(), fetcher });
-    calls += result.calls;
-    if (!result.ok) return { checkedAt: iso(nowMs), diffs, error: result.code, calls };
-    const row = stored.get(dealYmd);
-    if (!row) continue; // 상세 자료를 아직 받지 못한 달은 비교하지 않는다
-    const detail = Number(row.row_count) + Number(row.dropped_count);
-    if (detail !== result.totalCount) diffs.push({ dealYmd, basic: result.totalCount, detail });
+  for (const lawdCd of REALPRICE_LAWDS) {
+    for (const dealYmd of recent) {
+      const result = await fetchRealpriceTotalCount({ api: "saleBasic", lawdCd, dealYmd, serviceKey: env.MOLIT_RT_SERVICE_KEY.trim(), fetcher });
+      calls += result.calls;
+      if (!result.ok) return { checkedAt: iso(nowMs), diffs, error: result.code, calls };
+      const row = stored.get(`${lawdCd}:sale:${dealYmd}`);
+      if (!row) continue; // 상세 자료를 아직 받지 못한 달은 비교하지 않는다
+      const detail = Number(row.row_count) + Number(row.dropped_count);
+      if (detail !== result.totalCount) diffs.push({ lawdCd, dealYmd, basic: result.totalCount, detail });
+    }
   }
   return { checkedAt: iso(nowMs), diffs, error: null, calls };
 }
@@ -124,6 +133,9 @@ async function runInner(env, options, state) {
   // 시작 시각: 시험이 넣은 now → Cron이 정한 시각(scheduledTime) → 지금. 끝 시각(finishedIso)은 아래에서 시계를 다시 읽는다.
   const nowMs = typeof options.now === "function" ? options.now() : Number.isFinite(options.scheduledTime) ? options.scheduledTime : Date.now();
   const nowIso = iso(nowMs);
+  // 실행 시간 한도(REALPRICE_RUN_TIME_BUDGET_MS)를 재는 시계. 시험이 넣은 now가 있으면 그것을 쓴다.
+  const clock = typeof options.now === "function" ? options.now : Date.now;
+  const startedClock = clock();
   const fetcher = options.fetcher ?? fetch;
   const randomUUID = options.randomUUID ?? (() => crypto.randomUUID());
 
@@ -155,7 +167,7 @@ async function runInner(env, options, state) {
   const settingsRead = await readRealpriceSettingsStatement(db).all();
   // .first()는 D1에서도 meta를 돌려주지 않아 1행으로 센다(구조 번호·오늘 사용량).
   let pendingRowsRead = 1 + rowsReadOf(monthsRead) + (usageRow ? 1 : 0) + rowsReadOf(settingsRead);
-  const usage = { rows_written: Number(usageRow?.rows_written ?? 0), rows_read: Number(usageRow?.rows_read ?? 0) };
+  const usage = { api_calls: Number(usageRow?.api_calls ?? 0), rows_written: Number(usageRow?.rows_written ?? 0), rows_read: Number(usageRow?.rows_read ?? 0) };
   if (usage.rows_read >= REALPRICE_DAILY_READ_HARD) {
     // 끝 상한: 그날은 외부 요청·D1 쓰기 없이 끝(UTC 0시 = 한국 09시에 풀림).
     log({ event: LOG_EVENT, level: "warn", code: "RT_READ_BUDGET", limit: "hard" });
@@ -165,26 +177,30 @@ async function runInner(env, options, state) {
   const hold = parseHold(settings[REALPRICE_HOLD_SETTING]);
   const monthRows = monthsRead.results ?? [];
   const currentYmd = kstMonth(nowMs);
-  const known = new Set(monthRows.map((row) => `${row.kind}:${row.deal_ymd}`));
+  const known = new Set(monthRows.map(monthId));
   const missing = [];
-  for (const kind of REALPRICE_KINDS) {
-    for (const dealYmd of expectedMonths(kind, currentYmd)) if (!known.has(`${kind}:${dealYmd}`)) missing.push([kind, dealYmd]);
+  for (const lawdCd of REALPRICE_LAWDS) {
+    for (const kind of REALPRICE_KINDS) {
+      for (const dealYmd of expectedMonths(kind, currentYmd)) if (!known.has(`${lawdCd}:${kind}:${dealYmd}`)) missing.push([lawdCd, kind, dealYmd]);
+    }
   }
-  // 아직 표에 없는 달(처음 실행, 새 달 시작)은 넣기 전 모양으로 차례 고르기에 함께 넣는다. 실제로 넣는 것은 임대를 얻은 뒤다.
-  const virtualRows = missing.map(([kind, dealYmd]) => ({
-    kind, deal_ymd: dealYmd, status: "pending", row_count: 0, dropped_count: 0, held_count: null, attempts: 0, last_error: null, last_success_at: null, next_due_at: nowIso,
+  // 아직 표에 없는 달(처음 실행, 새 달 시작, 0008 뒤 새 구)은 넣기 전 모양으로 차례 고르기에 함께 넣는다. 실제로 넣는 것은 임대를 얻은 뒤다.
+  const virtualRows = missing.map(([lawdCd, kind, dealYmd]) => ({
+    lawd_cd: lawdCd, kind, deal_ymd: dealYmd, status: "pending", row_count: 0, dropped_count: 0, held_count: null, attempts: 0, last_error: null, last_success_at: null, next_due_at: nowIso,
   }));
   const unmarkedAborted = monthRows.filter((row) => row.attempts > 0 && row.last_error === null);
-  const abortedKeys = new Set(unmarkedAborted.map((row) => `${row.kind}:${row.deal_ymd}`));
-  const candidates = [...monthRows.filter((row) => !abortedKeys.has(`${row.kind}:${row.deal_ymd}`)), ...virtualRows];
+  const abortedKeys = new Set(unmarkedAborted.map(monthId));
+  const candidates = [...monthRows.filter((row) => !abortedKeys.has(monthId(row))), ...virtualRows];
   const writeBudgetExceeded = usage.rows_written >= REALPRICE_DAILY_WRITE_BUDGET;
+  const callBudgetExceeded = usage.api_calls >= REALPRICE_DAILY_CALL_BUDGET;
   const readSoftExceeded = usage.rows_read >= REALPRICE_DAILY_READ_SOFT;
-  const { picked, blocked } = pickDueMonths(candidates, { nowMs, hold, writeBudgetExceeded, readSoftExceeded, limit: REALPRICE_MONTHS_PER_RUN });
+  const { picked, blocked } = pickDueMonths(candidates, { nowMs, hold, writeBudgetExceeded, callBudgetExceeded, readSoftExceeded, limit: REALPRICE_MONTHS_PER_RUN });
   const dailyCheck = isDailyCheckWindow(nowMs);
   if (picked.length === 0 && unmarkedAborted.length === 0 && !dailyCheck) {
     // 할 일이 없으면 쓰기 없이 끝(rt_fetch_runs도 남기지 않음). 이때의 읽기는 사용량에 더하지 않는다(쓰기 1행을 아끼려고, 22.7절).
-    if (blocked.writeBudget > 0 || blocked.readBudget > 0) {
-      log({ event: LOG_EVENT, level: "warn", code: blocked.writeBudget > 0 ? "RT_WRITE_BUDGET" : "RT_READ_BUDGET", months: 0 });
+    if (blocked.writeBudget > 0 || blocked.readBudget > 0 || blocked.callBudget > 0) {
+      const code = blocked.writeBudget > 0 ? "RT_WRITE_BUDGET" : blocked.callBudget > 0 ? "RT_CALL_BUDGET" : "RT_READ_BUDGET";
+      log({ event: LOG_EVENT, level: "warn", code, months: 0 });
     }
     return { outcome: "idle", blocked };
   }
@@ -206,20 +222,19 @@ async function runInner(env, options, state) {
   const totals = { months: 0, calls: 0, inserted: 0, updated: 0, deleted: 0 };
   const codes = [];
 
-  // 시작 batch: 끊긴 달 표시, 없는 달 넣기, 받을 달 시작 표시, 실행 기록 시작.
+  // 시작 batch: 끊긴 달 표시, 없는 달 넣기, 실행 기록 시작. 받을 달의 시작 표시는 달마다 받기 바로 전에 한다(⑤).
   const startStatements = [];
   if (unmarkedAborted.length > 0) {
-    startStatements.push(db.prepare(MARK_ABORTED_SQL).bind(JSON.stringify(unmarkedAborted.map((row) => [row.kind, row.deal_ymd])), iso(nowMs + REALPRICE_ABORT_RETRY_MS)));
+    startStatements.push(db.prepare(MARK_ABORTED_SQL).bind(JSON.stringify(unmarkedAborted.map((row) => [row.lawd_cd, row.kind, row.deal_ymd])), iso(nowMs + REALPRICE_ABORT_RETRY_MS)));
     codes.push("RT_ABORTED");
   }
   if (missing.length > 0) startStatements.push(seedMonthsStatement(db, missing, nowMs));
-  const startIndex = startStatements.length;
-  for (const month of picked) startStatements.push(db.prepare(START_MONTH_SQL).bind(month.kind, month.deal_ymd, nowIso));
   startStatements.push(db.prepare("INSERT INTO rt_fetch_runs (seq, started_at) VALUES (?1, ?2)").bind(state.seq, nowIso));
   const startResults = await db.batch(startStatements);
   measuredWritten += rowsWrittenOf(startResults);
   state.runStarted = true;
   if (blocked.writeBudget > 0) codes.push("RT_WRITE_BUDGET");
+  if (blocked.callBudget > 0) codes.push("RT_CALL_BUDGET");
   if (blocked.readBudget > 0) codes.push("RT_READ_BUDGET");
 
   // 매일 03시 건수 대조(키 단위 미룸 중이면 건너뜀).
@@ -230,12 +245,23 @@ async function runInner(env, options, state) {
   }
   const countCheckCalls = countCheck?.calls ?? 0;
 
-  // ⑤ 차례대로 받아 반영(무료 플랜은 1개월 1종류).
+  // ⑤ 차례대로 받아 반영(한 번에 REALPRICE_MONTHS_PER_RUN건까지). 차례는 최근 4개월이 앞이다.
+  // 새 달을 시작하기 전에 실행 시간 한도와 하루 쓰기·호출 예산을 다시 본다. 최근 4개월은 예산과 상관없이 받고(22.7절 순서 1), 그 밖의 달은
+  // 예산에 닿으면 이 실행에서 더 받지 않는다(받지 않은 달은 시작 표시가 없어 다음 차례에 그대로 남음).
   let fetchFailure = null;
-  for (const [offset, month] of picked.entries()) {
-    if (changesOf(startResults[startIndex + offset]) !== 1) continue; // 미리 읽은 뒤 다른 실행이 처리한 달
+  let budgetStop = null;
+  for (const month of picked) {
+    if (clock() - startedClock >= REALPRICE_RUN_TIME_BUDGET_MS) break;
+    if (monthAge(currentYmd, month.deal_ymd) >= REALPRICE_RECENT_MONTHS) {
+      if (usage.rows_written + estimatedRecorded >= REALPRICE_DAILY_WRITE_BUDGET) budgetStop = "RT_WRITE_BUDGET";
+      else if (usage.api_calls + totals.calls >= REALPRICE_DAILY_CALL_BUDGET) budgetStop = "RT_CALL_BUDGET";
+      if (budgetStop) break;
+    }
+    const started = await db.prepare(START_MONTH_SQL).bind(month.kind, month.deal_ymd, nowIso, month.lawd_cd).run();
+    measuredWritten += rowsWrittenOf(started);
+    if (changesOf(started) !== 1) continue; // 미리 읽은 뒤 다른 실행이 처리한 달
     state.month = month;
-    const fetched = await fetchRealpriceMonth({ api: month.kind, dealYmd: month.deal_ymd, serviceKey: env.MOLIT_RT_SERVICE_KEY.trim(), fetcher });
+    const fetched = await fetchRealpriceMonth({ api: month.kind, lawdCd: month.lawd_cd, dealYmd: month.deal_ymd, serviceKey: env.MOLIT_RT_SERVICE_KEY.trim(), fetcher });
     totals.calls += fetched.calls;
     if (fetched.ok) {
       const applied = await applyRealpriceMonth(db, { month, fetched, nowMs, apiCalls: fetched.calls });
@@ -249,7 +275,7 @@ async function runInner(env, options, state) {
     } else {
       // 오류 뒤 다음 차례(22.4절 표): 그 달만 / 그 종류 모든 달 / 모든 종류. 앞서 받은 자료는 지우지 않는다.
       const plan = planRealpriceRetry(fetched.code, new Date(nowMs));
-      const statements = [db.prepare(FAIL_MONTH_SQL).bind(plan.code, plan.retryAt, month.kind, month.deal_ymd)];
+      const statements = [db.prepare(FAIL_MONTH_SQL).bind(plan.code, plan.retryAt, month.kind, month.deal_ymd, month.lawd_cd)];
       if (plan.scope === "all" || plan.scope === "kind") statements.push(upsertSettingStatement(db, REALPRICE_HOLD_SETTING, mergeHold(hold, plan, month.kind), nowMs));
       const estimate = statements.length + 1;
       statements.push(addUsageStatement(db, nowMs, { apiCalls: fetched.calls, rowsWritten: estimate }));
@@ -259,7 +285,10 @@ async function runInner(env, options, state) {
       fetchFailure = plan.code;
     }
     state.month = null;
+    // 키·종류 단위 오류(활용 신청·키 만료 등)면 같은 실행에서 다른 구·달을 더 부르지 않는다(같은 오류가 반복될 뿐).
+    if (fetchFailure && planRealpriceRetry(fetchFailure, new Date(nowMs)).scope !== "month") break;
   }
+  if (budgetStop) codes.push(budgetStop);
 
   // ⑥ 실행 기록·사용량 보정·임대 반납(한 batch).
   const errorCode = fetchFailure ?? codes[0] ?? countCheck?.error ?? null;
@@ -408,7 +437,7 @@ async function cleanupAfterInternalError(env, options, state) {
     const db = options.db ?? env?.WORK_DB;
     const nowMs = typeof options.now === "function" ? options.now() : Date.now();
     const statements = [];
-    if (state.month) statements.push(db.prepare(INTERNAL_FAIL_MONTH_SQL).bind(iso(nowMs + REALPRICE_ABORT_RETRY_MS), state.month.kind, state.month.deal_ymd));
+    if (state.month) statements.push(db.prepare(INTERNAL_FAIL_MONTH_SQL).bind(iso(nowMs + REALPRICE_ABORT_RETRY_MS), state.month.kind, state.month.deal_ymd, state.month.lawd_cd));
     if (state.runStarted) statements.push(db.prepare("UPDATE rt_fetch_runs SET finished_at = ?2, outcome = 'failed', error_code = 'RT_INTERNAL' WHERE seq = ?1").bind(state.seq, iso(nowMs)));
     statements.push(db.prepare(RELEASE_SQL).bind(iso(0), REALPRICE_LEASE_NAME, state.lease.holder));
     await db.batch(statements);

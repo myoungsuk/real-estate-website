@@ -2,7 +2,8 @@
 // 서버 요청·브라우저 저장·주소 변경은 하지 않는다(src/lib/work 공통 규칙). 응답 모양은 worker/realprice-complex.mjs를 따른다.
 // 2026-11-20 운영자 결정을 그대로 따른다: '평'은 쓰지 않고(평형 최고 대신 '○○㎡대 최고'), 84.97㎡와 84.98㎡는 따로 보며, 최고가 대비는 '앞선 최고 기준'이다.
 import { formatKoreanWon } from "./work-format.mjs";
-import { areaText, dateText, floorText } from "./realprice-view.mjs";
+import { areaText, dateText, floorText, tradeRegionText } from "./realprice-view.mjs";
+import { lawdOfAptSeq } from "./realprice-regions.mjs";
 import { INSIGHT_COMPARE_FROM_TEXT, INSIGHT_REASON_TEXT } from "./realprice-insight-view.mjs";
 
 // 서버 상수와 같은 값(tests/work-realprice-complex-view.test.mjs가 worker 상수와 대조한다).
@@ -38,8 +39,10 @@ const won = (value) => (Number.isSafeInteger(value) ? formatKoreanWon(value) : n
 // 머리: 단지 이름 아래 한 줄(동네·준공 연도·세대수). 자료에 없는 칸은 뺀다.
 export function complexHead(complex, fallback = {}) {
   const name = complex?.aptName || fallback.aptName || "단지명 없음";
+  // 머리 작은 줄 맨 앞은 구·법정동("서구 · 갈마동", 2026-11-25 사용자 결정 "구 이름도 줄마다 보이게 해줘"). 구는 응답의 lawdCd, 없으면 단지 고유번호 앞 5자리.
+  const lawdCd = complex?.lawdCd || fallback.lawdCd || lawdOfAptSeq(complex?.aptSeq ?? fallback.aptSeq) || null;
   const sub = [
-    complex?.umdName || fallback.umdName || null,
+    tradeRegionText({ lawdCd, umdName: complex?.umdName || fallback.umdName || "" }) || null,
     Number.isInteger(complex?.buildYear) && complex.buildYear > 1900 ? `${complex.buildYear}년 준공` : null,
     Number.isSafeInteger(complex?.households) && complex.households > 0 ? `${complex.households.toLocaleString("ko-KR")}세대` : null,
   ].filter(Boolean);

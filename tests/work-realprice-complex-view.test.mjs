@@ -60,6 +60,11 @@ test("머리: 자료에 없는 준공 연도·세대수는 빼고, 이름이 없
   assert.deepEqual(complexHead({ aptName: "가상숲", umdName: "가상동", buildYear: null, households: null }), { name: "가상숲", sub: "가상동" });
   assert.deepEqual(complexHead(null, { aptName: "누른 단지", umdName: "천동" }), { name: "누른 단지", sub: "천동" });
   assert.equal(complexHead(null).name, "단지명 없음");
+  // TK-145 구 이름(0008): 응답 lawdCd → 누른 거래의 lawdCd → 단지 고유번호 앞 5자리 차례로 찾는다.
+  assert.equal(complexHead({ aptSeq: "30170-1", aptName: "가상", umdName: "갈마동", lawdCd: "30170", buildYear: 2020, households: null }).sub, "서구 · 갈마동 · 2020년 준공");
+  assert.equal(complexHead({ aptSeq: "30200-9", aptName: "가상", umdName: "봉명동", buildYear: null, households: null }).sub, "유성구 · 봉명동");
+  assert.equal(complexHead(null, { aptName: "누른 단지", umdName: "천동", lawdCd: "30110" }).sub, "동구 · 천동");
+  assert.equal(complexHead(null, { aptName: "누른 단지", umdName: "중촌동", aptSeq: "30140-3" }).sub, "중구 · 중촌동");
 });
 
 test("면적 탭·최근 거래 머리: '평'을 쓰지 않고 전용면적 소수 둘째 자리, 직전보다 오른 폭", () => {

@@ -4,12 +4,13 @@ import AdminPageHelp from "../../../../components/admin/AdminPageHelp.astro";
 import AdminLayout from "../../../../layouts/AdminLayout.astro";
 import {
   DEFAULT_REALPRICE_FILTERS,
-  DONG_GU_UMD_NAMES,
   REALPRICE_AREA_OPTIONS,
   REALPRICE_KIND_OPTIONS,
+  REALPRICE_LAWD_OPTIONS,
   REALPRICE_PERIODS,
   REALPRICE_PRICE_OPTIONS,
   chipText,
+  umdSelectGroups,
 } from "../../../../lib/work/realprice-view.mjs";
 import { PROMO_IDS_MAX, PROMO_PATH, PROMO_PLACES, PROMO_STYLE_DEFAULT, PROMO_STYLES } from "../../../../lib/work/realprice-promo.mjs";
 import { COMPLEX_FLOW_RULE } from "../../../../lib/work/realprice-complex-view.mjs";
@@ -22,7 +23,7 @@ import { COMPLEX_FLOW_RULE } from "../../../../lib/work/realprice-complex-view.m
 // 오른쪽 미리보기 칸(D-3, 2026-11-23 사용자 승인 "이대로 구현"·"세로로 2장"): 1221px 이상만 380px 칸에 담은 거래의 홍보물 카드(지금 홍보물 화면 그림 그대로, 2장이면 세로)와
 // 그림 저장·글 복사·종이로 뽑기(A4)를 두고, 층·동은 표의 전용면적 아래 작은 줄로 내린다. 1220px 이하는 칸 없이 아래 막대 '홍보물 만들기' 그대로다.
 const settingsHref = "/admin/work/realprice/settings/";
-const mainLead = "대전 동구 아파트 실거래 신고 자료를 10분마다 조금씩 받아 둡니다. 계약일 기준이며, 신고 기한(30일) 때문에 최근 거래는 늘어날 수 있습니다.";
+const mainLead = "대전 5개 구(동구·중구·서구·유성구·대덕구) 아파트 실거래 신고 자료를 10분마다 조금씩 받아 둡니다. 계약일 기준이며, 신고 기한(30일) 때문에 최근 거래는 늘어날 수 있습니다.";
 const criterion = "같은 단지·같은 전용면적에서 계약일이 앞선 매매(해제·직거래 뺌)의 최고가보다 높은 거래";
 // 거르기 단추(chip)는 고른 값을 짧은 글자로 보이고, 누르면 휴대폰·PC 기본 고르기 목록(경계까지 쓴 글자)이 열린다.
 const chipSelects = [
@@ -32,15 +33,16 @@ const chipSelects = [
 ] as const;
 const moreSelects = [
   { key: "kind", id: "rt-kind", label: "거래 종류", options: REALPRICE_KIND_OPTIONS },
-  { key: "umd", id: "rt-umd", label: "법정동", options: [{ value: "", label: "전체 법정동" }, ...DONG_GU_UMD_NAMES.map((name) => ({ value: name, label: name }))] },
 ] as const;
+// 구 거르기 단추(0008, 대전 5개 구): 처음 값 '전체'(2026-11-25 사용자 결정 "처음 값은 전체로 해줘"). 법정동 목록은 고른 구에 맞춰 스크립트가 다시 채운다.
+const umdGroups = umdSelectGroups(String(DEFAULT_REALPRICE_FILTERS.lawd));
 const defaults: Record<string, string | boolean> = DEFAULT_REALPRICE_FILTERS;
 const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(defaults[key])).text;
 ---
 
 <AdminLayout
   title="실거래가 | 행복한부동산 관리자"
-  description="대전 동구 아파트 실거래 신고 자료를 계약일 최근순으로 보고 거르는 관리자 업무 도구입니다."
+  description="대전 5개 구 아파트 실거래 신고 자료를 계약일 최근순으로 보고 거르는 관리자 업무 도구입니다."
 >
   <div class="work-ui work-doc rt-doc" data-rt-page>
     <header class="work-doc__header">
@@ -150,7 +152,23 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
             <input id="rt-q" type="search" maxlength="30" placeholder="단지 이름이나 동 이름" enterkeyhint="search" autocomplete="off" data-rt-q />
             <button class="rt-find__go" type="button" data-rt-q-go>찾기</button>
           </div>
+          <div class="rt-chips rt-region" role="group" aria-label="구" data-rt-region>
+            {REALPRICE_LAWD_OPTIONS.map((option) => (
+              <button class="rt-chip" type="button" aria-pressed={option.value === DEFAULT_REALPRICE_FILTERS.lawd ? "true" : "false"} data-rt-lawd={option.value}>
+                {option.value === "" ? <>전체<span class="sr-only"> 구</span></> : option.label}
+              </button>
+            ))}
+          </div>
           <div class="rt-chips" role="group" aria-label="거르기">
+            {/* 979px 이하는 구 단추 줄 대신 이 고르기 단추 하나(첫 화면에 첫 거래가 다 들어오게, D안 390px 위치). 980px 이상은 위 구 단추 줄. */}
+            <label class="rt-chip rt-chip--menu rt-chip--select rt-region-pick" data-rt-region-pick>
+              <span class="rt-chip__text" aria-hidden="true" data-rt-region-text>전체 구</span>
+              <select id="rt-lawd" aria-label="구" data-rt-lawd-select autocomplete="off">
+                {REALPRICE_LAWD_OPTIONS.map((option) => (
+                  <option value={option.value} selected={option.value === DEFAULT_REALPRICE_FILTERS.lawd}>{option.value === "" ? "전체 구(대전 5개 구)" : option.label}</option>
+                ))}
+              </select>
+            </label>
             {chipSelects.map((select) => (
               <label class="rt-chip rt-chip--menu rt-chip--select" data-rt-chip={select.key}>
                 <span class="rt-chip__text" aria-hidden="true" data-rt-chip-text={select.key}>{chipTextOf(select.key)}</span>
@@ -177,6 +195,17 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
               </select>
             </div>
           ))}
+          <div class="admin-field">
+            <label for="rt-umd">법정동</label>
+            <select id="rt-umd" data-rt-umd autocomplete="off">
+              <option value="" selected>전체 법정동</option>
+              {umdGroups.map((group) => (
+                <optgroup label={group.label ?? ""}>
+                  {group.options.map((option) => <option value={option.value}>{option.label}</option>)}
+                </optgroup>
+              ))}
+            </select>
+          </div>
           <div class="rt-filter-checks">
             <label class="work-check">
               <input type="checkbox" data-rt-filter="excludeCancelled" checked autocomplete="off" />
@@ -211,7 +240,7 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
           </div>
           <div class="rt-empty" data-rt-zero hidden>
             <h3 data-rt-zero-title>조건에 맞는 거래가 없습니다.</h3>
-            <p data-rt-zero-body>기간을 늘리거나 거래 종류·법정동·금액 조건을 바꿔 보세요.</p>
+            <p data-rt-zero-body>기간을 늘리거나 구·거래 종류·법정동·금액 조건을 바꿔 보세요.</p>
             <div class="rt-empty__actions" data-rt-zero-actions>
               <button type="button" data-rt-zero-action="reset">거르기 초기화</button>
             </div>
@@ -231,7 +260,7 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
                   <th scope="col" class="rt-only-table rt-th-wrap">직전 거래</th>
                   <th scope="col" class="rt-only-table rt-th-wrap">최고가 대비</th>
                   <th scope="col">계약일</th>
-                  <th scope="col" class="rt-only-card">법정동</th>
+                  <th scope="col" class="rt-only-card">구·법정동</th>
                   <th scope="col" class="rt-only-card">새로 들어옴</th>
                   <th scope="col" class="rt-only-card">흐름·직전 거래</th>
                 </tr>
@@ -367,10 +396,15 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
       kstLong,
       monthText,
       priceParts,
+      parseUmdSelect,
       sizeText,
       statusView,
+      tradeRegionText,
       tradesQuery,
+      umdSelectGroups,
+      umdSelectValue,
     } from "../../../../lib/work/realprice-view.mjs";
+    import { lawdOfAptSeq, regionName } from "../../../../lib/work/realprice-regions.mjs";
     import {
       PROMO_IDS_MAX,
       PROMO_PATH,
@@ -401,6 +435,7 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
       kind: "sale" | "rent" | "presale";
       dealDate: string;
       umdName: string;
+      lawdCd?: string | null;
       aptSeq: string | null;
       aptName: string | null;
       areaM2: number;
@@ -434,6 +469,7 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
       items: { aptSeq: string; displayName: string; complexSlug: string | null }[];
     }
     type Filters = {
+      lawd: string;
       period: string;
       kind: string;
       area: string;
@@ -726,7 +762,7 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
             if (picked.has(latest.tradeKey)) picked.delete(latest.tradeKey);
             else {
               const trade: Trade = items.find((item) => item.tradeKey === latest.tradeKey) ?? {
-                tradeKey: latest.tradeKey, kind: "sale", dealDate: latest.dealDate, umdName: data.complex?.umdName ?? "", aptSeq: data.complex?.aptSeq ?? null,
+                tradeKey: latest.tradeKey, kind: "sale", dealDate: latest.dealDate, umdName: data.complex?.umdName ?? "", lawdCd: data.complex?.lawdCd ?? lawdOfAptSeq(data.complex?.aptSeq), aptSeq: data.complex?.aptSeq ?? null,
                 aptName: data.complex?.aptName ?? null, areaM2: area.areaM2, floor: latest.floor, buildYear: data.complex?.buildYear ?? null, priceWon: latest.priceWon,
                 depositWon: null, monthlyRentWon: null, dealingGbn: latest.dealingGbn, cancelled: false, aptDong: null, recordHigh: latest.recordHigh, prevMaxWon: area.prevMaxWon, isNew: false,
               };
@@ -749,7 +785,7 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
         if (!opener && String(window.getSelection?.() ?? "") !== "") return;
         const item = items.find((trade) => trade.tradeKey === tr.dataset.rtKey);
         if (!item || !canOpenComplex(item)) return;
-        detail?.open({ tradeKey: item.tradeKey, aptSeq: item.aptSeq as string, aptName: item.aptName, umdName: item.umdName, areaM2: item.areaM2 }, opener ?? tr.querySelector<HTMLButtonElement>("button[data-rt-open]"));
+        detail?.open({ tradeKey: item.tradeKey, aptSeq: item.aptSeq as string, aptName: item.aptName, umdName: item.umdName, lawdCd: item.lawdCd ?? null, areaM2: item.areaM2 }, opener ?? tr.querySelector<HTMLButtonElement>("button[data-rt-open]"));
       });
       previewRetry.addEventListener("click", () => {
         previewKey = "";
@@ -977,7 +1013,8 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
         if (high) name.append(tag("신고가", "rt-tag--high"));
         const sub = document.createElement("small");
         sub.className = "rt-name__sub rt-only-table";
-        sub.textContent = [item.umdName, Number.isInteger(item.buildYear) ? `${item.buildYear}년` : ""].filter(Boolean).join(" · ");
+        // 구·법정동("서구 · 갈마동", 2026-11-25 사용자 결정 "구 이름도 줄마다 보이게 해줘") · 준공연도. 표는 단지 아래 작은 줄, 카드는 아래 '구·법정동' 칸.
+        sub.textContent = [tradeRegionText(item), Number.isInteger(item.buildYear) ? `${item.buildYear}년` : ""].filter(Boolean).join(" · ");
         name.append(sub);
         const size = cell("rt-size", "전용면적·층");
         // 1221px 이상 표는 층·동을 전용면적 아래 작은 줄로 내린다(D-3, 미리보기 칸 자리). 글자는 그대로 "84.97㎡ · 10층 · 103동"이고 카드는 한 줄이다.
@@ -1027,8 +1064,8 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
         if (item.isNew) flags.append(tag("새로 들어옴", "rt-tag--new rt-only-table"));
         const date = cell("rt-date", "계약일");
         date.textContent = dateText(item.dealDate);
-        const umd = cell("rt-umd rt-only-card", "법정동");
-        umd.textContent = item.umdName;
+        const umd = cell("rt-umd rt-only-card", "구·법정동");
+        umd.textContent = tradeRegionText(item);
         const fresh = cell("rt-new rt-only-card", "새로 들어옴");
         if (item.isNew) fresh.append(tag("새로 들어옴", "rt-tag--new"));
         // 1221px 이상 표: 거래 종류·직거래·표시를 금액 아래 작은 줄로(거래 흐름 칸 자리를 내려고, 보드 63번). 카드는 위 칸 그대로.
@@ -1363,7 +1400,11 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
           watchEmpty.hidden = false;
           return;
         }
-        pick("[data-rt-watch-names]").textContent = `관심 단지 ${watch.items.length}곳: ${watch.items.map((item) => item.displayName).join(" · ")}`;
+        // 관심 단지마다 구 이름(단지 고유번호 앞 5자리, 0008)을 괄호로 붙인다.
+        pick("[data-rt-watch-names]").textContent = `관심 단지 ${watch.items.length}곳: ${watch.items.map((item) => {
+          const region = regionName(lawdOfAptSeq(item.aptSeq) ?? "");
+          return region ? `${item.displayName}(${region})` : item.displayName;
+        }).join(" · ")}`;
         watchLine.hidden = false;
         void loadList();
       }
@@ -1385,8 +1426,42 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
       const MAJOR_FIXED = new Set(["period", "kind", "excludeCancelled", "excludeDirect"]);
       // '더 보기' 안 칸(분양권만은 따로 단추가 있음) 가운데 켜진 것이 있으면 '더 보기' 단추도 켜짐으로 보인다.
       const moreSet = () => (filters.kind !== "all" && filters.kind !== "presale") || filters.umd !== "" || !filters.excludeCancelled || filters.excludeDirect;
+      // 구 단추(0008)와 법정동 목록. 법정동 목록은 구가 바뀔 때만 다시 채운다(같은 이름 법정동이 있어 값은 '구 코드|법정동').
+      const regionButtons = [...root.querySelectorAll<HTMLButtonElement>("[data-rt-lawd]")];
+      const regionSelect = pick<HTMLSelectElement>("[data-rt-lawd-select]");
+      const regionText = pick("[data-rt-region-text]");
+      const umdSelect = pick<HTMLSelectElement>("[data-rt-umd]");
+      let umdFilledFor = String(DEFAULT_REALPRICE_FILTERS.lawd);
+      function fillUmdOptions() {
+        if (umdFilledFor !== filters.lawd) {
+          const first = document.createElement("option");
+          first.value = "";
+          first.textContent = filters.lawd ? `${regionName(filters.lawd)} 전체 법정동` : "전체 법정동";
+          const groups = umdSelectGroups(filters.lawd).map((group) => {
+            const options = group.options.map((option) => {
+              const element = document.createElement("option");
+              element.value = option.value;
+              element.textContent = option.label;
+              return element;
+            });
+            if (group.label === null) return options;
+            const optgroup = document.createElement("optgroup");
+            optgroup.label = group.label;
+            optgroup.append(...options);
+            return [optgroup];
+          });
+          umdSelect.replaceChildren(first, ...groups.flat());
+          umdFilledFor = filters.lawd;
+        }
+        umdSelect.value = umdSelectValue(filters);
+      }
       function syncFilterControls() {
         const major = mode === "major";
+        for (const button of regionButtons) button.setAttribute("aria-pressed", button.dataset.rtLawd === filters.lawd ? "true" : "false");
+        regionSelect.value = filters.lawd;
+        regionText.textContent = filters.lawd ? regionName(filters.lawd) : "전체 구";
+        regionText.parentElement?.classList.toggle("is-set", filters.lawd !== "");
+        fillUmdOptions();
         for (const input of filterInputs) {
           const key = input.dataset.rtFilter as keyof Filters;
           if (input instanceof HTMLInputElement && input.type === "checkbox") input.checked = Boolean(filters[key]);
@@ -1417,6 +1492,22 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
           void loadList();
         });
       }
+      function chooseRegion(lawd: string) {
+        if (lawd === filters.lawd) return;
+        // 다른 구로 바꾸면 그 구에 없는 법정동 거르기는 끈다(같은 이름이 다른 구에도 있어 이름만 남기지 않음).
+        filters = { ...filters, lawd, umd: "" };
+        syncFilterControls();
+        void loadList();
+      }
+      for (const button of regionButtons) button.addEventListener("click", () => chooseRegion(button.dataset.rtLawd ?? ""));
+      regionSelect.addEventListener("change", () => chooseRegion(regionSelect.value));
+      umdSelect.addEventListener("change", () => {
+        const next = parseUmdSelect(umdSelect.value, filters.lawd);
+        if (!next) return;
+        filters = { ...filters, ...next };
+        syncFilterControls();
+        void loadList();
+      });
       for (const button of toggles) {
         button.addEventListener("click", () => {
           if (button.dataset.rtToggle === "highOnly") filters = { ...filters, highOnly: !filters.highOnly };

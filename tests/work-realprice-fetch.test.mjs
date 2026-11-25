@@ -19,6 +19,7 @@ import {
   classifyResultCode,
   fetchRealpriceMonth,
   fetchRealpriceTotalCount,
+  REALPRICE_LAWD_CODES,
   planRealpriceRetry,
 } from "../worker/realprice-fetch.mjs";
 import { REALPRICE_ROW_LIMITS, buildTradeRows, toAreaX100, toShortDate, toWon, tradeSignatureSource } from "../worker/realprice-rows.mjs";
@@ -42,13 +43,13 @@ const NOW = new Date("2026-11-19T03:00:00.000Z"); // 한국 시각 2026-11-19 12
 const fixtureFetcher = (text) => recordingFetcher(() => xmlResponse(text), requestedUrls);
 
 async function month(options) {
-  const result = await fetchRealpriceMonth({ api: "sale", dealYmd: "202610", serviceKey: FAKE_SERVICE_KEY, ...options });
+  const result = await fetchRealpriceMonth({ lawdCd: "30110", api: "sale", dealYmd: "202610", serviceKey: FAKE_SERVICE_KEY, ...options });
   collectedResults.push(result);
   return result;
 }
 
 const ROW_COLUMNS = [
-  "trade_key", "kind", "deal_ymd", "deal_date", "umd_nm", "jibun", "apt_seq", "apt_nm", "area_x100", "floor", "build_year",
+  "trade_key", "kind", "lawd_cd", "deal_ymd", "deal_date", "umd_nm", "jibun", "apt_seq", "apt_nm", "area_x100", "floor", "build_year",
   "price_won", "deposit_won", "monthly_rent_won", "dealing_gbn", "cancelled", "cancelled_on", "registered_on", "apt_dong", "extra_json",
 ];
 
@@ -152,7 +153,7 @@ test("TK-09: 가상 매매 XML 1쪽을 받아 설계서 22.4절 표대로 행을
   const { fetcher, calls } = fixtureFetcher(await readRealpriceFixture("sale-detail-normal.xml"));
   const result = await month({ fetcher });
   assert.deepEqual([result.ok, result.totalCount, result.items.length, result.calls, calls.length], [true, 3, 3, 1, 1]);
-  const { rows, droppedCount, cleared } = await buildTradeRows({ kind: "sale", dealYmd: "202610", items: result.items });
+  const { rows, droppedCount, cleared } = await buildTradeRows({ lawdCd: "30110", kind: "sale", dealYmd: "202610", items: result.items });
   assert.equal(droppedCount, 0);
   assert.deepEqual(cleared, { aptDong: 0, extraJson: 0 });
   const byDate = Object.fromEntries(rows.map((row) => [row.deal_date, row]));
@@ -199,7 +200,7 @@ test("TK-10: totalCount 2,350건을 1,000·1,000·350건 3쪽으로 받고, 2쪽
   assert.deepEqual([result.ok, result.totalCount, result.items.length, result.calls], [true, 2350, 2350, 3]);
   assert.deepEqual(calls.map((call) => call.pageNo), [1, 2, 3]);
   for (const call of calls) assert.equal(new URL(call.url).searchParams.get("numOfRows"), "1000");
-  const { rows, droppedCount } = await buildTradeRows({ kind: "sale", dealYmd: "202610", items: result.items });
+  const { rows, droppedCount } = await buildTradeRows({ lawdCd: "30110", kind: "sale", dealYmd: "202610", items: result.items });
   assert.deepEqual([rows.length, droppedCount, new Set(rows.map((row) => row.trade_key)).size], [2350, 0, 2350]);
 
   const failing = recordingFetcher((url, { pageNo }) => (pageNo === 2 ? new Response("busy", { status: 503 }) : xmlResponse(pages[pageNo - 1])), requestedUrls);
@@ -292,7 +293,7 @@ test("TK-17: 오류 봉투(OpenAPI_ServiceResponse, 추정 모양)의 returnReas
     assert.equal(result.code, expected, `봉투 코드 ${code}`);
   }
   const { fetcher } = fixtureFetcher(envelope("03"));
-  assert.deepEqual(await month({ fetcher }), { ok: true, api: "sale", dealYmd: "202610", totalCount: 0, items: [], calls: 1 }, "봉투의 03도 정상 0건");
+  assert.deepEqual(await month({ fetcher }), { ok: true, api: "sale", lawdCd: "30110", dealYmd: "202610", totalCount: 0, items: [], calls: 1 }, "봉투의 03도 정상 0건");
 });
 
 test("TK-17: HTTP 상태·주소 이동·연결 실패·15초 초과·깨진 응답·5MB 초과를 표대로 바꾼다", async () => {
@@ -348,14 +349,14 @@ test("TK-17: 다음 차례 계산 — 하루 한도는 한국 시각 다음 날 
 
 test("건수만 받기: 매매 일반 API를 numOfRows=1로 1번 불러 totalCount만 돌려준다(DEC-WT-32)", async () => {
   const { fetcher, calls } = fixtureFetcher(await readRealpriceFixture("sale-basic-count.xml"));
-  const result = await fetchRealpriceTotalCount({ api: "saleBasic", dealYmd: "202610", serviceKey: FAKE_SERVICE_KEY, fetcher });
+  const result = await fetchRealpriceTotalCount({ lawdCd: "30110", api: "saleBasic", dealYmd: "202610", serviceKey: FAKE_SERVICE_KEY, fetcher });
   collectedResults.push(result);
-  assert.deepEqual(result, { ok: true, api: "saleBasic", dealYmd: "202610", totalCount: 57, calls: 1 });
+  assert.deepEqual(result, { ok: true, api: "saleBasic", lawdCd: "30110", dealYmd: "202610", totalCount: 57, calls: 1 });
   const url = new URL(calls[0].url);
   assert.equal(`${url.origin}${url.pathname}`, REALPRICE_APIS.saleBasic.url);
   assert.equal(url.searchParams.get("numOfRows"), "1");
   const failing = recordingFetcher(() => new Response("", { status: 401 }), requestedUrls);
-  const failed = await fetchRealpriceTotalCount({ api: "saleBasic", dealYmd: "202610", serviceKey: FAKE_SERVICE_KEY, fetcher: failing.fetcher });
+  const failed = await fetchRealpriceTotalCount({ lawdCd: "30110", api: "saleBasic", dealYmd: "202610", serviceKey: FAKE_SERVICE_KEY, fetcher: failing.fetcher });
   collectedResults.push(failed);
   assert.deepEqual(failed, { ok: false, code: RT_KEY_INVALID, httpStatus: 401, calls: 1 });
 });
@@ -363,16 +364,16 @@ test("건수만 받기: 매매 일반 API를 numOfRows=1로 1번 불러 totalCou
 test("요청 주소: 4개 상수 밖의 API 종류·잘못된 연월은 요청 전에 막고, Decoding 키는 한 번만 인코딩한다", async () => {
   const { fetcher, calls } = recordingFetcher(() => xmlResponse(""), requestedUrls);
   for (const api of ["other", "../sale", "__proto__", "constructor", ""]) {
-    await assert.rejects(fetchRealpriceMonth({ api, dealYmd: "202610", serviceKey: FAKE_SERVICE_KEY, fetcher }), (error) => error instanceof TypeError && !error.message.includes(FAKE_SERVICE_KEY), api);
+    await assert.rejects(fetchRealpriceMonth({ lawdCd: "30110", api, dealYmd: "202610", serviceKey: FAKE_SERVICE_KEY, fetcher }), (error) => error instanceof TypeError && !error.message.includes(FAKE_SERVICE_KEY), api);
   }
   for (const dealYmd of ["202613", "202600", "2026-10", "20261", 202610]) {
-    await assert.rejects(fetchRealpriceMonth({ api: "sale", dealYmd, serviceKey: FAKE_SERVICE_KEY, fetcher }), TypeError, String(dealYmd));
+    await assert.rejects(fetchRealpriceMonth({ lawdCd: "30110", api: "sale", dealYmd, serviceKey: FAKE_SERVICE_KEY, fetcher }), TypeError, String(dealYmd));
   }
-  await assert.rejects(fetchRealpriceMonth({ api: "sale", dealYmd: "202610", serviceKey: " ", fetcher }), TypeError, "빈 키");
+  await assert.rejects(fetchRealpriceMonth({ lawdCd: "30110", api: "sale", dealYmd: "202610", serviceKey: " ", fetcher }), TypeError, "빈 키");
   assert.equal(calls.length, 0, "막힌 경우에는 바깥 요청 0번");
 
   const decodingKey = "ZZKEY+7F3A/0000==";
-  const url = new URL(buildRealpriceRequestUrl({ api: "rent", serviceKey: decodingKey, dealYmd: "202610", pageNo: 2 }));
+  const url = new URL(buildRealpriceRequestUrl({ lawdCd: "30110", api: "rent", serviceKey: decodingKey, dealYmd: "202610", pageNo: 2 }));
   assert.equal(url.searchParams.get("serviceKey"), decodingKey);
   assert.ok(url.search.includes("serviceKey=ZZKEY%2B7F3A%2F0000%3D%3D"), "한 번만 인코딩(%252B 같은 두 번 인코딩 없음)");
   assert.deepEqual([...url.searchParams.keys()], ["serviceKey", "LAWD_CD", "DEAL_YMD", "pageNo", "numOfRows"]);
@@ -407,25 +408,25 @@ test("칸 변환(D-5·D-7): 저장할 수 없는 항목은 이유별로 버리�
     { ...base, dealDay: "3", aptDong: "1".repeat(REALPRICE_ROW_LIMITS.aptDong + 1) },
   ];
   // 2월 30일은 달력에 없는 날, 9월은 요청한 달(202610)이 아닌 날이다.
-  const result = await buildTradeRows({ kind: "sale", dealYmd: "202610", items });
+  const result = await buildTradeRows({ lawdCd: "30110", kind: "sale", dealYmd: "202610", items });
   assert.deepEqual(REALPRICE_ROW_LIMITS, { aptNm: 80, umdNm: 30, jibun: 20, aptSeq: 20, aptDong: 20, extraJson: 1000 });
-  assert.deepEqual(result.dropped, { invalidDate: 1, outOfMonth: 1, missingArea: 2, missingAptNm: 1, invalidPrice: 1, tooLong: 4 });
+  assert.deepEqual(result.dropped, { invalidDate: 1, outOfMonth: 1, missingArea: 2, missingAptNm: 1, invalidPrice: 1, tooLong: 4, otherRegion: 0 });
   assert.equal(result.droppedCount, 10);
   assert.equal(result.rows.length, 3);
   assert.deepEqual(result.cleared, { aptDong: 1, extraJson: 0 });
   assert.ok(result.rows.some((row) => [...row.umd_nm].length === 30 && [...row.apt_nm].length === 80), "제한과 같은 길이는 남김(umd_nm 30)");
   assert.equal(result.rows.find((row) => row.deal_date === "2026-10-03").apt_dong, null, "apt_dong이 넘으면 행은 두고 NULL");
 
-  const calendar = await buildTradeRows({ kind: "sale", dealYmd: "202602", items: [{ ...base, dealMonth: "2", dealDay: "30" }, { ...base, dealMonth: "2", dealDay: "28" }] });
+  const calendar = await buildTradeRows({ lawdCd: "30110", kind: "sale", dealYmd: "202602", items: [{ ...base, dealMonth: "2", dealDay: "30" }, { ...base, dealMonth: "2", dealDay: "28" }] });
   assert.deepEqual([calendar.dropped.invalidDate, calendar.rows.length], [1, 1], "달력에 없는 날(2월 30일)");
 
-  const extra = await buildTradeRows({ kind: "rent", dealYmd: "202610", items: [{ ...base, deposit: "1,000", monthlyRent: "10", contractTerm: "9".repeat(1000) }] });
+  const extra = await buildTradeRows({ lawdCd: "30110", kind: "rent", dealYmd: "202610", items: [{ ...base, deposit: "1,000", monthlyRent: "10", contractTerm: "9".repeat(1000) }] });
   assert.deepEqual([extra.rows[0].extra_json, extra.cleared.extraJson], ["{}", 1], "extra_json이 1,000자를 넘으면 비움");
 });
 
 test("칸 변환: 전월세는 보증금·월세와 덧붙임 5칸만 남기고, 해제·중개 구분은 늘 비어 있다", async () => {
   const screen = parseRealpriceXml(await readRealpriceFixture("rent-screen.xml"));
-  const { rows, droppedCount } = await buildTradeRows({ kind: "rent", dealYmd: "202610", items: screen.items });
+  const { rows, droppedCount } = await buildTradeRows({ lawdCd: "30110", kind: "rent", dealYmd: "202610", items: screen.items });
   assert.equal(droppedCount, 0);
   const jeonse = rows.find((row) => row.deal_date === "2026-10-05");
   const wolse = rows.find((row) => row.deal_date === "2026-10-20");
@@ -439,16 +440,16 @@ test("칸 변환: 전월세는 보증금·월세와 덧붙임 5칸만 남기고,
   }
 
   const doc = parseRealpriceXml(await readRealpriceFixture("rent-doc.xml"));
-  const docRows = (await buildTradeRows({ kind: "rent", dealYmd: "202610", items: doc.items })).rows;
+  const docRows = (await buildTradeRows({ lawdCd: "30110", kind: "rent", dealYmd: "202610", items: doc.items })).rows;
   assert.deepEqual(docRows.map((row) => row.apt_seq).sort(), ["30110-9001", "30110-9002"], "기술문서 예제의 aptSeq는 받음");
   for (const row of docRows) assert.deepEqual(Object.keys(row), ROW_COLUMNS);
   assert.ok(!JSON.stringify(docRows).includes("가상로") && !JSON.stringify(docRows).includes("roadnm"), "소문자 roadnm… 칸은 버림");
-  await assert.rejects(buildTradeRows({ kind: "saleBasic", dealYmd: "202610", items: [] }), TypeError, "매매 일반은 저장하지 않음");
+  await assert.rejects(buildTradeRows({ lawdCd: "30110", kind: "saleBasic", dealYmd: "202610", items: [] }), TypeError, "매매 일반은 저장하지 않음");
 });
 
 test("칸 변환: 분양권은 ownershipGbn만 덧붙이고, 단지명·면적이 빈 항목은 버린다(D-5)", async () => {
   const page = parseRealpriceXml(await readRealpriceFixture("presale.xml"));
-  const { rows, droppedCount, dropped } = await buildTradeRows({ kind: "presale", dealYmd: "202610", items: page.items });
+  const { rows, droppedCount, dropped } = await buildTradeRows({ lawdCd: "30110", kind: "presale", dealYmd: "202610", items: page.items });
   assert.deepEqual([rows.length, droppedCount, dropped.missingArea], [2, 1, 1]);
   const byDate = Object.fromEntries(rows.map((row) => [row.deal_date, row]));
   assert.deepEqual([byDate["2026-10-12"].extra_json, byDate["2026-10-12"].dealing_gbn, byDate["2026-10-12"].price_won], ['{"ownershipGbn":"입"}', "direct", 352100000]);
@@ -460,7 +461,7 @@ test("칸 변환: 분양권은 ownershipGbn만 덧붙이고, 단지명·면적�
 test("TK-13·TK-14: 거래 ID — 똑같은 2건은 순번 0·1, 다시 받으면 같은 ID, 1건이 빠지면 1행만, 금액이 바뀌면 그 행만 다른 ID", async () => {
   const twin = saleDetailItem(5);
   const other = saleDetailItem(6);
-  const keysOf = async (items) => (await buildTradeRows({ kind: "sale", dealYmd: "202610", items })).rows.map((row) => row.trade_key);
+  const keysOf = async (items) => (await buildTradeRows({ lawdCd: "30110", kind: "sale", dealYmd: "202610", items })).rows.map((row) => row.trade_key);
   const prefix = (key) => key.slice(0, key.lastIndexOf(":"));
   const first = await keysOf([twin, { ...twin }, other]);
   assert.equal(first.length, 3);
@@ -477,14 +478,14 @@ test("TK-13·TK-14: 거래 ID — 똑같은 2건은 순번 0·1, 다시 받으�
 
   // 같은 서명 안에서는 바뀌는 칸으로 정렬해 순번을 붙이므로 받는 순서와 상관없이 같은 행이 같은 순번을 받는다.
   const cancelled = { ...twin, cdealType: "O", cdealDay: "26.10.20" };
-  const ordered = async (items) => (await buildTradeRows({ kind: "sale", dealYmd: "202610", items })).rows.map((row) => `${row.trade_key.slice(-1)}:${row.cancelled}`).sort();
+  const ordered = async (items) => (await buildTradeRows({ lawdCd: "30110", kind: "sale", dealYmd: "202610", items })).rows.map((row) => `${row.trade_key.slice(-1)}:${row.cancelled}`).sort();
   assert.deepEqual(await ordered([cancelled, twin]), await ordered([twin, cancelled]));
   assert.deepEqual(await ordered([cancelled, twin]), ["0:0", "1:1"]);
 });
 
 test("거래 ID 서명: 단지 고유번호가 없으면 법정동+지번+단지명, NFKC·공백 정리, 나중에 바뀌는 칸은 넣지 않음", async () => {
   const page = parseRealpriceXml(await readRealpriceFixture("sale-detail-empty-aptseq.xml"));
-  const { rows } = await buildTradeRows({ kind: "sale", dealYmd: "202610", items: page.items });
+  const { rows } = await buildTradeRows({ lawdCd: "30110", kind: "sale", dealYmd: "202610", items: page.items });
   const noSeq = rows.find((row) => row.apt_seq === null);
   const withSeq = rows.find((row) => row.apt_seq !== null);
   assert.ok(noSeq && withSeq, "aptSeq 공백 한 칸은 NULL");
@@ -502,11 +503,55 @@ test("TK-13(B-3): 서명이 같고 동만 다른 두 건은 한 건에 해제·�
   const base = saleDetailItem(8);
   const dong101 = { ...base, aptDong: "101" };
   const dong102 = { ...base, aptDong: "102" };
-  const keyByDong = async (items) => Object.fromEntries((await buildTradeRows({ kind: "sale", dealYmd: "202610", items })).rows.map((row) => [row.apt_dong, row.trade_key]));
+  const keyByDong = async (items) => Object.fromEntries((await buildTradeRows({ lawdCd: "30110", kind: "sale", dealYmd: "202610", items })).rows.map((row) => [row.apt_dong, row.trade_key]));
   const before = await keyByDong([dong101, dong102]);
   assert.equal(new Set(Object.values(before)).size, 2, "같은 서명 2행");
   const after = await keyByDong([dong102, { ...dong101, cdealType: "O", cdealDay: "26.10.25", rgstDate: "26.10.30" }]);
   assert.deepEqual(after, before, "101동에 해제·등기일이 붙어도 101동은 그대로 순번 0");
+});
+
+// ── 대전 5개 구(0008, 2026-11-25 사용자 결정 "대전만 하면 될 것 같아") ──
+
+test("TK-129: 요청 주소의 LAWD_CD는 받은 구 코드이고, 대전 5개 구 밖의 코드·빈 코드는 요청 전에 막는다", async () => {
+  assert.deepEqual([...REALPRICE_LAWD_CODES], ["30110", "30140", "30170", "30200", "30230"]);
+  for (const lawdCd of REALPRICE_LAWD_CODES) {
+    const url = new URL(buildRealpriceRequestUrl({ lawdCd, api: "sale", serviceKey: FAKE_SERVICE_KEY, dealYmd: "202610" }));
+    assert.equal(url.searchParams.get("LAWD_CD"), lawdCd);
+  }
+  for (const lawdCd of ["11110", "3011", "", undefined, 30110]) {
+    assert.throws(() => buildRealpriceRequestUrl({ lawdCd, api: "sale", serviceKey: FAKE_SERVICE_KEY, dealYmd: "202610" }), TypeError, String(lawdCd));
+  }
+  const { fetcher, calls } = recordingFetcher(() => xmlResponse(realpriceXml({ items: [], totalCount: 0 })), requestedUrls);
+  await assert.rejects(fetchRealpriceMonth({ lawdCd: "11110", api: "sale", dealYmd: "202610", serviceKey: FAKE_SERVICE_KEY, fetcher }), TypeError);
+  assert.equal(calls.length, 0, "막힌 코드는 부르지 않음");
+  const result = await fetchRealpriceMonth({ lawdCd: "30170", api: "sale", dealYmd: "202610", serviceKey: FAKE_SERVICE_KEY, fetcher });
+  assert.equal(result.lawdCd, "30170");
+});
+
+test("TK-130: 받은 구와 sggCd가 다른 항목은 otherRegion으로 버리고, sggCd가 비어 있으면 받은 구로 본다", async () => {
+  const items = [
+    saleDetailItem(1, { sggCd: "30170", aptSeq: "30170-1" }),
+    saleDetailItem(2, { sggCd: "30110" }),
+    saleDetailItem(3, { sggCd: " " }),
+  ];
+  const result = await buildTradeRows({ lawdCd: "30170", kind: "sale", dealYmd: "202610", items });
+  assert.deepEqual([result.rows.length, result.dropped.otherRegion, result.droppedCount], [2, 1, 1]);
+  assert.ok(result.rows.every((row) => row.lawd_cd === "30170"));
+  await assert.rejects(buildTradeRows({ lawdCd: "11110", kind: "sale", dealYmd: "202610", items }), TypeError);
+  await assert.rejects(buildTradeRows({ kind: "sale", dealYmd: "202610", items }), TypeError, "구 코드 없음");
+});
+
+test("TK-131: 동구(30110) 거래 ID는 넓히기 전과 같고, 다른 구는 서명 앞에 구 코드를 붙여 이름이 같은 법정동끼리 부딪히지 않는다", async () => {
+  // 단지 고유번호가 없는 거래는 법정동+지번+단지명으로 서명한다. 대동·오동처럼 구마다 같은 이름이 있어 구 코드가 없으면 같은 ID가 될 수 있다.
+  const item = saleDetailItem(4, { aptSeq: " ", umdNm: "대동", jibun: "1", aptNm: "같은이름", sggCd: " " });
+  const keyOf = async (lawdCd) => (await buildTradeRows({ lawdCd, kind: "sale", dealYmd: "202610", items: [item] })).rows[0];
+  const dong = await keyOf("30110");
+  assert.equal(tradeSignatureSource(dong), `sale|${dong.deal_date}|대동+1+같은이름|${dong.area_x100}|${dong.floor}|${dong.price_won}`, "동구는 구 코드 없는 옛 서명");
+  const keys = await Promise.all(REALPRICE_LAWD_CODES.map(async (lawdCd) => (await keyOf(lawdCd)).trade_key));
+  assert.equal(new Set(keys).size, REALPRICE_LAWD_CODES.length, "구마다 다른 ID");
+  const seo = await keyOf("30170");
+  assert.ok(tradeSignatureSource(seo).startsWith("30170|sale|"));
+  assert.ok(keys.every((key) => /^sale:202610:[0-9a-f]{20}:0$/u.test(key)), "ID 모양은 그대로");
 });
 
 // ── 첫 확인 스크립트(scripts/realprice-probe.mjs, TK-43용) ──
@@ -610,11 +655,11 @@ test("TK-32·TK-31(부분): 가짜 fetcher가 받은 요청 주소는 모두 4�
   for (const api of ["sale", "rent", "presale"]) {
     for (const respond of scenarios) {
       const { fetcher } = recordingFetcher(respond, ownUrls);
-      ownResults.push(await fetchRealpriceMonth({ api, dealYmd: "202610", serviceKey: FAKE_SERVICE_KEY, fetcher }));
+      ownResults.push(await fetchRealpriceMonth({ lawdCd: "30110", api, dealYmd: "202610", serviceKey: FAKE_SERVICE_KEY, fetcher }));
     }
   }
   const counting = recordingFetcher(() => xmlResponse(realpriceXml({ items: [], totalCount: 7 })), ownUrls);
-  ownResults.push(await fetchRealpriceTotalCount({ api: "saleBasic", dealYmd: "202610", serviceKey: FAKE_SERVICE_KEY, fetcher: counting.fetcher }));
+  ownResults.push(await fetchRealpriceTotalCount({ lawdCd: "30110", api: "saleBasic", dealYmd: "202610", serviceKey: FAKE_SERVICE_KEY, fetcher: counting.fetcher }));
   assert.ok(ownUrls.length > 50, `이 시험이 보낸 요청 ${ownUrls.length}개`);
   assert.ok(ownResults.length > 40, `이 시험이 모은 결과 ${ownResults.length}개`);
   assert.ok(ownResults.some((result) => result.ok && result.items?.length === 2350) && ownResults.some((result) => !result.ok));
@@ -624,7 +669,7 @@ test("TK-32·TK-31(부분): 가짜 fetcher가 받은 요청 주소는 모두 4�
     const url = new URL(value);
     assert.ok(REALPRICE_ENDPOINTS.includes(`${url.origin}${url.pathname}`), `허용 주소 밖: ${url.origin}${url.pathname}`);
     assert.ok(!url.hostname.includes("rt.molit.go.kr"), "국토교통부 실거래가 공개시스템 화면 주소 없음");
-    assert.equal(url.searchParams.get("LAWD_CD"), "30110");
+    assert.ok(REALPRICE_LAWD_CODES.includes(url.searchParams.get("LAWD_CD")), "대전 5개 구 코드만");
   }
   assert.equal(REALPRICE_ENDPOINTS.length, 4);
   for (const result of allResults) {

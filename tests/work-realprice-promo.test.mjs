@@ -24,7 +24,10 @@ import {
   isPromoSelectable,
   parsePromoIds,
   promoBlockReason,
+  promoAreaLabel,
   promoCards,
+  promoRegion,
+  promoRegionTags,
   promoFileName,
   promoHref,
   promoNumbers,
@@ -362,4 +365,30 @@ test("P1-f 홍보물 순서 글: 올릴 곳 4가지(인스타그램 먼저)마�
   assert.match(promoSteps("blog", { counted: { count: 900, limit: null, tags: 0, over: false } }).text, /\(900자\)/u, "상한이 없는 글은 글자 수만");
   assert.match(promoSteps("kakao", { counted: { count: 300, limit: null, tags: 0, over: false } }).image, /채팅에 사진으로 보냅니다/u);
   assert.equal(promoSteps("unknown", { counted: { count: 1, limit: null, tags: 0, over: false } }).post, insta.post, "모르는 곳은 인스타그램 순서");
+});
+
+test("TK-146 대전 5개 구(0008): 고정돼 있던 '대전 동구' 자리만 고른 거래의 구로 바꾸고(한 구면 그 구, 섞이면 '대전'), 구 이름을 새 자리에 넣지 않는다(2026-11-25 사용자 결정 \"홍보물에는 안 넣어도 돼\")", () => {
+  const seo = [{ ...HIGH, lawdCd: "30170" }, { ...PLAIN, lawdCd: "30170" }];
+  const mix = [{ ...HIGH, lawdCd: "30170" }, { ...PLAIN, lawdCd: "30200" }];
+  assert.deepEqual([promoRegion(THREE), promoRegion(seo), promoRegion(mix), promoRegion([{ ...HIGH, lawdCd: "30110" }, PLAIN])], ["30110", "30170", null, "30110"], "구 코드가 없으면 동구(0008 전 응답 모양)");
+  assert.deepEqual([promoAreaLabel(THREE), promoAreaLabel(seo), promoAreaLabel(mix)], ["대전 동구 아파트 실거래가", "대전 서구 아파트 실거래가", "대전 아파트 실거래가"]);
+  assert.deepEqual([promoRegionTags(seo), promoRegionTags(mix)], [["#대전서구", "#서구아파트"], []]);
+  assert.deepEqual(hashtags(seo).slice(0, 4), ["#대전서구", "#서구아파트", "#대전아파트", "#아파트실거래가"]);
+  assert.ok(!hashtags(mix).some((tag) => /동구|서구|유성구/u.test(tag)), hashtags(mix).join(" "));
+  const before = promoTexts(input(THREE));
+  // 사무소 주소(명시사항, '대전광역시 동구 …')는 구와 상관없이 늘 붙으므로 빼고 센다.
+  const strip = (texts) => Object.fromEntries(Object.entries(texts).map(([kind, text]) => [kind, text.replaceAll(office.address, "")]));
+  const seoTexts = strip(promoTexts(input(seo)));
+  const mixTexts = strip(promoTexts(input(mix)));
+  const dongTexts = strip(promoTexts(input([HIGH, PLAIN])));
+  for (const [kind, text] of Object.entries(seoTexts)) {
+    assert.ok(!text.includes("동구"), `${kind}: 서구 거래에 동구 말 없음`);
+    assert.equal((text.match(/서구/gu) ?? []).length, (dongTexts[kind].match(/동구/gu) ?? []).length, `${kind}: 동구가 나오던 자리 수만큼만 서구`);
+  }
+  for (const [kind, text] of Object.entries(mixTexts)) assert.ok(!/동구|서구|유성구/u.test(text), `${kind}: 섞이면 구 이름 없이 '대전'`);
+  assert.match(seoTexts.blog, /^제목: 대전 서구 아파트 실거래 2건/u);
+  assert.match(mixTexts.blog, /^제목: 대전 아파트 실거래 2건/u);
+  assert.match(mixTexts.blog, /공개 자료에서 대전 아파트 거래를 정리했습니다/u);
+  assert.equal(before.blog, promoTexts(input(THREE.map((item) => ({ ...item, lawdCd: "30110" })))).blog, "동구 거래는 0008 전과 같은 글");
+  assert.deepEqual([promoCards(input(seo))[0].areaLabel, promoCards(input(mix))[0].areaLabel], ["대전 서구 아파트 실거래가", "대전 아파트 실거래가"]);
 });

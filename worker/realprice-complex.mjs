@@ -11,6 +11,7 @@
 import { invalid } from "./work-input.mjs";
 import { APT_SEQ_PATTERN, REALPRICE_COMPARABLE_WHERE, addReadUsage, isRecordHighTarget, parseArea, previousMaxByRow, readTradesContext } from "./realprice-query.mjs";
 import { HOUSEHOLDS, REALPRICE_INSIGHT_WATCH_SQL, insightFor, ratioPct } from "./realprice-insights.mjs";
+import { lawdOfAptSeq } from "../src/lib/work/realprice-regions.mjs";
 import { rowsReadOf } from "./realprice-store.mjs";
 
 export const REALPRICE_COMPLEX_MONTHS = 36; // 흐름: 이번 달 포함 36개 달력월
@@ -132,9 +133,13 @@ export async function readRealpriceComplex(db, params, { nowMs }) {
   const warnings = [];
   if (context.readSoftExceeded) warnings.push({ code: "RT_READ_BUDGET", level: "soft" });
   const basis = { months: REALPRICE_COMPLEX_MONTHS, recentMonths: REALPRICE_COMPLEX_RECENT_MONTHS, recentMax: REALPRICE_COMPLEX_RECENT_MAX };
-  if (!context.recordHighEnabled) {
+  // 구는 단지 고유번호 앞 5자리(0008). 신고가 판정 준비는 그 구만 본다. 고유번호로 구를 모르면 5개 구 모두 준비됐을 때만 연다.
+  const lawdCd = lawdOfAptSeq(query.apt);
+  const enabled = lawdCd ? context.enabledFor(lawdCd) : context.recordHighEnabled;
+  const ready = lawdCd ? context.recordHighLawds.includes(lawdCd) : context.recordHighReady;
+  if (!enabled) {
     await addReadUsage(db, nowMs, 1 + rowsReadOf(context.monthsResult));
-    return { available: false, reason: context.readSoftExceeded ? "budget" : "pending", basis, recordHighReady: context.recordHighReady, warnings };
+    return { available: false, reason: context.readSoftExceeded ? "budget" : "pending", basis, recordHighReady: ready, warnings };
   }
   const areasResult = await db.prepare(REALPRICE_COMPLEX_AREAS_SQL).bind(query.apt).all();
   let rowsRead = rowsReadOf(areasResult);
@@ -153,7 +158,7 @@ export async function readRealpriceComplex(db, params, { nowMs }) {
     const slug = (watch.results ?? [])[0]?.complex_slug;
     const head = rows[0] ?? {};
     const buildYear = Number.isInteger(head.build_year) && head.build_year > 0 ? head.build_year : null;
-    complex = { aptSeq: query.apt, aptName: head.apt_nm ?? null, umdName: head.umd_nm ?? null, buildYear, households: HOUSEHOLDS.get(slug) ?? null };
+    complex = { aptSeq: query.apt, aptName: head.apt_nm ?? null, umdName: head.umd_nm ?? null, lawdCd, buildYear, households: HOUSEHOLDS.get(slug) ?? null };
     area = complexAreaView(areaRows, areaX100, rows, { today: kstDate(nowMs) });
   }
   await addReadUsage(db, nowMs, 1 + rowsReadOf(context.monthsResult) + rowsRead);
@@ -163,7 +168,7 @@ export async function readRealpriceComplex(db, params, { nowMs }) {
     areas: areaRows.map((row) => ({ areaM2: Number(row.area_x100) / 100, tradeCount: Number(row.trade_count), lastDealDate: row.last_date })),
     area,
     basis,
-    recordHighReady: context.recordHighReady,
+    recordHighReady: ready,
     warnings,
   };
 }

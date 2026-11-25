@@ -46,7 +46,7 @@ test("실거래가 D안 390px: 상태 한 줄은 접힘, 찾기칸·거르기 �
   await expect(page.locator("[data-rt-clear-all]")).toBeHidden();
   await expect(page.locator("[data-rt-take]")).toHaveText("위에서 6건 담기");
   const sizes = await tapSizes(page);
-  expect(sizes.map((size) => size.name), "단추 9개").toEqual(["찾기", "최근 3개월", "평형", "금액", "신고가만", "분양권만", "더 보기", "위에서 6건 담기", "담기 칸"]);
+  expect(sizes.map((size) => size.name), "단추 10개(979px 이하는 구 고르기 단추 하나)").toEqual(["찾기", "전체 구", "최근 3개월", "평형", "금액", "신고가만", "분양권만", "더 보기", "위에서 6건 담기", "담기 칸"]);
   expect(sizes.filter((size) => size.width < 44 || size.height < 44), "44px보다 작은 단추").toEqual([]);
   const firstBox = await rows(page).first().boundingBox();
   expect(firstBox.y, "첫 거래는 시안 D-390 위치(631px)보다 내려가지 않음").toBeLessThanOrEqual(631);
@@ -198,7 +198,7 @@ test("실거래가 D안 PC: 1280px은 같은 순서에 찾기칸·단추가 한 
   await page.locator("[data-rt-sum] > summary").click();
   const line = await page.evaluate(() => {
     const find = document.querySelector(".rt-find").getBoundingClientRect();
-    const chips = document.querySelector(".rt-chips").getBoundingClientRect();
+    const chips = document.querySelector(".rt-chips:not(.rt-region)").getBoundingClientRect();
     return { sameRow: Math.abs(find.top - chips.top) < 4, chipsOneLine: chips.height < 50 };
   });
   expect(line, "찾기칸 옆에 단추 6개가 한 줄").toEqual({ sameRow: true, chipsOneLine: true });
@@ -372,8 +372,9 @@ const states = [
       await expect(page.locator("#rt-list-title")).toHaveText("새 거래 0건 보는 중", { useInnerText: true });
       await expect(page.locator("[data-rt-take]"), "0건이면 다 담기 단추 숨김").toBeHidden();
       await page.locator("[data-rt-more-toggle]").click();
-      await page.locator("#rt-umd").selectOption("대동");
-      await expect.poll(() => calls.trades.at(-1)).toBe(`umd=${encodeURIComponent("대동")}`);
+      // 구가 '전체'일 때 법정동을 고르면 그 법정동의 구도 함께 고른다(같은 이름 법정동이 다른 구에도 있음, 0008).
+      await page.locator("#rt-umd").selectOption("30110|대동");
+      await expect.poll(() => calls.trades.at(-1)).toBe(`lawd=30110&umd=${encodeURIComponent("대동")}`);
       await page.getByRole("button", { name: "거르기 초기화" }).last().click();
       await expect.poll(() => calls.trades.at(-1)).toBe("");
     },
@@ -572,9 +573,9 @@ test("실거래가 설정: 관심 단지가 비면 홈페이지 단지 이름 �
 
   const refresh = page.getByRole("button", { name: "지금 다시 받기" });
   await refresh.click();
-  await expect(page.locator("[data-rt-refresh-done-text]")).toHaveText("다시 받기를 차례에 넣었습니다. 최근 자료 12건(4개월 × 3종류)을 약 2시간 안에 모두 다시 받습니다. 그동안 목록은 지금 자료로 볼 수 있습니다.");
+  await expect(page.locator("[data-rt-refresh-done-text]")).toHaveText("다시 받기를 차례에 넣었습니다. 최근 자료 60건(5개 구 × 4개월 × 3종류)을 약 50분 안에 모두 다시 받습니다. 그동안 목록은 지금 자료로 볼 수 있습니다.");
   await expect(page.locator("[data-rt-refresh]")).toBeDisabled();
-  await expect(page.locator("[data-rt-refresh]")).toHaveText("다시 받는 중(약 2시간)");
+  await expect(page.locator("[data-rt-refresh]")).toHaveText("다시 받는 중(약 50분)");
   expect(calls.refresh).toHaveLength(1);
   expect(calls.refresh[0].body).toEqual({});
   expect(calls.refresh[0].headers["x-admin-csrf"]).toBe("test-csrf-1");
@@ -619,12 +620,12 @@ test("실거래가 설정: 찾는 중에는 Enter(키 반복 포함)·검색어 
   assertNoErrors();
 });
 
-test("실거래가 설정: 하루 조회 끝 상한을 넘은 날 다시 받기 알림은 '약 2시간 안에' 대신 한국 시각 오전 9시부터 받는다고 알린다(TK-29)", async ({ page }) => {
+test("실거래가 설정: 하루 조회 끝 상한을 넘은 날 다시 받기 알림은 '약 50분 안에' 대신 한국 시각 오전 9시부터 받는다고 알린다(TK-29)", async ({ page }) => {
   const assertNoErrors = collectErrors(page);
   const calls = await setup(page, { status: { ...okStatus, today: { ...okStatus.today, rowsRead: okStatus.today.readHardLimit } } });
   await page.goto("/admin/work/realprice/settings/");
   await page.getByRole("button", { name: "지금 다시 받기" }).click();
-  await expect(page.locator("[data-rt-refresh-done-text]")).toHaveText("다시 받기를 차례에 넣었습니다. 하루 조회 한도를 넘어 한국 시각 내일 오전 9시부터 다시 받습니다. 최근 자료 12건(4개월 × 3종류)은 그 뒤 약 2시간 안에 모두 받습니다. 목록과 단지 찾기도 오전 9시부터 다시 볼 수 있습니다.");
+  await expect(page.locator("[data-rt-refresh-done-text]")).toHaveText("다시 받기를 차례에 넣었습니다. 하루 조회 한도를 넘어 한국 시각 내일 오전 9시부터 다시 받습니다. 최근 자료 60건(5개 구 × 4개월 × 3종류)은 그 뒤 약 50분 안에 모두 받습니다. 목록과 단지 찾기도 오전 9시부터 다시 볼 수 있습니다.");
   await expect(page.locator("[data-rt-refresh]")).toHaveText("오전 9시부터 다시 받음");
   await expect(page.locator("[data-rt-refresh]")).toBeDisabled();
   expect(calls.refresh).toHaveLength(1);
@@ -1027,7 +1028,7 @@ test("거래 흐름 1280px 표: 칸 3개(흐름·직전 거래·최고가 대비
   await expect(first.locator(".rt-name .rt-tag--high")).toHaveText("신고가");
   await expect(first.locator(".rt-price .rt-up")).toHaveText("▲ 600만 앞선 최고보다");
   await expect(rows(page).nth(4).locator(".rt-up"), "신고가가 아니면 오름 폭 없음").toHaveCount(0);
-  await expect(first.locator(".rt-name__sub")).toHaveText("천동 · 2020년");
+  await expect(first.locator(".rt-name__sub"), "구 이름도 줄마다(2026-11-25 사용자 결정)").toHaveText("동구 · 천동 · 2020년");
   await expect(rows(page).nth(2).locator(".rt-price__meta")).toContainText("매매 · 직거래");
   await expect(rows(page).nth(3).locator(".rt-ratio strong")).toHaveText("첫 거래");
   await expect(rows(page).nth(3).locator(".rt-last")).toHaveText("직전 거래 없음");
@@ -1318,5 +1319,81 @@ test("D-3 종이로 뽑기(A4): 누를 때만 카드 그림 판을 붙여 인쇄
   await page.emulateMedia({ media: "screen" });
   await page.evaluate(() => window.dispatchEvent(new Event("afterprint")));
   await expect(page.locator(".rt-print-sheet")).toHaveCount(0);
+  assertNoErrors();
+});
+
+// 대전 5개 구(0008, 2026-11-25 사용자 결정 "대전만 하면 될 것 같아"·"처음 값은 전체로 해줘"·"구 이름도 줄마다 보이게 해줘").
+test("TK-147 구 거르기 1280px: 구 단추 6개(처음 '전체', 매개변수 없음) 한 줄, 누르면 lawd 한 번·그 구 거래만, 줄마다 '서구 · 갈마동', 다시 '전체'면 매개변수 없음", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const calls = await setup(page, { width: 1280 });
+  await page.goto("/admin/work/realprice/");
+  await expect(rows(page)).toHaveCount(30);
+  expect(calls.trades, "처음 값 '전체'는 구 매개변수 없이").toEqual([""]);
+  const region = page.locator("[data-rt-region]");
+  await expect(region).toBeVisible();
+  await expect(page.locator("[data-rt-region-pick]"), "980px 이상은 구 고르기 단추를 숨김").toBeHidden();
+  await expect(region.locator("button")).toHaveText(["전체 구", "동구", "중구", "서구", "유성구", "대덕구"]);
+  await expect(region.locator('button[aria-pressed="true"]')).toHaveText("전체 구");
+  expect(await region.evaluate((element) => element.getBoundingClientRect().height), "구 단추는 한 줄").toBeLessThan(50);
+  await expect(page.locator('[data-rt-rows] > tr:has-text("가상서쪽마을") .rt-name__sub')).toHaveText("서구 · 갈마동 · 2020년");
+  await expect(page.locator('[data-rt-rows] > tr:has-text("가상유성숲") .rt-name__sub')).toHaveText("유성구 · 봉명동 · 2020년");
+
+  await region.getByRole("button", { name: "서구" }).click();
+  await expect.poll(() => calls.trades.at(-1)).toBe("lawd=30170");
+  await expect(rows(page)).toHaveCount(1);
+  await expect(region.locator('button[aria-pressed="true"]')).toHaveText("서구");
+  await expect(page.locator("[data-rt-on-text]")).toContainText("서구");
+  expect(await overflowOf(page), "가로 넘침 0").toBe(0);
+  await region.getByRole("button", { name: "전체 구" }).click();
+  await expect.poll(() => calls.trades.at(-1)).toBe("");
+  await expect(rows(page)).toHaveCount(30);
+  assertNoErrors();
+});
+
+test("TK-148 구 거르기 390·360px: 구 단추 줄 대신 '전체 구' 고르기 단추 하나(44px, 첫 거래 위치 그대로), 카드에 '서구 · 갈마동', 가로 넘침 0", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const calls = await setup(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/admin/work/realprice/");
+  await expect(rows(page)).toHaveCount(30);
+  await expect(page.locator("[data-rt-region]"), "979px 이하는 구 단추 줄을 숨김").toBeHidden();
+  const pickChip = page.locator("[data-rt-region-pick]");
+  await expect(pickChip).toBeVisible();
+  await expect(page.locator("[data-rt-region-text]")).toHaveText("전체 구");
+  const box = await pickChip.boundingBox();
+  expect(box.height, "44px 이상").toBeGreaterThanOrEqual(44);
+  await expect(page.locator('[data-rt-rows] > tr:has-text("가상서쪽마을") .rt-umd')).toHaveText("서구 · 갈마동");
+  await page.locator("#rt-lawd").selectOption("30170");
+  await expect.poll(() => calls.trades.at(-1)).toBe("lawd=30170");
+  await expect(page.locator("[data-rt-region-text]")).toHaveText("서구");
+  await expect(pickChip).toHaveClass(/is-set/u);
+  await expect(rows(page)).toHaveCount(1);
+  await expect(rows(page).first().locator(".rt-umd")).toHaveText("서구 · 갈마동");
+  for (const width of [390, 360]) {
+    await page.setViewportSize({ width, height: 844 });
+    expect(await overflowOf(page), `${width}px 가로 넘침 0`).toBe(0);
+    // 두 줄 꺾임: 구·법정동 칸과 구 고르기 단추 글자는 한 줄이어야 한다.
+    const lines = await page.evaluate(() => [document.querySelector("[data-rt-rows] > tr:first-child .rt-umd"), document.querySelector("[data-rt-region-text]")]
+      .map((element) => Math.round(element.getBoundingClientRect().height / parseFloat(getComputedStyle(element).lineHeight || "24"))));
+    expect(lines, `${width}px 한 줄`).toEqual([1, 1]);
+  }
+  await page.locator("#rt-lawd").selectOption("");
+  await expect.poll(() => calls.trades.at(-1)).toBe("");
+  assertNoErrors();
+});
+
+test("TK-149 실거래가 설정: 구마다 채우기 줄 5개(다 채움·몇 % 채움, 신고가 준비 여부)와 다시 받기 약 50분", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  await setup(page, { width: 390 });
+  await page.goto("/admin/work/realprice/settings/");
+  const list = page.locator("[data-rt-region-fill] > li");
+  await expect(list).toHaveCount(5);
+  await expect(list.first()).toHaveText("동구 다 채움 · 신고가 표시 됨");
+  await expect(list.nth(3)).toContainText("유성구");
+  await expect(list.nth(3)).toContainText("신고가는 매매를 다 채운 뒤");
+  await expect(page.getByText("10분마다 나눠 받아 약 50분 안에 끝납니다", { exact: false })).toBeVisible();
+  expect(await overflowOf(page), "390px 가로 넘침 0").toBe(0);
+  await page.setViewportSize({ width: 360, height: 800 });
+  expect(await overflowOf(page), "360px 가로 넘침 0").toBe(0);
   assertNoErrors();
 });

@@ -158,12 +158,12 @@ test("T3-03 취소한 토큰·없는 토큰·형식이 틀린 토큰·업무 도
   const current = await createFeed(env);
   assert.equal((await fetchFeed(env, feedPath(current.token))).status, 200);
   const usedAt = rows(database, "SELECT last_used_at FROM calendar_feeds WHERE id = ?", current.feed.id)[0].last_used_at;
-  for (const version of ["6", "8"]) {
+  for (const version of ["7", "9"]) {
     database.prepare("UPDATE settings SET value_json = ? WHERE key = 'schema_version'").run(version);
     const result = await fetchFeed(env, feedPath(current.token), { now: NOW + 2 * DAY });
     assert.deepEqual({ status: result.status, headers: result.headers, text: result.text }, { status: 404, ...seen[0] }, `구조 번호 ${version}`);
   }
-  database.prepare("UPDATE settings SET value_json = '7' WHERE key = 'schema_version'").run();
+  database.prepare("UPDATE settings SET value_json = '8' WHERE key = 'schema_version'").run();
   assert.equal(rows(database, "SELECT last_used_at FROM calendar_feeds WHERE id = ?", current.feed.id)[0].last_used_at, usedAt, "404 때는 받은 날짜를 쓰지 않음");
   assert.equal(writes.length, 1, "D1 쓰기는 200 한 번뿐");
 });

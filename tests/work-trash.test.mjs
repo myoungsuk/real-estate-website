@@ -55,8 +55,8 @@ const restore = (env, batchId, options = {}) => work(env, `/trash/${batchId}/res
 const list = async (env, query = "", options = {}) => work(env, `/trash${query}`, options);
 
 test("0007은 0001 ~ 0006 위에 trash_batches·trash_rows 두 표와 색인 2개만 더하고 구조 번호를 7로 올리며, CHECK가 모르는 종류·표·연결·깨진 JSON·빈 이름을 막는다", () => {
-  assert.equal(migrationFiles.at(-1), "0007_trash.sql");
-  assert.equal(migrationFiles.length, 7);
+  assert.equal(migrationFiles[6], "0007_trash.sql");
+  assert.equal(migrationFiles.length, 8, "그 뒤는 0008(대전 5개 구)만");
   const database = new DatabaseSync(":memory:");
   database.exec("PRAGMA foreign_keys = ON;");
   for (const sql of allMigrationSql.slice(0, 6)) database.exec(sql);
@@ -121,7 +121,7 @@ test("T2-83·T2-92f 손님 삭제 → 휴지통 목록 1줄(남은 날 7·함께
     nextCursor: null,
   });
   const batchRow = rows(database, "SELECT kind, target_id, schema_version, deleted_by, request_id FROM trash_batches")[0];
-  assert.deepEqual([batchRow.kind, batchRow.target_id, batchRow.schema_version, batchRow.deleted_by], ["customer", A, 7, OWNER]);
+  assert.deepEqual([batchRow.kind, batchRow.target_id, batchRow.schema_version, batchRow.deleted_by], ["customer", A, 8, OWNER]);
   const deleteAudit = audit(database).find((entry) => entry.action === "customer.delete");
   assert.equal(deleteAudit.request_id, batchRow.request_id, "묶음과 감사 기록이 같은 요청 번호");
   assert.deepEqual(audit(database).at(-1), { actor_email: OWNER, action: "trash.list", target_type: null, target_id: null, request_id: listed.json.requestId, outcome: "ok", reason: "result_count=1" });

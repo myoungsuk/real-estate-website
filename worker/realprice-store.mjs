@@ -3,15 +3,28 @@
 //   여러 행은 행마다 문장을 만들지 않고 종류마다 json_each(?1) 한 문장에 1,000행까지 담는다(TK-58).
 // - 같은 batch에서 rt_fetch_months(상태·건수·다음 차례)와 rt_daily_usage(호출·쓰기 추정·읽기)를 함께 고친다.
 // - 요청 주소·인증키·응답 본문은 이 파일에 들어오지 않는다(받기 결과의 항목만 받는다).
+// - 지역(0008, 2026-11-25 사용자 결정 "대전만 하면 될 것 같아"): 받을 차례는 구·종류·달마다 한 줄(rt_fetch_months 기본 키 lawd_cd·kind·deal_ymd)이다.
+//   거래 ID 범위(종류·연월)에는 모든 구의 거래가 함께 들어 있으므로, 한 달 반영은 lawd_cd로 그 구의 행만 읽고 고친다(다른 구 행을 지우지 않게).
 import { buildTradeRows } from "./realprice-rows.mjs";
+import { REALPRICE_LAWD_CODES } from "../src/lib/work/realprice-regions.mjs";
 
 export const REALPRICE_KINDS = Object.freeze(["sale", "presale", "rent"]); // 과거 채우기 순서(신고가에 매매가 먼저 필요, 22.7절 순서 2)
 export const REALPRICE_START_MONTHS = Object.freeze({ sale: "200601", presale: "200706", rent: "201101" });
-export const REALPRICE_MONTHS_PER_RUN = 1; // 무료 플랜 Cron CPU 10ms 때문에 1회 1개월 1종류(Workers Paid 뒤 12로 올리는 작은 PR, DEC-WT-31)
+export const REALPRICE_LAWDS = REALPRICE_LAWD_CODES; // 받는 구(같은 순서로 차례를 고름: 동구 → 중구 → 서구 → 유성구 → 대덕구)
+// 한 번(10분)에 받는 구·종류·달 수. 무료 플랜 때는 Cron CPU 10ms 때문에 1이었다(DEC-WT-31). Workers Paid(2026-11-23) 뒤 12로 올리고(0008),
+// 실행 시간(REALPRICE_RUN_TIME_BUDGET_MS)·하루 쓰기·호출 예산으로 다시 막는다.
+export const REALPRICE_MONTHS_PER_RUN = 12;
 export const REALPRICE_CRON_MINUTES = 10;
-export const REALPRICE_DAILY_WRITE_BUDGET = 40_000;
-export const REALPRICE_DAILY_READ_SOFT = 1_500_000;
-export const REALPRICE_DAILY_READ_HARD = 2_500_000;
+// 한 실행이 새 달 받기를 시작하는 시간 한도(실행 겹침 방지 임대 5분 안에 끝나게). 넘으면 남은 달은 시작 표시 없이 다음 실행으로 넘긴다.
+export const REALPRICE_RUN_TIME_BUDGET_MS = 3 * 60 * 1000;
+// 하루(UTC 날) 쓰기·읽기·호출 예산(22.7절). 무료 플랜 때는 D1 하루 한도(쓰기 10만·읽기 500만 행)에 맞춰 4만·150만·250만이었다.
+// Workers Paid는 하루 한도가 없고 월 포함량(쓰기 5,000만·읽기 250억 행)을 넘으면 요금이 붙는다. 5개 구 과거 채우기(쓰기 약 120만 행, 추정)를
+// 4일 안팎에 끝내면서, 예산을 날마다 다 써도 한 달 쓰기 900만 행(포함량의 18%)을 넘지 않게 30만으로 둔다(0008).
+export const REALPRICE_DAILY_WRITE_BUDGET = 300_000;
+export const REALPRICE_DAILY_READ_SOFT = 6_000_000;
+export const REALPRICE_DAILY_READ_HARD = 10_000_000;
+// 공공데이터포털 개발 계정은 API마다 하루 10,000번이다. 세 API를 합친 수가 이보다 적으면 어느 API도 넘지 않는다(최근 4개월 다시 받기는 이 예산과 상관없이 받음).
+export const REALPRICE_DAILY_CALL_BUDGET = 8_000;
 export const REALPRICE_READ_WARN_RATIO = 0.8;
 export const REALPRICE_LEASE_NAME = "realprice-fetch";
 export const REALPRICE_LEASE_MS = 5 * 60 * 1000;
@@ -104,13 +117,14 @@ function isHeld(hold, kind, nowIso) {
 }
 
 // 받을 차례 고르기(읽기만, 22.7절 표의 순서). months: rt_fetch_months 행(아직 없는 달은 넣기 전 모양으로 함께 줌).
-// 쓰기 예산을 넘으면 최근 4개월만, 읽기 첫 상한을 넘으면 과거 채우기(한 번도 받지 못한 달)를 뺀다.
-export function pickDueMonths(months, { nowMs, hold = { all: null, kinds: {} }, writeBudgetExceeded = false, readSoftExceeded = false, limit = REALPRICE_MONTHS_PER_RUN }) {
+// 쓰기·호출 예산을 넘으면 최근 4개월만, 읽기 첫 상한을 넘으면 과거 채우기(한 번도 받지 못한 달)를 뺀다.
+export function pickDueMonths(months, { nowMs, hold = { all: null, kinds: {} }, writeBudgetExceeded = false, callBudgetExceeded = false, readSoftExceeded = false, limit = REALPRICE_MONTHS_PER_RUN }) {
   const nowIso = iso(nowMs);
   const currentYmd = kstMonth(nowMs);
   const kindOrder = (kind) => REALPRICE_KINDS.indexOf(kind);
+  const lawdOrder = (month) => REALPRICE_LAWDS.indexOf(month.lawd_cd);
   const candidates = [];
-  const blocked = { writeBudget: 0, readBudget: 0 };
+  const blocked = { writeBudget: 0, readBudget: 0, callBudget: 0 };
   for (const month of months) {
     if (month.next_due_at > nowIso || isHeld(hold, month.kind, nowIso)) continue;
     const age = monthAge(currentYmd, month.deal_ymd);
@@ -126,6 +140,10 @@ export function pickDueMonths(months, { nowMs, hold = { all: null, kinds: {} }, 
       blocked.writeBudget += 1;
       continue;
     }
+    if (order > 1 && callBudgetExceeded) {
+      blocked.callBudget += 1;
+      continue;
+    }
     if (order === 2 && readSoftExceeded) {
       blocked.readBudget += 1;
       continue;
@@ -134,19 +152,20 @@ export function pickDueMonths(months, { nowMs, hold = { all: null, kinds: {} }, 
   }
   candidates.sort((a, b) => {
     if (a.order !== b.order) return a.order - b.order;
+    const byMonth = (x, y) => (x.month.deal_ymd === y.month.deal_ymd ? 0 : x.month.deal_ymd < y.month.deal_ymd ? 1 : -1);
     if (a.order === 2) {
-      // 과거 채우기: 매매 → 분양권 → 전월세, 종류 안에서는 최근 달부터.
-      return kindOrder(a.month.kind) - kindOrder(b.month.kind) || (a.month.deal_ymd < b.month.deal_ymd ? 1 : -1);
+      // 과거 채우기: 매매 → 분양권 → 전월세, 종류 안에서는 최근 달부터, 같은 달은 구 순서(모든 구가 최근 달부터 함께 채워짐).
+      return kindOrder(a.month.kind) - kindOrder(b.month.kind) || byMonth(a, b) || lawdOrder(a.month) - lawdOrder(b.month);
     }
     if (a.month.next_due_at !== b.month.next_due_at) return a.month.next_due_at < b.month.next_due_at ? -1 : 1;
-    return kindOrder(a.month.kind) - kindOrder(b.month.kind) || (a.month.deal_ymd < b.month.deal_ymd ? 1 : -1);
+    return kindOrder(a.month.kind) - kindOrder(b.month.kind) || byMonth(a, b) || lawdOrder(a.month) - lawdOrder(b.month);
   });
   return { picked: candidates.slice(0, limit).map((candidate) => candidate.month), blocked, dueCount: candidates.length };
 }
 
 // ── 문장 ──
 
-const READ_MONTHS_SQL = "SELECT kind, deal_ymd, status, row_count, dropped_count, held_count, attempts, last_error, last_success_at, next_due_at FROM rt_fetch_months";
+const READ_MONTHS_SQL = "SELECT lawd_cd, kind, deal_ymd, status, row_count, dropped_count, held_count, attempts, last_error, last_success_at, next_due_at FROM rt_fetch_months";
 
 export function readMonthsStatement(db) {
   return db.prepare(READ_MONTHS_SQL);
@@ -160,11 +179,14 @@ export function readRealpriceSettingsStatement(db) {
   return db.prepare("SELECT key, value_json FROM settings WHERE key IN (?1, ?2)").bind(REALPRICE_HOLD_SETTING, REALPRICE_COUNT_CHECK_SETTING);
 }
 
-// 아직 없는 달을 넣는다(INSERT OR IGNORE, 처음 실행은 약 700행을 한 문장에). pairs: [[kind, deal_ymd], …]
-export function seedMonthsStatement(db, pairs, nowMs) {
-  return db.prepare("INSERT OR IGNORE INTO rt_fetch_months (kind, deal_ymd, next_due_at) SELECT json_extract(value, '$[0]'), json_extract(value, '$[1]'), ?2 FROM json_each(?1)")
-    .bind(JSON.stringify(pairs), iso(nowMs));
+// 아직 없는 달을 넣는다(INSERT OR IGNORE, 0008 적용 뒤 첫 실행은 새 4개 구 약 2,700행을 한 문장에). triples: [[lawd_cd, kind, deal_ymd], …]
+export function seedMonthsStatement(db, triples, nowMs) {
+  return db.prepare("INSERT OR IGNORE INTO rt_fetch_months (lawd_cd, kind, deal_ymd, next_due_at) SELECT json_extract(value, '$[0]'), json_extract(value, '$[1]'), json_extract(value, '$[2]'), ?2 FROM json_each(?1)")
+    .bind(JSON.stringify(triples), iso(nowMs));
 }
+
+// 구·종류·달 한 줄의 이름("30110:sale:202610"). 경고의 months·차례 비교에 쓴다.
+export const monthId = (row) => `${row.lawd_cd}:${row.kind}:${row.deal_ymd}`;
 
 // 하루 사용량 더하기(UTC 날짜 행). rows_written은 batch 전에 세는 추정값이고, 실행 끝에 D1 meta 값으로 맞춘다(work-scheduled.mjs).
 const ADD_USAGE_SQL = `INSERT INTO rt_daily_usage (day_utc, api_calls, rows_written, rows_read) VALUES (?1, ?2, ?3, ?4)
@@ -183,7 +205,7 @@ export function upsertSettingStatement(db, key, value, nowMs) {
 
 // rt_trades에 받은 그대로 넣는 칸(trade_key ~ extra_json)과 바뀔 수 있는 칸(서명에 넣지 않은 칸).
 const TRADE_COLUMNS = Object.freeze([
-  "trade_key", "kind", "deal_ymd", "deal_date", "umd_nm", "jibun", "apt_seq", "apt_nm", "area_x100", "floor", "build_year",
+  "trade_key", "kind", "lawd_cd", "deal_ymd", "deal_date", "umd_nm", "jibun", "apt_seq", "apt_nm", "area_x100", "floor", "build_year",
   "price_won", "deposit_won", "monthly_rent_won", "dealing_gbn", "cancelled", "cancelled_on", "registered_on", "apt_dong", "extra_json",
 ]);
 export const REALPRICE_VARIABLE_COLUMNS = Object.freeze([
@@ -198,7 +220,8 @@ SELECT ${extract(INSERT_COLUMNS)}, ?2, ?3, ?3 FROM json_each(?1)`;
 const UPDATE_TRADES_SQL = `UPDATE rt_trades SET ${REALPRICE_VARIABLE_COLUMNS.map((column) => `${column} = n.${column}`).join(", ")}, updated_at = ?2
 FROM (SELECT ${extract(UPDATE_COLUMNS)} FROM json_each(?1)) AS n WHERE rt_trades.trade_key = n.trade_key`;
 const DELETE_TRADES_SQL = "DELETE FROM rt_trades WHERE trade_key IN (SELECT value FROM json_each(?1))";
-const READ_MONTH_TRADES_SQL = `SELECT ${UPDATE_COLUMNS.join(", ")} FROM rt_trades WHERE trade_key >= ?1 AND trade_key < ?2`;
+// 그 구의 그 달 행만(기본 키 범위 + lawd_cd). 범위에는 다른 구 행도 있어 그만큼 더 읽지만, 고치고 지우는 것은 이 구 행뿐이다.
+const READ_MONTH_TRADES_SQL = `SELECT ${UPDATE_COLUMNS.join(", ")} FROM rt_trades WHERE trade_key >= ?1 AND trade_key < ?2 AND lawd_cd = ?3`;
 
 // 신고가 비교용 단지 번호(22.5절). TK-43(2026-11-19)에서 옛 매매의 aptSeq 빈 값이 0건이라 rt_complex_keys 없이 apt_seq를 그대로 쓴다(D-4).
 export function cmpSeqFor(row) {
@@ -255,10 +278,10 @@ export function hasMeta(results) {
 // 받은 한 달을 반영한다. month: rt_fetch_months 행(받기 전 상태). fetched: fetchRealpriceMonth 성공 결과.
 // 돌려주는 값: { outcome: "ok" | "held", inserted, updated, deleted, droppedCount, cleared, rowsRead, rowsWrittenEstimate, results, statements }
 export async function applyRealpriceMonth(db, { month, fetched, nowMs, apiCalls }) {
-  const { kind, deal_ymd: dealYmd } = month;
-  const built = await buildTradeRows({ kind, dealYmd, items: fetched.items });
+  const { lawd_cd: lawdCd, kind, deal_ymd: dealYmd } = month;
+  const built = await buildTradeRows({ kind, dealYmd, lawdCd, items: fetched.items });
   const [from, to] = monthKeyRange(kind, dealYmd);
-  const read = await db.prepare(READ_MONTH_TRADES_SQL).bind(from, to).all();
+  const read = await db.prepare(READ_MONTH_TRADES_SQL).bind(from, to, lawdCd).all();
   const existingRows = read.results ?? [];
   const rowsRead = rowsReadOf(read);
   const nowIso = iso(nowMs);
@@ -274,8 +297,8 @@ export async function applyRealpriceMonth(db, { month, fetched, nowMs, apiCalls 
   const nextDueAt = nextDueAfterSuccess(age, nowMs);
   if (sharpDrop && !confirmed) {
     const statements = [
-      db.prepare("UPDATE rt_fetch_months SET status = 'held', held_count = ?1, attempts = 0, last_error = 'RT_HELD_DROP', next_due_at = ?2 WHERE kind = ?3 AND deal_ymd = ?4")
-        .bind(newCount, nextDueAt, kind, dealYmd),
+      db.prepare("UPDATE rt_fetch_months SET status = 'held', held_count = ?1, attempts = 0, last_error = 'RT_HELD_DROP', next_due_at = ?2 WHERE lawd_cd = ?5 AND kind = ?3 AND deal_ymd = ?4")
+        .bind(newCount, nextDueAt, kind, dealYmd, lawdCd),
     ];
     const rowsWrittenEstimate = estimateRowsWritten(kind, { extra: 2 });
     statements.push(addUsageStatement(db, nowMs, { apiCalls, rowsWritten: rowsWrittenEstimate, rowsRead }));
@@ -296,8 +319,8 @@ export async function applyRealpriceMonth(db, { month, fetched, nowMs, apiCalls 
     statements.push(db.prepare(UPDATE_TRADES_SQL).bind(JSON.stringify(values), nowIso));
   }
   for (const part of chunk(deletes)) statements.push(db.prepare(DELETE_TRADES_SQL).bind(JSON.stringify(part)));
-  statements.push(db.prepare("UPDATE rt_fetch_months SET status = 'ok', row_count = ?1, dropped_count = ?2, held_count = NULL, attempts = 0, last_error = NULL, last_success_at = ?3, next_due_at = ?4 WHERE kind = ?5 AND deal_ymd = ?6")
-    .bind(newCount, built.droppedCount, nowIso, nextDueAt, kind, dealYmd));
+  statements.push(db.prepare("UPDATE rt_fetch_months SET status = 'ok', row_count = ?1, dropped_count = ?2, held_count = NULL, attempts = 0, last_error = NULL, last_success_at = ?3, next_due_at = ?4 WHERE lawd_cd = ?7 AND kind = ?5 AND deal_ymd = ?6")
+    .bind(newCount, built.droppedCount, nowIso, nextDueAt, kind, dealYmd, lawdCd));
   const rowsWrittenEstimate = estimateRowsWritten(kind, { inserted: inserts.length, updated: updates.length, deleted: deletes.length, extra: 2 });
   statements.push(addUsageStatement(db, nowMs, { apiCalls, rowsWritten: rowsWrittenEstimate, rowsRead }));
   const results = await db.batch(statements);
@@ -317,17 +340,25 @@ export async function applyRealpriceMonth(db, { month, fetched, nowMs, apiCalls 
 
 // ── 갱신 상태(GET /work/realprice/status, 22.9절) ──
 
-const warningMonths = (rows) => rows.slice(0, 12).map((row) => `${row.kind}:${row.deal_ymd}`);
+const warningMonths = (rows) => rows.slice(0, 12).map(monthId);
 
-// 매매 자료가 이번 달부터 거꾸로 빠짐없이 받아진 가장 오래된 달(YYYY-MM). 이번 달도 아직이면 null.
-export function saleCoveredThrough(monthRows, currentYmd) {
-  const done = new Set(monthRows.filter((row) => row.kind === "sale" && row.last_success_at).map((row) => row.deal_ymd));
+// 매매 자료가 이번 달부터 거꾸로 빠짐없이 받아진 가장 오래된 달(YYYY-MM). lawds(기본: 5개 구 모두)가 모두 받은 달까지만 센다. 이번 달도 아직이면 null.
+export function saleCoveredThrough(monthRows, currentYmd, lawds = REALPRICE_LAWDS) {
+  const done = new Set(monthRows.filter((row) => row.kind === "sale" && row.last_success_at).map(monthId));
   let covered = null;
   for (const dealYmd of expectedMonths("sale", currentYmd).reverse()) {
-    if (!done.has(dealYmd)) break;
+    if (!lawds.every((lawd) => done.has(`${lawd}:sale:${dealYmd}`))) break;
     covered = dealYmd;
   }
   return covered ? `${covered.slice(0, 4)}-${covered.slice(4, 6)}` : null;
+}
+
+// 신고가 판정 준비가 끝난 구(그 구의 매매 시작 달 ~ 이번 달을 모두 받음). 신고가는 같은 단지(구 코드로 시작하는 aptSeq) 안에서만 비교하므로
+// 구마다 따로 판단한다. 새 구를 채우는 동안에도 다 받은 동구 거래는 신고가를 계속 보인다.
+export function recordHighReadyLawds(monthRows, currentYmd) {
+  const done = new Set(monthRows.filter((row) => row.kind === "sale" && row.last_success_at).map(monthId));
+  const months = expectedMonths("sale", currentYmd);
+  return REALPRICE_LAWDS.filter((lawd) => months.every((dealYmd) => done.has(`${lawd}:sale:${dealYmd}`)));
 }
 
 export function buildRealpriceWarnings({ monthRows, usage, hold, countCheck, nowMs, retryPolicy }) {
@@ -356,7 +387,8 @@ export function buildRealpriceWarnings({ monthRows, usage, hold, countCheck, now
     if (retryPolicy[entry.code]?.warning) warnings.push({ code: entry.code, count: 1, months: [], kind: entry.kind, until: entry.until });
   }
   const diffs = Array.isArray(countCheck?.diffs) ? countCheck.diffs : [];
-  if (diffs.length > 0) warnings.push({ code: "RT_COUNT_DIFF", count: diffs.length, months: diffs.slice(0, 12).map((diff) => `sale:${diff.dealYmd}`), checkedAt: countCheck.checkedAt ?? null });
+  // 0008 전 대조 결과에는 구가 없다(그때는 동구만 받음).
+  if (diffs.length > 0) warnings.push({ code: "RT_COUNT_DIFF", count: diffs.length, months: diffs.slice(0, 12).map((diff) => `${diff.lawdCd ?? REALPRICE_LAWDS[0]}:sale:${diff.dealYmd}`), checkedAt: countCheck.checkedAt ?? null });
   return warnings;
 }
 
@@ -380,11 +412,24 @@ export async function readRealpriceStatus(db, { nowMs, retryPolicy }) {
     countCheck = null;
   }
   const currentYmd = kstMonth(nowMs);
-  const backfill = {};
-  for (const kind of ["sale", "rent", "presale"]) {
+  // 과거 채우기 막대는 5개 구 합계(구·종류·달 한 줄씩 셈). backfillRegions는 구마다 같은 셈과 신고가 준비 여부.
+  const countDone = (kind, lawds) => {
     const expected = new Set(expectedMonths(kind, currentYmd));
-    backfill[kind] = { done: monthRows.filter((row) => row.kind === kind && row.last_success_at && expected.has(row.deal_ymd)).length, total: expected.size };
-  }
+    return {
+      done: monthRows.filter((row) => row.kind === kind && lawds.includes(row.lawd_cd) && row.last_success_at && expected.has(row.deal_ymd)).length,
+      total: expected.size * lawds.length,
+    };
+  };
+  const backfill = {};
+  for (const kind of ["sale", "rent", "presale"]) backfill[kind] = countDone(kind, REALPRICE_LAWDS);
+  const readyLawds = recordHighReadyLawds(monthRows, currentYmd);
+  const backfillRegions = REALPRICE_LAWDS.map((lawd) => ({
+    lawdCd: lawd,
+    sale: countDone("sale", [lawd]),
+    presale: countDone("presale", [lawd]),
+    rent: countDone("rent", [lawd]),
+    recordHighReady: readyLawds.includes(lawd),
+  }));
   const lastSuccessAt = monthRows.reduce((latest, row) => (row.last_success_at && (!latest || row.last_success_at > latest) ? row.last_success_at : latest), null);
   const runs = (runsResult.results ?? []).map((row) => ({
     seq: row.seq,
@@ -404,7 +449,9 @@ export async function readRealpriceStatus(db, { nowMs, retryPolicy }) {
     lastSuccessAt,
     coveredThrough: saleCoveredThrough(monthRows, currentYmd),
     backfill,
-    recordHighReady: backfill.sale.done === backfill.sale.total,
+    backfillRegions,
+    recordHighReady: readyLawds.length === REALPRICE_LAWDS.length,
+    recordHighLawds: readyLawds,
     lastError: lastErrorRun ? { code: lastErrorRun.errorCode, at: lastErrorRun.finishedAt ?? lastErrorRun.startedAt } : null,
     warnings: buildRealpriceWarnings({ monthRows, usage, hold, countCheck, nowMs, retryPolicy }),
     today: {
@@ -414,6 +461,7 @@ export async function readRealpriceStatus(db, { nowMs, retryPolicy }) {
       writeBudget: REALPRICE_DAILY_WRITE_BUDGET,
       readSoftLimit: REALPRICE_DAILY_READ_SOFT,
       readHardLimit: REALPRICE_DAILY_READ_HARD,
+      callBudget: REALPRICE_DAILY_CALL_BUDGET,
     },
     unmatchedSaleRows: Number(unmatchedRow?.n ?? 0),
     runs,
@@ -423,19 +471,21 @@ export async function readRealpriceStatus(db, { nowMs, retryPolicy }) {
 // ── 지금 다시 받기(POST /work/realprice/refresh, 22.7절) ──
 
 // WHERE true: INSERT … SELECT 뒤의 ON CONFLICT를 SQLite가 조인 문법으로 읽지 않게 한다.
-const REFRESH_MONTHS_SQL = `INSERT INTO rt_fetch_months (kind, deal_ymd, next_due_at) SELECT json_extract(value, '$[0]'), json_extract(value, '$[1]'), ?2 FROM json_each(?1) WHERE true
-ON CONFLICT(kind, deal_ymd) DO UPDATE SET next_due_at = excluded.next_due_at`;
+const REFRESH_MONTHS_SQL = `INSERT INTO rt_fetch_months (lawd_cd, kind, deal_ymd, next_due_at) SELECT json_extract(value, '$[0]'), json_extract(value, '$[1]'), json_extract(value, '$[2]'), ?2 FROM json_each(?1) WHERE true
+ON CONFLICT(lawd_cd, kind, deal_ymd) DO UPDATE SET next_due_at = excluded.next_due_at`;
 
-// 최근 4개월 3종류(12건)의 next_due_at을 지금으로 바꾸고(아직 없는 달은 넣음), 키·종류 단위 미룸을 푼다. 외부 요청은 보내지 않는다.
+// 최근 4개월 3종류 5개 구(60건)의 next_due_at을 지금으로 바꾸고(아직 없는 달은 넣음), 키·종류 단위 미룸을 푼다. 외부 요청은 보내지 않는다.
 export function refreshStatements(db, nowMs) {
   const currentYmd = kstMonth(nowMs);
   const pairs = [];
-  for (const kind of REALPRICE_KINDS) {
-    for (let age = 0; age < REALPRICE_RECENT_MONTHS; age += 1) pairs.push([kind, monthFromIndex(monthIndex(currentYmd) - age)]);
+  for (const lawd of REALPRICE_LAWDS) {
+    for (const kind of REALPRICE_KINDS) {
+      for (let age = 0; age < REALPRICE_RECENT_MONTHS; age += 1) pairs.push([lawd, kind, monthFromIndex(monthIndex(currentYmd) - age)]);
+    }
   }
   return {
     queuedMonths: pairs.length,
-    // 최근 달은 차례의 맨 앞(순서 1)이라 다른 달이 기다리고 있어도 이 12건이 먼저 받아진다. Cron 1번에 REALPRICE_MONTHS_PER_RUN건.
+    // 최근 달은 차례의 맨 앞(순서 1)이라 다른 달이 기다리고 있어도 이 60건이 먼저 받아진다. Cron 1번에 REALPRICE_MONTHS_PER_RUN건.
     estimatedMinutes: Math.ceil(pairs.length / REALPRICE_MONTHS_PER_RUN) * REALPRICE_CRON_MINUTES,
     statements: [
       db.prepare(REFRESH_MONTHS_SQL).bind(JSON.stringify(pairs), iso(nowMs)),

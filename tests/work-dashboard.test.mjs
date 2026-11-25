@@ -159,7 +159,7 @@ test("대시보드: GET 말고는 405 METHOD_NOT_ALLOWED와 Allow: GET이고 아
 });
 
 test("대시보드: 구조 번호가 다르면 켜진 칸만 WORK_SCHEMA_OUTDATED·AHEAD이고 request.denied 한 줄, 꺼진 칸은 꺼짐 코드 그대로다", async () => {
-  for (const [version, code] of [[6, "WORK_SCHEMA_OUTDATED"], [8, "WORK_SCHEMA_AHEAD"]]) {
+  for (const [version, code] of [[7, "WORK_SCHEMA_OUTDATED"], [9, "WORK_SCHEMA_AHEAD"]]) {
     const { database, db } = freshDb();
     seedWork(database);
     setSchema(database, version);

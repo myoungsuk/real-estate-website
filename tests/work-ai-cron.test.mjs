@@ -180,7 +180,7 @@ test("구조 번호가 코드와 다르면 열린 작업이 있어도 OpenAI를 
   const ai = oneCreate();
   await createStarted(ctx, ai);
   const before = jobRows(ctx.database);
-  ctx.database.prepare("UPDATE settings SET value_json = '8' WHERE key = 'schema_version'").run();
+  ctx.database.prepare("UPDATE settings SET value_json = '9' WHERE key = 'schema_version'").run();
   const { entries, log } = collect();
   assert.deepEqual(await runAiPollCron(ctx.env, { now: () => NOW + MINUTE, openaiFetch: ai.fetcher, log }), { outcome: "schema" });
   assert.deepEqual(jobRows(ctx.database), before);

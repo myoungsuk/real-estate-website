@@ -58,13 +58,13 @@ test("서버 요청은 work-realprice-client.ts 한 곳에서만, 브라우저 �
   assert.match(client, /cache: "no-store"/u);
 });
 
-test("화면 글자 속 숫자는 서버 값과 같다(30건 더 보기·10분마다·최근 4개월·약 2시간·최근 3년)", async () => {
+test("화면 글자 속 숫자는 서버 값과 같다(30건 더 보기·10분마다·최근 4개월·약 50분·최근 3년)", async () => {
   const [index, settings] = await Promise.all(PAGES.map(readSource));
   assert.equal(REALPRICE_VIEW_PAGE_SIZE, ADMIN_HELP_FACTS.realpricePageSize);
   assert.ok(index.includes(`${REALPRICE_VIEW_PAGE_SIZE}건 더 보기`), "더 보기 단추 글자 = 한 번에 받는 수");
   assert.ok(index.includes(`${ADMIN_HELP_FACTS.realpriceFetchMinutes}분마다 조금씩 받아 둡니다`));
   assert.ok(settings.includes(`최근 ${ADMIN_HELP_FACTS.realpriceRefreshMonths}개월 자료(매매·전월세·분양권)`));
-  assert.ok(settings.includes(`${ADMIN_HELP_FACTS.realpriceFetchMinutes}분마다 하나씩 받아 약 ${ADMIN_HELP_FACTS.realpriceRefreshHours}시간 안에 끝납니다`));
+  assert.ok(settings.includes(`${ADMIN_HELP_FACTS.realpriceFetchMinutes}분마다 나눠 받아 약 ${ADMIN_HELP_FACTS.realpriceRefreshMinutes}분 안에 끝납니다`));
   assert.ok(settings.includes(`최근 ${ADMIN_HELP_FACTS.realpriceSearchYears}년 매매 기준`));
   assert.ok(settings.includes(`최근 ${ADMIN_HELP_FACTS.realpriceSearchYears}년 매매 \${`), "찾기 결과 줄");
 });

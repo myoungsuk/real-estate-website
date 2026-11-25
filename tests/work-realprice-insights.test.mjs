@@ -5,7 +5,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { REALPRICE_INSIGHTS_SQL, insightGroups, medianWon, ratioPct } from "../worker/realprice-insights.mjs";
 import { REALPRICE_COMPARABLE_WHERE, REALPRICE_PRIOR_SQL } from "../worker/realprice-query.mjs";
-import { REALPRICE_KINDS, expectedMonths, kstMonth } from "../worker/realprice-store.mjs";
+import { REALPRICE_KINDS, REALPRICE_LAWDS, expectedMonths, kstMonth } from "../worker/realprice-store.mjs";
 import { FAKE_SERVICE_KEY } from "./realprice-fixtures.mjs";
 import { NOW, freshDb, rows, work, workEnv } from "./work-test-kit.mjs";
 
@@ -18,20 +18,20 @@ const readNow = (database) => rows(database, "SELECT rows_read FROM rt_daily_usa
 const setRead = (database, value) => database.prepare("INSERT INTO rt_daily_usage (day_utc, rows_read) VALUES (?, ?) ON CONFLICT(day_utc) DO UPDATE SET rows_read = excluded.rows_read").run(today, value);
 
 function markAllMonthsOk(database) {
-  const insert = database.prepare("INSERT OR REPLACE INTO rt_fetch_months (kind, deal_ymd, status, row_count, attempts, last_success_at, next_due_at) VALUES (?, ?, 'ok', 0, 0, ?, ?)");
-  for (const kind of REALPRICE_KINDS) for (const ymd of expectedMonths(kind, kstMonth(NOW))) insert.run(kind, ymd, iso(NOW - DAY), iso(NOW + DAY));
+  const insert = database.prepare("INSERT OR REPLACE INTO rt_fetch_months (lawd_cd, kind, deal_ymd, status, row_count, attempts, last_success_at, next_due_at) VALUES (?, ?, ?, 'ok', 0, 0, ?, ?)");
+  for (const lawd of REALPRICE_LAWDS) for (const kind of REALPRICE_KINDS) for (const ymd of expectedMonths(kind, kstMonth(NOW))) insert.run(lawd, kind, ymd, iso(NOW - DAY), iso(NOW + DAY));
 }
 
 let keyCounter = 0;
-function insertTrade(database, { kind = "sale", date, aptSeq = "A1", cmpSeq, area = 8497, price = 300_000_000, dealing = "broker", cancelled = 0, floor = 10 }) {
+function insertTrade(database, { kind = "sale", date, aptSeq = "A1", cmpSeq, area = 8497, price = 300_000_000, dealing = "broker", cancelled = 0, floor = 10, lawd = "30110" }) {
   keyCounter += 1;
   const ymd = date.slice(0, 4) + date.slice(5, 7);
   const key = `${kind}:${ymd}:${String(keyCounter).padStart(20, "0")}:1`;
   database.prepare(`INSERT INTO rt_trades (trade_key, kind, deal_ymd, deal_date, umd_nm, jibun, apt_seq, cmp_seq, apt_nm, area_x100, floor, build_year,
-    price_won, deposit_won, monthly_rent_won, dealing_gbn, cancelled, cancelled_on, registered_on, apt_dong, extra_json, is_backfill, first_seen_at, updated_at)
-    VALUES (?, ?, ?, ?, '가상동', '1', ?, ?, '가상숲1단지', ?, ?, 2020, ?, ?, NULL, ?, ?, NULL, NULL, NULL, '{}', 1, ?, ?)`).run(
+    price_won, deposit_won, monthly_rent_won, dealing_gbn, cancelled, cancelled_on, registered_on, apt_dong, extra_json, is_backfill, first_seen_at, updated_at, lawd_cd)
+    VALUES (?, ?, ?, ?, '가상동', '1', ?, ?, '가상숲1단지', ?, ?, 2020, ?, ?, NULL, ?, ?, NULL, NULL, NULL, '{}', 1, ?, ?, ?)`).run(
     key, kind, ymd, date, aptSeq, cmpSeq === undefined ? aptSeq : cmpSeq, area, floor,
-    kind === "rent" ? null : price, kind === "rent" ? 100_000_000 : null, kind === "rent" ? null : dealing, cancelled, iso(NOW - 30 * DAY), iso(NOW - 30 * DAY),
+    kind === "rent" ? null : price, kind === "rent" ? 100_000_000 : null, kind === "rent" ? null : dealing, cancelled, iso(NOW - 30 * DAY), iso(NOW - 30 * DAY), lawd,
   );
   return key;
 }
@@ -144,17 +144,17 @@ test("63 읽기 한도: 사용량은 rt_daily_usage에 더하고 감사 0, 첫 �
   assert.equal(auditCount(database), auditBefore, "보기 요청은 감사 0");
   assert.equal(ok.response.headers.get("Cache-Control"), "no-store");
 
-  setRead(database, 1_500_000);
+  setRead(database, 6_000_000);
   const soft = await insights(env, [key]);
   assert.deepEqual([soft.status, soft.json.data.items[0], soft.json.data.warnings], [200, { tradeKey: key, available: false, reason: "budget" }, [{ code: "RT_READ_BUDGET", level: "soft" }]]);
 
-  setRead(database, 2_500_000);
+  setRead(database, 10_000_000);
   const hard = await insights(env, [key]);
   assert.deepEqual([hard.status, hard.json.error.code], [429, "RT_READ_BUDGET"]);
-  assert.equal(readNow(database), 2_500_000, "거절한 조회는 더하지 않음");
+  assert.equal(readNow(database), 10_000_000, "거절한 조회는 더하지 않음");
 
   setRead(database, 0);
-  database.prepare("DELETE FROM rt_fetch_months WHERE kind = 'sale' AND deal_ymd = '200601'").run();
+  database.prepare("DELETE FROM rt_fetch_months WHERE lawd_cd = '30110' AND kind = 'sale' AND deal_ymd = '200601'").run();
   const pending = await insights(env, [key]);
   assert.deepEqual([pending.status, pending.json.data.items[0].reason, pending.json.data.recordHighReady], [200, "pending", false]);
 });
@@ -197,4 +197,18 @@ test("63 가운데 값·최고가 대비 계산", () => {
   assert.equal(ratioPct(528_840_000, 520_000_000), 101.7);
   assert.equal(ratioPct(500_000_000, 500_000_000), 100);
   assert.equal(ratioPct(500_000_000, null), null);
+});
+
+test("TK-140 흐름도 구마다 판정 준비를 본다: 서구 매매 한 달이 빠지면 서구 거래만 pending, 동구 거래는 흐름을 돌려줌", async () => {
+  const { database, db } = freshDb({ d1Meta: true });
+  markAllMonthsOk(database);
+  database.prepare("UPDATE rt_fetch_months SET status = 'pending', last_success_at = NULL WHERE lawd_cd = '30170' AND kind = 'sale' AND deal_ymd = '201005'").run();
+  const east = insertTrade(database, { date: "2026-10-01", aptSeq: "30110-1" });
+  const west = insertTrade(database, { date: "2026-10-01", aptSeq: "30170-1", lawd: "30170" });
+  const result = await insights(stagePEnv(db), [east, west]);
+  assert.equal(result.status, 200);
+  assert.equal(itemOf(result.json, east).available, true);
+  assert.deepEqual([itemOf(result.json, west).available, itemOf(result.json, west).reason], [false, "pending"]);
+  assert.equal(result.json.data.recordHighReady, false);
+  assert.equal((await insights(stagePEnv(db), [east])).json.data.recordHighReady, true, "동구 거래만 고르면 준비 끝");
 });
