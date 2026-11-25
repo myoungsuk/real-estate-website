@@ -129,6 +129,11 @@ test("한도: 스레드만 이모지를 UTF-8 바이트 수로 센다(Meta 문�
   assert.deepEqual([own("가1#\n나"), own("😀"), own("☀"), own("👍🏽"), own("🇰🇷"), own("1️⃣"), own("👨‍👩‍👧")], [5, 4, 3, 8, 8, 7, 18]);
   assert.equal(placeCount("threads", { text: "가나다", hashtags: [], disclosureText: "가" }).emoji, 0);
   assert.equal(placeFieldNote(placeCount("threads", { text: "가나다", hashtags: [], disclosureText: "가" })).includes("이모지"), false, "이모지가 없으면 알리지 않음");
+  // 자동으로 붙는 글(구분선·명시사항)도 같은 규칙으로 센다: 내 글 2자 + (빈 줄·구분선 13 + '가' 1 + 이모지 4 = 18자) = 20자.
+  // 붙는 글만 코드 포인트로 세면 붙는 글 15·내 글 5가 되어 여기서 떨어진다(2026-11-25 날개-2 검토에서 찾은 시험 빈틈).
+  const tailEmoji = placeCount("threads", { text: "가나", hashtags: [], disclosureText: "가😀" });
+  assert.deepEqual([tailEmoji.own, tailEmoji.attached, tailEmoji.total, tailEmoji.emoji, tailEmoji.left], [2, 18, 20, 1, 480]);
+  assert.equal(placeCount("instagram", { text: "가나", hashtags: [], disclosureText: "가😀" }).attached, 15, "인스타그램은 붙는 글의 이모지도 1자");
   // 인스타그램·카카오톡·블로그는 그대로 한 개를 1자로 센다(문서에 세는 방식이 없음).
   assert.deepEqual([placeCount("instagram", { text: "😀😀", hashtags: [], disclosureText: "가" }).own, placeCount("instagram", { text: "😀😀", hashtags: [], disclosureText: "가" }).emoji], [2, 0]);
   assert.equal(placeCount("kakao", { title: "", text: "😀😀", disclosureText: "가" }).own, 2);

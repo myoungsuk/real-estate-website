@@ -532,7 +532,7 @@
     },
     "blog-draft": {
       "route": "/admin/work/blog/",
-      "sources": "a55b6c065a203636befca290b6891a039ec68eacf1905de54880d9a3508eda0b",
+      "sources": "cdd3d6c17c7dba7b2885627d5e213d2f0141c5ecf705ed4e880af42d42366266",
       "shots": {
         "blog-phone-1-source": {
           "width": 772,

@@ -1,6 +1,6 @@
 // 글 초안 3단계 '글 성격·만들기'의 화면 계산(2026-11-25 글 성격 21가지·현장 메모 '빠르게 넣기'). 화면 스크립트가 쓰고 시험이 직접 부른다.
 // 서버 요청·브라우저 저장·주소 변경을 하지 않는다. 메모 글을 기록하지 않는다.
-import { BLOG_STYLES, BLOG_STYLE_GROUPS, EMPHASIS_MAX, allowedStyles } from "./blog-checks.mjs";
+import { BLOG_STYLES, BLOG_STYLE_GROUPS, EMPHASIS_MAX, MEMO_HEADS, allowedStyles, dropEmptyMemoHeads } from "./blog-checks.mjs";
 
 const styleOf = (id) => BLOG_STYLES.find((style) => style.id === id);
 
@@ -36,10 +36,7 @@ export function lockedStylesText(styles, source) {
 
 // ── 현장 메모 '빠르게 넣기' ──
 // 새 칸을 두지 않고, 단추를 누르면 메모 칸에 머리말("역·교통: ")만 넣는다(사용자 결정 2026-11-25 "추천대로").
-const MEMO_HEADS = Object.freeze({
-  listing: ["역·교통", "학교", "상권", "수리·상태", "전망·채광"],
-  complex: ["역·교통", "학교", "상권", "단지 시설"],
-});
+// 머리말 목록(MEMO_HEADS)은 서버도 써서 blog-checks.mjs에 있다(머리말만 있는 줄을 빈 것으로 보는 규칙과 한 곳).
 
 // 그 자료·성격에서 보일 머리말 단추. 메모에 사실이 있어야 글이 되는 성격(재건축·재개발·시황·타이밍·경험담)은 그 성격의 머리말을 맨 앞에 더한다.
 export function memoQuickHeads(source, styleId) {
@@ -65,9 +62,10 @@ export function addMemoHead(value, head, max = EMPHASIS_MAX) {
 }
 
 // 메모에 사실이 있어야 글이 되는 성격을 골랐는데 메모가 비었을 때의 한 줄(막지 않음). 그 밖에는 빈 글자.
+// 머리말 단추만 누르고 글을 쓰지 않은 메모("직접 본 것: ")도 빈 메모로 본다(단추가 알림을 끄지 않게, 2026-11-25).
 export function memoNeedText(styleId, value) {
   const style = styleOf(styleId);
-  if (!style?.memoHead || String(value ?? "").trim() !== "") return "";
+  if (!style?.memoHead || dropEmptyMemoHeads(value) !== "") return "";
   return `'${style.label}' 글은 이 칸에 확인한 사실을 적어야 글이 됩니다. 비워 두면 평범한 소개 글이 됩니다(그대로 만들 수는 있습니다).`;
 }
 
