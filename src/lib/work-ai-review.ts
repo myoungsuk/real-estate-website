@@ -8,12 +8,14 @@
 // - '거래에 넣기 전 확인'은 지금 값 → 넣을 값과, 서버와 같은 계산 함수로 만든 일정 미리 보기를 보인다. '거래에 넣기'는 POST confirm 한 번이고 자동으로 다시 보내지 않는다.
 // - 근거는 원문 글(evidence.quote)이 먼저이고, 사진 위 상자는 참고다. 사진은 같은 출처 <img>(사본 원본, 감사 file.download)로만 보이고 blob: 주소를 쓰지 않는다.
 // - 계약서 글·금액·날짜는 화면 메모리에만 둔다(주소·제목·브라우저 저장소 없음).
+// - '거래에 넣기'가 되면 그 거래의 매출장부 보수 줄을 미리 채운 칸(work-ai-ledger.ts)을 한 번 만든다. 사람이 '장부에 넣기'를 눌러야 장부에 들어간다(2026-11-25).
 import legalRules from "../data/work/legal-rules.json";
 import { WorkApiError, getCustomerSession } from "./work-customers-client";
 import type { DealEvent } from "./work-customers-client";
 import { element, setStatus } from "./work-customers-dom";
 import { confirmAiGroup, readAiDeal, readAiGroup, type AiConfirmResult, type AiDeal, type AiDealDetail, type AiGroupView, type AiJob } from "./work-ai-client";
 import { fileContentUrl } from "./work-files-client";
+import { aiLedgerSection } from "./work-ai-ledger";
 import {
   AI_CHANGE_TEXT,
   AI_COPY_TRASHED_TEXT,
@@ -111,6 +113,8 @@ export function mountAiReview(page: HTMLElement) {
   let blocked = false;
   let badFields: string[] = [];
   let done: AiConfirmResult | null = null;
+  // 거래에 넣은 뒤 한 번만 만드는 장부 칸. 다시 그려도 같은 마디를 붙여 장부 목록을 다시 읽지 않는다.
+  let ledgerBox: HTMLElement | null = null;
   const images = new Map<number, HTMLImageElement>();
 
   const jobOf = (runIndex: number): AiJob | undefined => view?.jobs.find((job) => job.runIndex === runIndex);
@@ -727,6 +731,7 @@ export function mountAiReview(page: HTMLElement) {
     setStatus(status, "거래에 넣고 있습니다…", "saving");
     try {
       done = await confirmAiGroup(groupId, aiConfirmBody(comparison, choices, detail.deal.version));
+      ledgerBox = aiLedgerSection(done.deal as unknown as Parameters<typeof aiLedgerSection>[0], detail.parties.map((party) => party.role));
       busy = false;
       step = "done";
       setStatus(status, "", "idle");
@@ -890,6 +895,7 @@ export function mountAiReview(page: HTMLElement) {
         }
         nodes.push(evts);
       }
+      if (ledgerBox) nodes.push(ledgerBox);
       const go = element("a", "work-primary-button axr-done-go", "손님 카드로 돌아가기");
       go.href = back.href;
       const act = element("div", "ax-act");
@@ -959,6 +965,7 @@ export function mountAiReview(page: HTMLElement) {
     choices = {};
     manualDrafts = {};
     done = null;
+    ledgerBox = null;
     images.clear();
     void start();
   });
