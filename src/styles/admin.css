@@ -2691,6 +2691,8 @@ nav.tr-homelinks { display: flex; flex-wrap: wrap; gap: 0 24px; margin: 0 0 14px
 .dsh-listing:hover > span:first-child { text-decoration: underline; text-underline-offset: 3px; }
 .dsh-listing b { font-weight: 800; }
 .dsh-listing .dsh-sync.is-late { justify-self: start; padding: 1px 6px; border-radius: 4px; color: var(--ad-warn-ink); background: var(--ad-warn); font-weight: 800; }
+.dsh-sync-help { display: inline-flex; align-items: center; min-height: 44px; color: var(--ds-ink); font-size: 1rem; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; overflow-wrap: anywhere; word-break: keep-all; }
+.dsh-sync-help[hidden] { display: none; }
 .dsh-state { display: grid; gap: 8px; justify-items: start; margin: 12px 0 6px; padding: 12px; border-radius: 6px; }
 .dsh-state p { margin: 0; font-weight: 700; }
 .dsh-state.is-off { border-left: 4px solid var(--ds-navy); background: var(--ds-paper-2); }

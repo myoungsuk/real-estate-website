@@ -5,7 +5,7 @@ import AdminPageHelp from "../../components/admin/AdminPageHelp.astro";
 import AdminLayout from "../../layouts/AdminLayout.astro";
 import { naverListings } from "../../lib/naver-listings";
 import { buildListingReviewQueue } from "../../lib/listing-review.mjs";
-import { bankLastSeenOn, shortDate, WOORI_SYNC_NO_LISTINGS_TEXT, wooriLastSeenOn } from "../../lib/work/dashboard-view.mjs";
+import { bankLastSeenOn, shortDate, WOORI_SYNC_LATE_HELP_TEXT, WOORI_SYNC_NO_LISTINGS_TEXT, wooriLastSeenOn } from "../../lib/work/dashboard-view.mjs";
 import reviewPolicy from "../../../.github/listing-review-policy.json";
 import reviewState from "../../../.github/listing-review-state.json";
 
@@ -32,7 +32,7 @@ const reviewQueue = buildListingReviewQueue(
 const reviewText = reviewQueue.enabled ? `재확인 필요 ${reviewQueue.needsReview}건` : "재확인 경고 기준 미설정";
 // 부동산뱅크 자동 받기가 멈췄는지는 화면을 연 때 아래 스크립트가 잰다(빌드 때는 받은 날만 실음).
 const bankSeenOn = bankLastSeenOn(reviewState);
-// 우리집부동산 자동 받기(사무소 PC)도 같다. 우리집부동산 매물이 0건이면 받은 날을 알 수 없다는 글만 둔다.
+// 우리집부동산 자동 받기(사무소 PC, 09:20)는 '오늘 받았나'를 화면을 연 때 잰다. 우리집부동산 매물이 0건이면 받은 날을 알 수 없다는 글만 둔다.
 const wooriSeenOn = wooriLastSeenOn(reviewState);
 ---
 
@@ -101,6 +101,8 @@ const wooriSeenOn = wooriLastSeenOn(reviewState);
             ? <span class="dsh-meta dsh-sync" data-dsh-woori-sync={wooriSeenOn}>우리집부동산 자동 받기 {shortDate(wooriSeenOn)}</span>
             : <span class="dsh-meta dsh-sync">{WOORI_SYNC_NO_LISTINGS_TEXT}</span>}
         </a>
+        <!-- '오늘 못 받음'일 때만 보인다. 매물 링크 안에 고리를 겹칠 수 없어 바로 아래에 따로 둔다. -->
+        {wooriSeenOn && <a class="dsh-sync-help" href="/admin/listings/editor/#woori-import-heading" data-dsh-woori-help hidden>{WOORI_SYNC_LATE_HELP_TEXT}</a>}
       </section>
     </div>
   </div>
@@ -294,13 +296,18 @@ const wooriSeenOn = wooriLastSeenOn(reviewState);
     // 미리 그린 뒤·뒤로 가기 캐시·오래 켜 둔 탭에서도 낡지 않게 화면이 보일 때마다 다시 잰다.
     const bankSync = root?.querySelector<HTMLElement>("[data-dsh-bank-sync]");
     const wooriSync = root?.querySelector<HTMLElement>("[data-dsh-woori-sync]");
+    const wooriHelp = root?.querySelector<HTMLElement>("[data-dsh-woori-help]");
     const renderSyncLine = (line: HTMLElement, sync: { stale: boolean; text: string }) => {
       line.textContent = sync.text;
       line.classList.toggle("is-late", sync.stale);
     };
     const renderSyncLines = () => {
       if (bankSync?.dataset.dshBankSync) renderSyncLine(bankSync, bankSyncState(bankSync.dataset.dshBankSync, todayInKorea(), Date.now()));
-      if (wooriSync?.dataset.dshWooriSync) renderSyncLine(wooriSync, wooriSyncState(wooriSync.dataset.dshWooriSync, todayInKorea(), Date.now()));
+      if (wooriSync?.dataset.dshWooriSync) {
+        const sync = wooriSyncState(wooriSync.dataset.dshWooriSync, todayInKorea(), Date.now());
+        renderSyncLine(wooriSync, sync);
+        if (wooriHelp) wooriHelp.hidden = !sync.stale;
+      }
     };
     renderSyncLines();
     document.addEventListener("prerenderingchange", renderSyncLines);
