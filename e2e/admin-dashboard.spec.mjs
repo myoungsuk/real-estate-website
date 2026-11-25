@@ -194,3 +194,34 @@ test("대시보드: '부동산뱅크 자동 받기' 줄은 받은 날 0시(한�
     expect(await overflowOf(page), String(width)).toBe(0);
   }
 });
+
+test("대시보드: '우리집부동산 자동 받기' 줄은 부동산뱅크 줄 아래에 있고, 같은 36시간 기준으로 '! … 멈춤'과 경고 칸을 보인다", async ({ page }) => {
+  await setup(page);
+  const listing = panel(page, "realprice").locator(".dsh-listing");
+  const line = listing.locator("[data-dsh-woori-sync]");
+  // 받은 날은 빌드 때 실제 .github/listing-review-state.json에서 온다. 우리집부동산 매물이 0건이면 날짜 없는 안내 글만 있다.
+  if ((await line.count()) === 0) {
+    await expect(listing).toContainText("우리집부동산 자동 받기 · 매물 0건이라 받은 날을 알 수 없음");
+    test.skip(true, "우리집부동산 매물이 없어 날짜 줄이 없음");
+  }
+  const syncLines = listing.locator(".dsh-sync");
+  await expect(syncLines.last()).toHaveAttribute("data-dsh-woori-sync", /^\d{4}-\d{2}-\d{2}$/u);
+  const seenOn = await line.getAttribute("data-dsh-woori-sync");
+  const kst = (hours) => new Date(Date.parse(`${seenOn}T00:00:00+09:00`) + hours * 3_600_000);
+
+  // 다음 날 09:20 받기 전·12:00까지는 보통 글(어제)
+  await page.clock.setSystemTime(kst(24 + 11));
+  await page.reload();
+  await expect(line).toHaveText(/^우리집부동산 자동 받기 어제 · \d+\.\d+\(.\)$/u);
+  await expect(line).not.toHaveClass(/is-late/u);
+
+  // PC가 사흘 꺼져 있었음
+  await page.clock.setSystemTime(kst(24 * 3 + 9));
+  await page.reload();
+  await expect(line).toHaveText(/^! 우리집부동산 자동 받기 멈춤 · 마지막 \d+\.\d+\(.\)\(3일 전\)$/u);
+  await expect(line).toHaveClass(/is-late/u);
+  for (const width of [360, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await overflowOf(page), String(width)).toBe(0);
+  }
+});

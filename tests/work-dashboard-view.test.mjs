@@ -23,6 +23,10 @@ import {
   taskWhen,
   tradeAreaText,
   undatedText,
+  WOORI_SYNC_NO_LISTINGS_TEXT,
+  WOORI_SYNC_STALE_HOURS,
+  wooriLastSeenOn,
+  wooriSyncState,
 } from "../src/lib/work/dashboard-view.mjs";
 
 const TODAY = "2026-11-23";
@@ -178,4 +182,48 @@ test("부동산뱅크 자동 받기는 받은 날 0시(한국 시각)부터 36�
   assert.deepEqual(bankSyncState("2026-11-25", "2026-11-24", at("2026-11-24T23:00:00")), { stale: false, text: "부동산뱅크 자동 받기 오늘 · 11.25(수)" });
   // 색만으로 알리지 않음: 멈춤 글에는 늘 '!'와 '멈춤'이 있다
   for (const state of [bankSyncState("2026-11-20", "2026-11-24", at("2026-11-24T00:00:00"))]) assert.match(state.text, /^! .*멈춤/u);
+});
+
+test("우리집부동산 받은 날은 우리집부동산 매물 가운데 가장 늦은 lastSeenAt이고, 부동산뱅크·직접 등록 날짜는 섞지 않는다", () => {
+  const state = {
+    items: {
+      a: { source: "bank", lastSeenAt: "2026-11-25" },
+      w1: { source: "woori", lastSeenAt: "2026-11-23" },
+      w2: { source: "woori", lastSeenAt: "2026-11-24" },
+      c: { source: "manual", lastSeenAt: null, lastReviewedAt: "2026-11-25" },
+    },
+  };
+  assert.equal(wooriLastSeenOn(state), "2026-11-24");
+  assert.equal(bankLastSeenOn(state), "2026-11-25");
+  assert.equal(wooriLastSeenOn({ items: { a: { source: "bank", lastSeenAt: "2026-11-25" } } }), null);
+  assert.equal(wooriLastSeenOn({ items: { w: { source: "woori", lastSeenAt: "어제" } } }), null);
+  assert.equal(wooriLastSeenOn({}), null);
+  assert.equal(wooriLastSeenOn(null), null);
+});
+
+test("우리집부동산 자동 받기도 받은 날 0시(한국 시각)부터 36시간이 넘으면 '!'와 '멈춤'으로 알리고, 0건이면 받은 날을 모른다고만 말한다", () => {
+  assert.equal(WOORI_SYNC_STALE_HOURS, 36);
+  const at = (kst) => Date.parse(`${kst}+09:00`);
+  // 09:20 받기 뒤 오늘
+  assert.deepEqual(wooriSyncState("2026-11-25", "2026-11-25", at("2026-11-25T09:40:00")), { stale: false, text: "우리집부동산 자동 받기 오늘 · 11.25(수)" });
+  // 다음 날 09:20 받기 전·늦은 배포까지는 정상(어제)
+  assert.deepEqual(wooriSyncState("2026-11-24", "2026-11-25", at("2026-11-25T11:59:59")), { stale: false, text: "우리집부동산 자동 받기 어제 · 11.24(화)" });
+  // 경계: 다음 날 12:00 정각은 정상, 1밀리초 넘으면 멈춤
+  assert.equal(wooriSyncState("2026-11-24", "2026-11-25", at("2026-11-25T12:00:00")).stale, false);
+  assert.deepEqual(wooriSyncState("2026-11-24", "2026-11-25", at("2026-11-25T12:00:00") + 1), { stale: true, text: "! 우리집부동산 자동 받기 멈춤 · 마지막 11.24(화)(어제)" });
+  // PC가 사흘 꺼져 있었음
+  assert.deepEqual(wooriSyncState("2026-11-22", "2026-11-25", at("2026-11-25T09:00:00")), { stale: true, text: "! 우리집부동산 자동 받기 멈춤 · 마지막 11.22(일)(3일 전)" });
+  // 시계 차이로 받은 날이 앞서도 음수 날짜를 쓰지 않는다
+  assert.deepEqual(wooriSyncState("2026-11-26", "2026-11-25", at("2026-11-25T23:00:00")), { stale: false, text: "우리집부동산 자동 받기 오늘 · 11.26(목)" });
+  // 0건: '멈춤'이라고 지어내지 않는다
+  assert.equal(WOORI_SYNC_NO_LISTINGS_TEXT, "우리집부동산 자동 받기 · 매물 0건이라 받은 날을 알 수 없음");
+  assert.doesNotMatch(WOORI_SYNC_NO_LISTINGS_TEXT, /멈춤|^!/u);
+});
+
+test("우리집부동산 줄을 더해도 부동산뱅크 줄의 기준과 글은 그대로다", () => {
+  const at = (kst) => Date.parse(`${kst}+09:00`);
+  const now = at("2026-11-25T12:00:00") + 1;
+  assert.deepEqual(bankSyncState("2026-11-24", "2026-11-25", now), { stale: true, text: "! 부동산뱅크 자동 받기 멈춤 · 마지막 11.24(화)(어제)" });
+  assert.deepEqual(wooriSyncState("2026-11-24", "2026-11-25", now), { stale: true, text: "! 우리집부동산 자동 받기 멈춤 · 마지막 11.24(화)(어제)" });
+  assert.match(bankSyncState("2026-11-25", "2026-11-25", now).text, /^부동산뱅크 자동 받기 오늘/u);
 });

@@ -191,23 +191,49 @@ export const moneyKindText = (kind) => /** @type {Record<string, string>} */ (LE
 export const BANK_SYNC_STALE_HOURS = 36;
 const HOUR_MS = 60 * 60 * 1000;
 
-/** 부동산뱅크 매물 가운데 가장 늦은 받은 날. 부동산뱅크 매물이 없으면 null @param {{ items?: Record<string, { source: string, lastSeenAt: string | null }> }} reviewState */
-export function bankLastSeenOn(reviewState) {
+// 우리집부동산 매물 자동 받기(사무소 PC 작업 스케줄러, 매일 09:20, scripts/run-woori-sync-local.mjs)도 같은 파일의 우리집부동산 매물(source "woori") lastSeenAt으로 본다(2026-11-25).
+// 기준도 36시간이다: 09:20 받기 + 시험·배포 몇 분이 받은 날 안에 끝나므로, 다음 날 12:00까지 받은 날이 바뀌지 않으면 멈춤이다.
+// PC가 꺼져 있거나 작업이 아예 돌지 않으면 PC 쪽 실패 이슈가 열리지 않으므로 이 줄과 .github/workflows/woori-sync-stall-alert.yml(13:00)이 알린다.
+export const WOORI_SYNC_STALE_HOURS = 36;
+
+/** 한 출처 매물 가운데 가장 늦은 받은 날. 그 출처 매물이 없으면 null @param {{ items?: Record<string, { source: string, lastSeenAt: string | null }> }} reviewState @param {string} source */
+function sourceLastSeenOn(reviewState, source) {
   const dates = Object.values(reviewState?.items ?? {})
-    .filter((item) => item?.source === "bank" && /^\d{4}-\d{2}-\d{2}$/u.test(item.lastSeenAt ?? ""))
+    .filter((item) => item?.source === source && /^\d{4}-\d{2}-\d{2}$/u.test(item.lastSeenAt ?? ""))
     .map((item) => /** @type {string} */ (item.lastSeenAt));
   return dates.length > 0 ? dates.sort().at(-1) ?? null : null;
 }
 
+/** 부동산뱅크 매물 가운데 가장 늦은 받은 날. 부동산뱅크 매물이 없으면 null @param {{ items?: Record<string, { source: string, lastSeenAt: string | null }> }} reviewState */
+export const bankLastSeenOn = (reviewState) => sourceLastSeenOn(reviewState, "bank");
+
+/** 우리집부동산 매물 가운데 가장 늦은 받은 날. 우리집부동산 매물이 없으면 null @param {{ items?: Record<string, { source: string, lastSeenAt: string | null }> }} reviewState */
+export const wooriLastSeenOn = (reviewState) => sourceLastSeenOn(reviewState, "woori");
+
 /**
- * 받은 날(한국 날짜)의 0시부터 36시간이 넘으면 멈춤으로 본다(00:10 실행·배포가 늦어지는 몫을 넉넉히 둠). 색만으로 알리지 않게 '!'와 '멈춤'을 글에 넣는다.
- * @param {string} lastSeenOn 'YYYY-MM-DD' @param {string} today 한국 날짜 'YYYY-MM-DD' @param {number} nowMs 지금 시각(밀리초)
+ * 받은 날(한국 날짜)의 0시부터 기준 시간이 넘으면 멈춤으로 본다. 색만으로 알리지 않게 '!'와 '멈춤'을 글에 넣는다.
+ * @param {string} label 출처 이름 @param {number} staleHours @param {string} lastSeenOn 'YYYY-MM-DD' @param {string} today 한국 날짜 'YYYY-MM-DD' @param {number} nowMs 지금 시각(밀리초)
  */
-export function bankSyncState(lastSeenOn, today, nowMs) {
+function listingSyncState(label, staleHours, lastSeenOn, today, nowMs) {
   const days = Math.max(0, dayIndex(today) - dayIndex(lastSeenOn));
   const ago = days === 0 ? "오늘" : days === 1 ? "어제" : `${days}일 전`;
-  const stale = nowMs - Date.parse(`${lastSeenOn}T00:00:00.000+09:00`) > BANK_SYNC_STALE_HOURS * HOUR_MS;
+  const stale = nowMs - Date.parse(`${lastSeenOn}T00:00:00.000+09:00`) > staleHours * HOUR_MS;
   return stale
-    ? { stale, text: `! 부동산뱅크 자동 받기 멈춤 · 마지막 ${shortDate(lastSeenOn)}(${ago})` }
-    : { stale, text: `부동산뱅크 자동 받기 ${ago} · ${shortDate(lastSeenOn)}` };
+    ? { stale, text: `! ${label} 자동 받기 멈춤 · 마지막 ${shortDate(lastSeenOn)}(${ago})` }
+    : { stale, text: `${label} 자동 받기 ${ago} · ${shortDate(lastSeenOn)}` };
 }
+
+/**
+ * 부동산뱅크: 받은 날 0시부터 36시간이 넘으면 멈춤(00:10 실행·배포가 늦어지는 몫을 넉넉히 둠).
+ * @param {string} lastSeenOn 'YYYY-MM-DD' @param {string} today 한국 날짜 'YYYY-MM-DD' @param {number} nowMs 지금 시각(밀리초)
+ */
+export const bankSyncState = (lastSeenOn, today, nowMs) => listingSyncState("부동산뱅크", BANK_SYNC_STALE_HOURS, lastSeenOn, today, nowMs);
+
+/**
+ * 우리집부동산: 받은 날 0시부터 36시간이 넘으면 멈춤(09:20 실행, 다음 날 12:00까지).
+ * @param {string} lastSeenOn 'YYYY-MM-DD' @param {string} today 한국 날짜 'YYYY-MM-DD' @param {number} nowMs 지금 시각(밀리초)
+ */
+export const wooriSyncState = (lastSeenOn, today, nowMs) => listingSyncState("우리집부동산", WOORI_SYNC_STALE_HOURS, lastSeenOn, today, nowMs);
+
+// 우리집부동산 매물이 0건이면 받은 날이 남지 않아 멈춤인지 알 수 없다(공개 목록이 비면 자동 받기는 파일을 바꾸지 않고 실패한다).
+export const WOORI_SYNC_NO_LISTINGS_TEXT = "우리집부동산 자동 받기 · 매물 0건이라 받은 날을 알 수 없음";

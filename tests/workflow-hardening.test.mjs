@@ -95,6 +95,47 @@ test("IndexNow 알림은 성공한 master CI와 그 커밋을 포함한 Producti
   assert.doesNotMatch(workflow, /--scope search/u);
 });
 
+test("우리집부동산 받기 멈춤 알림은 13:00 한국 시각에 상태 파일만 읽고, 알림 job만 이슈 권한을 갖는다", async () => {
+  const workflow = await readWorkflow("woori-sync-stall-alert.yml");
+  assertPinnedOfficialActions(workflow);
+  assert.match(workflow, /schedule:\s*\n\s*- cron: "0 4 \* \* \*"/u);
+  assert.match(workflow, /^permissions:\s*\n\s*contents: read/mu);
+  assert.doesNotMatch(workflow, /contents: write|secrets\.|GITHUB_TOKEN:|git push|woori-house|npm (ci|test|run)/u);
+
+  const alertIndex = workflow.indexOf("\n  alert:");
+  assert.ok(alertIndex > workflow.indexOf("\n  check:"), "알림 job은 check 뒤에 있음");
+  const checkJob = workflow.slice(0, alertIndex);
+  const alertJob = workflow.slice(alertIndex);
+
+  // check job: 판정 스크립트와 상태 파일만 받고 이슈 권한·토큰이 없다.
+  assert.doesNotMatch(checkJob, /issues: write|actions: read|GH_TOKEN/u);
+  assert.match(checkJob, /sparse-checkout: \|\s*\n\s*\.github\/listing-review-state\.json\s*\n\s*scripts\/check-woori-sync-stale\.mjs\s*\n\s*sparse-checkout-cone-mode: false/u);
+  assert.match(checkJob, /node scripts\/check-woori-sync-stale\.mjs --state \.github\/listing-review-state\.json/u);
+
+  // alert job: 멈춤일 때만, issues: write만, 저장소를 받지 않는다.
+  assert.match(alertJob, /needs: \[check\]/u);
+  assert.match(alertJob, /if: \$\{\{ needs\.check\.outputs\.status == 'stale' && github\.ref == 'refs\/heads\/master' \}\}/u);
+  assert.match(alertJob, /permissions:\s*\n\s*issues: write\s*\n\s*steps:/u);
+  assert.doesNotMatch(alertJob, /uses:|actions: read/u);
+  assert.equal((alertJob.match(/GH_TOKEN: \$\{\{ github\.token \}\}/gu) ?? []).length, 1);
+  // PC 받기와 같은 제목, 봇이나 저장소 주인이 연 열린 이슈에는 댓글, 없으면 새로 연다. 이 job은 닫지 않는다(PC 받기 성공이 닫음).
+  assert.match(alertJob, /title="우리집부동산 매물 자동 받기 실패"/u);
+  assert.match(alertJob, /select\(\.title == \\"\$title\\" and \(\.author\.is_bot or \.author\.login == \\"\$OWNER\\"\)\)/u);
+  assert.match(alertJob, /gh issue comment "\$number" --body-file "\$body_file"/u);
+  assert.match(alertJob, /gh issue create --title "\$title" --body-file "\$body_file"/u);
+  assert.doesNotMatch(alertJob, /gh issue close/u);
+  // 본문 값은 실행 주소와 마지막으로 받은 날뿐이다.
+  assert.match(alertJob, /"- 실행: \$RUN_URL"/u);
+  assert.match(alertJob, /"- 마지막으로 받은 날: \$\{LAST_SEEN:-확인 못 함\}"/u);
+  assert.doesNotMatch(alertJob, /--log|gh run download|gh run view/u);
+});
+
+test("PC 받기 실패 이슈 제목은 멈춤 알림 워크플로와 같다(PC의 다음 성공이 그 이슈를 닫음)", async () => {
+  const { WOORI_LOCAL_SYNC_ISSUE_TITLE } = await import("../scripts/run-woori-sync-local.mjs");
+  const workflow = await readWorkflow("woori-sync-stall-alert.yml");
+  assert.ok(workflow.includes(`title="${WOORI_LOCAL_SYNC_ISSUE_TITLE}"`));
+});
+
 for (const [label, name] of [["부동산뱅크", "sync-bank-listings.yml"], ["우리집부동산", "sync-woori-listings.yml"]]) test(`${label} 자동 받기는 실패하면 이슈를 열고 성공하면 닫으며, 알림 job만 이슈 권한을 갖는다`, async () => {
   const workflow = await readWorkflow(name);
   const alertIndex = workflow.indexOf("\n  alert:");
