@@ -344,3 +344,23 @@ test("TK-161 켰는데 설정이 빠졌으면 D1·OpenAI 없이 매시 정각에
   }
   assert.equal(none.calls.length, 0);
 });
+
+test("TK-161 계약서 AI 조회가 안에서 실패해도(D1 문장 예외) 같은 차례에 글 초안은 받고, 계약서 AI 쪽 결과에는 고정 코드만 남는다", async (t) => {
+  installNetworkTrap(t);
+  const both = await blogSetup();
+  const env = aiEnv(both.db, createR2(), { WORK_BLOG_ENABLED: "true", OPENAI_MODEL_BLOG: "gpt-test-blog", OPENAI_REASONING_EFFORT: "xhigh", OPENAI_PRICES_JSON: JSON.stringify({ ...AI_PRICES, ...FAKE_PRICES }) });
+  // 계약서 AI 작업 표(ai_jobs)를 읽는 문장만 던지게 한다. 글 초안 문장(blog_drafts·ai_usage_daily·settings)은 그대로 돈다.
+  const prepare = both.db.prepare.bind(both.db);
+  both.db.prepare = (sql) => {
+    if (/\bai_jobs\b/u.test(sql)) throw new Error("가짜 D1 장애 ZZSECRET");
+    return prepare(sql);
+  };
+  const openai = scriptedOpenAi([{ kind: "retrieve", respond: completed("resp_wait_0", sampleResult()) }]);
+  const { entries, log } = collect();
+  const result = await cron(env, NOW + MINUTE, openai, log);
+  assert.deepEqual([result.outcome, result.code], ["internal_error", "AI_CRON_INTERNAL"], "계약서 AI 쪽은 안에서 실패");
+  assert.deepEqual(result.blog, { outcome: "ok", polled: 1, changed: 1, failed: 0 }, "글 초안은 같은 차례에 받음");
+  assert.deepEqual(draftRows(both.database).map((row) => [row.status, row.error_code, row.actual_cost_micro_usd]), [["completed", null, ACTUAL_4000_5000]]);
+  assert.deepEqual(openai.calls.map((call) => call.kind), ["retrieve"]);
+  assert.ok(!JSON.stringify([result, entries]).includes("ZZSECRET"), "예외 글은 결과·로그에 남기지 않음");
+});
