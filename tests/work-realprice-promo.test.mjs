@@ -1,4 +1,4 @@
-// 실거래가 홍보물(P1-e) 순수 함수(src/lib/work/realprice-promo.mjs). TK-38: 글 4가지의 자동 첨부(스레드는 2026-11-25부터 그림에만)·동 번호 0·층 숫자·금액, 해제 거래 빼기.
+// 실거래가 홍보물(P1-e) 순수 함수(src/lib/work/realprice-promo.mjs). TK-38: 글 4가지의 자동 첨부(스레드·인스타그램은 2026-11-25부터 그림에만)·동 번호 0·층 숫자·금액, 해제 거래 빼기.
 // 거래는 모두 가상 단지이고 사무소 정보는 공개 office.json이다.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -38,6 +38,7 @@ import {
   promoTitle,
   receivedText,
   PROMO_HASHTAGS_MAX,
+  PROMO_BASIS_LABEL,
   PROMO_PLACES,
   PROMO_TEXT_KINDS,
   hashtags,
@@ -138,15 +139,15 @@ test("P1-f 해시태그: 고정 4개 → 거래 종류 → #신고가 → 법정
   for (const tag of tags) assert.doesNotMatch(tag, /\d+동$|\d+호/u, `동 번호·호수 없음: ${tag}`);
 });
 
-test("TK-38 글 4가지(가상 거래 3건): 출처·받은 시각·계약일 기준·신고 기한·해제 제외·명시사항 5항목(스레드 글은 그림에만), 동 번호 0, 층 숫자 그대로, 금액이 자료와 같음", () => {
+test("TK-38 글 4가지(가상 거래 3건): 출처·받은 시각·계약일 기준·신고 기한·해제 제외·명시사항 5항목(스레드·인스타그램 글은 그림에만), 동 번호 0, 층 숫자 그대로, 금액이 자료와 같음", () => {
   const texts = promoTexts(input(THREE));
   assert.deepEqual(Object.keys(texts), ["threads", "instagram", "blog", "kakao"]);
   for (const [kind, text] of Object.entries(texts)) {
     const short = kind === "threads" || kind === "kakao";
-    if (kind === "threads") {
-      // 스레드 글은 출처·받은 시각·안내·사무소 명시사항을 넣지 않는다(2026-11-25 사용자 요청, 카드 그림에만).
-      assert.ok(!text.includes(PROMO_SOURCE) && !text.includes("출처") && !text.includes("받음") && !text.includes("신고 기한"), "threads: 출처·받은 시각·안내 없음");
-      for (const field of ["legalName", "address", "mobile", "registrationNumber", "representative"]) assert.ok(!text.includes(office[field]), `threads: 명시사항 ${field} 없음`);
+    if (kind === "threads" || kind === "instagram") {
+      // 스레드·인스타그램 글은 출처·받은 시각·안내·흐름 기준·사무소 명시사항을 넣지 않는다(2026-11-25 사용자 요청·16:42:29 답, 늘 함께 올리는 카드 그림에만).
+      assert.ok(!text.includes(PROMO_SOURCE) && !text.includes("출처") && !text.includes("받음") && !text.includes("받은 자료") && !text.includes("신고 기한") && !text.includes(PROMO_BASIS_LABEL), `${kind}: 출처·받은 시각·안내·흐름 기준 없음`);
+      for (const field of ["legalName", "address", "mobile", "registrationNumber", "representative"]) assert.ok(!text.includes(office[field]), `${kind}: 명시사항 ${field} 없음`);
     } else {
       assert.ok(text.includes(PROMO_SOURCE), `${kind}: 출처`);
       assert.ok(text.includes(short ? "11. 20. 09:50 받음" : "2026. 11. 20. 09:50 받은 자료"), `${kind}: 받은 시각(한국 시각)`);
@@ -334,8 +335,24 @@ test("카드: 여러 장이면 제목 끝 ' · 1/2장', 장마다 출처 두 줄
   assert.equal(JSON.stringify(cards).match(/\d+\s?동(?![구\w])/u), null, "카드 자료 전체에 동 번호 0");
 });
 
-test("올릴 곳마다 글 끝에 붙일 것(PROMO_TEXT_TAIL): 스레드만 출처·명시사항을 빼고(그림에만), 세 곳은 그대로. 신고가 판정 기준은 글 4가지에 남는다", () => {
-  assert.deepEqual(PROMO_TEXT_TAIL, { threads: { source: false, office: false }, instagram: { source: true, office: true }, blog: { source: true, office: true }, kakao: { source: true, office: true } });
+test("스레드 500자 경계(2026-11-25 검토 권함): 딱 500자면 그 단계 글 그대로, 501자면 다음 단계(짧은 줄)로 간다", () => {
+  // 여섯 건 가운데 한 건의 단지 이름만 한 자씩 늘린다. 머리 줄에는 단지 이름이 없어 한 줄씩 글은 한 자씩 길어진다.
+  const rows = (length) => [1, 2, 3, 4, 5, 6].map((n) => ({ ...PLAIN, tradeKey: key("sale", "202611", 60 + n), aptName: n === 1 ? `가${"나".repeat(length - 1)}` : "가상들마을", dealDate: `2026-11-1${n}` }));
+  const isFull = (text) => text.split("\n").filter((line) => line.startsWith("- ")).every((line) => line.includes(", 전용 ") && line.includes(", 계약 "));
+  let edge = 0;
+  for (let length = 1; length <= 300 && isFull(promoTexts(input(rows(length))).threads); length += 1) edge = length;
+  assert.ok(edge > 1, "한 줄씩 글이 들어가는 길이가 있음");
+  const at500 = promoTexts(input(rows(edge))).threads;
+  assert.equal([...at500].length, PROMO_LIMITS.threads, "가장 긴 한 줄씩 글은 딱 500자(그대로 씀)");
+  assert.equal([...promoTexts(input(rows(edge - 1))).threads].length, PROMO_LIMITS.threads - 1, "한 자 짧으면 499자");
+  const at501 = promoTexts(input(rows(edge + 1))).threads;
+  assert.ok(!isFull(at501) && !at501.includes("그림에 정리"), "501자가 되는 글은 짧은 줄 단계로");
+  assert.equal(at501.split("\n").filter((line) => line.startsWith("- ")).length, 6, "짧은 줄도 거래 6줄");
+  assert.ok([...at501].length < PROMO_LIMITS.threads, `${[...at501].length}자`);
+});
+
+test("올릴 곳마다 글 끝에 붙일 것(PROMO_TEXT_TAIL): 스레드·인스타그램은 출처·명시사항을 빼고(그림에만), 블로그·카카오톡은 그대로. 신고가 판정 기준은 글 4가지에 남는다", () => {
+  assert.deepEqual(PROMO_TEXT_TAIL, { threads: { source: false, office: false }, instagram: { source: false, office: false }, blog: { source: true, office: true }, kakao: { source: true, office: true } });
   assert.deepEqual(Object.keys(PROMO_TEXT_TAIL).sort(), PROMO_TEXT_KINDS.map(([kind]) => kind).sort(), "글 종류와 같은 4가지");
   assert.ok(Object.isFrozen(PROMO_TEXT_TAIL) && Object.isFrozen(PROMO_TEXT_TAIL.threads), "표는 바꿀 수 없음");
   const texts = promoTexts(input([HIGH, PLAIN]));
@@ -366,6 +383,12 @@ test("올릴 곳마다 글 끝에 붙일 것(PROMO_TEXT_TAIL): 스레드만 출�
   assert.ok(on.threads.includes(`출처: ${PROMO_SOURCE}, 11. 20. 09:50 받음. ${PROMO_NOTICE_SHORT}`) && on.threads.includes(office.mobile), "스레드를 켜면 출처 줄·명시사항");
   assert.ok([...on.threads].length <= PROMO_LIMITS.threads, "켜도 500자 안");
   for (const kind of ["instagram", "blog", "kakao"]) assert.equal(on[kind], texts[kind], `${kind}: 다른 글은 그대로`);
+  // 인스타그램: 남는 것은 거래 글·신고가 판정 기준·해시태그뿐이고, 표를 켜면 그 전(2026-11-25 앞) 글처럼 출처·흐름 기준·명시사항이 붙는다.
+  const insta = texts.instagram.split("\n");
+  assert.deepEqual(insta.slice(-3), [PROMO_HIGH_RULE, "", hashtags([HIGH, PLAIN]).join(" ")], "인스타그램 끝: 판정 기준 → 빈 줄 → 해시태그");
+  const instaOn = promoTexts(input([HIGH, PLAIN]), { ...PROMO_TEXT_TAIL, instagram: { source: true, office: true } }).instagram;
+  assert.ok(instaOn.includes(`출처: ${PROMO_SOURCE}, 2026. 11. 20. 09:50 받은 자료`) && instaOn.includes(office.mobile) && instaOn.endsWith(hashtags([HIGH, PLAIN]).join(" ")), "인스타그램을 켜면 출처·명시사항 뒤에 해시태그");
+  assert.ok(!promoTexts(input([PLAIN])).instagram.includes("2006년 1월 이후"), "신고가가 없으면 인스타그램에도 판정 기준 줄 없음");
   const half = promoTexts(input([HIGH, PLAIN]), { ...PROMO_TEXT_TAIL, kakao: { source: true, office: false } }).kakao;
   assert.ok(half.includes("국토교통부") && !half.includes(office.mobile), "출처만 남기고 명시사항만 뺄 수도 있음");
 });
@@ -376,7 +399,7 @@ const FLOW = (tradeKey) => ({ tradeKey, available: true, series: flowSeries([nul
 const ONE_MONTH = (tradeKey) => ({ tradeKey, available: true, series: flowSeries([null, null, null, null, null, null, null, null, null, null, null, 610_000_000]), prev: null, prevMaxWon: null, ratioPct: null, recent3m: 1, households: null });
 const FULL_BASIS = "흐름 기준: 같은 단지·같은 전용면적 · 흐름선: 12개월 월별 가운데 값 · 최고·직전: 실제 거래";
 
-test("흐름 기준 줄(TR-11 PR #156 권함 2, 2026-11-25): 카드에 흐름을 그린 거래가 있을 때만 출처 줄을 넣는 글(스레드 빼고 세 곳)의 출처 줄 바로 아래와 그림에, 그린 항목만", () => {
+test("흐름 기준 줄(TR-11 PR #156 권함 2, 2026-11-25): 카드에 흐름을 그린 거래가 있을 때만 출처 줄을 넣는 글(블로그·카카오톡, 표에서 켠 스레드·인스타그램)의 출처 줄 바로 아래와 그림에, 그린 항목만", () => {
   const insights = { [HIGH.tradeKey]: FLOW(HIGH.tradeKey) };
   const texts = promoTexts(input(THREE, { insights }));
   // 스레드 글은 출처 줄을 넣지 않으므로 흐름 기준 줄도 없다(1건·3건·6건 모두 흐름이 없을 때의 글과 같다). 기준은 그림에 있다.
@@ -384,11 +407,15 @@ test("흐름 기준 줄(TR-11 PR #156 권함 2, 2026-11-25): 카드에 흐름을
   const single = promoTexts(input([HIGH], { insights }));
   assert.equal(single.threads, promoTexts(input([HIGH])).threads, "스레드 1건: 흐름이 있어도 같은 글");
   assert.doesNotMatch(`${texts.threads}\n${single.threads}`, /흐름 기준/u);
+  // 인스타그램도 출처 줄을 넣지 않으므로(2026-11-25 16:42:29 답) 흐름이 있어도 같은 글이다.
+  assert.equal(texts.instagram, promoTexts(input(THREE)).instagram, "인스타그램 3건: 흐름이 있어도 같은 글");
+  assert.doesNotMatch(texts.instagram, /흐름 기준/u);
+  const instagramOn = { ...PROMO_TEXT_TAIL, instagram: { source: true, office: true } };
   // 표에서 스레드 출처를 켜면 그 전처럼 들어갈 때만 기준 줄이 붙는다(1건은 붙고, 3건은 500자를 넘어 빼고 거래 줄은 그대로).
   const threadsOn = { ...PROMO_TEXT_TAIL, threads: { source: true, office: true } };
   const singleOn = promoTexts(input([HIGH], { insights }), threadsOn).threads;
   assert.equal(promoTexts(input(THREE, { insights }), threadsOn).threads, promoTexts(input(THREE), threadsOn).threads, "켠 스레드 3건: 들어가지 않으면 기준 줄 없이");
-  const checks = [...Object.entries(texts).filter(([kind]) => kind !== "threads").map(([kind, text]) => [kind, text, promoTexts(input(THREE))[kind]]), ["threads(표에서 켠 1건)", singleOn, promoTexts(input([HIGH]), threadsOn).threads]];
+  const checks = [...Object.entries(texts).filter(([kind]) => kind !== "threads" && kind !== "instagram").map(([kind, text]) => [kind, text, promoTexts(input(THREE))[kind]]), ["threads(표에서 켠 1건)", singleOn, promoTexts(input([HIGH]), threadsOn).threads], ["instagram(표에서 켬)", promoTexts(input(THREE, { insights }), instagramOn).instagram, promoTexts(input(THREE), instagramOn).instagram]];
   for (const [kind, text, before] of checks) {
     const lines = text.split("\n");
     const at = lines.indexOf(FULL_BASIS);
@@ -417,7 +444,7 @@ test("흐름 기준 줄(TR-11 PR #156 권함 2, 2026-11-25): 카드에 흐름을
   for (const [kind, text] of Object.entries(rentOnly)) assert.doesNotMatch(text, /흐름 기준/u, `${kind}: 전월세는 흐름을 그리지 않음`);
   // 흐름선을 그리지 못한(거래 있는 달이 하나) 첫 거래만이면 3개월 거래 수 기준만 적는다(카드와 같은 promoBasisLine).
   const first = promoTexts(input([PLAIN], { insights: { [PLAIN.tradeKey]: ONE_MONTH(PLAIN.tradeKey) } }));
-  for (const [kind, text] of Object.entries(first)) assert.equal(text.includes("흐름 기준: 같은 단지·같은 전용면적 · 최근 3개월: 계약일 기준 거래 수"), kind !== "threads", kind);
+  for (const [kind, text] of Object.entries(first)) assert.equal(text.includes("흐름 기준: 같은 단지·같은 전용면적 · 최근 3개월: 계약일 기준 거래 수"), kind !== "threads" && kind !== "instagram", kind);
   // 글의 기준 줄은 카드 자료의 basis 칸과 같은 글이다(그림에는 2026-11-25부터 출처 두 줄 아래 작은 글로 그린다, 흐름을 그린 장에만).
   assert.equal(promoCards(input(THREE, { insights }))[0].basis, FULL_BASIS.replace("흐름 기준: ", ""));
   assert.equal(promoCards(input(THREE))[0].basis, "", "흐름을 그리지 않은 장에는 기준 줄이 없음");

@@ -239,10 +239,11 @@ const headLine = (items) => `[${promoAreaLabel(items)}] ${items.length === 1 ? p
 
 // 올릴 곳마다 글 끝에 붙일 것(2026-11-25 사용자 요청 "출처랑 명함부분은 한군데만 나오면 되니까 표에만 나오게끔 고쳐줘").
 // source: 출처·받은 시각·계약일 기준 안내 줄과 흐름 기준 줄, office: 사무소 명시사항. false면 그 글에는 넣지 않는다(카드 그림 아래 칸에는 늘 있다, promoCards).
-// 스레드만 뺐다. 나머지 세 곳도 빼려면 이 표의 그 줄만 false로 바꾼다. 신고가 판정 기준 줄은 이 표와 상관없이 신고가 거래가 있으면 글에 남는다.
+// 스레드와 인스타그램(2026-11-25 16:42:29 사용자 답 "전부 추천대로")은 뺐다. 두 곳은 늘 카드 그림을 함께 올린다는 전제다(그림 없이 글만 올리면 출처·명시사항이 빠진다).
+// 블로그·카카오톡은 글만 따로 읽힐 수 있어 그대로 둔다. 빼려면 이 표의 그 줄만 false로 바꾼다. 신고가 판정 기준 줄(과 인스타그램 해시태그)은 이 표와 상관없이 남는다.
 export const PROMO_TEXT_TAIL = Object.freeze({
   threads: Object.freeze({ source: false, office: false }),
-  instagram: Object.freeze({ source: true, office: true }),
+  instagram: Object.freeze({ source: false, office: false }),
   blog: Object.freeze({ source: true, office: true }),
   kakao: Object.freeze({ source: true, office: true }),
 });
@@ -286,6 +287,7 @@ function threadsText(input, tail) {
   return tries.find(fits) ?? summary(plain);
 }
 
+// 인스타그램: 자세한 글(신고가가 있으면 판정 기준 한 줄) → 빈 줄 → 해시태그. 출처·흐름 기준·명시사항은 함께 올리는 카드 그림에 있다(PROMO_TEXT_TAIL.instagram).
 function instagramText(input, tail) {
   return [fullText(input, tail), "", hashtags(input.items).join(" ")].join("\n");
 }
@@ -419,7 +421,8 @@ export function promoUpText(item) {
 // 장마다 그림 자료. 여러 장이면 제목 끝에 " · 1/2장". 아래 칸에는 사무소 명시사항 5항목과, 그 위 작은 글로 출처 두 줄(source: 출처·받은 시각 /
 // 계약일 기준·신고 기한 안내·해제 거래 제외)과 흐름 기준 줄(basis, 그 장에 흐름을 그린 거래가 있을 때만)을 장마다 둔다(2026-11-25 사용자 요청
 // "출처랑 명함부분은 … 표에만 나오게끔". 2026-11-24 "완전히 뺌"으로 뺐던 출처 상자와 같은 날 뺀 흐름 기준 줄을 작은 글로 되돌림).
-// 신고가 판정 기준은 그림에 넣지 않고 글 4가지에 남는다(P1-e 받은 시각 막기도 그대로). 글의 흐름 기준 줄(basisLines)은 PROMO_TEXT_TAIL을 따른다.
+// 신고가 판정 기준은 그림에 넣지 않고 글 4가지에 남는다(P1-e 받은 시각 막기도 그대로). 글의 출처·흐름 기준 줄(basisLines)·명시사항은 PROMO_TEXT_TAIL을 따르므로
+// 지금은 블로그·카카오톡 글에만 있고, 스레드·인스타그램 글에는 이 그림에만 있다(두 곳은 늘 그림을 함께 올린다는 전제, 2026-11-25 16:42:29 사용자 답).
 // insights: 거래 ID → 거래 흐름 응답 한 개(없거나 못 받았으면 빈 값). basis는 그 장에 실제로 그린 흐름 항목만 적는다.
 export function promoCards({ items, receivedAt, office, insights = {}, style = PROMO_STYLE_DEFAULT }) {
   if (promoBlockReason({ items, receivedAt, office })) return [];
