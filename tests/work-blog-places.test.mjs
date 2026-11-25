@@ -66,7 +66,7 @@ test("복사 글: 블로그는 지금 '블로그 글 복사'와 같다", () => {
 test("글자 수: 전체 = 내 글 + 자동으로 붙는 글이 늘 맞는다", () => {
   const text = "남향 10층 집"; // 8자
   const threads = placeCount("threads", { text, hashtags: ["#가상동"], disclosureText });
-  assert.deepEqual(threads, { place: "threads", total: 38, own: 8, attached: 30, limit: 500, room: 470, left: 462, tags: 0 });
+  assert.deepEqual(threads, { place: "threads", total: 38, own: 8, attached: 30, limit: 500, room: 470, left: 462, tags: 0, emoji: 0 });
   assert.equal(threads.attached, length(RULE_PART) + length(disclosureText), "빈 줄·구분선 13자 + 명시사항 17자");
   const instagram = placeCount("instagram", { text, hashtags: ["#가상동", "#남향"], disclosureText });
   assert.equal(instagram.own, 8);
@@ -113,6 +113,25 @@ test("한도: 스레드 500자를 넘으면 막고, 얼마나 줄일지 알린�
   const noRoom = placeVerdict("threads", { text: "글", hashtags: [], disclosureText: "가".repeat(490) });
   assert.equal(noRoom.ok, false);
   assert.deepEqual(noRoom.reasons, ["자동으로 붙는 글(명시사항)만 503자라 스레드 500자에 넣을 수 없습니다."]);
+});
+
+test("한도: 스레드만 이모지를 UTF-8 바이트 수로 센다(Meta 문서 'Emojis are counted as the number of UTF-8 bytes'). 이모지 180개 + 명시사항 300자는 막힌다", () => {
+  const disclosure = "가".repeat(300);
+  // 2026-11-25 전에는 코드 포인트로 세어 180 + 313 = 493자로 통과했다(날개-2 검토에서 찾음).
+  const emoji = placeVerdict("threads", { text: "😀".repeat(180), hashtags: [], disclosureText: disclosure });
+  assert.deepEqual([emoji.ok, emoji.count.own, emoji.count.attached, emoji.count.total, emoji.count.emoji], [false, 720, 313, 1033, 180]);
+  assert.equal(emoji.count.total, emoji.count.own + emoji.count.attached, "전체 = 내 글 + 자동으로 붙는 글은 그대로 맞음");
+  assert.equal(placeFieldNote(emoji.count), "720자 · 533자 넘음 · 이모지는 스레드가 세는 대로 한 개를 여러 자로 셉니다");
+  assert.equal(placeVerdict("threads", { text: "😀".repeat(46), hashtags: [], disclosureText: disclosure }).ok, true, "46개 × 4 = 184자는 남은 자리 187자 안");
+  assert.equal(placeVerdict("threads", { text: "😀".repeat(47), hashtags: [], disclosureText: disclosure }).ok, false, "47개 × 4 = 188자는 넘음");
+  // 글자마다: 4바이트 이모지 4자, 3바이트 그림 문자(☀)·이어 붙이는 글자(U+200D·U+FE0F·U+20E3) 3자, 한글·숫자·#·줄바꿈은 1자(글 끝의 줄바꿈은 복사 글에 들어가지 않음).
+  const own = (text) => placeCount("threads", { text, hashtags: [], disclosureText: "가" }).own;
+  assert.deepEqual([own("가1#\n나"), own("😀"), own("☀"), own("👍🏽"), own("🇰🇷"), own("1️⃣"), own("👨‍👩‍👧")], [5, 4, 3, 8, 8, 7, 18]);
+  assert.equal(placeCount("threads", { text: "가나다", hashtags: [], disclosureText: "가" }).emoji, 0);
+  assert.equal(placeFieldNote(placeCount("threads", { text: "가나다", hashtags: [], disclosureText: "가" })).includes("이모지"), false, "이모지가 없으면 알리지 않음");
+  // 인스타그램·카카오톡·블로그는 그대로 한 개를 1자로 센다(문서에 세는 방식이 없음).
+  assert.deepEqual([placeCount("instagram", { text: "😀😀", hashtags: [], disclosureText: "가" }).own, placeCount("instagram", { text: "😀😀", hashtags: [], disclosureText: "가" }).emoji], [2, 0]);
+  assert.equal(placeCount("kakao", { title: "", text: "😀😀", disclosureText: "가" }).own, 2);
 });
 
 test("한도: 인스타그램은 2,200자에서 막고, 해시태그 6개부터는 막지 않고 알리기만 한다", () => {

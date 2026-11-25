@@ -346,7 +346,9 @@ for (const [device, width] of DEVICES) {
     await expect(blog.step(page, 3)).toHaveClass(/bl-step--open/u);
     const make = page.getByRole("button", { name: "글 초안 만들기" });
     const styleGroup = blog.step(page, 3).locator("input[name='bl-style']").first().locator("xpath=ancestor::*[@role='radiogroup'][1]");
-    await snap(page, `blog-${device}-2-make`, { clip: [blog.step(page, 3)], targets: [styleGroup, make] });
+    // 앞 단추를 누른 자리에 남은 포인터가 머리말 단추 위에 걸려 테두리가 달리 찍히지 않게 치운다.
+    await page.mouse.move(0, 0);
+    await snap(page, `blog-${device}-2-make`, { clip: [blog.step(page, 3)], targets: [styleGroup, blog.step(page, 3).locator(".bl-quick"), make] });
     await make.click();
     await expect(page.locator("[data-bl-wait]")).toBeVisible();
     await page.clock.runFor(5_000);

@@ -11,18 +11,24 @@ export const BLOG_PLACES = Object.freeze([
 ]);
 
 // 글자 수 상한(2026-11-25 다시 확인). realprice-promo.mjs PROMO_LIMITS와 같은 값이어야 한다(tests/work-blog-places.test.mjs가 대조).
-// - 스레드 500자: Meta Threads API 문서 'Threads posts'(2026-10-30 갱신) "Text posts are limited to 500 characters.", 이모지는 UTF-8 바이트 수로 셈.
+// - 스레드 500자: Meta Threads API 문서 'Threads posts'(2026-10-30 갱신) "Text posts are limited to 500 characters." "Emojis are counted as the number of UTF-8 bytes."(2026-11-25 다시 읽음).
 // - 인스타그램 2,200자: Meta 'IG User Media'(2026-09-28 갱신) caption "Maximum 2200 characters, 30 hashtags, and 20 @ tags."
 // - 인스타그램 해시태그 5개: 앱에서 올릴 때의 값. 2025-12 Instagram이 "게시물·릴스 캡션의 해시태그를 5개로 차츰 바꾼다"고 알렸다는 보도
 //   (Social Media Today 2025-12-18)가 근거이고, Meta 공식 문서에서는 확인하지 못했다(API 문서는 30개). 그래서 넘어도 막지 않고 알리기만 한다.
 // - 블로그·카카오톡은 이 글 길이에서 걸리는 상한이 없다(카카오톡 말풍선 길이는 공식 문서에서 확인하지 못해 막지 않는다).
-// 글에 이모지를 넣지 않으므로 글자 수는 코드 포인트로 센다(한글 한 글자·줄바꿈 하나 = 1자).
+// 글자 수는 코드 포인트로 센다(한글 한 글자·줄바꿈 하나 = 1자). 스레드만 Meta 문서대로 이모지를 UTF-8 바이트 수로 센다(4바이트 이모지 하나 = 4자).
+// 문서에 '이모지'의 범위는 없어 넉넉하게 잡는다(그림 문자 + 피부색·국기 글자·이어 붙이는 글자 같은 이모지 부품). 스레드 앱이 덜 셀 수는 있어도
+// 우리가 덜 세어 앱에서 넘치는 일은 없게 하려는 것이다(추정). 인스타그램은 이모지를 세는 방식이 문서에 없어 코드 포인트 그대로 센다.
 export const BLOG_PLACE_LIMITS = Object.freeze({ blog: null, instagram: 2200, threads: 500, kakao: null });
 export const INSTAGRAM_HASHTAG_NOTE_FROM = 5;
 
 const PLACE_IDS = BLOG_PLACES.map((place) => place.id);
 const labelOf = (place) => BLOG_PLACES.find((item) => item.id === place).label;
-const length = (text) => [...String(text ?? "")].length;
+const EMOJI = /[\p{Extended_Pictographic}\p{Emoji_Component}]/u; // Emoji_Component의 숫자·#·*는 1바이트라 그대로 1자다.
+const utf8Bytes = (char) => { const code = char.codePointAt(0); return code < 0x80 ? 1 : code < 0x800 ? 2 : code < 0x10000 ? 3 : 4; };
+const byBytes = (place, char) => place === "threads" && EMOJI.test(char) && utf8Bytes(char) > 1;
+const length = (text, place) => { let sum = 0; for (const char of String(text ?? "")) sum += byBytes(place, char) ? utf8Bytes(char) : 1; return sum; };
+const emojiCount = (text, place) => { let sum = 0; for (const char of String(text ?? "")) if (byBytes(place, char)) sum += 1; return sum; };
 const number = (value) => value.toLocaleString("ko-KR");
 const tagList = (hashtags) => (hashtags ?? []).map((tag) => String(tag ?? "").trim()).filter(Boolean);
 const assertPlace = (place) => {
@@ -57,16 +63,16 @@ export function placeCopyText(place, input) {
 // 글자 수. total = own + attached가 늘 맞는다.
 // - own: 내가 고칠 수 있는 글(AI 글). attached: 자동으로 붙는 글(해시태그 줄·빈 줄·구분선·명시사항).
 // - room: 내 글이 쓸 수 있는 자리(limit - attached, 상한이 없으면 null). left: 지금 남은 자리(limit - total).
-// - tags: 복사 글 안의 해시태그 수(내 글에 직접 쓴 것도 셈).
+// - tags: 복사 글 안의 해시태그 수(내 글에 직접 쓴 것도 셈). emoji: 바이트 수로 센 이모지 글자 수(스레드만, 그 밖은 0).
 export function placeCount(place, input) {
   assertPlace(place);
   const copy = placeCopyText(place, input);
-  const total = length(copy);
-  const tail = length(tailOf(place, input));
+  const total = length(copy, place);
+  const tail = length(tailOf(place, input), place);
   const attached = total > tail ? tail + 2 : tail; // 내 글이 있으면 꼬리 앞에 빈 줄 하나(줄바꿈 2자)
   const limit = BLOG_PLACE_LIMITS[place];
   const tags = (copy.match(/#[^\s#]+/gu) ?? []).length;
-  return { place, total, own: total - attached, attached, limit, room: limit === null ? null : limit - (tail + 2), left: limit === null ? null : limit - total, tags };
+  return { place, total, own: total - attached, attached, limit, room: limit === null ? null : limit - (tail + 2), left: limit === null ? null : limit - total, tags, emoji: emojiCount(copy, place) };
 }
 
 // 화면에 보이는 글자 수 줄. 더한 값이 그대로 맞게 '내 글 + 자동으로 붙는 글' 둘로만 나눈다. 인스타그램은 해시태그 수를 덧붙인다.
@@ -79,8 +85,9 @@ export function placeMeterText(count) {
 // 글 칸 아래 한 줄. 상한이 있는 곳은 남은 자리(넘었으면 넘은 글자 수)를 함께 알린다.
 export function placeFieldNote(count) {
   if (count.limit === null) return `${number(count.own)}자`;
-  if (count.left < 0) return `${number(count.own)}자 · ${number(-count.left)}자 넘음`;
-  return `${number(count.own)}자 · 남은 자리 ${number(count.left)}자(${labelOf(count.place)} ${number(count.limit)}자에서 자동으로 붙는 글 ${number(count.attached)}자를 뺀 자리)`;
+  const emoji = count.emoji > 0 ? " · 이모지는 스레드가 세는 대로 한 개를 여러 자로 셉니다" : "";
+  if (count.left < 0) return `${number(count.own)}자 · ${number(-count.left)}자 넘음${emoji}`;
+  return `${number(count.own)}자 · 남은 자리 ${number(count.left)}자(${labelOf(count.place)} ${number(count.limit)}자에서 자동으로 붙는 글 ${number(count.attached)}자를 뺀 자리)${emoji}`;
 }
 
 // 한도 판정. reasons: 복사를 막는 까닭(있으면 ok false). notes: 막지 않고 알리기만 하는 것.

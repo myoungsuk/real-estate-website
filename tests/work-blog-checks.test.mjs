@@ -10,6 +10,7 @@ import { buildDisclosure, formatArea, formatManagementFee, formatWon, officeLine
 import { checkView } from "../src/lib/work/blog-view.mjs";
 import {
   BLOG_RESULT_LIMITS,
+  BLOG_STYLE_GROUPS,
   BLOG_STYLES,
   allowedStyles,
   checkBlogDraft,
@@ -158,13 +159,31 @@ test("TK-47 개인정보 형식: 주민등록번호·사무소 번호가 아닌 
   assert.deepEqual(validateBlogInputs({ unit: "101" }).errors, ["unit"], "호수 칸은 받지 않음");
 });
 
-test("TK-61 글 성격 7가지와 거래 형태별 허용: 매매에 전세·월세 성격 없음, 단지 소개 글은 담백하게·실거주·투자만", () => {
-  assert.deepEqual(BLOG_STYLES.map((style) => style.label), ["담백하게", "급매", "실거주", "전세 안내", "월세", "수익형", "투자"]);
+test("TK-61 글 성격 21가지(묶음 넷)와 거래 형태별 잠금: 매매에 전세·월세 성격 없음, 전세·월세에 급매·수익형·투자·재건축 없음, 단지 소개 글에 거래 조건 성격 없음", () => {
+  assert.deepEqual(BLOG_STYLES.map((style) => style.label), [
+    "담백하게", "급매", "전세 안내", "월세", "수익형", "투자", "재건축·재개발", "시황·타이밍",
+    "실거주", "신혼부부·첫 집", "은퇴·실속", "갈아타기", "처음 사는 분",
+    "학군·교육", "역세권·교통", "대단지·시설", "신축·상태", "조망·채광",
+    "자주 묻는 질문", "이런 분께 추천", "경험담",
+  ]);
+  assert.equal(new Set(BLOG_STYLES.map((style) => style.id)).size, 21, "id는 겹치지 않음");
   assert.ok(BLOG_STYLES.every((style) => style.instruction && style.note));
-  assert.deepEqual(allowedStyles(APT), ["plain", "urgent", "live", "yield", "invest"]);
-  assert.deepEqual(allowedStyles({ type: "naver_listing", facts: { tradeType: "jeonse" } }), ["plain", "live", "jeonse"]);
-  assert.deepEqual(allowedStyles({ type: "naver_listing", facts: { tradeType: "monthly-rent" } }), ["plain", "live", "monthly"]);
-  assert.deepEqual(allowedStyles(COMPLEX), ["plain", "live", "invest"]);
+  // 2026-11-25 전 7가지의 id는 그대로다(그때 만든 초안을 다시 열 수 있어야 함).
+  for (const id of ["plain", "urgent", "live", "jeonse", "monthly", "yield", "invest"]) assert.ok(BLOG_STYLES.some((style) => style.id === id), id);
+  // 묶음은 넷이고 모든 성격이 그 가운데 하나에 든다.
+  assert.deepEqual(BLOG_STYLE_GROUPS.map((group) => group.label), ["기본·거래 조건", "누구에게 권할지", "무엇을 앞에 둘지", "글 짜임"]);
+  assert.ok(BLOG_STYLES.every((style) => BLOG_STYLE_GROUPS.some((group) => group.id === style.group)));
+  // 지시문은 성격마다 한 문장이고 금지 목록을 늘어놓지 않는다(사용자 방침 2026-11-24).
+  assert.ok(BLOG_STYLES.every((style) => (style.instruction.match(/[.!?]/gu) ?? []).length === 1), "성격 지시는 한 문장");
+  // 메모에 사실이 있어야 글이 되는 성격 셋만 머리말을 갖는다.
+  assert.deepEqual(BLOG_STYLES.filter((style) => style.memoHead).map((style) => [style.id, style.memoHead]), [["redevelop", "사업 단계"], ["market", "최근 거래"], ["story", "직접 본 것"]]);
+
+  const off = (source) => BLOG_STYLES.map((style) => style.id).filter((id) => !allowedStyles(source).includes(id));
+  assert.deepEqual(off(APT), ["jeonse", "monthly"]);
+  assert.deepEqual(off({ type: "naver_listing", facts: { tradeType: "jeonse" } }), ["urgent", "monthly", "yield", "invest", "redevelop"]);
+  assert.deepEqual(off({ type: "naver_listing", facts: { tradeType: "monthly-rent" } }), ["urgent", "jeonse", "yield", "invest", "redevelop"]);
+  assert.deepEqual(off(COMPLEX), ["urgent", "jeonse", "monthly", "yield"]);
+  assert.deepEqual(allowedStyles({ type: "naver_listing", facts: { tradeType: "unknown" } }), ["plain"], "모르는 거래 형태는 담백하게만");
 });
 
 test("TK-51 결과 모양: 키 5개 정확히, 경계값은 그대로·넘으면 잘라 받음(trimmed), 빈 제목·빈 문단·모양 틀림만 실패, 해시태그 앞에 # 하나", () => {
