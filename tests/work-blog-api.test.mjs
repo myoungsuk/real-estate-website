@@ -14,7 +14,7 @@ import listings from "../src/data/listings.json" with { type: "json" };
 import bundledNaverListings from "../src/data/naver-listings.json" with { type: "json" };
 import rules from "../src/data/work/ad-disclosure-rules.json" with { type: "json" };
 import { listBlogSources } from "../src/lib/work/blog-sources.mjs";
-import { blogSources, blogSourcesFor, buildOpenAiRequest, emphasisNumbersOf, estimateInputTokens } from "../worker/work-blog.mjs";
+import { BLOG_INSTRUCTIONS, BLOG_SET_LINES, blogSources, blogSourcesFor, buildOpenAiRequest, emphasisNumbersOf, estimateInputTokens } from "../worker/work-blog.mjs";
 import { handleAdminApi } from "../worker/admin-api.mjs";
 import { runRealpriceCron } from "../worker/work-scheduled.mjs";
 import { createWorkCsrfToken } from "../worker/work-security.mjs";
@@ -923,4 +923,97 @@ test("OpenAI 400 오류 이름표(2026-11-24 계약서 AI 400 진단): type·cod
   assert.equal((await caught(respond(400, "not json"))).upstreamError, null);
   assert.equal((await caught(respond(400, JSON.stringify({ error: { type: "x" }, pad: "y".repeat(9000) })))).upstreamError, null, "8KB 넘는 본문은 읽지 않음");
   assert.equal((await caught(respond(401, { error: { type: "invalid_request_error", code: "invalid_api_key" } }))).upstreamError, null, "400만");
+});
+
+// 2026-11-25 사용자 결정(판 1 물음 4·5·6 "전부 추천대로"): 1편/3편을 고르고 처음 값은 3편, 3편은 첫 문장·짜임만 다르게, 고르지 않은 편은 '내 초안'에 남김.
+// 한도는 판 1 시안 추천 4 "3편은 한도 3편 몫과 예상 비용을 단추 위에 보임"대로 하루 편수 3편 몫 + 3편 예상 비용 합계.
+test("TK-206 글 초안 3편: count 3은 초안 3행·감사 3줄·OpenAI 3번(지시문 끝 한 줄만 다름)이고 하루 3편 몫과 3편 예상 비용 합계를 한 번에 예약하며, 묶음 표시(set)는 새 표 없이 초안 행에 둔다", async (t) => {
+  installNetworkTrap(t);
+  const { database, env } = blogDb();
+  await setLimits(env);
+  const openai = scriptedOpenAi([
+    { kind: "create", respond: created("resp_set_1") },
+    { kind: "create", respond: created("resp_set_2") },
+    { kind: "create", respond: created("resp_set_3") },
+    { kind: "retrieve", respond: completed("resp_set_2", sampleResult()) },
+  ]);
+  const made = await work(env, "/blog/drafts", { method: "POST", body: { source: COMPLEX, style: "plain", count: 3 }, openaiFetch: openai.fetcher });
+  assert.equal(made.status, 201, JSON.stringify(made.json));
+  const { draft, drafts } = made.json.data;
+  assert.equal(drafts.length, 3);
+  const ids = drafts.map((item) => item.id);
+  assert.deepEqual(drafts.map((item) => item.set), [1, 2, 3].map((n) => ({ n, of: 3, ids })));
+  assert.equal(draft.id, ids[0], "처음 만들어진 편을 draft로 줌");
+
+  assert.deepEqual(openai.calls.map((call) => call.kind), ["create", "create", "create"]);
+  const [one, two, three] = openai.calls;
+  assert.deepEqual([one, two, three].map((call) => call.body.instructions), BLOG_SET_LINES.map((line) => `${BLOG_INSTRUCTIONS}\n${line}`), "편마다 지시문 끝 한 줄만 다름");
+  assert.equal(new Set([one, two, three].map((call) => JSON.stringify(call.body.input))).size, 1, "보내는 자료는 3편이 같음");
+  for (const line of BLOG_SET_LINES) assert.ok(line.length <= 80, `더한 지시는 짧은 한 줄: ${line.length}자`);
+
+  const reservedTotal = [one, two, three].reduce((sum, call) => sum + reservedFor(call), 0);
+  assert.deepEqual(usageRows(database), [{ day: "2026-11-17", create_requests: 3, estimated_cost_micro_usd: reservedTotal, input_tokens: 0, output_tokens: 0 }]);
+  assert.deepEqual(auditRows(database).filter((row) => row.action === "blog.create").map((row) => row.reason), ["source_type=complex;set=1/3", "source_type=complex;set=2/3", "source_type=complex;set=3/3"]);
+  const stored = draftRows(database);
+  assert.deepEqual(stored.map((row) => row.openai_response_id).sort(), ["resp_set_1", "resp_set_2", "resp_set_3"]);
+  for (const row of stored) assert.deepEqual(Object.keys(JSON.parse(row.disclosure_json)), ["inputs", "emphasisNumbers", "set"]);
+
+  // 편마다 따로 받고, 목록에도 묶음 표시가 붙는다(고르지 않은 편도 남음).
+  const second = await work(env, `/blog/drafts/${ids[1]}`, { openaiFetch: openai.fetcher, now: NOW + 5_000 });
+  assert.deepEqual([second.json.data.draft.status, second.json.data.draft.set.n], ["completed", 2]);
+  const list = await work(env, "/blog/drafts");
+  assert.deepEqual(list.json.data.items.map((item) => item.set?.n).sort(), [1, 2, 3]);
+  assert.deepEqual([openai.remaining(), openai.violations], [0, []]);
+
+  // 1편(count 1 또는 없음)은 그 전과 같다: 지시문 그대로, set null, 하루 1편 몫.
+  const single = blogDb();
+  await setLimits(single.env);
+  const singleAi = scriptedOpenAi([{ kind: "create", respond: created("resp_one_1") }, { kind: "create", respond: created("resp_one_2") }]);
+  for (const body of [{ source: COMPLEX, style: "plain", count: 1 }, { source: COMPLEX, style: "plain" }]) {
+    const result = await work(single.env, "/blog/drafts", { method: "POST", body, openaiFetch: singleAi.fetcher });
+    assert.equal(result.status, 201);
+    assert.deepEqual([result.json.data.draft.set, "drafts" in result.json.data], [null, false]);
+  }
+  assert.deepEqual(singleAi.calls.map((call) => call.body.instructions), [BLOG_INSTRUCTIONS, BLOG_INSTRUCTIONS]);
+  assert.equal(usageRows(single.database)[0].create_requests, 2);
+});
+
+test("TK-207 글 초안 3편 막기: 남은 편수가 3보다 적으면 429 daily(아무것도 늘리지 않음), count는 1·3만(그 밖은 400), 셋 다 확실히 안 되면 첫 오류이고 그 편 몫을 모두 되돌림, 하나만 안 되면 그 편 몫만 되돌리고 201", async (t) => {
+  installNetworkTrap(t);
+  const short = blogDb();
+  await setLimits(short.env, { daily: 4 });
+  short.database.exec("INSERT INTO ai_usage_daily (day, create_requests, estimated_cost_micro_usd) VALUES ('2026-11-17', 2, 100000)");
+  const none = scriptedOpenAi();
+  const over = await work(short.env, "/blog/drafts", { method: "POST", body: { source: COMPLEX, style: "plain", count: 3 }, openaiFetch: none.fetcher });
+  assert.deepEqual([over.status, over.json.error.code, over.json.error.details], [429, "AI_BUDGET_EXCEEDED", ["daily"]]);
+  assert.deepEqual([none.calls.length, draftRows(short.database).length], [0, 0]);
+  assert.deepEqual(usageRows(short.database).map((row) => [row.create_requests, row.estimated_cost_micro_usd]), [[2, 100000]], "늘리지 않음");
+
+  for (const count of [0, 2, 4, "3", null, 3.5]) {
+    const bad = await work(short.env, "/blog/drafts", { method: "POST", body: { source: COMPLEX, style: "plain", count }, openaiFetch: none.fetcher });
+    assert.deepEqual([bad.status, bad.json.error.code, bad.json.error.details], [400, "VALIDATION_FAILED", ["count"]], `count ${JSON.stringify(count)}`);
+  }
+  assert.equal(none.calls.length, 0);
+
+  const allFail = blogDb();
+  await setLimits(allFail.env);
+  const failing = scriptedOpenAi([0, 1, 2].map(() => ({ kind: "create", respond: httpError(429, { "retry-after": "20" }) })));
+  const failed = await work(allFail.env, "/blog/drafts", { method: "POST", body: { source: COMPLEX, style: "plain", count: 3 }, openaiFetch: failing.fetcher });
+  assert.deepEqual([failed.status, failed.json.error.code], [429, "AI_RATE_LIMITED"]);
+  assert.deepEqual(draftRows(allFail.database).map((row) => [row.status, row.error_code]), [0, 1, 2].map(() => ["failed", "AI_RATE_LIMITED"]));
+  assert.deepEqual(usageRows(allFail.database).map((row) => [row.create_requests, row.estimated_cost_micro_usd]), [[0, 0]], "3편 몫 모두 되돌림");
+
+  const partly = blogDb();
+  await setLimits(partly.env);
+  const mixed = scriptedOpenAi([
+    { kind: "create", respond: created("resp_mix_1") },
+    { kind: "create", respond: httpError(400) },
+    { kind: "create", respond: created("resp_mix_3") },
+  ]);
+  const made = await work(partly.env, "/blog/drafts", { method: "POST", body: { source: COMPLEX, style: "plain", count: 3 }, openaiFetch: mixed.fetcher });
+  assert.equal(made.status, 201);
+  assert.deepEqual(made.json.data.drafts.map((item) => [item.set.n, item.status, item.errorCode]), [[1, "queued", null], [2, "failed", "AI_REQUEST_INVALID"], [3, "queued", null]]);
+  const [usage] = usageRows(partly.database);
+  assert.equal(usage.create_requests, 2, "실패한 편 몫만 되돌림");
+  assert.equal(usage.estimated_cost_micro_usd, reservedFor(mixed.calls[0]) + reservedFor(mixed.calls[2]));
 });

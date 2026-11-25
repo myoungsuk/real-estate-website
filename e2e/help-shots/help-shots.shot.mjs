@@ -348,7 +348,11 @@ for (const [device, width] of DEVICES) {
     const styleGroup = blog.step(page, 3).locator("input[name='bl-style']").first().locator("xpath=ancestor::*[@role='radiogroup'][1]");
     // 앞 단추를 누른 자리에 남은 포인터가 머리말 단추 위에 걸려 테두리가 달리 찍히지 않게 치운다.
     await page.mouse.move(0, 0);
-    await snap(page, `blog-${device}-2-make`, { clip: [blog.step(page, 3)], targets: [styleGroup, blog.step(page, 3).locator(".bl-quick"), make] });
+    // 3단계는 '몇 편'이 더해져 한 장이면 70KB를 넘으므로(2026-11-25) 글 성격·메모 칸과 몇 편·만들기 단추를 두 장으로 나눠 찍는다.
+    const memo = blog.step(page, 3).locator("[data-bl-emphasis-count]");
+    await snap(page, `blog-${device}-2-style`, { clip: [blog.step(page, 3).locator(".bl-step__head, .bl-step__title").first(), styleGroup, memo], targets: [styleGroup, blog.step(page, 3).locator(".bl-quick")] });
+    const count = blog.step(page, 3).locator(".bl-count-pick");
+    await snap(page, `blog-${device}-2-make`, { clip: [count, make, blog.step(page, 3).locator("[data-bl-make-note]")], targets: [count, make] });
     await make.click();
     await expect(page.locator("[data-bl-wait]")).toBeVisible();
     await page.clock.runFor(5_000);

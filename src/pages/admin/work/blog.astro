@@ -134,9 +134,18 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
               </div>
             </div>
             <p class="admin-inline-notice bl-alert" role="alert" tabindex="-1" data-bl-make-alert hidden><span aria-hidden="true">!</span><span></span></p>
+            <div class="work-row bl-count-pick" role="radiogroup" aria-labelledby="bl-count-label">
+              <span class="work-row__label" id="bl-count-label">몇 편</span>
+              <div class="work-row__control">
+                <div class="work-segment bl-seg bl-seg--noted" data-cols="2" data-bl-count-pick>
+                  <label class="work-choice"><input type="radio" name="bl-count" value="3" autocomplete="off" checked /><span>3편 같이 만들기</span><small class="bl-seg__note">첫 문장·짜임만 다름</small></label>
+                  <label class="work-choice"><input type="radio" name="bl-count" value="1" autocomplete="off" /><span>1편만</span><small class="bl-seg__note">한도 1편 몫</small></label>
+                </div>
+              </div>
+            </div>
             <div class="bl-make">
-              <button class="work-primary-button" type="button" data-bl-make>글 초안 만들기</button>
               <p class="bl-make__note" data-bl-make-note></p>
+              <button class="work-primary-button" type="button" data-bl-make>글 초안 만들기</button>
             </div>
           </div>
         </li>
@@ -145,6 +154,7 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
       <section class="bl-wait" aria-labelledby="bl-wait-title" data-bl-wait hidden>
         <h2 id="bl-wait-title" tabindex="-1">글을 만들고 있습니다</h2>
         <p role="status" data-bl-wait-text></p>
+        <ul class="bl-set-progress" aria-label="3편 진행" data-bl-set-progress hidden></ul>
         <p>보통 1 ~ 3분 걸립니다(추정). 처음 1분은 5초마다, 그 뒤에는 15초마다 확인합니다.</p>
         <p class="bl-wait__note"><strong>화면을 닫거나 휴대폰을 꺼도 됩니다.</strong> 다 만든 글은 서버가 받아 '보관 중인 초안'에 넣어 둡니다. 이 기기에서 이 화면을 다시 열면 맨 위에서 알려 드립니다. 30분이 지나도 끝나지 않으면 만들지 못한 것으로 닫습니다.</p>
         <button class="work-secondary-button" type="button" data-bl-cancel>만들기 취소</button>
@@ -153,6 +163,11 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
       <div class="bl-result" data-bl-result hidden>
         <div class="bl-result__main">
           <h2 class="bl-result__title" tabindex="-1">만든 글 <small data-bl-result-meta></small></h2>
+          <div class="bl-set-tabs" role="group" aria-labelledby="bl-set-tabs-label" data-bl-set-tabs hidden>
+            <p class="bl-places__label" id="bl-set-tabs-label">같이 만든 3편 <small data-bl-set-line></small></p>
+            <div class="bl-set-tabs__list" data-bl-set-list></div>
+            <p class="bl-soft">고르지 않은 편은 '보관 중인 초안'에 남습니다.</p>
+          </div>
           <p class="admin-inline-notice bl-alert" role="alert" data-bl-source-gone hidden><span aria-hidden="true">!</span><span>고른 자료가 지금 공개 자료에 없어 명시사항을 붙일 수 없습니다. 이 초안은 복사할 수 없습니다.</span></p>
           <div class="bl-places" role="radiogroup" aria-labelledby="bl-places-label">
             <p class="bl-places__label" id="bl-places-label">어디에 올릴까요?</p>
@@ -255,7 +270,8 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
             </div>
           </div>
           <section class="bl-disc bl-cardset" id="bl-cardset" aria-labelledby="bl-cardset-title" data-bl-cardset hidden>
-            <h3 id="bl-cardset-title">카드 그림 <small>공개 자료로 그림 · AI가 그리지 않음</small></h3>
+            <h3 id="bl-cardset-title">카드 그림 <small>숫자·글은 공개 자료로 그림 · AI 그림은 표지 사진 자리에만</small></h3>
+            <div class="bl-cardopts" data-bl-cardopts></div>
             <p class="bl-cardset__status" role="status" data-bl-cardset-status></p>
             <ul class="bl-cardset__list" data-bl-cardset-list></ul>
             <button class="work-secondary-button" type="button" data-bl-cardset-save hidden></button>
@@ -322,6 +338,8 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
     import { matchesBlogSourceQuery } from "../../../lib/work/blog-sources.mjs";
     import { todayInKorea } from "../../../lib/work/legal-dates.mjs";
     import { renderBlogCards, type BlogCard } from "../../../lib/work-blog-card";
+    import { createBlogCardOptions } from "../../../lib/work-blog-backgrounds";
+    import { BLOG_SET_DEFAULT, isSetSize, makeCountView, makeWaitText, openSetIds, setProgressView, setTag } from "../../../lib/work/blog-set-view.mjs";
     import { createBlogWaitNotice } from "../../../lib/work-blog-wait";
     import { createDisclosureFields, keepHeight, releaseHeight, type FieldState } from "../../../lib/work-disclosure-fields";
     import {
@@ -410,6 +428,12 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
         const waitPanel = pick("[data-bl-wait]");
         const waitText = pick("[data-bl-wait-text]");
         const cancelButton = pick<HTMLButtonElement>("[data-bl-cancel]");
+        // 1편·3편 고르기(2026-11-25 사용자 결정 4: 처음 3편). 화면 메모리에만 두고 주소·브라우저 저장소에 넣지 않는다.
+        const countInputs = [...root.querySelectorAll<HTMLInputElement>('input[name="bl-count"]')];
+        const setProgress = pick<HTMLUListElement>("[data-bl-set-progress]");
+        const setTabs = pick("[data-bl-set-tabs]");
+        const setList = pick("[data-bl-set-list]");
+        const setLine = pick("[data-bl-set-line]");
         // 기다리던 글 알림(맨 위). 만드는 중인 초안 번호만 이 브라우저에 기억한다.
         const waited = createBlogWaitNotice(pick("[data-bl-waited]"), (id) => void openDraft(id));
         const resultPanel = pick("[data-bl-result]");
@@ -481,6 +505,10 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
         let locationValue = "";
         let locationKey = "";
         let draft: BlogDraft | null = null;
+        // 같이 만든 3편 묶음. ids는 편 순서, members는 받은 만큼의 초안(전체 또는 보관 목록 한 줄).
+        let setIds: string[] = [];
+        const setMembers = new Map<string, BlogDraft | BlogDraftListItem>();
+        let setTimer = 0;
         let mode: Mode = "compose";
         let pollTimer = 0;
         let tickTimer = 0;
@@ -532,6 +560,7 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
         function renderLimits() {
           const view = limitsView(limits);
           pick("[data-bl-usage-text]").textContent = view.line;
+          cardOptions.renderLimits();
           usage.hidden = !view.line;
           const badge = pick("[data-bl-limits-badge]");
           badge.textContent = view.saved && limits ? `· 하루 ${limits.dailyCreateLimit}편 · 월 ${usdText(limits.monthlyCostLimitMicroUsd ?? 0)}달러` : "아직 없음";
@@ -853,12 +882,18 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
         });
         emphasisInput.addEventListener("input", () => renderMemoCount());
 
+        const selectedCount = () => {
+          const value = Number(countInputs.find((input) => input.checked)?.value);
+          return (isSetSize(value) ? value : BLOG_SET_DEFAULT) as 1 | 3;
+        };
         function renderMake() {
-          const reason = limitsView(limits).reason as string | null;
-          makeButton.disabled = busy || Boolean(reason);
-          makeNote.textContent = busy ? "보내는 중입니다…" : reason ?? (limits ? `만들면 오늘 ${limits.usage.todayCreates + 1} / ${limits.dailyCreateLimit}편이 됩니다. 1 ~ 3분 걸립니다.` : "");
-          makeNote.classList.toggle("is-blocked", !busy && Boolean(reason));
+          const count = selectedCount();
+          const view = makeCountView(limits, count) as { line: string; reason: string | null };
+          makeButton.disabled = busy || Boolean(view.reason);
+          makeNote.textContent = busy ? "보내는 중입니다…" : view.reason ?? `${view.line}. ${makeWaitText(count)}`;
+          makeNote.classList.toggle("is-blocked", !busy && Boolean(view.reason));
         }
+        for (const input of countInputs) input.addEventListener("change", renderMake);
 
         makeButton.addEventListener("click", async () => {
           if (!picked || busy) return;
@@ -883,8 +918,10 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
           setNotice(makeAlert, "");
           renderMake();
           try {
-            const created = await createBlogDraft({ source: { type: picked.type, id: picked.id }, style, inputs: state.inputs, emphasis: emphasis.emphasis });
-            showDraft(created.draft);
+            const count = selectedCount();
+            const created = await createBlogDraft({ source: { type: picked.type, id: picked.id }, style, inputs: state.inputs, emphasis: emphasis.emphasis, count });
+            for (const member of created.drafts ?? []) waited.track(member);
+            showDraft(created.draft, created.drafts);
           } catch (error) {
             const { code, details } = errorOf(error);
             const fieldError = code === "DISCLOSURE_INCOMPLETE" || ((code === "VALIDATION_FAILED" || code === "PERSONAL_DATA_PATTERN") && !details.every((key) => key === "emphasis" || key === "style"));
@@ -921,6 +958,7 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
             cardsetKey = "";
             cardsetSeq += 1;
             showCardsetMessage("");
+            window.clearTimeout(setTimer);
           }
           pickedBar.hidden = next === "compose" || !draft;
           bar.hidden = next !== "result";
@@ -936,6 +974,9 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
         }
         function backToCompose() {
           draft = null;
+          setIds = [];
+          setMembers.clear();
+          window.clearTimeout(setTimer);
           pollSeq += 1;
           edited = false;
           if (!picked) openStep = 1;
@@ -943,13 +984,96 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
           renderSteps();
         }
 
-        function showDraft(next: BlogDraft) {
+        // ── 같이 만든 3편 ──
+
+        // 묶음을 새로 정하거나(다른 묶음·1편 초안) 받은 초안을 묶음에 넣는다. siblings: 같이 받은 편(만들기 응답).
+        function noteSet(next: BlogDraft, siblings: BlogDraft[] = []) {
+          const ids = next.set?.ids ?? [];
+          if (ids.join() !== setIds.join()) {
+            setIds = ids;
+            setMembers.clear();
+            // 보관 목록에서 연 묶음은 나머지 편의 상태를 목록 줄로 먼저 채운다.
+            for (const item of drafts) if (ids.includes(item.id)) setMembers.set(item.id, item);
+          }
+          for (const member of [...siblings, next]) if (setIds.includes(member.id)) setMembers.set(member.id, member);
+        }
+        const setParts = () => setIds.map((id) => setMembers.get(id) ?? null);
+        function renderSet() {
+          const has = setIds.length > 1;
+          setTabs.hidden = !has || mode !== "result";
+          setProgress.hidden = !has || mode !== "wait";
+          if (!has) return;
+          const view = setProgressView(setParts());
+          setLine.textContent = `· ${view.line}`;
+          setProgress.replaceChildren(...view.parts.map((part) => el("li", `bl-set-progress__item is-${part.state}`, part.text)));
+          setList.replaceChildren(...view.parts.map((part, index) => {
+            const id = setIds[index];
+            const current = draft?.id === id;
+            const button = el("button", `bl-set-tab is-${part.state}`);
+            button.type = "button";
+            button.append(el("strong", "", `${part.n}편`), el("span", "", current ? "보는 중" : part.state === "done" ? "열기" : part.state === "open" ? "만드는 중" : "못 만듦"));
+            button.setAttribute("aria-pressed", String(current));
+            button.setAttribute("aria-label", `${part.n}편 ${current ? "보는 중" : part.text.replace(`${part.n}편 `, "")}`);
+            button.disabled = !current && part.state !== "done";
+            button.addEventListener("click", () => {
+              if (!current) void switchSet(id);
+            });
+            return button;
+          }));
+        }
+        async function switchSet(id: string) {
+          if (edited && !window.confirm("고친 글은 저장되지 않습니다. 다른 편을 열까요?")) return;
+          const known = setMembers.get(id);
+          if (known && "result" in known && known.result) {
+            edited = false;
+            showDraft(known);
+            return;
+          }
+          try {
+            const { draft: next } = await readBlogDraft(id);
+            edited = false;
+            showDraft(next);
+          } catch (error) {
+            setLine.textContent = `· ${apiErrorText(errorOf(error).code)}`;
+          }
+        }
+        // 묶음 가운데 열린 편을 다시 읽는다. 돌려주는 값: 받은 초안들과 못 읽은 편이 있었는지.
+        async function readOpenSet() {
+          const ids = openSetIds(setParts().filter(Boolean) as BlogDraft[]);
+          const read = await Promise.allSettled(ids.map((id) => readBlogDraft(id)));
+          const got: BlogDraft[] = [];
+          for (const item of read) {
+            if (item.status !== "fulfilled") continue;
+            setMembers.set(item.value.draft.id, item.value.draft);
+            waited.track(item.value.draft);
+            got.push(item.value.draft);
+          }
+          return { got, failed: read.some((item) => item.status === "rejected") };
+        }
+        // 결과를 보는 동안 아직 만드는 편이 있으면 따로 확인한다(그 편이 다 되면 탭이 열림).
+        function scheduleSetPoll() {
+          window.clearTimeout(setTimer);
+          if (mode !== "result" || openSetIds(setParts().filter(Boolean) as BlogDraft[]).length === 0) return;
+          const first = setParts().find((item) => item && "createdAt" in item) as BlogDraft | undefined;
+          setTimer = window.setTimeout(async () => {
+            if (document.hidden || mode !== "result") return scheduleSetPoll();
+            await readOpenSet();
+            if (mode !== "result") return;
+            renderSet();
+            void refreshSide();
+            scheduleSetPoll();
+          }, pollDelayMs(first ? Date.now() - Date.parse(first.createdAt) : 0));
+        }
+
+        function showDraft(next: BlogDraft, siblings: BlogDraft[] = []) {
           draft = next;
           pollSeq += 1;
           waited.track(next);
+          noteSet(next, siblings);
           renderPicked();
           if (isOpenStatus(next.status) && !next.closed) {
             setMode("wait");
+            renderSet();
             tick();
             tickTimer = window.setInterval(tick, 1000);
             schedulePoll();
@@ -959,6 +1083,8 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
           if (next.result) {
             renderResult(next);
             setMode("result");
+            renderSet();
+            scheduleSetPoll();
             pick(".bl-result__title", resultPanel).focus();
             return;
           }
@@ -969,6 +1095,7 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
           pick("[data-bl-fail-body]").textContent = view.body;
           pick("[data-bl-retry]").hidden = !(view.retry && picked && sourceKey(picked) === sourceKey(next.source));
           setMode("fail");
+          renderSet();
           pick("[data-bl-fail-title]").focus();
         }
 
@@ -988,6 +1115,27 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
           if (document.hidden) return; // 다시 보일 때 바로 확인한다(visibilitychange).
           const seq = pollSeq;
           try {
+            if (setIds.length > 1) {
+              // 3편: 열린 편을 모두 읽고, 먼저 끝난 편을 연다. 모두 못 만들었으면 첫 편의 까닭을 보인다.
+              const { failed } = await readOpenSet();
+              if (seq !== pollSeq) return;
+              const view = setProgressView(setParts());
+              if (view.firstDone) {
+                showDraft(setMembers.get(setIds[view.firstDone - 1]) as BlogDraft);
+                void refreshSide();
+                return;
+              }
+              if (view.allSettled) {
+                showDraft((setMembers.get(setIds[0]) as BlogDraft) ?? draft);
+                void refreshSide();
+                return;
+              }
+              draft = (setMembers.get(draft.id) as BlogDraft) ?? draft;
+              renderSet();
+              if (failed) waitText.textContent = "결과를 확인하지 못했습니다. 잠시 뒤 다시 확인합니다.";
+              schedulePoll();
+              return;
+            }
             const { draft: next } = await readBlogDraft(draft.id);
             if (seq !== pollSeq) return;
             if (isOpenStatus(next.status) && !next.closed) {
@@ -1017,10 +1165,13 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
         });
 
         cancelButton.addEventListener("click", async () => {
-          if (!draft || !window.confirm("만들기를 취소할까요? 이미 든 비용은 되돌리지 못할 수 있습니다.")) return;
+          const many = setIds.length > 1;
+          if (!draft || !window.confirm(many ? "만드는 중인 편을 모두 취소할까요? 이미 든 비용은 되돌리지 못할 수 있습니다." : "만들기를 취소할까요? 이미 든 비용은 되돌리지 못할 수 있습니다.")) return;
           cancelButton.disabled = true;
           try {
-            await closeBlogDraft(draft.id, "cancel");
+            const ids = many ? openSetIds(setParts().filter(Boolean) as BlogDraft[]) : [draft.id];
+            // 3편은 열린 편을 하나씩 닫는다. 하나라도 못 닫으면 아래 오류로 알리고, 이미 닫은 편은 그대로 둔다.
+            for (const id of ids) await closeBlogDraft(id, "cancel");
             backToCompose();
             setNotice(makeAlert, "만들기를 취소했습니다.", "✓");
           } catch (error) {
@@ -1340,6 +1491,15 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
         // 서버를 부르지 않고, 그림은 data 주소로만 보인다(blob 주소·브라우저 저장소 없음). 같은 내용이면 다시 그리지 않는다.
         const cardDataList = JSON.parse(root.querySelector("[data-bl-card-data]")?.textContent ?? "[]") as { slug: string }[];
         const cardCanvas = document.createElement("canvas");
+        // 카드 모양·표지 사진(AI 배경 그림) 고르기(2026-11-25 사용자 결정 2·7·8·9). 고르면 같은 자료로 카드를 다시 그린다.
+        let lastCardset: [ReturnType<typeof currentDisclosure>, boolean] | null = null;
+        const cardOptions = createBlogCardOptions(pick("[data-bl-cardopts]"), {
+          limits: () => limits,
+          refreshLimits: () => void refreshSide(),
+          changed: () => {
+            if (lastCardset && mode === "result") void updateCardset(...lastCardset);
+          },
+        });
         function showCardsetMessage(message: string) {
           cardsetList.replaceChildren();
           cardsetSave.hidden = true;
@@ -1348,8 +1508,10 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
           renderCardBits();
         }
         async function updateCardset(made: ReturnType<typeof currentDisclosure>, locationIssue: boolean) {
+          lastCardset = [made, locationIssue];
           const current = draft;
           const source = current?.result && current.sourcePublic ? current.currentSource : null;
+          cardOptions.setKind(source ? (source.type === "complex" ? "complex" : "listing") : null);
           if (!source) {
             cardsetPanel.hidden = true;
             cardsetKey = "";
@@ -1364,7 +1526,8 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
           else if (!made) view = { ok: false, error: "고른 자료가 지금 공개 자료에 없어 표지를 만들 수 없습니다." };
           else if (locationIssue) view = { ok: false, error: "소재지를 고치면 표지를 만듭니다." };
           else view = buildListingCover(source, made.disclosure, office);
-          const key = view.ok ? JSON.stringify(view.cards) : `error:${view.error}`;
+          const options = cardOptions.state();
+          const key = view.ok ? `${options.key}|${JSON.stringify(view.cards)}` : `error:${view.error}`;
           if (key === cardsetKey) return;
           cardsetKey = key;
           const seq = ++cardsetSeq;
@@ -1374,7 +1537,7 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
           }
           showCardsetMessage("카드를 그리는 중입니다…");
           try {
-            const result = await renderBlogCards(cardCanvas, view.cards as BlogCard[]);
+            const result = await renderBlogCards(cardCanvas, view.cards as BlogCard[], { look: options.look, coverImage: options.coverImage });
             if (seq !== cardsetSeq) return;
             if (result.overflow) {
               showCardsetMessage("내용이 길어 카드에 다 들어가지 않아 만들지 않았습니다.");
@@ -1511,7 +1674,8 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
             open.type = "button";
             open.setAttribute("aria-label", `${name} 열기`);
             open.addEventListener("click", () => void openDraft(item.id));
-            li.append(el("strong", "", name), el("span", "", draftStatusText(item)), open);
+            const tag = setTag(item.set);
+            li.append(el("strong", "", name), el("span", "", tag ? `${tag} · ${draftStatusText(item)}` : draftStatusText(item)), open);
             return li;
           }));
         }
@@ -1586,9 +1750,14 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
           window.clearTimeout(pollTimer);
           window.clearInterval(tickTimer);
           window.clearTimeout(recheckTimer);
+          window.clearTimeout(setTimer);
           pollSeq += 1;
           picked = null;
           draft = null;
+          setIds = [];
+          setMembers.clear();
+          for (const input of countInputs) input.checked = input.value === String(BLOG_SET_DEFAULT);
+          cardOptions.clear();
           locationValue = "";
           locationKey = "";
           query = "";

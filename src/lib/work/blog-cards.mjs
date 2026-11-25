@@ -155,13 +155,23 @@ export function buildComplexCards(data, office) {
     ...data.extras,
   ].slice(0, 3);
   const subtitle = [data.areaName ? `대전 동구 ${data.areaName}` : null, data.context].filter(Boolean).join(" · ");
+  // 판 2 방향 A(2026-11-25 사용자 결정 7 "사진이 주인공"): 표지는 사진 아래 단지 이름 + 한 줄 + 숫자 3개(세대·동·주차). 합계 숫자는 만들지 않는다.
+  const coverSubtitle = [data.areaName ? `대전 동구 ${data.areaName}` : null, data.date ? `${data.date.value} ${data.date.label}` : null].filter(Boolean).join(" · ");
+  const coverFacts = [
+    { label: "세대", value: households, unit: "세대" },
+    ...(data.dongs ? [{ label: "동", value: group(data.dongs), unit: "개동" }] : []),
+    ...(parking?.big ? [{ label: parking.note === "전부 지하 주차" ? "주차(전부 지하)" : "주차(전부 지상)", value: parking.big, unit: "대" }] : []),
+  ];
 
   const cards = [
     { key: "cover", label: BLOG_CARD_LABELS.cover, badge: "단지 한눈에", image: data.image, imageAlt: data.name, big: households, unit: "세대", bigNote: dongs ?? "",
-      titleLines: cardTitleLines(data.title, data.name), chips: [dateChip, secondChip].filter(Boolean), disclosure },
+      titleLines: cardTitleLines(data.title, data.name), chips: [dateChip, secondChip].filter(Boolean), name: data.name, subtitle: coverSubtitle, facts: coverFacts, disclosure },
     { key: "info", label: BLOG_CARD_LABELS.info, badge: "단지 정보", name: data.name, subtitle, households, donut, side, supplyBar, tiles, sourceLine: data.sourceLine, disclosure },
   ];
-  if (data.checks.length > 0) cards.push({ key: "checks", label: BLOG_CARD_LABELS.checks, badge: "현장 체크", kicker: "계약 전 현장에서", heading: `확인할 ${data.checks.length}가지`, items: data.checks, disclosure });
+  if (data.checks.length > 0) {
+    cards.push({ key: "checks", label: BLOG_CARD_LABELS.checks, badge: "현장 체크", kicker: "계약 전 현장에서", heading: `확인할 ${data.checks.length}가지`,
+      titleLines: ["계약 전에", `현장에서 볼 ${data.checks.length}가지`], lede: `${data.name} 보러 가기 전에`, items: data.checks, disclosure });
+  }
   return { ok: /** @type {const} */ (true), cards };
 }
 

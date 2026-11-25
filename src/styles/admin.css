@@ -1985,6 +1985,46 @@ html:has(.rt-pick-bar:not([hidden])) { scroll-padding-bottom: calc(var(--rt-pick
 .bl-cardset__link { min-height: 44px; display: inline-flex; align-items: center; padding: 0 4px; color: var(--ds-navy); }
 .bl-cardset__link[hidden] { display: none; }
 .bl-cardset .work-secondary-button { width: 100%; margin-bottom: 8px; }
+/* 카드 모양·표지 사진·AI 배경 그림 고르기(2026-11-25 판 2, 사용자 결정 7 ~ 9). 같은 .bl-seg 단추를 쓰고, 글 아래 작은 설명은 단추 안 둘째 줄. */
+.bl-opt { display: grid; gap: 6px; min-width: 0; margin: 0 0 12px; padding: 0; border: 0; }
+.bl-opt__legend { margin: 0 0 6px; padding: 0; color: var(--ds-ink-soft); font-weight: 800; }
+.work-ui .bl-seg--noted .work-choice { flex-direction: column; gap: 0; padding-block: 6px; line-height: 1.3; }
+/* 설명 글은 누름을 가로채지 않는다(단추 전체를 덮은 라디오가 받음). opacity를 쓰면 쌓임 맥락이 생겨 라디오 위로 올라오므로 쓰지 않는다. */
+.work-ui .bl-seg__note { color: inherit; font-size: 0.875rem; font-weight: 600; pointer-events: none; }
+.bl-cardopts { margin: 0 0 4px; }
+.bl-bg { display: grid; gap: 4px; margin: 0 0 12px; padding: 12px; border: 1px solid var(--ds-edge); border-radius: var(--ad-radius); background: var(--ds-paper); }
+.bl-bg__desc { display: grid; gap: 6px; margin: 0 0 8px; }
+.bl-bg__desc textarea { width: 100%; min-height: 64px; padding: 10px 12px; border: 1px solid var(--ds-field-edge); border-radius: 8px; font: inherit; line-height: 1.5; resize: vertical; }
+.bl-bg__rules { margin: 0 0 8px; padding-left: 1.2em; color: var(--ds-ink); }
+.bl-bg__rules li + li { margin-top: 2px; }
+.bl-bg__fixed { margin: 0 0 8px; }
+.bl-bg .bl-bg__make { margin: 4px 0 0; }
+.bl-bg__progress { margin: 0; color: var(--ds-ink); font-weight: 700; }
+.bl-bg__progress:empty { display: none; }
+.bl-bg__list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 8px 0 0; padding: 0; list-style: none; }
+.bl-bg__list[hidden] { display: none; }
+.bl-bg__slot { display: grid; place-items: center; aspect-ratio: 4 / 5; border: 1.5px dashed var(--ds-field-edge); border-radius: var(--ad-radius); color: var(--ds-ink-soft); background: var(--ds-paper-2); font-weight: 700; text-align: center; }
+.bl-bg__pick { position: relative; display: grid; gap: 4px; justify-items: center; min-height: 44px; color: var(--ds-ink); font-weight: 800; cursor: pointer; }
+.bl-bg__pick img { display: block; width: 100%; height: auto; aspect-ratio: 4 / 5; object-fit: cover; border: 3px solid transparent; border-radius: var(--ad-radius); }
+.bl-bg__pick input { position: absolute; top: 8px; left: 8px; inline-size: 22px; block-size: 22px; margin: 0; accent-color: var(--ds-navy); }
+.bl-bg__pick:has(input:checked) img { border-color: var(--ds-navy); }
+.bl-bg__pick:has(input:checked) span::before { content: "✓ "; }
+.bl-bg__pick:has(input:focus-visible) img { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+/* 같이 만든 3편(2026-11-25 사용자 결정 4 ~ 6): 기다리는 동안 편마다 한 줄, 결과에서는 편 단추 3개. */
+.bl-set-progress { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0 0 8px; padding: 0; list-style: none; font-weight: 800; }
+.bl-set-progress__item.is-done::before { content: "✓ "; }
+.bl-set-progress__item.is-failed { color: var(--ds-stamp); }
+.bl-set-tabs { display: grid; gap: 6px; margin: 0 0 12px; }
+.bl-set-tabs .bl-places__label small { font-weight: 700; }
+.bl-set-tabs .bl-soft { margin: 0; }
+.bl-set-tabs__list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.bl-set-tab { display: grid; justify-items: center; gap: 0; min-height: 52px; padding: 6px 4px; border: 1.5px solid var(--ds-field-edge); border-radius: var(--ad-radius); color: var(--ds-ink); background: var(--ds-paper); font: inherit; line-height: 1.25; cursor: pointer; }
+.bl-set-tab span { font-size: 0.875rem; font-weight: 700; }
+.bl-set-tab[aria-pressed="true"] { border-color: var(--ds-navy); color: var(--ds-paper); background: var(--ds-navy); }
+.bl-set-tab:disabled { color: var(--ds-ink-soft); background: var(--ds-paper-2); border-style: dashed; cursor: not-allowed; }
+.bl-set-tab.is-failed:disabled { color: var(--ds-stamp); }
+.bl-set-tab:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+.bl-count-pick { margin-top: 4px; }
 .bl-gap { padding: 0 4px; color: var(--ds-paper); background: var(--ds-stamp); font-weight: 800; }
 .bl-actions { display: grid; gap: 8px; }
 .bl-actions .work-primary-button:disabled, .bl-actions .work-secondary-button:disabled, .bl-do .work-primary-button:disabled { color: var(--ds-ink-soft); border-color: var(--ds-edge); background: var(--ds-paper-2); cursor: not-allowed; }
