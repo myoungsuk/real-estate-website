@@ -57,7 +57,9 @@ function makeStore({ customers, count } = {}) {
 // 늘 같은 시각에서 시작하고 실제 서버는 부르지 않는다(맞지 않는 관리 API는 503).
 // failCustomerReadAfterNote: 손님 메모 저장(POST /notes) 바로 뒤의 손님 카드 읽기 한 번만 503으로 실패시킨다.
 // failCustomerReadAfterDeal: 새 거래 저장(POST /deals) 바로 뒤의 손님 카드 읽기 한 번만 503으로 실패시킨다.
-async function setup(page, { width = 390, enabled = true, filesEnabled = false, aiEnabled = false, store = makeStore(), patchConflict = false, failCustomerReadAfterNote = false, failCustomerReadAfterDeal = false } = {}) {
+// loseDealReply: 새 거래를 만든 뒤 답을 보내지 않고 연결을 끊는다(fetch TypeError). 그 횟수만큼 한 번씩.
+// lostDealChange: 답을 끊는 거래만 손님 카드에 이 값(dealType·role)으로 바꿔 넣는다(보낸 값과 다른 거래가 생긴 경우).
+async function setup(page, { width = 390, enabled = true, filesEnabled = false, aiEnabled = false, store = makeStore(), patchConflict = false, failCustomerReadAfterNote = false, failCustomerReadAfterDeal = false, loseDealReply = 0, lostDealChange = null } = {}) {
   await page.clock.install({ time: NOW });
   await page.setViewportSize({ width, height: 900 });
   const calls = { all: [], writes: [] };
@@ -166,10 +168,15 @@ async function setup(page, { width = 390, enabled = true, filesEnabled = false, 
       if (bad.length > 0) return route.fulfill(failure(400, "VALIDATION_FAILED", bad.slice(0, 1)));
       const deal = { id: uuid(nextId++), title: body.title, dealType: body.dealType, saleKind: body.dealType === "sale" ? "sale" : null, propertyKind: body.propertyKind, scheduleTarget: body.scheduleTarget ?? null, propertyLabel: "", priceWon: null, depositWon: null, monthlyRentWon: null, contractOn: null, middlePaymentOn: null, balanceOn: null, status: "open", version: 1, createdAt: "2026-11-21T03:00:00.000Z", updatedAt: "2026-11-21T03:00:00.000Z" };
       store.createdDeals = [...(store.createdDeals ?? []), deal];
+      const change = loseDealReply > 0 ? lostDealChange ?? {} : {};
       for (const party of body.parties) {
-        store.deals[party.customerId] = [{ id: deal.id, title: deal.title, dealType: deal.dealType, status: deal.status, role: party.role, version: 1, updatedAt: deal.updatedAt, events: [], files: [] }, ...(store.deals[party.customerId] ?? [])];
+        store.deals[party.customerId] = [{ id: deal.id, title: deal.title, dealType: deal.dealType, status: deal.status, role: party.role, version: 1, updatedAt: deal.updatedAt, events: [], files: [], ...change }, ...(store.deals[party.customerId] ?? [])];
       }
       if (failCustomerReadAfterDeal) failNextCustomerRead = true;
+      if (loseDealReply > 0) {
+        loseDealReply -= 1;
+        return route.abort("failed");
+      }
       return route.fulfill(envelope({ deal, parties: body.parties.map((party) => ({ ...party, displayName: store.customers.find((item) => item.id === party.customerId).displayName })) }, 201));
     }
     // 새로 만든 거래의 '장부 보기'(거래 하나 + 그 거래의 장부 줄, 줄은 아직 없음)
@@ -1098,6 +1105,100 @@ test("새 거래: 로그인·보안 확인 만료로 실패하면 새로고침�
 
   await page.getByRole("button", { name: "새 거래" }).click();
   expect(await asksBeforeLeaving(page), "빈 새 거래 칸은 묻지 않음").toBe(false);
+});
+
+// 새 거래 칸을 열어 가상 전세 거래를 채운다(손님 카드가 열린 뒤).
+async function fillJeonseDeal(page, title) {
+  await page.getByRole("button", { name: "새 거래" }).click();
+  const panel = page.locator("[data-cu-deal-panel]");
+  await page.locator("#cu-deal-name").fill(title);
+  await panel.locator('input[name="cu-deal-type"][value="jeonse"]').check();
+  await panel.locator('input[name="cu-deal-kind"][value="housing"]').check();
+  await panel.locator('input[name="cu-deal-role"][value="tenant"]').check();
+  return panel;
+}
+const DEAL_FOUND = "✓ 저장한 뒤 답이 오지 않아 손님 카드를 다시 읽어 보니 거래가 만들어져 있었습니다. 다시 누르지 않아도 됩니다. 아래 거래 칸에서 장부를 봅니다.";
+
+test("새 거래: 서버가 거래를 만들고 답만 끊기면 손님 카드를 한 번 다시 읽어 '만들어져 있었습니다'로 칸을 닫고 그 거래로 옮기며, 거래는 한 번만 보낸다", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const calls = await setup(page, { width: 390, loseDealReply: 1 });
+  await page.goto(`/admin/work/customers/detail/?id=${uuid(2)}`);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("가상 손님 2");
+  await expect(page.locator(".cu-deal")).toHaveCount(0);
+  const panel = await fillJeonseDeal(page, "가상강변마을 59㎡ 전세");
+  await page.getByRole("button", { name: "거래 저장" }).click();
+  await expect(page.locator("[data-cu-deals-status]")).toHaveText(DEAL_FOUND);
+  await expect(panel).toBeHidden();
+  await expect(page.locator("[data-cu-deals-reload]")).toBeHidden();
+  await expect(page.locator(".cu-deal")).toHaveCount(1);
+  await expect(page.locator(".cu-deal .cu-deal__meta")).toHaveText("전세 · 임차인 · 진행 중");
+  await expect(page.locator(".cu-deal .cu-deal__title")).toBeFocused();
+  expect(calls.writes.filter((item) => item.path === "/deals"), "거래는 한 번만 보냄").toHaveLength(1);
+  expect(calls.all.filter((line) => line === `GET /customers/${uuid(2)}`), "처음 읽기 + 다시 확인 한 번").toHaveLength(2);
+  await expectNoPersonalTrace(page);
+  assertNoErrors();
+});
+
+for (const [label, change, meta] of [["이 손님의 쪽", { role: "other" }, "전세 · 기타 · 진행 중"], ["거래 종류", { dealType: "monthly_rent" }, "월세 · 임차인 · 진행 중"]]) {
+  test(`새 거래: 답이 끊긴 뒤 다시 읽은 새 거래가 제목은 같아도 ${label}이 다르면 만들어졌다고 보지 않고 지금 실패 문장 그대로이며, 다시 읽기는 한 번뿐이다`, async ({ page }) => {
+    const assertNoErrors = collectErrors(page);
+    const calls = await setup(page, { width: 390, loseDealReply: 1, lostDealChange: change });
+    await page.goto(`/admin/work/customers/detail/?id=${uuid(2)}`);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("가상 손님 2");
+    const panel = await fillJeonseDeal(page, "가상강변마을 59㎡ 전세");
+    await page.getByRole("button", { name: "거래 저장" }).click();
+    await expect(page.locator("[data-cu-deal-status]")).toHaveText(`저장하지 못했습니다. ${NETWORK_SAVE}`);
+    await expect(panel).toBeVisible();
+    await expect(page.locator("[data-cu-deals-status]")).toHaveText("");
+    // 다시 읽은 손님 카드에는 그 거래가 보이지만(값이 달라) 만들어진 것으로 보지 않았다.
+    await expect(page.locator(".cu-deal .cu-deal__meta")).toHaveText(meta);
+    await expect(page.getByRole("button", { name: "거래 저장" })).toBeEnabled();
+    expect(calls.writes.filter((item) => item.path === "/deals")).toHaveLength(1);
+    expect(calls.all.filter((line) => line === `GET /customers/${uuid(2)}`), "처음 읽기 + 다시 확인 한 번").toHaveLength(2);
+    await expectNoPersonalTrace(page);
+    assertNoErrors();
+  });
+}
+
+test("새 거래: 거래가 만들어지지 않은 채 끊기거나 5xx·JSON이 아닌 502면 다시 읽어도 없으므로 지금 실패 문장 그대로이고, 다시 읽기도 실패하면 그대로, 400은 다시 읽지 않는다", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const calls = await setup(page, { width: 360 });
+  const seen = await failRequests(page, "POST", (path) => path === "/deals", ["abort", badGateway, failure(503, "STORAGE_UNAVAILABLE"), failure(400, "VALIDATION_FAILED", ["title"]), "abort"]);
+  await page.goto(`/admin/work/customers/detail/?id=${uuid(2)}`);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("가상 손님 2");
+  const panel = await fillJeonseDeal(page, "가상강변마을 59㎡ 전세");
+  const save = page.getByRole("button", { name: "거래 저장" });
+  const status = page.locator("[data-cu-deal-status]");
+  const reads = () => calls.all.filter((line) => line === `GET /customers/${uuid(2)}`).length;
+
+  await save.click();
+  await expect(status).toHaveText(`저장하지 못했습니다. ${NETWORK_SAVE}`);
+  expect(reads(), "끊김은 한 번 다시 읽음").toBe(2);
+  await save.click();
+  await expect(status).toHaveText(`저장하지 못했습니다. ${GENERIC}`);
+  expect(reads(), "JSON이 아닌 502도 한 번 다시 읽음").toBe(3);
+  await save.click();
+  await expect(status).toHaveText(`저장하지 못했습니다. ${STORAGE}`);
+  expect(reads(), "503도 한 번 다시 읽음").toBe(4);
+  await save.click();
+  await expect(status).toHaveText("저장하지 못했습니다. 넣은 값의 형식이 맞지 않습니다. 칸을 다시 확인해 주세요.");
+  expect(reads(), "400은 서버의 거절이라 다시 읽지 않음").toBe(4);
+
+  // 이번에는 다시 읽기도 끊긴다.
+  const readFails = await failRequests(page, "GET", (path) => path === `/customers/${uuid(2)}`, ["abort"]);
+  await save.click();
+  await expect(status).toHaveText(`저장하지 못했습니다. ${NETWORK_SAVE}`);
+  expect(readFails, "다시 읽기는 한 번만").toEqual([`/customers/${uuid(2)}`]);
+
+  await expect(panel).toBeVisible();
+  await expect(page.locator("#cu-deal-name")).toHaveValue("가상강변마을 59㎡ 전세");
+  await expect(panel.locator('input[name="cu-deal-role"][value="tenant"]')).toBeChecked();
+  await expect(save).toBeEnabled();
+  await expect(page.locator(".cu-deal")).toHaveCount(0);
+  expect(seen).toHaveLength(5);
+  expect(calls.writes, "실패한 다섯 번은 가짜 업무 API까지 가지 않음").toEqual([]);
+  await expectNoPersonalTrace(page);
+  assertNoErrors();
 });
 
 test("새 거래: 제목을 넣던 새 거래 칸이 열려 있으면 떠나기 전에 묻는다", async ({ page }) => {
