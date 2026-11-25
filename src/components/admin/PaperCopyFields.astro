@@ -5,7 +5,7 @@
 // 칸 목록·글자 수 한도는 src/lib/work/paper-copy.mjs paperCopyFields(), 묶기는 src/lib/work-paper-copy.ts.
 interface Props {
   tool: string;
-  fields: Record<string, readonly { key: string; label: string; max: number; value: string; optional: boolean }[]>;
+  fields: Record<string, readonly { key: string; label: string; max: number; value: string; optional: boolean; hint: string }[]>;
   shape: string;
   note: string;
 }
@@ -25,7 +25,7 @@ const { tool, fields, shape, note } = Astro.props;
           <label class="work-row__label" for={`${tool}-copy-${value}-${item.key}`}>{item.label}</label>
           <div class="work-row__control">
             <input id={`${tool}-copy-${value}-${item.key}`} type="text" maxlength={item.max} value={item.value} autocomplete="off" data-copy-key={item.key} />
-            <small>{item.max}자까지{item.optional ? " · 비우면 그 줄을 뺍니다" : ""}</small>
+            <small>{item.max}자까지{item.hint ? ` · ${item.hint}` : ""}{item.optional ? " · 비우면 그 줄을 뺍니다" : ""}</small>
           </div>
         </div>
       ))}
