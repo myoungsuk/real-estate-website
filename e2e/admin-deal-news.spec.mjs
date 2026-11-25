@@ -135,7 +135,10 @@ test("거래 완료 소식 390px: 60일·잔금이 막으면 까닭과 풀리는
   await searchFor(page, "가상숲");
   await page.locator("[data-dn-hits] button").first().click();
   await radio(page, "84㎡대").check();
-  await page.locator("[data-dn-count-go]").click();
+  // 키보드로 누르면 단추가 꺼진 뒤 초점이 결과 문단으로 간다(body로 빠지지 않음).
+  await page.locator("[data-dn-count-go]").focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("[data-dn-count-result]")).toBeFocused();
   await expect(page.locator("[data-dn-name]")).toHaveValue("가상숲 101동");
   await expect(page.locator("[data-dn-name-note]")).toHaveClass(/dn-bad/u);
   await expect(page.locator("[data-dn-name-note]")).toContainText("직접 고쳐 주세요");

@@ -109,7 +109,7 @@ import { DEAL_NEWS_DEAL_TYPES, DEAL_NEWS_GUARD, DEAL_NEWS_PROPERTY_KINDS, DEAL_N
                   <button class="work-secondary-button" type="button" data-dn-count-go>최근 거래 건수 확인</button>
                   <span class="dn-quiet" data-dn-count-hint>한 번만 셉니다. 단지·면적·거래 종류를 바꾸면 다시 셉니다.</span>
                 </div>
-                <p class="dn-result" role="status" aria-live="polite" data-dn-count-result hidden></p>
+                <p class="dn-result" role="status" aria-live="polite" tabindex="-1" data-dn-count-result hidden></p>
               </div>
             </div>
             <div class="work-row" data-dn-name-row hidden>
@@ -376,6 +376,8 @@ import { DEAL_NEWS_DEAL_TYPES, DEAL_NEWS_GUARD, DEAL_NEWS_PROPERTY_KINDS, DEAL_N
       const deal = dealType();
       const token = ++countToken;
       const button = $<HTMLButtonElement>("count-go");
+      // 단추가 꺼지면 초점이 body로 빠지므로, 키보드로 누른 경우 끝난 뒤 결과 문단으로 옮긴다.
+      const hadFocus = document.activeElement === button;
       button.disabled = true;
       $("count-hint").textContent = "세고 있습니다.";
       try {
@@ -389,6 +391,8 @@ import { DEAL_NEWS_DEAL_TYPES, DEAL_NEWS_GUARD, DEAL_NEWS_PROPERTY_KINDS, DEAL_N
           : `건수를 세지 못했습니다(${error instanceof Error ? error.message : "알 수 없는 오류"}). 동네 이름으로 올립니다.` };
       }
       update();
+      const result = $("count-result");
+      if (hadFocus && !result.hidden) result.focus();
     }
 
     // ── 지금 입력으로 판정·미리보기 ──
