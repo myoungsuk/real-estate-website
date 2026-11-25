@@ -79,8 +79,19 @@ const isEmptyMemoHeadLine = (line) => {
 };
 // 머리말만 있는 줄을 뺀 메모(앞뒤 공백 정리). 단추만 누르고 글을 쓰지 않은 메모는 빈 글자가 된다.
 // 빈 메모 알림(memoNeedText)과 AI에 보내는 메모(validateEmphasis)가 같이 써서, 화면이 비었다고 본 메모는 서버도 빈 메모로 받는다.
+// 다만 머리말 줄 바로 아래 줄에 글을 이어 쓴 꼴("학교:" 줄바꿈 "걸어서 5분")은 머리말을 남긴다. 빼면 무엇에 대한 글인지 AI가 알 수 없다.
+// 아래 줄이 비었거나 또 다른 머리말로 시작하면 이어 쓴 것이 아니므로 뺀다.
+const startsWithMemoHead = (line) => {
+  const cut = line.indexOf(":");
+  return cut > 0 && KNOWN_MEMO_HEADS.has(line.slice(0, cut).trim());
+};
 export function dropEmptyMemoHeads(value) {
-  return String(value ?? "").split("\n").filter((line) => !isEmptyMemoHeadLine(line)).join("\n").trim();
+  const lines = String(value ?? "").split("\n");
+  return lines.filter((line, index) => {
+    if (!isEmptyMemoHeadLine(line)) return true;
+    const below = (lines[index + 1] ?? "").trim();
+    return below !== "" && !startsWithMemoHead(below);
+  }).join("\n").trim();
 }
 const DIRECTIONS = new Set(["동향", "서향", "남향", "북향", "남동향", "남서향", "북동향", "북서향"]);
 const MOVE_IN_PARTS = new Set(["초순", "중순", "하순"]);

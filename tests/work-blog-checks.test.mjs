@@ -509,7 +509,19 @@ test("TK-188 빈 머리말: 머리말 단추만 누르고 글을 쓰지 않은 �
   assert.equal(dropEmptyMemoHeads("직접 본 것: "), "");
   assert.equal(dropEmptyMemoHeads("역·교통: \n학교: \n상권:"), "", "머리말 셋만 누른 메모");
   assert.equal(dropEmptyMemoHeads("역·교통: 가상역 걸어서 8분\n학교: \n상권: 가상시장"), "역·교통: 가상역 걸어서 8분\n상권: 가상시장");
-  assert.equal(dropEmptyMemoHeads("  학교 :  \n욕실을 새로 고침\n\n전망·채광: "), "욕실을 새로 고침", "앞뒤 빈칸·쌍점 앞 빈칸이 있어도 같은 줄로 봄");
+  assert.equal(dropEmptyMemoHeads("  학교 :  \n\n욕실을 새로 고침\n\n전망·채광: "), "욕실을 새로 고침", "앞뒤 빈칸·쌍점 앞 빈칸이 있어도 같은 줄로 봄");
+  // 머리말 줄 바로 아래 줄에 글을 이어 쓰면 머리말을 남긴다(빼면 "걸어서 5분"이 무엇까지인지 알 수 없음, 날개-2 검토 2026-11-25).
+  const below = "역·교통:\n가상역 걸어서 5분\n학교:\n가상초 걸어서 5분";
+  assert.equal(dropEmptyMemoHeads(below), below, "아래 줄에 쓴 글은 머리말과 함께 감");
+  assert.equal(dropEmptyMemoHeads("상권:\n- 가상마트 5분\n- 가상시장 3분"), "상권:\n- 가상마트 5분\n- 가상시장 3분");
+  assert.equal(dropEmptyMemoHeads("  학교 :  \n욕실을 새로 고침"), "학교 :  \n욕실을 새로 고침");
+  assert.equal(dropEmptyMemoHeads("학교:\n역·교통:\n가상역 걸어서 5분"), "역·교통:\n가상역 걸어서 5분", "아래 줄이 또 머리말이면 이어 쓴 것이 아님");
+  assert.equal(dropEmptyMemoHeads("학교:\n역·교통: 가상역 걸어서 5분"), "역·교통: 가상역 걸어서 5분");
+  assert.equal(dropEmptyMemoHeads("학교:\n\n가상초 걸어서 5분"), "가상초 걸어서 5분", "빈 줄을 건너뛴 글은 이어 쓴 것으로 보지 않음");
+  assert.equal(dropEmptyMemoHeads("학교:\n주차: 세대당 1대"), "학교:\n주차: 세대당 1대", "단추에 없는 머리말로 시작한 아래 줄은 글로 봄");
+  for (const memo of [below, "학교:\n역·교통:\n\n가상역", "직접 본 것: \n역·교통: 가상역 걸어서 8분\n학교: "]) {
+    assert.equal(dropEmptyMemoHeads(dropEmptyMemoHeads(memo)), dropEmptyMemoHeads(memo), "두 번 지나도 같은 값");
+  }
   assert.equal(dropEmptyMemoHeads("주차: \n참고:"), "주차: \n참고:", "단추에 없는 머리말은 사용자가 쓴 줄이라 그대로");
   assert.equal(dropEmptyMemoHeads("학교"), "학교", "쌍점이 없으면 머리말 줄이 아님");
   assert.equal(dropEmptyMemoHeads("학교: 학교:"), "학교: 학교:");
