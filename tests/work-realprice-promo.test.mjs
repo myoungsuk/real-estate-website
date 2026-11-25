@@ -39,6 +39,7 @@ import {
   receivedText,
   PROMO_HASHTAGS_MAX,
   PROMO_BASIS_LABEL,
+  officeShortLine,
   PROMO_PLACES,
   PROMO_TEXT_KINDS,
   hashtags,
@@ -139,15 +140,21 @@ test("P1-f 해시태그: 고정 4개 → 거래 종류 → #신고가 → 법정
   for (const tag of tags) assert.doesNotMatch(tag, /\d+동$|\d+호/u, `동 번호·호수 없음: ${tag}`);
 });
 
-test("TK-38 글 4가지(가상 거래 3건): 출처·받은 시각·계약일 기준·신고 기한·해제 제외·명시사항 5항목(스레드·인스타그램 글은 그림에만), 동 번호 0, 층 숫자 그대로, 금액이 자료와 같음", () => {
+test("TK-38 글 4가지(가상 거래 3건): 출처·받은 시각·계약일 기준·신고 기한·해제 제외·명시사항 5항목(스레드·인스타그램 글은 그림에만, 글 끝에 사무소 한 줄), 동 번호 0, 층 숫자 그대로, 금액이 자료와 같음", () => {
   const texts = promoTexts(input(THREE));
   assert.deepEqual(Object.keys(texts), ["threads", "instagram", "blog", "kakao"]);
   for (const [kind, text] of Object.entries(texts)) {
     const short = kind === "threads" || kind === "kakao";
     if (kind === "threads" || kind === "instagram") {
-      // 스레드·인스타그램 글은 출처·받은 시각·안내·흐름 기준·사무소 명시사항을 넣지 않는다(2026-11-25 사용자 요청·16:42:29 답, 늘 함께 올리는 카드 그림에만).
+      // 스레드·인스타그램 글은 출처·받은 시각·안내·흐름 기준·사무소 명시사항 5항목을 넣지 않는다(2026-11-25 사용자 요청·16:42:29 답, 늘 함께 올리는 카드 그림에만).
+      // 사무소는 상호·연락처·등록번호 한 줄만 글 끝 쪽에 한 번 둔다(16:57:36 사용자 "1"). 대표·소재지는 그림에만.
       assert.ok(!text.includes(PROMO_SOURCE) && !text.includes("출처") && !text.includes("받음") && !text.includes("받은 자료") && !text.includes("신고 기한") && !text.includes(PROMO_BASIS_LABEL), `${kind}: 출처·받은 시각·안내·흐름 기준 없음`);
-      for (const field of ["legalName", "address", "mobile", "registrationNumber", "representative"]) assert.ok(!text.includes(office[field]), `${kind}: 명시사항 ${field} 없음`);
+      for (const field of ["address", "representative"]) assert.ok(!text.includes(office[field]), `${kind}: 명시사항 ${field} 없음(그림에만)`);
+      assert.equal(officeShortLine(office), `${office.legalName} · ${office.mobile} · 등록번호 ${office.registrationNumber}`, "사무소 한 줄 꼴");
+      const lines = text.split("\n");
+      assert.equal(lines.filter((line) => line === officeShortLine(office)).length, 1, `${kind}: 사무소 한 줄 한 번`);
+      for (const field of ["legalName", "mobile", "registrationNumber"]) assert.equal(text.split(office[field]).length - 1, 1, `${kind}: ${field}는 그 한 줄에만`);
+      assert.equal(lines.at(kind === "threads" ? -1 : -3), officeShortLine(office), `${kind}: 끝(인스타그램은 해시태그 앞)`);
     } else {
       assert.ok(text.includes(PROMO_SOURCE), `${kind}: 출처`);
       assert.ok(text.includes(short ? "11. 20. 09:50 받음" : "2026. 11. 20. 09:50 받은 자료"), `${kind}: 받은 시각(한국 시각)`);
@@ -175,6 +182,8 @@ test("TK-38 글 4가지(가상 거래 3건): 출처·받은 시각·계약일 �
     "- 가상들마을 매매 6억 1,000만 원, 전용 101.62㎡ 지하 1층, 계약 10. 30.",
     "",
     PROMO_HIGH_RULE_SHORT,
+    "",
+    officeShortLine(office),
   ].join("\n"));
   assert.ok(textCount("threads", texts.threads).count <= PROMO_LIMITS.threads, "스레드 500자 안");
   assert.ok(!textCount("instagram", texts.instagram).over, "인스타그램 2,200자·해시태그 30개 안");
@@ -240,32 +249,38 @@ test("DEC-WT-23: 명시사항 5항목이 하나라도 비면 만들지 않는다
 test("스레드 500자: 1건은 자세히, 여러 건은 한 줄씩(6건도 들어감), 넘으면 거래 줄을 '그림에 정리' 한 줄로 줄인다", () => {
   const one = promoTexts(input([HIGH])).threads;
   assert.match(one, /^\[대전 동구 아파트 실거래가\] 가상숲1단지 매매 신고가\n\n가상숲1단지\(천동\) 매매 5억 2,000만 원\n전용 84\.97㎡ · 15층 · 계약 2026\. 11\. 12\.\n신고가 · 같은 단지·같은 전용면적 앞선 최고 4억 9,500만 원/u);
-  assert.ok(one.endsWith(`\n\n${PROMO_HIGH_RULE}`), "1건 신고가: 끝은 판정 기준 한 줄");
-  assert.equal(promoTexts(input([PLAIN])).threads, "[대전 동구 아파트 실거래가] 가상들마을 매매\n\n가상들마을(신흥동) 매매 6억 1,000만 원\n전용 101.62㎡ · 지하 1층 · 계약 2026. 10. 30.", "1건 신고가 아님: 머리 줄과 거래뿐");
+  assert.ok(one.endsWith(`\n\n${PROMO_HIGH_RULE}\n\n${officeShortLine(office)}`), "1건 신고가: 판정 기준 한 줄 → 사무소 한 줄");
+  assert.equal(promoTexts(input([PLAIN])).threads, "[대전 동구 아파트 실거래가] 가상들마을 매매\n\n가상들마을(신흥동) 매매 6억 1,000만 원\n전용 101.62㎡ · 지하 1층 · 계약 2026. 10. 30.\n\n리더스시티행복한공인중개사사무소 · 010-2790-8675 · 등록번호 30110-2023-00028", "1건 신고가 아님: 머리 줄과 거래, 사무소 한 줄");
   // 6건: 출처·명시사항을 뺀 뒤로는 14자 단지 이름 여섯 건도 한 줄씩 들어간다(그 전에는 '그림에 정리'로 줄었다).
   const six = [HIGH, HIGH2, PLAIN, MONTHLY, JEONSE, PRESALE].map((item) => ({ ...item, aptName: `${item.aptName}센트럴파크리버뷰` }));
   const sixLines = promoTexts(input(six)).threads.split("\n");
   assert.ok([...sixLines.join("\n")].length <= PROMO_LIMITS.threads, `${[...sixLines.join("\n")].length}자`);
   assert.deepEqual([sixLines[1], sixLines.filter((line) => line.startsWith("- ")).length, sixLines.slice(2, 8).every((line) => line.startsWith("- "))], ["", 6, true], "머리 줄 → 빈 줄 → 거래 6줄");
   assert.ok(sixLines[2].startsWith("- 가상숲1단지센트럴파크리버뷰 매매 5억 2,000만 원") && sixLines[5].includes("보증금 5,000만 / 월 85만 원"), "거래 줄에 금액");
-  // 한 줄씩이 500자를 넘으면 먼저 거래 줄을 짧게('전용'·'계약' 낱말만 빼고 숫자는 그대로) 한다: 20자 단지 이름 월세 여섯 건(지하 층)도 한 줄씩 들어간다.
-  const name20 = "가상더샵센트럴파크리버뷰포레스트3단지";
-  const tight = [1, 2, 3, 4, 5, 6].map((n) => ({ ...MONTHLY, tradeKey: key("rent", "202611", 30 + n), aptName: name20, areaM2: 101.62, floor: -1, dealDate: `2026-11-1${n}`, depositWon: 150_000_000, monthlyRentWon: 1_250_000 }));
+  // 한 줄씩이 500자를 넘으면 먼저 거래 줄을 짧게('전용'·'계약' 낱말만 빼고 숫자는 그대로) 한다: 10자 단지 이름 월세 여섯 건(지하 층)은 짧은 줄로 들어간다.
+  // (사무소 한 줄을 더한 뒤로 이 꼴의 짧은 줄 한계는 월세 12자·11억 원대 신고가 매매 11자다. 그보다 길면 '그림에 정리'.)
+  const name10 = "가상센트럴파크3단지";
+  const tight = [1, 2, 3, 4, 5, 6].map((n) => ({ ...MONTHLY, tradeKey: key("rent", "202611", 30 + n), aptName: name10, areaM2: 101.62, floor: -1, dealDate: `2026-11-1${n}`, depositWon: 150_000_000, monthlyRentWon: 1_250_000 }));
   const tightText = promoTexts(input(tight)).threads;
   const tightLines = tightText.split("\n").filter((line) => line.startsWith("- "));
   assert.ok([...tightText].length <= PROMO_LIMITS.threads, `${[...tightText].length}자`);
   assert.ok(tightLines.length === 6 && !tightText.includes("그림에 정리"), "짧은 거래 줄 6개");
-  assert.equal(tightLines[0], `- ${name20} 월세 보증금 1억 5,000만 / 월 125만 원, 101.62㎡ 지하 1층, 11. 11.`, "숫자는 그대로, '전용'·'계약'만 뺌");
+  assert.equal(tightLines[0], `- ${name10} 월세 보증금 1억 5,000만 / 월 125만 원, 101.62㎡ 지하 1층, 11. 11.`, "숫자는 그대로, '전용'·'계약'만 뺌");
   // 같은 이름의 매매 신고가 여섯 건도 짧은 줄 + 판정 기준 한 줄로 들어간다.
-  const tightHigh = tight.map((item) => ({ ...HIGH, tradeKey: item.tradeKey.replace("rent", "sale"), aptName: name20, areaM2: 101.62, floor: 15, dealDate: item.dealDate, priceWon: 1_125_500_000, prevMaxWon: 1_098_000_000 }));
+  const tightHigh = tight.map((item) => ({ ...HIGH, tradeKey: item.tradeKey.replace("rent", "sale"), aptName: name10, areaM2: 101.62, floor: 15, dealDate: item.dealDate, priceWon: 1_125_500_000, prevMaxWon: 1_098_000_000 }));
   const tightHighText = promoTexts(input(tightHigh)).threads;
   assert.ok([...tightHighText].length <= PROMO_LIMITS.threads && tightHighText.split("\n").filter((line) => line.startsWith("- ")).length === 6, `${[...tightHighText].length}자`);
-  assert.ok(tightHighText.endsWith(`\n\n${PROMO_HIGH_RULE_SHORT}`), "신고가 판정 기준 한 줄은 남음");
+  assert.ok(tightHighText.endsWith(`\n\n${PROMO_HIGH_RULE_SHORT}\n\n${officeShortLine(office)}`), "신고가 판정 기준 한 줄과 사무소 한 줄은 남음");
+  // 20자 단지 이름 매매 신고가 여섯 건(가장 긴 꼴)은 사무소 한 줄을 넣으면 짧은 줄로도 넘어 '그림에 정리'로 줄고, 사무소 한 줄은 그래도 남는다.
+  const longest = tightHigh.map((item) => ({ ...item, aptName: "가상더샵센트럴파크리버뷰포레스트3단지" }));
+  const longestText = promoTexts(input(longest)).threads;
+  assert.ok(longestText.includes("그림에 정리") && longestText.endsWith(`\n\n${PROMO_HIGH_RULE_SHORT}\n\n${officeShortLine(office)}`) && [...longestText].length <= PROMO_LIMITS.threads, `${[...longestText].length}자`);
   // 그래도 500자를 넘는 긴 단지 이름(40자) 여섯 건은 거래 줄 대신 '그림에 정리' 한 줄로 줄인다(자르지 않음).
   const long = six.map((item) => ({ ...item, aptName: `${item.aptName}${"가".repeat(26)}` }));
   const threads = promoTexts(input(long)).threads;
   assert.ok([...threads].length <= PROMO_LIMITS.threads, `${[...threads].length}자`);
   assert.match(threads, /거래 6건\(계약일 2026\. 10\. 30\. ~ 2026\. 11\. 12\.\)은 그림에 정리했습니다\./u);
+  assert.ok(threads.endsWith(officeShortLine(office)), "줄인 글에도 사무소 한 줄");
   assert.ok(!threads.includes("- "), "줄인 글에는 거래 줄이 없음");
   assert.equal(textCount("threads", "가".repeat(501)).over, true);
   assert.equal(textCount("instagram", Array.from({ length: 31 }, (_, n) => `#t${n}`).join(" ")).over, true, "해시태그 31개");
@@ -343,16 +358,17 @@ test("스레드 500자 경계(2026-11-25 검토 권함): 딱 500자면 그 단�
   for (let length = 1; length <= 300 && isFull(promoTexts(input(rows(length))).threads); length += 1) edge = length;
   assert.ok(edge > 1, "한 줄씩 글이 들어가는 길이가 있음");
   const at500 = promoTexts(input(rows(edge))).threads;
-  assert.equal([...at500].length, PROMO_LIMITS.threads, "가장 긴 한 줄씩 글은 딱 500자(그대로 씀)");
+  assert.equal([...at500].length, PROMO_LIMITS.threads, "가장 긴 한 줄씩 글은 사무소 한 줄까지 딱 500자(그대로 씀)");
+  assert.ok(at500.endsWith(`\n\n${officeShortLine(office)}`), "500자에 사무소 한 줄이 들어 있음");
   assert.equal([...promoTexts(input(rows(edge - 1))).threads].length, PROMO_LIMITS.threads - 1, "한 자 짧으면 499자");
   const at501 = promoTexts(input(rows(edge + 1))).threads;
   assert.ok(!isFull(at501) && !at501.includes("그림에 정리"), "501자가 되는 글은 짧은 줄 단계로");
   assert.equal(at501.split("\n").filter((line) => line.startsWith("- ")).length, 6, "짧은 줄도 거래 6줄");
-  assert.ok([...at501].length < PROMO_LIMITS.threads, `${[...at501].length}자`);
+  assert.ok([...at501].length < PROMO_LIMITS.threads && at501.endsWith(`\n\n${officeShortLine(office)}`), `${[...at501].length}자, 사무소 한 줄 그대로`);
 });
 
-test("올릴 곳마다 글 끝에 붙일 것(PROMO_TEXT_TAIL): 스레드·인스타그램은 출처·명시사항을 빼고(그림에만), 블로그·카카오톡은 그대로. 신고가 판정 기준은 글 4가지에 남는다", () => {
-  assert.deepEqual(PROMO_TEXT_TAIL, { threads: { source: false, office: false }, instagram: { source: false, office: false }, blog: { source: true, office: true }, kakao: { source: true, office: true } });
+test("올릴 곳마다 글 끝에 붙일 것(PROMO_TEXT_TAIL): 스레드·인스타그램은 출처·명시사항 5항목을 빼고(그림에만) 사무소 한 줄만, 블로그·카카오톡은 그대로. 신고가 판정 기준은 글 4가지에 남는다", () => {
+  assert.deepEqual(PROMO_TEXT_TAIL, { threads: { source: false, office: "line" }, instagram: { source: false, office: "line" }, blog: { source: true, office: true }, kakao: { source: true, office: true } });
   assert.deepEqual(Object.keys(PROMO_TEXT_TAIL).sort(), PROMO_TEXT_KINDS.map(([kind]) => kind).sort(), "글 종류와 같은 4가지");
   assert.ok(Object.isFrozen(PROMO_TEXT_TAIL) && Object.isFrozen(PROMO_TEXT_TAIL.threads), "표는 바꿀 수 없음");
   const texts = promoTexts(input([HIGH, PLAIN]));
@@ -361,7 +377,9 @@ test("올릴 곳마다 글 끝에 붙일 것(PROMO_TEXT_TAIL): 스레드·인스
     assert.equal(text.includes("국토교통부"), on.source, `${kind} 출처`);
     assert.equal(text.includes("09:50"), on.source, `${kind} 받은 시각`);
     assert.equal(/신고 기한|30일/u.test(text), on.source, `${kind} 신고 기한`);
-    assert.equal(text.includes(office.mobile) && text.includes(office.registrationNumber), on.office, `${kind} 사무소 명시사항`);
+    assert.equal(text.includes(office.mobile) && text.includes(office.registrationNumber), on.office !== false, `${kind} 사무소 연락처·등록번호`);
+    assert.equal(text.includes(office.address) && text.includes(office.representative), on.office === true, `${kind} 사무소 소재지·대표(5항목 전부일 때만)`);
+    assert.equal(text.split("\n").includes(officeShortLine(office)), on.office === "line", `${kind} 사무소 한 줄`);
     assert.ok(text.includes("2006년 1월 이후"), `${kind} 신고가 판정 기준`);
   }
   // 글에서 뺀 출처·명시사항은 그림에 장마다 있다(한 곳에는 꼭 나옴).
@@ -383,9 +401,9 @@ test("올릴 곳마다 글 끝에 붙일 것(PROMO_TEXT_TAIL): 스레드·인스
   assert.ok(on.threads.includes(`출처: ${PROMO_SOURCE}, 11. 20. 09:50 받음. ${PROMO_NOTICE_SHORT}`) && on.threads.includes(office.mobile), "스레드를 켜면 출처 줄·명시사항");
   assert.ok([...on.threads].length <= PROMO_LIMITS.threads, "켜도 500자 안");
   for (const kind of ["instagram", "blog", "kakao"]) assert.equal(on[kind], texts[kind], `${kind}: 다른 글은 그대로`);
-  // 인스타그램: 남는 것은 거래 글·신고가 판정 기준·해시태그뿐이고, 표를 켜면 그 전(2026-11-25 앞) 글처럼 출처·흐름 기준·명시사항이 붙는다.
+  // 인스타그램: 남는 것은 거래 글·신고가 판정 기준·사무소 한 줄·해시태그뿐이고, 표를 켜면 그 전(2026-11-25 앞) 글처럼 출처·흐름 기준·명시사항이 붙는다.
   const insta = texts.instagram.split("\n");
-  assert.deepEqual(insta.slice(-3), [PROMO_HIGH_RULE, "", hashtags([HIGH, PLAIN]).join(" ")], "인스타그램 끝: 판정 기준 → 빈 줄 → 해시태그");
+  assert.deepEqual(insta.slice(-5), [PROMO_HIGH_RULE, "", officeShortLine(office), "", hashtags([HIGH, PLAIN]).join(" ")], "인스타그램 끝: 판정 기준 → 사무소 한 줄 → 해시태그");
   const instaOn = promoTexts(input([HIGH, PLAIN]), { ...PROMO_TEXT_TAIL, instagram: { source: true, office: true } }).instagram;
   assert.ok(instaOn.includes(`출처: ${PROMO_SOURCE}, 2026. 11. 20. 09:50 받은 자료`) && instaOn.includes(office.mobile) && instaOn.endsWith(hashtags([HIGH, PLAIN]).join(" ")), "인스타그램을 켜면 출처·명시사항 뒤에 해시태그");
   assert.ok(!promoTexts(input([PLAIN])).instagram.includes("2006년 1월 이후"), "신고가가 없으면 인스타그램에도 판정 기준 줄 없음");

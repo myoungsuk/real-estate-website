@@ -812,9 +812,12 @@ test("P1-e TK-39 홍보물 화면: ids로만 다시 읽고 카드 PNG 1080×1350
     expect(texts[value], `${name}: 층 숫자 그대로`).toContain("지하 1층");
     expect(texts[value], `${name}: 동 번호 0`).not.toMatch(/103동/u);
     if (value === "threads" || value === "instagram") {
-      // 스레드·인스타그램 글은 출처·받은 시각·사무소 명시사항을 넣지 않는다(2026-11-25 사용자 요청 "출처랑 명함부분은 … 표에만"·16:42:29 답, 카드 그림에만).
+      // 스레드·인스타그램 글은 출처·받은 시각·사무소 명시사항 5항목을 넣지 않는다(2026-11-25 사용자 요청 "출처랑 명함부분은 … 표에만"·16:42:29 답, 카드 그림에만).
+      // 사무소는 상호·연락처·등록번호 한 줄만 둔다(16:57:36 사용자 "1"). 소재지는 그림에만.
       expect(texts[value], `${name}: 출처·받은 시각 없음`).not.toMatch(/국토교통부|받음|받은 자료/u);
-      expect(texts[value], `${name}: 명시사항 없음`).not.toContain("010-2790-8675");
+      expect(texts[value].split("\n"), `${name}: 사무소 한 줄`).toContain("리더스시티행복한공인중개사사무소 · 010-2790-8675 · 등록번호 30110-2023-00028");
+      expect(texts[value].split("010-2790-8675").length - 1, `${name}: 연락처는 한 번`).toBe(1);
+      expect(texts[value], `${name}: 소재지 없음`).not.toContain("안샘로14번길");
       continue;
     }
     expect(texts[value], `${name}: 받은 시각(한국 12:10)`).toMatch(/11\. 19\. 12:10 받/u);

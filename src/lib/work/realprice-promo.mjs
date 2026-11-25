@@ -238,15 +238,22 @@ const headLine = (items) => `[${promoAreaLabel(items)}] ${items.length === 1 ? p
 // ── 글 4가지 ──
 
 // 올릴 곳마다 글 끝에 붙일 것(2026-11-25 사용자 요청 "출처랑 명함부분은 한군데만 나오면 되니까 표에만 나오게끔 고쳐줘").
-// source: 출처·받은 시각·계약일 기준 안내 줄과 흐름 기준 줄, office: 사무소 명시사항. false면 그 글에는 넣지 않는다(카드 그림 아래 칸에는 늘 있다, promoCards).
-// 스레드와 인스타그램(2026-11-25 16:42:29 사용자 답 "전부 추천대로")은 뺐다. 두 곳은 늘 카드 그림을 함께 올린다는 전제다(그림 없이 글만 올리면 출처·명시사항이 빠진다).
-// 블로그·카카오톡은 글만 따로 읽힐 수 있어 그대로 둔다. 빼려면 이 표의 그 줄만 false로 바꾼다. 신고가 판정 기준 줄(과 인스타그램 해시태그)은 이 표와 상관없이 남는다.
+// source: 출처·받은 시각·계약일 기준 안내 줄과 흐름 기준 줄. false면 그 글에는 넣지 않는다(카드 그림 아래 칸에는 늘 있다, promoCards).
+// office: 사무소 명시사항. true = 5항목 전부(블로그 5줄·카카오톡 한 줄, 그 전 글 그대로), "line" = 상호·연락처·등록번호 한 줄(officeShortLine), false = 넣지 않음.
+// 스레드와 인스타그램(2026-11-25 16:42:29 사용자 답 "전부 추천대로")은 출처를 빼고, 사무소는 한 줄만 남긴다(16:57:36 사용자 "1").
+// 두 곳은 늘 카드 그림을 함께 올린다는 전제다(5항목 전부·출처는 그림에 있다). 블로그·카카오톡은 글만 따로 읽힐 수 있어 그대로 둔다.
+// 신고가 판정 기준 줄(과 인스타그램 해시태그)은 이 표와 상관없이 남는다.
 export const PROMO_TEXT_TAIL = Object.freeze({
-  threads: Object.freeze({ source: false, office: false }),
-  instagram: Object.freeze({ source: false, office: false }),
+  threads: Object.freeze({ source: false, office: "line" }),
+  instagram: Object.freeze({ source: false, office: "line" }),
   blog: Object.freeze({ source: true, office: true }),
   kakao: Object.freeze({ source: true, office: true }),
 });
+// 사무소 한 줄: 카카오톡 글의 5항목 한 줄에서 대표·소재지를 뺀 꼴. 값은 명시사항 칸(office, ad-disclosure.mjs OFFICE_DISCLOSURE_FIELDS의 칸 이름)을 그대로 쓴다.
+// 칸이 비면 글 4가지를 만들지 않는 규칙(P1-e, promoBlockReason)은 그대로다.
+export const officeShortLine = (office) => `${office.legalName} · ${office.mobile} · 등록번호 ${office.registrationNumber}`;
+// 스레드·인스타그램 글 끝 사무소 줄: "line"이면 한 줄, true면 그림 아래 칸과 같은 3줄, false면 없음.
+const officeTail = (office, mode) => (mode === "line" ? [officeShortLine(office)] : mode ? disclosureLines(office) : []);
 // 짧은 출처 줄(카카오톡 글, 그리고 표에서 켰을 때의 스레드 글). 카드 그림은 연도까지 적은 두 줄을 따로 쓴다(promoCards의 source).
 const shortSource = (receivedAt) => `출처: ${PROMO_SOURCE}, ${shortReceived(receivedAt)}. ${PROMO_NOTICE_SHORT}`;
 
@@ -266,12 +273,14 @@ function fullText({ items, receivedAt, office, insights }, tail) {
   });
   const notes = [...(tail.source ? [`출처: ${PROMO_SOURCE}, ${receivedText(receivedAt)} 받은 자료`, PROMO_NOTICE, ...basisLines(items, insights)] : []), ...(anyHigh(items) ? [PROMO_HIGH_RULE] : [])];
   if (notes.length > 0) lines.push("", ...notes);
-  if (tail.office) lines.push("", ...disclosureLines(office));
+  const officeLines = officeTail(office, tail.office);
+  if (officeLines.length > 0) lines.push("", ...officeLines);
   return lines.join("\n");
 }
 
 // 스레드: 머리 줄 → 빈 줄 → 1건은 자세히, 여러 건은 한 줄씩. 500자를 넘으면 거래 줄을 짧게(tightLine), 그래도 넘으면 거래 줄 대신 "그림에 정리" 한 줄로 줄인다.
-// 2026-11-25부터 출처·흐름 기준·사무소 명시사항은 글에 넣지 않고 카드 그림에만 둔다(PROMO_TEXT_TAIL.threads). 그래서 6건도 한 줄씩 들어간다.
+// 2026-11-25부터 출처·흐름 기준·사무소 명시사항 5항목은 글에 넣지 않고 카드 그림에만 두며, 글 끝에는 사무소 한 줄만 둔다(PROMO_TEXT_TAIL.threads).
+// 사무소 한 줄은 모든 단계의 끝(end)에 붙으므로 어느 단계에서도 빠지지 않고, 500자는 그 줄까지 넣고 잰다.
 // 표를 다시 켰을 때: 흐름 기준 줄은 거래 줄보다 뒤로 미룬다(각 단계에서 기준 줄을 넣어 500자 안이면 넣고, 넘으면 그 단계는 기준 줄 없이 본다).
 function threadsText(input, tail) {
   const { items, receivedAt, office } = input;
@@ -279,7 +288,8 @@ function threadsText(input, tail) {
   const plain = { ...input, insights: undefined };
   const end = (from) => {
     const notes = [...(tail.source ? [shortSource(receivedAt), ...basisLines(items, from.insights)] : []), ...(anyHigh(items) ? [PROMO_HIGH_RULE_SHORT] : [])];
-    return [...(notes.length > 0 ? ["", ...notes] : []), ...(tail.office ? ["", ...disclosureLines(office)] : [])];
+    const officeLines = officeTail(office, tail.office);
+    return [...(notes.length > 0 ? ["", ...notes] : []), ...(officeLines.length > 0 ? ["", ...officeLines] : [])];
   };
   const compact = (from, line = compactLine) => [headLine(items), "", ...items.map(line), ...end(from)].join("\n");
   const summary = (from) => [headLine(items), `거래 ${items.length}건(${dealRange(items)})은 그림에 정리했습니다.`, ...end(from)].join("\n");
@@ -287,7 +297,7 @@ function threadsText(input, tail) {
   return tries.find(fits) ?? summary(plain);
 }
 
-// 인스타그램: 자세한 글(신고가가 있으면 판정 기준 한 줄) → 빈 줄 → 해시태그. 출처·흐름 기준·명시사항은 함께 올리는 카드 그림에 있다(PROMO_TEXT_TAIL.instagram).
+// 인스타그램: 자세한 글(신고가가 있으면 판정 기준 한 줄) → 빈 줄 → 사무소 한 줄 → 빈 줄 → 해시태그. 출처·흐름 기준·명시사항 5항목은 함께 올리는 카드 그림에 있다(PROMO_TEXT_TAIL.instagram).
 function instagramText(input, tail) {
   return [fullText(input, tail), "", hashtags(input.items).join(" ")].join("\n");
 }
@@ -422,7 +432,7 @@ export function promoUpText(item) {
 // 계약일 기준·신고 기한 안내·해제 거래 제외)과 흐름 기준 줄(basis, 그 장에 흐름을 그린 거래가 있을 때만)을 장마다 둔다(2026-11-25 사용자 요청
 // "출처랑 명함부분은 … 표에만 나오게끔". 2026-11-24 "완전히 뺌"으로 뺐던 출처 상자와 같은 날 뺀 흐름 기준 줄을 작은 글로 되돌림).
 // 신고가 판정 기준은 그림에 넣지 않고 글 4가지에 남는다(P1-e 받은 시각 막기도 그대로). 글의 출처·흐름 기준 줄(basisLines)·명시사항은 PROMO_TEXT_TAIL을 따르므로
-// 지금은 블로그·카카오톡 글에만 있고, 스레드·인스타그램 글에는 이 그림에만 있다(두 곳은 늘 그림을 함께 올린다는 전제, 2026-11-25 16:42:29 사용자 답).
+// 지금은 블로그·카카오톡 글에만 있고, 스레드·인스타그램 글에는 이 그림에만 있다(글 끝에는 사무소 한 줄만, 두 곳은 늘 그림을 함께 올린다는 전제, 2026-11-25 16:42:29·16:57:36 사용자 답).
 // insights: 거래 ID → 거래 흐름 응답 한 개(없거나 못 받았으면 빈 값). basis는 그 장에 실제로 그린 흐름 항목만 적는다.
 export function promoCards({ items, receivedAt, office, insights = {}, style = PROMO_STYLE_DEFAULT }) {
   if (promoBlockReason({ items, receivedAt, office })) return [];
