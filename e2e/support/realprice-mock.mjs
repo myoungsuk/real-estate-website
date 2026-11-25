@@ -70,13 +70,58 @@ export function insightOf(id) {
   return { tradeKey: id, available: true, series, prev: { dealDate: "2026-10-02", floor: 9, priceWon: 390_000_000 }, prevMaxWon, ratioPct: Math.round((item.priceWon * 1000) / prevMaxWon) / 10, recent3m: 3, households: null };
 }
 export const defaultInsights = (ids) => envelope({ items: ids.map(insightOf), missing: [], basis: { months: 12, recentMonths: 3 }, recordHighReady: true, warnings: [] });
+// 단지 상세 칸(2026-11-25) 가짜 응답: 단지마다 면적 두 가지(59.92㎡·84.97㎡). 84.97㎡의 최근 거래는 목록의 그 단지 거래이고, 59.92㎡의 최근 거래는 목록에 없는 거래다.
+export function complexOf(params) {
+  const aptSeq = params.get("apt");
+  const item = [...firstPage, ...secondPage].find((trade) => trade.aptSeq === aptSeq);
+  const areaM2 = params.get("area") === "59.92" ? 59.92 : 84.97;
+  const months = Array.from({ length: 36 }, (_, index) => {
+    const at = 2023 * 12 + 11 + index;
+    return `${Math.floor(at / 12)}-${String((at % 12) + 1).padStart(2, "0")}`;
+  });
+  const base = areaM2 === 84.97 ? 360_000_000 : 250_000_000;
+  const series = months.map((ym, index) => ({ ym, medianWon: index % 4 === 2 ? null : base + Math.round(Math.sin(index / 4) * 12 + index) * 1_000_000, count: index % 4 === 2 ? 0 : 2 }));
+  const latestKey = areaM2 === 84.97 && item ? item.tradeKey : `sale:202610:${String(800 + Number(aptSeq.slice(1))).padStart(20, "0")}:1`;
+  const latestPrice = areaM2 === 84.97 && item?.priceWon ? item.priceWon : 268_000_000;
+  const recent = [
+    { tradeKey: latestKey, dealDate: areaM2 === 84.97 && item ? item.dealDate : "2026-10-21", floor: 10, priceWon: latestPrice, dealingGbn: "broker", cancelled: false, recordHigh: areaM2 === 84.97 && item?.recordHigh === true },
+    { tradeKey: "sale:202610:00000000000000000901:1", dealDate: "2026-10-12", floor: 7, priceWon: latestPrice + 30_000_000, dealingGbn: "broker", cancelled: true, recordHigh: false },
+    { tradeKey: "sale:202609:00000000000000000902:1", dealDate: "2026-09-03", floor: 3, priceWon: latestPrice - 20_000_000, dealingGbn: "direct", cancelled: false, recordHigh: false },
+    ...Array.from({ length: 6 }, (_, index) => ({ tradeKey: `sale:202608:${String(910 + index).padStart(20, "0")}:1`, dealDate: `2026-0${8 - Math.floor(index / 2)}-${20 - index}`, floor: 4 + index, priceWon: latestPrice - (index + 1) * 4_000_000, dealingGbn: "broker", cancelled: false, recordHigh: false })),
+  ];
+  return {
+    available: true,
+    complex: { aptSeq, aptName: item?.aptName ?? "가상 단지", umdName: item?.umdName ?? "천동", buildYear: 2020, households: aptSeq === "A1" ? 2135 : null },
+    areas: [{ areaM2: 59.92, tradeCount: 41, lastDealDate: "2026-10-21" }, { areaM2: 84.97, tradeCount: 128, lastDealDate: "2026-11-27" }],
+    area: {
+      areaM2,
+      tradeCount: areaM2 === 84.97 ? 128 : 41,
+      latest: { tradeKey: latestKey, dealDate: recent[0].dealDate, floor: 10, priceWon: latestPrice, dealingGbn: "broker", recordHigh: recent[0].recordHigh },
+      prev: { dealDate: "2026-09-03", floor: 9, priceWon: latestPrice - 15_000_000 },
+      prevMaxWon: latestPrice - 5_000_000,
+      ratioPct: Math.round((latestPrice * 1000) / (latestPrice - 5_000_000)) / 10,
+      ratioSkip: null,
+      recent3m: 7,
+      typeMaxWon: latestPrice,
+      typeMaxDate: recent[0].dealDate,
+      bandM2: Math.floor(areaM2),
+      bandMaxWon: latestPrice + 12_000_000,
+      bandTypes: 2,
+      series,
+      recent,
+    },
+    basis: { months: 36, recentMonths: 3, recentMax: 20 },
+    recordHighReady: true,
+    warnings: [],
+  };
+}
 export const failure = (status, code, extra = {}) => ({ status, json: { ok: false, error: { code, message: "시험 오류", retryable: false, ...extra }, requestId: "test" } });
 
 // 늘 같은 시각에서 보이게 시계를 고정하고, 실제 서버는 부르지 않는다(맞지 않는 관리 API는 503).
-export async function setup(page, { width = 390, session = { realpriceEnabled: true }, status = okStatus, trades, watch, complexes, put, refresh, insights } = {}) {
+export async function setup(page, { width = 390, session = { realpriceEnabled: true }, status = okStatus, trades, watch, complexes, put, refresh, insights, complex } = {}) {
   await page.clock.setFixedTime(NOW);
   await page.setViewportSize({ width, height: 900 });
-  const calls = { trades: [], complexes: [], puts: [], refresh: [], session: 0, watchGets: 0, insights: [] };
+  const calls = { trades: [], complexes: [], puts: [], refresh: [], session: 0, watchGets: 0, insights: [], complex: [] };
   await page.route("**/api/admin/**", (route) => route.fulfill(failure(503, "TEST_OFFLINE")));
   await page.route(`${WORK}/public-tools/session`, (route) => {
     calls.session += 1;
@@ -114,6 +159,12 @@ export async function setup(page, { width = 390, session = { realpriceEnabled: t
     const q = new URL(route.request().url()).searchParams.get("q");
     calls.complexes.push(q);
     return route.fulfill(envelope({ items: complexes ? complexes(q) : [] }));
+  });
+  // 단지 상세(complex)는 complexes 찾기와 이름이 겹치므로 주소 끝으로 가른다.
+  await page.route((url) => url.pathname.endsWith("/api/admin/v1/work/realprice/complex"), (route) => {
+    const params = new URL(route.request().url()).searchParams;
+    calls.complex.push(params.toString());
+    return route.fulfill(complex ? complex(params, calls.complex.length) : envelope(complexOf(params)));
   });
   await page.route(`${WORK}/realprice/refresh`, (route) => {
     calls.refresh.push({ body: route.request().postDataJSON(), headers: route.request().headers() });
