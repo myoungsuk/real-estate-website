@@ -175,10 +175,11 @@ test("단지 상세 입력 검사: apt 없음·형식 틀림·'*'·두 번·area
   const { database, db } = freshDb({ d1Meta: true });
   markAllMonthsOk(database);
   const env = stagePEnv(db);
-  for (const query of ["", "apt=", "apt=가나", "apt=*", "apt=A1&apt=A2", "apt=A1&area=84.975", "apt=A1&area=0", "apt=A1&area=abc", "apt=A1&area=84&area=59", "apt=A1&ids=x", "apt=zzzzzzzzzzzzzzzzzzzzzz"]) {
+  for (const query of ["", "apt=", "apt=가나", "apt=*", "apt=A1&apt=A2", "apt=A1&area=84.975", "apt=A1&area=0", "apt=A1&area=xyz", "apt=A1&area=84&area=59", "apt=A1&ids=x", "apt=zzzzzzzzzzzzzzzzzzzzzz"]) {
     const result = await detail(env, query);
     assert.deepEqual([result.status, result.json.error.code], [400, "VALIDATION_FAILED"], query);
-    assert.doesNotMatch(JSON.stringify(result.json), /가나|zzzzzzzz|abc/u, "값을 돌려주지 않음");
+    // 응답의 요청 ID는 무작위 UUID(0-9·a-f·줄표)라, 대조 글자는 UUID에 나올 수 없는 것만 쓴다('abc'는 우연히 들어갈 수 있었음).
+    assert.doesNotMatch(JSON.stringify(result.json), /가나|zzzzzzzz|xyz/u, "값을 돌려주지 않음");
   }
   assert.equal((await detail(env, "apt=A1", { method: "POST", body: {} })).status, 405);
   const off = await detail(workEnv(db, { WORK_TOOLS_ENABLED: undefined, WORK_REALPRICE_ENABLED: undefined }), "apt=A1");

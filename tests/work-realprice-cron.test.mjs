@@ -580,6 +580,28 @@ test("TK-135: 하루 호출 8,000번·쓰기 30만 행에 닿으면 최근 4개�
   assert.deepEqual([monthRow(mid.database, "sale", "202001").attempts, monthRow(mid.database, "sale", "202001").last_success_at], [0, null]);
 });
 
+test("TK-135(실행 중 호출 예산): 시작할 때는 8,000번 아래였어도 받는 중에 닿으면 그 뒤 과거 채우기 달은 시작하지 않고 RT_CALL_BUDGET으로 남긴다", async () => {
+  const { database, db } = freshDb({ d1Meta: true });
+  await seedAllDone(db, database);
+  makeDue(database, "sale", "202611");
+  for (const ymd of ["202001", "202002", "202003"]) makeDue(database, "sale", ymd, { neverFetched: true });
+  // 오늘 7,998번에서 시작: 최근 달(1번) → 7,999번이라 과거 달 하나(202003, 최근 달부터)는 받고, 8,000번에 닿아 나머지 두 달은 시작하지 않는다.
+  setUsage(database, "2026-11-17", { calls: 7_998 });
+  const { fetcher, picked } = portal();
+  const log = [];
+  const stopped = await cron(cronEnv(db), { fetcher, log });
+  assert.deepEqual([stopped.outcome, stopped.code, stopped.months, picked()], ["partial", "RT_CALL_BUDGET", 2, ["sale:202611", "sale:202003"]]);
+  assert.equal(rows(database, "SELECT api_calls FROM rt_daily_usage WHERE day_utc = '2026-11-17'")[0].api_calls, 8_000);
+  for (const ymd of ["202001", "202002"]) {
+    const month = monthRow(database, "sale", ymd);
+    assert.deepEqual([month.status, month.attempts, month.last_success_at], ["pending", 0, null], `${ymd}은 시작 표시 없이 다음 차례로`);
+  }
+  // 다음 차례에는 시작할 때 이미 8,000번이라 받지 않고 경고만 남긴다.
+  assert.equal((await cron(cronEnv(db), { now: NOW + 10 * MINUTE, fetcher, log })).outcome, "idle");
+  assert.equal(log.at(-1).code, "RT_CALL_BUDGET");
+  assert.deepEqual(picked(), ["sale:202611", "sale:202003"]);
+});
+
 test("TK-136: 0008 뒤 첫 실행은 동구 676달을 건드리지 않고 새 4개 구 2,704달만 넣은 뒤, 새 구의 최근 달부터 받는다", async () => {
   const { database, db } = freshDb({ d1Meta: true });
   await seedAllDone(db, database, NOW, [BASE]);
