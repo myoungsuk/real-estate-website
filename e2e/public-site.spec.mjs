@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import { ADMIN_PAGE_HELP } from "../src/lib/admin-help.mjs";
 import { stripWebpMetadataFromDataUrl } from "../src/lib/admin-webp-clean.mjs";
+import { countRecentNaverListings, naverListingBoardLineParts } from "../src/lib/naver-listing-recent.mjs";
 import { validateWebpBytes } from "../worker/github-content.mjs";
 
 // 단지 이름·사실·사진 설명·홈 단지 목록은 운영자가 관리자 화면에서 바꾸는 값이라, 기대값을 글자로 적지 않고 같은 공개 JSON에서 읽는다.
@@ -24,6 +25,16 @@ test("홈의 핵심 상담 링크와 검색 가능한 문서 구조가 유지된
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await expect(page.locator('a[href^="tel:"]').first()).toBeVisible();
   await expect(page.locator('a[href^="sms:"]').first()).toBeVisible();
+
+  // '최근 등록 매물' 제목 아래 줄: 매물 수·날짜는 매일 바뀌므로 같은 공개 JSON으로 만든 글과 대조하고, 글의 꼴만 글자로 본다.
+  const listingData = readData("naver-listings");
+  const boardLine = naverListingBoardLineParts({
+    total: listingData.items.length,
+    recentCount: countRecentNaverListings(listingData.items, listingData.checkedAt),
+    checkedAt: listingData.checkedAt,
+  }).join(" · ");
+  expect(boardLine).toMatch(/^네이버 공개 매물 \d+건 · (최근 7일 등록 \d+건 · )?\d{1,2}월 \d{1,2}일 확인$/u);
+  await expect(page.locator(".hw__board-line")).toHaveText(boardLine);
 
   const kakao = page.getByRole("link", { name: /카카오톡/ }).first();
   await expect(kakao).toHaveAttribute("href", /^https:\/\//u);

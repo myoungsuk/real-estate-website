@@ -1,11 +1,17 @@
 ---
 import { homeContent } from "../lib/content";
 import { naverListings, naverListingsUpdatedAt } from "../lib/naver-listings";
+import { countRecentNaverListings, naverListingBoardLineParts } from "../lib/naver-listing-recent.mjs";
 import { formatOfficeHours, office, phoneHref, smsHref } from "../lib/site";
 
 // 홈 첫 화면(DESIGN.md "첫 화면 구성"). 관리자 편집 값(home-content.broker.*)을 그대로 읽는다.
 const listingCount = naverListings.length;
-const checkedLabel = `${Number(naverListingsUpdatedAt.slice(5, 7))}월 ${Number(naverListingsUpdatedAt.slice(8, 10))}일 확인`;
+// 제목 아래 한 줄: 매물 수 · 확인일 기준 최근 7일 등록 수(0건이면 뺌) · 확인 날짜. 빌드한 날이 아니라 확인일로 센다.
+const boardLineParts = naverListingBoardLineParts({
+  total: listingCount,
+  recentCount: countRecentNaverListings(naverListings, naverListingsUpdatedAt),
+  checkedAt: naverListingsUpdatedAt,
+});
 // 대표 칸은 평일 상담 시간만(DESIGN.md "대표 칸"). 토·일을 포함한 전체 시간은 사무소 구역에 둔다.
 const weekdayHours = office.hours.find((hour) => hour.label === "평일") ?? office.hours[0];
 ---
@@ -119,6 +125,11 @@ const weekdayHours = office.hours.find((hour) => hour.label === "평일") ?? off
     margin: 2px 0 0;
     color: #ffffff;
     font-weight: 700;
+  }
+
+  /* 줄의 조각(매물 수 · 최근 7일 등록 · 확인일)은 낱말 사이에서 꺾이지 않고 통째로 다음 줄로 넘어간다 */
+  .hw__board-line span {
+    display: inline-block;
   }
 
   /* 매물 종이 칸: 정렬 줄과 종이 윗부분이 사진 아래 끝에 걸친다 */
@@ -355,7 +366,7 @@ const weekdayHours = office.hours.find((hour) => hour.label === "평일") ?? off
       <h1 id="broker-heading">{homeContent.broker.headline}</h1>
       <div class="hw__board-head">
         <h2 id="listing-heading">최근 등록 매물</h2>
-        <p>네이버 공개 매물 {listingCount}건 · {checkedLabel}</p>
+        <p class="hw__board-line">{boardLineParts.map((part, index) => <>{index > 0 && " "}<span>{part}{index < boardLineParts.length - 1 && " ·"}</span></>)}</p>
       </div>
     </div>
   </div>
