@@ -1,6 +1,7 @@
 import { XMLParser } from "fast-xml-parser";
 import { SyntaxValidator } from "fast-xml-validator";
 import { findBannedKeys, findSensitiveStrings, findUnexpectedKeys, validateExternalLinks } from "../content-validation.mjs";
+import { buildBlogExcerpt, normalizeBlogCategory } from "../../src/lib/blog-excerpt.mjs";
 import { ExternalSyncTrustError } from "./errors.mjs";
 
 export const NAVER_BLOG_ID = "p5468300";
@@ -161,6 +162,16 @@ function assertThumbnailUrl(value, type, label) {
   return url.toString();
 }
 
+// 글 앞부분 요약·분류는 사무소 공개 연락처·호수 예외 없이(office 없이) 가장 엄하게 본다. 걸리면 그 칸만 빼고 글은 넣는다.
+function findSensitiveInBlogText(value) {
+  return findSensitiveStrings(value, { path: "blog" });
+}
+
+function naverBlogCategory(value) {
+  const category = normalizeBlogCategory(textValue(value));
+  return category && findSensitiveInBlogText(category).length === 0 ? category : null;
+}
+
 function naverBlogIdFromUrl(url) {
   const segments = url.pathname.split("/").filter(Boolean);
   return url.searchParams.get("blogId") ?? segments[0] ?? "";
@@ -252,12 +263,22 @@ export function parseNaverBlogFeed(xml, { blogId = NAVER_BLOG_ID } = {}) {
     const { logNo } = parseNaverPostUrl(textValue(item?.link), blogId);
     const publishedAt = naverDate(item?.pubDate, label);
     const thumbnailUrl = assertThumbnailUrl(firstImageUrl(item?.description), "blog", `${label} 썸네일`);
+    // 요약을 싣지 않는 글(매물 소개·금액·동 번호·민감 문자열 등)은 excerpt가 null이고 excerptSkipReason에 까닭이 남는다.
+    const category = naverBlogCategory(item?.category);
+    const excerpt = buildBlogExcerpt(
+      { title, category, description: textValue(item?.description) },
+      { findSensitive: findSensitiveInBlogText },
+    );
     return {
       sourceId: logNo,
       id: `naver-blog-${logNo}`,
       type: "blog",
       title,
       summary: `리더스시티행복한부동산 공식 블로그에서 “${title}” 관련 내용을 확인해 보세요.`,
+      excerpt: excerpt.excerpt,
+      excerptSkipReason: excerpt.reason,
+      excerptSkippedGreeting: excerpt.skippedGreeting,
+      category,
       url: `https://blog.naver.com/PostView.naver?blogId=${blogId}&logNo=${logNo}`,
       publishedAt,
       thumbnailUrl,
@@ -360,6 +381,8 @@ export function buildExternalContentItem(candidate, thumbnail) {
     status: "published",
     title: candidate.title,
     summary: candidate.summary,
+    ...(candidate.type === "blog" && candidate.excerpt ? { excerpt: candidate.excerpt } : {}),
+    ...(candidate.type === "blog" && candidate.category ? { category: candidate.category } : {}),
     url: candidate.url,
     publishedAt: candidate.publishedAt,
     thumbnail,

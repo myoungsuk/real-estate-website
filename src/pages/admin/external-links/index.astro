@@ -96,6 +96,7 @@ const instagramContents = externalContents.filter((item) => item.type === "insta
       type AdminResource,
     } from "../../../lib/admin-content-client";
     import { guardAdminFormChanges, reviewAdminContentChange } from "../../../lib/admin-content-review";
+    import { keepBlogExtras } from "../../../lib/admin-blog-extras.mjs";
     import { suggestInstagramContentId } from "../../../lib/admin-external-id.mjs";
     import { normalizeInstagramUrl } from "../../../lib/admin-instagram-url.mjs";
     import type { ExternalContent } from "../../../lib/content";
@@ -319,8 +320,9 @@ const instagramContents = externalContents.filter((item) => item.type === "insta
           }
           field("id")!.value = suggestedId;
         }
+        // 입력 칸이 없는 글 앞부분 요약·분류는 같은 블로그 글을 고칠 때 저장돼 있던 값을 그대로 넘긴다(keepBlogExtras).
         const createNext = (nextThumbnail: ExternalContent["thumbnail"]) => {
-          const nextItem: ExternalContent = { id: field("id")!.value.trim(), type, ...(type === "youtube" ? { youtubeFormat: field("youtubeFormat")!.value as ExternalContent["youtubeFormat"] } : {}), status: field("status")!.value as ExternalContent["status"], title: field("title")!.value.trim(), summary: field("summary")!.value.trim(), url: type === "instagram" ? normalizeInstagramUrl(field("url")!.value.trim()) : field("url")!.value.trim(), publishedAt: field("publishedAt")!.value || null, thumbnail: nextThumbnail };
+          const nextItem: ExternalContent = { id: field("id")!.value.trim(), type, ...(type === "youtube" ? { youtubeFormat: field("youtubeFormat")!.value as ExternalContent["youtubeFormat"] } : {}), status: field("status")!.value as ExternalContent["status"], title: field("title")!.value.trim(), summary: field("summary")!.value.trim(), ...keepBlogExtras(existing, { type, url: field("url")!.value.trim() }), url: type === "instagram" ? normalizeInstagramUrl(field("url")!.value.trim()) : field("url")!.value.trim(), publishedAt: field("publishedAt")!.value || null, thumbnail: nextThumbnail };
           return originalId ? resource!.data.map((item) => item.id === originalId ? nextItem : item) : [...resource!.data, nextItem];
         };
         const reviewCandidate = createNext(thumbnail);

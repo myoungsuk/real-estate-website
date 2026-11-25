@@ -209,6 +209,118 @@ test("관리자가 등록한 인스타그램 항목이 섞여 있어도 동기�
   }
 });
 
+// 글 앞부분 요약·분류(2026-11-25): 새 블로그 글에만 넣고, 요약을 싣지 않는 글은 요약 없이 넣은 뒤 실행을 계속한다.
+const blogBody = "전세나 월세 계약을 마친 뒤에도 꼭 확인해야 하는 절차가 있습니다. 임대차 신고 기한과 대상 여부를 차례로 정리했습니다.";
+function naverRssWith({ title = null, category = "부동산공부", description = blogBody } = {}) {
+  let xml = naverRss.replace("본문은 저장하지 않습니다.", description);
+  if (title !== null) xml = xml.replace("새 블로그 글 & 확인사항", title);
+  if (category !== null) xml = xml.replace("<item>", `<item>\n      <category><![CDATA[${category}]]></category>`);
+  return xml;
+}
+
+test("네이버 RSS에서 글 앞부분 요약과 분류를 함께 만든다", () => {
+  const [plain] = parseNaverBlogFeed(naverRss);
+  assert.deepEqual(
+    { excerpt: plain.excerpt, reason: plain.excerptSkipReason, category: plain.category },
+    { excerpt: null, reason: "too-short", category: null },
+    "분류가 없고 글 앞부분이 짧은 글",
+  );
+  assert.deepEqual(Object.keys(buildExternalContentItem(plain, null)), ["id", "type", "status", "title", "summary", "url", "publishedAt", "thumbnail"], "없는 칸은 만들지 않음");
+
+  const [item] = parseNaverBlogFeed(naverRssWith({
+    category: " 아파트/분양권 ",
+    description: `안녕하세요, 리더스시티행복한부동산입니다 ^^ &amp;quot;4블록이랑 5블록, 뭐가 달라요?&amp;quot; <b>${blogBody}</b>.......`,
+  }));
+  assert.equal(item.category, "아파트/분양권");
+  assert.equal(item.excerptSkipReason, null);
+  assert.equal(item.excerptSkippedGreeting, "안녕하세요, 리더스시티행복한부동산입니다 ^^");
+  assert.equal(item.excerpt, "\"4블록이랑 5블록, 뭐가 달라요?\" 전세나 월세 계약을 마친 뒤에도 꼭 확인해야 하는 절차가 있습니다. 임대차 신고 기한과 대상 여부를 차례로…");
+  assert.match(item.thumbnailUrl, /^https:\/\/blogthumb\.pstatic\.net\//u, "썸네일은 그대로 찾음");
+  const built = buildExternalContentItem(item, null);
+  assert.deepEqual(Object.keys(built), ["id", "type", "status", "title", "summary", "excerpt", "category", "url", "publishedAt", "thumbnail"]);
+  assert.equal(built.summary, "리더스시티행복한부동산 공식 블로그에서 “새 블로그 글 & 확인사항” 관련 내용을 확인해 보세요.", "기존 summary 틀 문장은 그대로");
+  assert.doesNotThrow(() => validateMergedExternalContents([built]));
+
+  assert.equal(parseNaverBlogFeed(naverRssWith({ category: "문의 010-1111-2222" }))[0].category, null, "민감 문자열이 든 분류는 싣지 않음");
+  assert.equal(parseNaverBlogFeed(naverRssWith({ category: "가".repeat(31) }))[0].category, null, "너무 긴 분류는 싣지 않음");
+
+  const [video] = parseYouTubeFeed(youtubeAtom, { channelId });
+  const videoItem = buildExternalContentItem({ ...video, excerpt: blogBody, category: "부동산공부" }, null);
+  assert.equal("excerpt" in videoItem || "category" in videoItem, false, "유튜브 항목에는 넣지 않음");
+  assert.throws(() => validateMergedExternalContents([{ ...videoItem, excerpt: blogBody }]), /excerpt: 블로그 콘텐츠에만/u);
+  assert.throws(() => validateMergedExternalContents([{ ...videoItem, category: "부동산공부" }]), /category: 블로그 콘텐츠에만/u);
+});
+
+test("새 블로그 글은 요약·분류와 함께 넣고, 요약을 싣지 않는 글은 요약 없이 넣은 뒤 실행을 계속한다", async (t) => {
+  const id = "naver-blog-224999999999";
+  for (const [name, feed, expected] of [
+    ["실을 수 있는 글", {}, { excerpt: blogBody, category: "부동산공부", reason: null }],
+    ["분류가 없는 글", { category: null }, { excerpt: blogBody, category: undefined, reason: null }],
+    ["추천매물 분류", { category: "추천매물" }, { excerpt: undefined, category: "추천매물", reason: "listing-category" }],
+    ["거래완료 제목", { title: "천동 리더스시티 전세 매물 소개(거래완료)", category: "아파트/분양권" }, { excerpt: undefined, category: "아파트/분양권", reason: "deal-closed" }],
+    ["금액 표현", { description: `${blogBody} 매매가 4억 2천만 원입니다.` }, { excerpt: undefined, category: "부동산공부", reason: "price" }],
+    ["동 번호", { description: `${blogBody} 이번 집은 401동 고층입니다.` }, { excerpt: undefined, category: "부동산공부", reason: "building-number" }],
+    ["승인되지 않은 연락처", { description: `${blogBody} 문의 010-1111-2222` }, { excerpt: undefined, category: "부동산공부", reason: "sensitive" }],
+    ["사무소 공개 연락처", { description: `${blogBody} 문의 010-2790-8675` }, { excerpt: undefined, category: "부동산공부", reason: "sensitive" }],
+    ["미분양 호 수량", { description: `${blogBody} 6월에 2,044호로 올해 최고치를 찍었고, 7월에 1,866호로 내려왔습니다.` }, { excerpt: undefined, category: "부동산공부", reason: "sensitive" }],
+    ["인사뿐인 글", { description: "안녕하세요. 리더스시티행복한부동산입니다." }, { excerpt: undefined, category: "부동산공부", reason: "too-short" }],
+  ]) {
+    await t.test(name, async (t) => {
+      const root = await makeSyncRoot(t);
+      const logs = [];
+      const result = await runExternalContentSync({
+        rootDir: root,
+        summaryPath: null,
+        fetcher: fixtureFetcher({ naverXml: naverRssWith(feed) }),
+        fetchAttempts: 1,
+        youtubeChannelId: channelId,
+        now: new Date("2026-08-30T00:00:00Z"),
+        logger: { log: (line) => logs.push(line), warn() {} },
+      });
+      assert.deepEqual({ blog: result.blogNew, youtube: result.youtubeNew, changed: result.contentChanged }, { blog: 1, youtube: 1, changed: true });
+      assert.deepEqual(result.blogWithoutExcerpt, expected.reason ? [{ id, reason: expected.reason }] : []);
+      assert.equal(logs.some((line) => line.startsWith(`Blog without excerpt: ${id} (`)), Boolean(expected.reason));
+      const savedRaw = await readFile(join(root, "src", "data", "external-links.json"), "utf8");
+      const saved = JSON.parse(savedRaw);
+      const blog = saved.find((item) => item.id === id);
+      assert.equal(blog.excerpt, expected.excerpt);
+      assert.equal(blog.category, expected.category);
+      assert.equal("excerpt" in blog, expected.excerpt !== undefined, "싣지 않을 때는 칸 자체를 만들지 않음");
+      assert.equal("category" in blog, expected.category !== undefined);
+      assert.doesNotMatch(savedRaw, /010-1111-2222|010-2790-8675|2,044호|401동|4억 2천만/u, "뺀 글의 조각은 파일에 남지 않음");
+      const video = saved.find((item) => item.type === "youtube");
+      assert.equal("excerpt" in video || "category" in video, false, "유튜브 항목에는 넣지 않음");
+    });
+  }
+});
+
+test("이미 있는 블로그 글에는 요약·분류를 채우지 않는다(덧붙이기만)", async (t) => {
+  const existingBlog = {
+    ...buildExternalContentItem(parseNaverBlogFeed(naverRss)[0], null),
+    summary: "운영자가 수정한 요약",
+    thumbnail: { src: "/images/blog/operator.webp", alt: "운영자 썸네일" },
+  };
+  const existingWithExtras = { ...existingBlog, excerpt: "운영자가 확인한 글 앞부분 요약입니다.", category: "세금" };
+  for (const existing of [existingBlog, existingWithExtras]) {
+    const root = await makeSyncRoot(t, { current: [existing] });
+    const result = await runExternalContentSync({
+      rootDir: root,
+      summaryPath: null,
+      fetcher: fixtureFetcher({ naverXml: naverRssWith({ category: "아파트/분양권" }) }),
+      fetchAttempts: 1,
+      youtubeChannelId: channelId,
+      now: new Date("2026-08-30T00:00:00Z"),
+      logger: { log() {}, warn() {} },
+    });
+    assert.deepEqual({ blog: result.blogNew, youtube: result.youtubeNew }, { blog: 0, youtube: 1 });
+    assert.deepEqual(result.blogWithoutExcerpt, []);
+    const saved = JSON.parse(await readFile(join(root, "src", "data", "external-links.json"), "utf8"));
+    const blog = saved.find((item) => item.type === "blog");
+    assert.deepEqual(blog, existing);
+    assert.deepEqual(Object.keys(blog), Object.keys(existing), "칸 순서도 그대로");
+  }
+});
+
 test("동기화 결과는 공개 스키마와 금지 필드·민감 문자열을 함께 검증한다", () => {
   const item = buildExternalContentItem(parseNaverBlogFeed(naverRss)[0], null);
   const office = { mobile: "010-2790-8675", email: "office@example.com", address: "근린생활시설 105호" };

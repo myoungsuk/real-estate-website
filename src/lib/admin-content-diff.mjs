@@ -64,6 +64,8 @@ const EXACT_LABELS = Object.freeze({
   "home-content:areaGuide.title": "지역 안내 큰 제목",
   "home-content:areaGuide.description": "지역 안내 도입 설명",
   "naver-listings:items": "네이버 공개 매물",
+  "external-links:items[].excerpt": "외부 콘텐츠 · 글 앞부분 요약",
+  "external-links:items[].category": "외부 콘텐츠 · 네이버 분류",
   "complexes:items[].seo.title": "지역·단지 · 검색 제목",
   "complexes:items[].seo.description": "지역·단지 · 검색 설명",
 });

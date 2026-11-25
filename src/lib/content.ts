@@ -17,6 +17,9 @@ export interface ExternalContent {
   status: ExternalContentStatus;
   title: string;
   summary: string;
+  // 블로그 글에만 두는 선택 칸: 글 앞부분 요약(1 ~ 300자)과 네이버 분류 이름. 규칙은 blog-excerpt.mjs.
+  excerpt?: string;
+  category?: string;
   url: string;
   publishedAt: string | null;
   thumbnail: ContentImage | null;
