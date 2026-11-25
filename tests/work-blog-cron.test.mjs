@@ -4,7 +4,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { AI_POLL_CRON } from "../worker/work-ai-cron.mjs";
-import { BLOG_POLL_LOOKBACK_MS, BLOG_POLL_MAX_ROWS, BLOG_RESULT_KEEP_MS, BLOG_WAIT_MAX_MS, OPEN_DRAFTS_SQL } from "../worker/work-blog.mjs";
+import { BLOG_POLL_LOOKBACK_MS, BLOG_POLL_MAX_ROWS, BLOG_RESULT_KEEP_MS, BLOG_WAIT_LOOKUP_FAIL_MAX_MS, BLOG_WAIT_MAX_MS, OPEN_DRAFTS_SQL } from "../worker/work-blog.mjs";
 import { runBlogPollCron } from "../worker/work-blog-cron.mjs";
 import { REALPRICE_CRON, handleScheduled } from "../worker/work-scheduled.mjs";
 import { FAKE_PRICES, blogEnv, completed, created, httpError, installNetworkTrap, networkError, pending, sampleResult, scriptedOpenAi } from "./openai-fixtures.mjs";
@@ -176,10 +176,12 @@ test("TK-157 화면 조회와 예약이 같은 초안을 같은 때 끝내도 �
   assert.deepEqual([aiA.violations, aiB.violations], [[], []]);
 });
 
-test("TK-158 기다리는 끝 30분: 그 전에는 그대로, 30분이 지나도 끝나지 않았거나 조회가 계속 실패하면 실패(AI_WAIT_TIMEOUT)로 닫고 미리 더한 비용을 실제 비용으로 남기며, 그 뒤에는 다시 보지 않음", async (t) => {
+test("TK-158 기다리는 끝 30분: 그 전에는 그대로, 30분이 지나도 끝나지 않았거나 조회가 40분 넘게 계속 실패하면 실패(AI_WAIT_TIMEOUT)로 닫고 미리 더한 비용을 실제 비용으로 남기며, 그 뒤에는 다시 보지 않음", async (t) => {
   installNetworkTrap(t);
   assert.equal(BLOG_WAIT_MAX_MS, 30 * MINUTE);
   assert.ok(BLOG_WAIT_MAX_MS > BLOG_RESULT_KEEP_MS && BLOG_POLL_LOOKBACK_MS > BLOG_WAIT_MAX_MS);
+  assert.equal(BLOG_WAIT_LOOKUP_FAIL_MAX_MS, BLOG_WAIT_MAX_MS + BLOG_RESULT_KEEP_MS, "조회가 실패하는 동안은 결과 보관 시간(10분)만큼 더 봄");
+  assert.ok(BLOG_POLL_LOOKBACK_MS > BLOG_WAIT_LOOKUP_FAIL_MAX_MS);
 
   // ① OpenAI가 계속 만드는 중이라고 답함.
   const slow = await blogSetup();
@@ -197,12 +199,15 @@ test("TK-158 기다리는 끝 30분: 그 전에는 그대로, 30분이 지나도
   assert.equal(after.calls.length, 0, "닫은 초안은 다시 조회하지 않음");
   assert.deepEqual(openai.calls.map((call) => call.kind), ["retrieve", "retrieve"], "OpenAI 쪽 요청은 취소하지 않음");
 
-  // ② 조회가 네트워크 오류로 계속 실패함(1번 다시 하므로 한 차례에 2번 부름).
+  // ② 조회가 네트워크 오류로 계속 실패함(1번 다시 하므로 한 차례에 2번 부름). 끝났는지 모르므로 30분에서 닫지 않고 40분까지 다시 본다.
   const down = await blogSetup();
-  const broken = scriptedOpenAi(Array.from({ length: 4 }, () => ({ kind: "retrieve", respond: networkError() })));
-  assert.deepEqual((await cron(down.env, NOW + 29 * MINUTE, broken)).blog, { outcome: "ok", polled: 1, changed: 0, failed: 0 });
-  assert.deepEqual(statusOf(down.database), [["queued", null]]);
-  assert.deepEqual((await cron(down.env, NOW + 31 * MINUTE, broken)).blog, { outcome: "ok", polled: 1, changed: 1, failed: 0 });
+  const broken = scriptedOpenAi(Array.from({ length: 8 }, () => ({ kind: "retrieve", respond: networkError() })));
+  for (const [at, label] of [[29 * MINUTE, "29분"], [31 * MINUTE, "31분(30분에서 닫지 않음)"], [BLOG_WAIT_LOOKUP_FAIL_MAX_MS, "딱 40분"]]) {
+    assert.deepEqual((await cron(down.env, NOW + at, broken)).blog, { outcome: "ok", polled: 1, changed: 0, failed: 0 }, label);
+    assert.deepEqual(statusOf(down.database), [["queued", null]], label);
+  }
+  assert.deepEqual((await cron(down.env, NOW + BLOG_WAIT_LOOKUP_FAIL_MAX_MS + MINUTE, broken)).blog, { outcome: "ok", polled: 1, changed: 1, failed: 0 });
+  assert.equal(broken.calls.length, 8);
   assert.deepEqual(draftRows(down.database).map((row) => [row.status, row.error_code, row.actual_cost_micro_usd]), [["failed", "AI_WAIT_TIMEOUT", down.reserved]]);
   assert.equal(usageRows(down.database)[0].estimated_cost_micro_usd, down.reserved);
 
@@ -216,6 +221,46 @@ test("TK-158 기다리는 끝 30분: 그 전에는 그대로, 30분이 지나도
   const done = scriptedOpenAi([{ kind: "retrieve", respond: completed("resp_wait_0", sampleResult()) }]);
   await cron(lucky.env, NOW + BLOG_WAIT_MAX_MS + MINUTE, done);
   assert.deepEqual(statusOf(lucky.database), [["completed", null]]);
+});
+
+test("TK-158 30분 바로 뒤 조회가 실패(5xx·429)해도 닫지 않고 다음 분에 받음: 그때 다 됐으면 글과 실제 비용을 저장하고, 아직 만드는 중이라고 답하면 지금처럼 닫음", async (t) => {
+  installNetworkTrap(t);
+  // ① 29분에는 만드는 중 → 31분 조회가 503(1번 다시 해도 503) → 32분에 다 됐다고 답함.
+  const late = await blogSetup();
+  const flaky = scriptedOpenAi([
+    { kind: "retrieve", respond: pending("resp_wait_0", "in_progress") },
+    { kind: "retrieve", respond: httpError(503) },
+    { kind: "retrieve", respond: httpError(503) },
+    { kind: "retrieve", respond: completed("resp_wait_0", sampleResult()) },
+  ]);
+  await cron(late.env, NOW + 29 * MINUTE, flaky);
+  assert.deepEqual((await cron(late.env, NOW + 31 * MINUTE, flaky)).blog, { outcome: "ok", polled: 1, changed: 0, failed: 0 }, "조회 실패 한 번으로 닫지 않음");
+  assert.deepEqual(draftRows(late.database).map((row) => [row.status, row.error_code, row.actual_cost_micro_usd]), [["in_progress", null, null]]);
+  assert.deepEqual((await cron(late.env, NOW + 32 * MINUTE, flaky)).blog, { outcome: "ok", polled: 1, changed: 1, failed: 0 });
+  assert.deepEqual(draftRows(late.database).map((row) => [row.status, row.error_code, row.actual_cost_micro_usd, row.result_json !== null]), [["completed", null, ACTUAL_4000_5000, true]]);
+  assert.equal(usageRows(late.database)[0].estimated_cost_micro_usd, ACTUAL_4000_5000, "미리 더한 비용을 실제 비용으로 바로잡음");
+  assert.equal(flaky.calls.length, 4);
+
+  // ② 429(다시 부르지 않는 오류)도 같다. 화면 조회로 봐도 같은 규칙이다.
+  const limited = await blogSetup();
+  const busy = scriptedOpenAi([{ kind: "retrieve", respond: httpError(429) }, { kind: "retrieve", respond: httpError(429) }]);
+  await cron(limited.env, NOW + 31 * MINUTE, busy);
+  assert.deepEqual(statusOf(limited.database), [["queued", null]]);
+  const viaScreen = await work(limited.env, `/blog/drafts/${limited.id}`, { openaiFetch: busy.fetcher, now: NOW + 39 * MINUTE });
+  assert.deepEqual([viaScreen.json.data.draft.status, viaScreen.json.data.draft.errorCode ?? null], ["queued", null]);
+  assert.equal(busy.calls.length, 2);
+
+  // ③ 조회가 되살아났는데 OpenAI가 아직 만드는 중이라고 답하면, 30분이 지났으므로 지금처럼 바로 닫는다(늘어난 10분은 조회가 실패하는 동안에만).
+  const still = await blogSetup();
+  const back = scriptedOpenAi([
+    { kind: "retrieve", respond: httpError(503) },
+    { kind: "retrieve", respond: httpError(503) },
+    { kind: "retrieve", respond: pending("resp_wait_0", "in_progress") },
+  ]);
+  await cron(still.env, NOW + 31 * MINUTE, back);
+  assert.deepEqual(statusOf(still.database), [["queued", null]]);
+  await cron(still.env, NOW + 32 * MINUTE, back);
+  assert.deepEqual(draftRows(still.database).map((row) => [row.status, row.error_code, row.actual_cost_micro_usd]), [["failed", "AI_WAIT_TIMEOUT", still.reserved]]);
 });
 
 test("TK-159 조회 실패 뒤 다음 분에 다시 봄: OpenAI 5xx·네트워크 오류는 그대로 두었다가 다음 차례에 받고, D1 쓰기가 실패한 초안은 failed로 세고 다른 초안은 계속 받으며, 404는 10분 전후로 unknown·expired", async (t) => {
@@ -343,4 +388,24 @@ test("TK-161 켰는데 설정이 빠졌으면 D1·OpenAI 없이 매시 정각에
     assert.deepEqual(entries, [{ event: "blog_poll_cron", level: "warn", code: "BLOG_CRON_INTERNAL" }]);
   }
   assert.equal(none.calls.length, 0);
+});
+
+test("TK-161 계약서 AI 조회가 안에서 실패해도(D1 문장 예외) 같은 차례에 글 초안은 받고, 계약서 AI 쪽 결과에는 고정 코드만 남는다", async (t) => {
+  installNetworkTrap(t);
+  const both = await blogSetup();
+  const env = aiEnv(both.db, createR2(), { WORK_BLOG_ENABLED: "true", OPENAI_MODEL_BLOG: "gpt-test-blog", OPENAI_REASONING_EFFORT: "xhigh", OPENAI_PRICES_JSON: JSON.stringify({ ...AI_PRICES, ...FAKE_PRICES }) });
+  // 계약서 AI 작업 표(ai_jobs)를 읽는 문장만 던지게 한다. 글 초안 문장(blog_drafts·ai_usage_daily·settings)은 그대로 돈다.
+  const prepare = both.db.prepare.bind(both.db);
+  both.db.prepare = (sql) => {
+    if (/\bai_jobs\b/u.test(sql)) throw new Error("가짜 D1 장애 ZZSECRET");
+    return prepare(sql);
+  };
+  const openai = scriptedOpenAi([{ kind: "retrieve", respond: completed("resp_wait_0", sampleResult()) }]);
+  const { entries, log } = collect();
+  const result = await cron(env, NOW + MINUTE, openai, log);
+  assert.deepEqual([result.outcome, result.code], ["internal_error", "AI_CRON_INTERNAL"], "계약서 AI 쪽은 안에서 실패");
+  assert.deepEqual(result.blog, { outcome: "ok", polled: 1, changed: 1, failed: 0 }, "글 초안은 같은 차례에 받음");
+  assert.deepEqual(draftRows(both.database).map((row) => [row.status, row.error_code, row.actual_cost_micro_usd]), [["completed", null, ACTUAL_4000_5000]]);
+  assert.deepEqual(openai.calls.map((call) => call.kind), ["retrieve"]);
+  assert.ok(!JSON.stringify([result, entries]).includes("ZZSECRET"), "예외 글은 결과·로그에 남기지 않음");
 });

@@ -4,7 +4,7 @@
 // - 켜기 값 WORK_BLOG_ENABLED가 정확히 "true"가 아니면 env.WORK_DB에 손대지 않고 끝낸다(D1·외부 요청·로그 0).
 // - 켜져 있으면 열린 초안 조회 1번(최근 24시간에 만든 것 중 최대 10행). 없으면 거기서 끝난다. 있을 때만 구조 번호를 읽고 OpenAI를 행마다 1번 조회한다.
 // - 정산은 "아직 열린 행일 때만" 바뀌는 guard를 걸어, 화면 조회와 같은 분에 겹쳐도 사용량·결과는 한 번만 바뀐다.
-// - 만든 지 30분이 지나도 끝나지 않은 초안은 pollDraft()가 실패(AI_WAIT_TIMEOUT)로 닫는다.
+// - 만든 지 30분이 지나도 끝나지 않은 초안은 pollDraft()가 실패(AI_WAIT_TIMEOUT)로 닫는다(조회가 실패하는 동안은 40분까지 다시 본다).
 // - 모든 예외를 잡아 고정 코드만 남긴다. 로그에는 개수·코드만 넣고 응답 본문·글·error.message는 넣지 않는다.
 import { WORK_SCHEMA_VERSION, readSchemaVersion } from "./work-api.mjs";
 import { runBatch } from "./work-audit.mjs";
