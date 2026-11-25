@@ -811,6 +811,15 @@ test("P1-e TK-39 홍보물 화면: ids로만 다시 읽고 카드 PNG 1080×1350
     for (const money of ["4억 100만 원", "보증금 2,000만 / 월 85만 원", "4억 300만 원"]) expect(texts[value], `${name}: ${money}`).toContain(money);
     expect(texts[value], `${name}: 층 숫자 그대로`).toContain("지하 1층");
     expect(texts[value], `${name}: 동 번호 0`).not.toMatch(/103동/u);
+    if (value === "threads" || value === "instagram") {
+      // 스레드·인스타그램 글은 출처·받은 시각·사무소 명시사항 5항목을 넣지 않는다(2026-11-25 사용자 요청 "출처랑 명함부분은 … 표에만"·16:42:29 답, 카드 그림에만).
+      // 사무소는 상호·연락처·등록번호 한 줄만 둔다(16:57:36 사용자 "1"). 소재지는 그림에만.
+      expect(texts[value], `${name}: 출처·받은 시각 없음`).not.toMatch(/국토교통부|받음|받은 자료/u);
+      expect(texts[value].split("\n"), `${name}: 사무소 한 줄`).toContain("리더스시티행복한공인중개사사무소 · 010-2790-8675 · 등록번호 30110-2023-00028");
+      expect(texts[value].split("010-2790-8675").length - 1, `${name}: 연락처는 한 번`).toBe(1);
+      expect(texts[value], `${name}: 소재지 없음`).not.toContain("안샘로14번길");
+      continue;
+    }
     expect(texts[value], `${name}: 받은 시각(한국 12:10)`).toMatch(/11\. 19\. 12:10 받/u);
     expect(texts[value], `${name}: 출처는 글에 그대로`).toContain("국토교통부");
     expect(texts[value]).toContain("010-2790-8675");
@@ -961,8 +970,10 @@ test("새 카드 4건 한 장·긴 단지 이름: 4가지 모양 모두 글자�
     expect(texts, `${name}: 딱지`).toEqual(expect.arrayContaining(["▲ 신고가", "분양권"]));
     expect(texts, `${name}: 오름 폭`).toContain("▲ 600만");
     expect(texts, `${name}: 상호 크게`).toContain("리더스시티행복한공인중개사사무소");
-    expect(texts.some((text) => text.includes("국토교통부")), `${name}: 출처 상자는 그림에서 뺌`).toBe(false);
-    expect(texts.some((text) => text.includes("받은 자료")), `${name}: 받은 시각도 그림에서 뺌`).toBe(false);
+    // 2026-11-25부터 출처·받은 시각·계약일 기준 안내는 그림 아래 칸 위 작은 글로 다시 넣는다(스레드 글에서 뺀 대신).
+    expect(texts.some((text) => text.includes("국토교통부")), `${name}: 그림에 출처`).toBe(true);
+    expect(texts.some((text) => /11\. 19\. 12:10 받음/u.test(text)), `${name}: 그림에 받은 시각`).toBe(true);
+    expect(texts.some((text) => text.includes("계약일 기준")), `${name}: 그림에 계약일 기준 안내`).toBe(true);
   }
   // 글 4가지에는 긴 이름을 줄이지 않고 그대로 쓴다.
   await page.locator("[data-promo-text-fold] > summary").click();
@@ -1086,6 +1097,11 @@ test("거래 흐름 홍보물: 담은 매매 ID만 한 번 묻고, 흐름을 못
     await expect(page.locator(".rt-promo__card img").first()).toHaveAttribute("src", /^data:image\/png;base64,/u);
     expect(calls.insights.at(-1), state).toBe([firstPage[0].tradeKey, firstPage[3].tradeKey].join(","));
     // 흐름 기준 줄(2026-11-25): 흐름을 그렸으면 글 출처 줄 아래 한 줄, 못 받았으면 줄 없음(글은 흐름을 받은 뒤 만든다).
+    // 처음 보이는 인스타그램 글에는 출처 줄이 없어 기준 줄도 없다(16:42:29 사용자 답, 그림에만). 출처 줄이 있는 블로그 글로 본다.
+    expect(await page.locator("[data-promo-preview]").inputValue(), `${state}: 인스타그램 글`).not.toContain("흐름 기준");
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"], { origin: new URL(page.url()).origin });
+    await page.getByRole("button", { name: "블로그 글 복사" }).click();
+    await expect(page.locator("[data-promo-preview-label]")).toHaveText("블로그 글");
     const text = await page.locator("[data-promo-preview]").inputValue();
     if (state === "ok") expect(text.split("\n"), state).toContain("흐름 기준: 같은 단지·같은 전용면적 · 흐름선: 12개월 월별 가운데 값 · 최고·직전: 실제 거래");
     else expect(text, state).not.toContain("흐름 기준");

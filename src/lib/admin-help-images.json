@@ -722,7 +722,7 @@
     },
     "promo-pick": {
       "route": "/admin/work/realprice/",
-      "sources": "bbf3a47af8660ef6694bfeae7da8a0fc28a33a22cd33588902a00493d504da1a",
+      "sources": "7ce983ec7c14272b14d6f07aa4f34d7ef63221da7935c95592fd88afac254fa9",
       "shots": {
         "promo-phone-1-pick": {
           "width": 780,
@@ -747,8 +747,8 @@
         "promo-wide-1-pick": {
           "width": 1520,
           "height": 619,
-          "bytes": 46432,
-          "sha256": "936e6e74091bf0ad0dfe980accc7a9dcb3b8f3620573aa2919ebbe4a9ed7c6b9",
+          "bytes": 47670,
+          "sha256": "c1eebfd3868843e52ab2ff16dd22ac8b81979bd08bd799933d00ed31e529552e",
           "marks": [
             [
               0.0234,
@@ -764,9 +764,9 @@
             ],
             [
               0.6945,
-              0.793,
+              0.7424,
               0.9648,
-              0.8922
+              0.8416
             ]
           ]
         }
@@ -774,13 +774,13 @@
     },
     "promo-make": {
       "route": "/admin/work/realprice/promo/",
-      "sources": "718d79d8554cbf50fa2c0f1733be61e1904fc1a0c0d2bd9296be313197c42892",
+      "sources": "534e37a9fa62c21492d230caf759657d136b7c562a1df63b6114265d0dfe2fc8",
       "shots": {
         "promo-phone-2-card": {
           "width": 780,
           "height": 1318,
-          "bytes": 43858,
-          "sha256": "6ad43d2462aacb99e455120ae43d414a081e7073f522f30cb6876f7f747cdad8",
+          "bytes": 51550,
+          "sha256": "7441109bf0369d196036fa798775e7156d4dfedd2cdf4df038647eb782b365d6",
           "marks": [
             [
               0.0949,
@@ -799,8 +799,8 @@
         "promo-phone-3-post": {
           "width": 780,
           "height": 590,
-          "bytes": 20912,
-          "sha256": "bab02b2e6b70e2a2a617484516673921f41ec6fee9bcf4247c02a1aee4157292",
+          "bytes": 20736,
+          "sha256": "1107051ad1d8754fb04f08029e44debc727185b1b0349c717136f0ac8e902d2e",
           "marks": [
             [
               0.0949,
@@ -813,8 +813,8 @@
         "promo-wide-2-card": {
           "width": 1520,
           "height": 1138,
-          "bytes": 44450,
-          "sha256": "cb42aa7a9a25c539e66e8ef5d528380928900a44b34f754d6ef95e5105ade880",
+          "bytes": 52162,
+          "sha256": "f75ca9731edd0f40f0076cd2e1e39696acd8bbd113a10f9aa16fb3d376aff783",
           "marks": [
             [
               0.0101,
@@ -833,8 +833,8 @@
         "promo-wide-3-post": {
           "width": 1520,
           "height": 222,
-          "bytes": 14836,
-          "sha256": "6ed238d4a6525160b80691a3e66ee0130516d1fe45661c50504fce71a4fdec4d",
+          "bytes": 15040,
+          "sha256": "4f54ce5e75d214bedb36ba8f1b28e7fcae72c0027c888cbacf075dce31604576",
           "marks": [
             [
               0.0101,
