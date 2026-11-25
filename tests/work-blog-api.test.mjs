@@ -269,7 +269,7 @@ test("TK-46·TK-50·TK-61 단지 소개 글: 최대 예상 비용을 미리 더�
   assert.equal(call.authIsFakeKey, true);
   assert.equal(call.hasSignal, true, "시간 제한 신호를 붙임");
   assert.deepEqual([call.body.model, call.body.reasoning, call.body.max_output_tokens, call.body.background, call.body.store], [FAKE_MODEL, { effort: "xhigh" }, FAKE_MAX_OUTPUT, true, false]);
-  assert.deepEqual([call.body.text.format.type, call.body.text.format.strict, call.body.text.format.schema.required], ["json_schema", true, ["title", "sections", "checklist", "hashtags", "snsShort", "factsUsed"]]);
+  assert.deepEqual([call.body.text.format.type, call.body.text.format.strict, call.body.text.format.schema.required], ["json_schema", true, ["title", "sections", "checklist", "hashtags", "instagram", "threads", "factsUsed"]]);
   const payload = JSON.parse(call.body.input[0].content[0].text);
   assert.equal(payload.kind, "complex");
   assert.equal(payload.style.instruction, BLOG_STYLES.find((style) => style.id === "live").instruction);
@@ -716,9 +716,11 @@ test("2026-11-23 글 초안 개선: 단지 글은 단지 자료 7개 항목을 �
   assert.deepEqual(Object.keys(payload.complex.details), ["highlights", "unitGroups", "supplySummary", "livingSections", "amenityGroups", "checkpoints", "faqs"]);
   assert.doesNotMatch(call.body.input[0].content[0].text, /"seo"|"sources"|"image"|"aliases"|relatedContentIds|\.webp/u, "출처·검색 설정·사진·별칭·관련 콘텐츠는 보내지 않음");
   // 2026-11-24 지시문 줄임: 할 일·입력 사실만·사무소 정보 빼기·글 성격과 현장 메모·구성 한 줄(5줄)만 두고, 글자 수·개수 숫자와 금지 목록은 코드가 잡는다.
-  assert.ok(call.body.instructions.split("\n").length <= 5, "지시문은 5줄 이하");
-  for (const phrase of ["kind가 complex", "입력 JSON에 있는 사실만", "명시사항", "style.instruction", "현장에서 확인할 점", "현장 메모"]) assert.ok(call.body.instructions.includes(phrase), phrase);
-  for (const phrase of ["1,200 ~ 2,000자", "60자", "4 ~ 6개", "'평'", "직선거리", "보장"]) assert.ok(!call.body.instructions.includes(phrase), `지시문에 '${phrase}' 없음`);
+  // 2026-11-25 올릴 곳 글: instagram·threads 칸에 무엇을 쓰는지 한 줄을 더해 6줄. 글자 수·금지 목록은 여전히 넣지 않는다(스레드 500자는 화면이 막음).
+  assert.ok(call.body.instructions.split("\n").length <= 6, "지시문은 6줄 이하");
+  for (const phrase of ["kind가 complex", "입력 JSON에 있는 사실만", "명시사항", "style.instruction", "현장에서 확인할 점", "현장 메모", "instagram", "threads", "hashtags에만"]) assert.ok(call.body.instructions.includes(phrase), phrase);
+  for (const phrase of ["1,200 ~ 2,000자", "60자", "4 ~ 6개", "'평'", "직선거리", "보장", "500자", "2,200자", "snsShort", "카카오톡"]) assert.ok(!call.body.instructions.includes(phrase), `지시문에 '${phrase}' 없음`);
+  assert.deepEqual([call.body.text.format.schema.properties.instagram, call.body.text.format.schema.properties.threads, "snsShort" in call.body.text.format.schema.properties], [{ type: "string" }, { type: "string" }, false]);
   assert.deepEqual(call.body.text.format.schema.properties.sections.items.required, ["heading", "paragraphs"]);
 
   const done = await work(env, `/blog/drafts/${made.json.data.draft.id}`, { openaiFetch: openai.fetcher, now: NOW + 10_000 });
@@ -752,6 +754,49 @@ test("2026-11-23 옛 꼴 초안(소제목 없음)은 D1에 있던 그대로 열�
   assert.deepEqual(reopened.json.data.draft.result, result);
   assert.equal(openai.calls.length, 2, "완료된 초안을 다시 열어도 OpenAI를 다시 부르지 않음");
   assert.equal(draftRows(database).length, 1);
+});
+
+test("2026-11-25 올릴 곳 꼴: instagram·threads를 받은 초안은 두 칸을 그대로 저장하고, 그 칸의 금액은 그 칸 자리로 막으며, 화면이 다시 계산해도 서버 검사와 같다", async (t) => {
+  installNetworkTrap(t);
+  const { database, env } = blogDb();
+  await setLimits(env);
+  const placed = {
+    title: "리더스시티 5블록 단지 소개",
+    sections: [{ heading: "단지 개요", paragraphs: ["16개동 2,135세대 단지입니다."] }],
+    checklist: ["동·층·방향을 낮과 저녁에 확인"],
+    hashtags: ["대전동구"],
+    instagram: "리더스시티 5블록은 16개동 2,135세대 단지입니다.",
+    threads: "리더스시티 5블록 3억 원대 매물 문의 주세요.",
+    factsUsed: ["16개동 · 2,135세대"],
+  };
+  const openai = scriptedOpenAi([
+    { kind: "create", respond: created("resp_fake_placed") },
+    { kind: "retrieve", respond: completed("resp_fake_placed", placed) },
+  ]);
+  const made = await work(env, "/blog/drafts", { method: "POST", body: { source: COMPLEX, style: "plain" }, openaiFetch: openai.fetcher });
+  assert.equal(made.status, 201, JSON.stringify(made.json));
+  const done = await work(env, `/blog/drafts/${made.json.data.draft.id}`, { openaiFetch: openai.fetcher, now: NOW + 10_000 });
+  const finished = done.json.data.draft;
+  assert.equal(finished.status, "completed");
+  assert.deepEqual(Object.keys(finished.result), ["title", "paragraphs", "headings", "checklist", "hashtags", "instagram", "threads", "factsUsed"]);
+  assert.deepEqual([finished.result.instagram, finished.result.threads], [placed.instagram, placed.threads]);
+  assert.deepEqual(finished.checks.blocks.map((item) => [item.kind, item.where]), [["complex_number", "threads"]], "스레드 글의 금액만 그 칸 자리로 막음");
+  assert.deepEqual(checkBlogDraft(finished.result, { source: finished.currentSource, inputs: finished.inputs, emphasis: finished.emphasisNumbers }), finished.checks);
+  const [row] = draftRows(database);
+  assert.deepEqual(Object.keys(JSON.parse(row.result_json)), Object.keys(finished.result), "D1에는 받은 꼴 그대로");
+  const reopened = await work(env, `/blog/drafts/${made.json.data.draft.id}`, { openaiFetch: openai.fetcher, now: NOW + 20_000 });
+  assert.deepEqual(reopened.json.data.draft.result, finished.result);
+  assert.equal(openai.calls.length, 2, "다시 열어도 OpenAI를 다시 부르지 않음");
+
+  // 한 칸이 빠지거나 옛 칸과 섞인 응답은 받지 않는다(스키마 strict가 막지만 서버도 다시 본다).
+  for (const bad of [{ ...placed, snsShort: "섞임" }, (({ threads: _threads, ...rest }) => rest)(placed)]) {
+    const { env: badEnv } = blogDb();
+    await setLimits(badEnv);
+    const fake = scriptedOpenAi([{ kind: "create", respond: created("resp_fake_bad") }, { kind: "retrieve", respond: completed("resp_fake_bad", bad) }]);
+    const draft = await work(badEnv, "/blog/drafts", { method: "POST", body: { source: COMPLEX, style: "plain" }, openaiFetch: fake.fetcher });
+    const read = await work(badEnv, `/blog/drafts/${draft.json.data.draft.id}`, { openaiFetch: fake.fetcher, now: NOW + 10_000 });
+    assert.deepEqual([read.json.data.draft.status, read.json.data.draft.errorCode], ["failed", "AI_RESULT_INVALID"], Object.keys(bad).join(","));
+  }
 });
 
 test("2026-11-23 대표 현장 메모: 500자까지 받고 숫자 표기만 남기는 규칙은 그대로(글은 저장하지 않음)", async (t) => {

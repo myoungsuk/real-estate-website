@@ -432,3 +432,53 @@ test("새 꼴 검사: 소제목(h문단 번호)과 현장에서 확인할 점(ch
   assert.deepEqual(result.warnings.map((item) => [item.kind, item.where]), [["amenity", "check"]]);
   assert.deepEqual(checkBlogDraft({ title: "제목", paragraphs: ["매매 2억 6,000만 원입니다."], hashtags: [], snsShort: "짧은 글" }, { source: APT, inputs }).blocks, []);
 });
+
+// 2026-11-25 올릴 곳 꼴: snsShort 대신 instagram·threads 두 칸을 받는다(카카오톡 글은 받지 않고 코드가 만듦).
+test("올릴 곳 꼴 결과(2026-11-25): instagram·threads를 받아 그대로 두고, 상한(1,200자·500자)을 넘으면 자르며, 옛 칸과 섞이거나 한 칸이 빠지면 받지 않음", () => {
+  const value = {
+    title: "제목",
+    sections: [{ heading: "소제목", paragraphs: ["문단"] }],
+    checklist: ["확인"],
+    hashtags: ["태그"],
+    instagram: " 인스타그램 글 ",
+    threads: " 스레드 글 ",
+    factsUsed: [],
+  };
+  const { ok, result } = validateBlogResult(value);
+  assert.equal(ok, true);
+  assert.deepEqual(Object.keys(result), ["title", "paragraphs", "headings", "checklist", "hashtags", "instagram", "threads", "factsUsed"]);
+  assert.deepEqual([result.instagram, result.threads, "snsShort" in result, "trimmed" in result], ["인스타그램 글", "스레드 글", false, false]);
+  assert.deepEqual([BLOG_RESULT_LIMITS.instagram, BLOG_RESULT_LIMITS.threads], [1200, 500]);
+
+  const edge = validateBlogResult({ ...value, instagram: "가".repeat(1200), threads: "나".repeat(500) }).result;
+  assert.deepEqual([edge.instagram.length, edge.threads.length, "trimmed" in edge], [1200, 500, false], "경계값은 자르지 않음");
+  const long = validateBlogResult({ ...value, instagram: "가".repeat(1201), threads: "나".repeat(501) }).result;
+  assert.deepEqual([long.instagram.length, long.threads.length, long.trimmed], [1200, 500, true], "한 글자 넘으면 상한 길이로 자름");
+  const blank = validateBlogResult({ ...value, instagram: " ", threads: "" }).result;
+  assert.deepEqual([blank.instagram, blank.threads], ["", ""], "올릴 곳 글은 비어도 받음(화면이 그곳 복사만 막음)");
+
+  const { instagram, threads, ...rest } = value;
+  for (const bad of [
+    { ...rest, instagram },
+    { ...rest, threads },
+    { ...value, snsShort: "옛 칸과 섞임" },
+    { ...value, kakao: "받지 않는 칸" },
+    { ...value, instagram: null },
+    { ...value, threads: ["목록"] },
+    { title: "제목", paragraphs: ["문단"], hashtags: [], instagram, threads, factsUsed: [] },
+  ]) assert.equal(validateBlogResult(bad).ok, false, JSON.stringify(bad).slice(0, 90));
+});
+
+test("올릴 곳 꼴 글 검사(2026-11-25): 인스타그램·스레드 글의 숫자·연락처는 그 칸 자리(instagram·threads)로 잡고, 옛 초안은 지금처럼 sns 자리", () => {
+  const inputs = fullAptInputs();
+  const draft = (extra = {}) => ({ title: "제목", paragraphs: ["남향입니다."], headings: [""], checklist: [], hashtags: [], instagram: "남향입니다.", threads: "남향입니다.", ...extra });
+  const wheres = (value) => checkBlogDraft(value, { source: APT, inputs, officePhone: office.mobile }).blocks.map((item) => [item.kind, item.where]);
+  assert.deepEqual(wheres(draft()), []);
+  assert.deepEqual(wheres(draft({ instagram: "매매 3억 원입니다." })), [["money", "instagram"]]);
+  assert.deepEqual(wheres(draft({ threads: "매매 3억 원입니다." })), [["money", "threads"]]);
+  assert.deepEqual(wheres(draft({ instagram: "매매 2억 6,000만 원입니다.", threads: "매매 2억 6,000만 원입니다." })), [], "입력과 같은 금액은 통과");
+  assert.deepEqual(wheres(draft({ instagram: "연락 010.3333.4444", threads: "연락 010.3333.4444" })).map(([, where]) => where).sort(), ["instagram", "threads"]);
+  // 화면은 옛 초안의 snsShort를 두 칸에 넣어 보이므로, 한 칸만 문자열이어도 두 칸으로 검사한다.
+  assert.deepEqual(wheres({ title: "제목", paragraphs: ["남향입니다."], hashtags: [], instagram: "매매 3억 원입니다." }), [["money", "instagram"]]);
+  assert.deepEqual(wheres({ title: "제목", paragraphs: ["남향입니다."], hashtags: [], snsShort: "매매 3억 원입니다." }), [["money", "sns"]]);
+});

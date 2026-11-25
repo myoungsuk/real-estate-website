@@ -86,6 +86,7 @@ test("글 초안 화면: 명시사항 빈 칸 이름은 겹치지 않게 한국�
 test("글 초안 화면: 검사 결과는 같은 자리·같은 종류를 한 줄로 묶고, 막힘이 있을 때만 복사를 막는다", () => {
   assert.equal(whereLabel("title"), "제목");
   assert.equal(whereLabel("sns"), "SNS 짧은 글");
+  assert.deepEqual([whereLabel("instagram"), whereLabel("threads")], ["인스타그램 글", "스레드 글"]);
   assert.equal(whereLabel("p2"), "문단 2");
   const view = checkView({
     blocks: [

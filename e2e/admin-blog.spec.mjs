@@ -141,15 +141,19 @@ test("글 초안 단지 소개: 만들기 → 5초마다 확인 → 결과, 입�
 
   await page.locator("#bl-p2").fill("단지 안 산책길이 있습니다.");
   await expect(page.locator("[data-bl-bar-text]")).toHaveText("✓ 복사할 수 있음");
-  await expect(page.locator("[data-bl-copy='blog']")).toBeEnabled();
-  await page.locator("[data-bl-copy='blog']").click();
+  await expect(page.locator("[data-bl-copy]")).toBeEnabled();
+  await page.locator("[data-bl-copy]").click();
   await expect(page.locator("[data-bl-copy-status]")).toHaveText("✓ 블로그 글을 복사했습니다. 명시사항까지 함께 붙여 넣으세요.");
   const [blogText] = await copied(page);
   expect(blogText.startsWith("가상숲 단지 소개\n\n가상숲 단지는 1,200세대입니다.\n\n단지 안 산책길이 있습니다.\n\n#천동 #가상숲\n\n──────────\n[중개사무소] ")).toBe(true);
   expect(blogText, "명시사항은 office.json의 사무소 5항목").toContain(`${office.mobile} · 등록번호 `);
 
+  // 옛 초안(snsShort 한 칸)은 그 글을 인스타그램·스레드 칸에 그대로 보인다.
+  await page.locator("input[name='bl-place'][value='instagram']").check();
+  await expect(page.locator("#bl-instagram")).toHaveValue("가상숲 단지 1,200세대");
+  await expect(page.locator("[data-bl-copy]")).toHaveText("인스타그램 글 복사");
   await page.evaluate(() => { window.__clipFail = true; });
-  await page.locator("[data-bl-copy='sns']").click();
+  await page.locator("[data-bl-copy]").click();
   await expect(page.locator("[data-bl-preview-fold]"), "자동 복사가 막히면 미리 보기를 펼침").toHaveAttribute("open", "");
   await expect(page.locator("[data-bl-copy-status]")).toContainText("자동 복사가 막혔습니다");
   await expect(page.locator("#bl-preview")).toHaveValue(/^가상숲 단지 1,200세대\n\n#천동 #가상숲\n\n──────────\n\[중개사무소\] /u);
@@ -184,15 +188,17 @@ test("글 초안 다시 열기 360px: 소재지는 저장하지 않아 다시 �
   await expect(reloc).toBeVisible();
   await expect(reloc).toHaveValue("");
   await expect(page.locator("[data-bl-check]")).toContainText("명시사항 빈 칸: 소재지");
-  await expect(page.locator("[data-bl-copy='blog']")).toBeDisabled();
+  await expect(page.locator("[data-bl-copy]")).toBeDisabled();
   await expect(page.locator("[data-bl-disclosure] .bl-gap")).toHaveText("비어 있음");
 
   await reloc.fill(`${LOCATION} 101호`);
   await expect(page.locator("[data-bl-check]")).toContainText("소재지에 호수·전화번호처럼 보이는 글자가 있습니다.");
-  await expect(page.locator("[data-bl-copy='blog']")).toBeDisabled();
+  await expect(page.locator("[data-bl-copy]")).toBeDisabled();
   await reloc.fill(LOCATION);
-  await expect(page.locator("[data-bl-copy='sns']")).toBeEnabled();
-  await page.locator("[data-bl-copy='sns']").click();
+  await page.locator("input[name='bl-place'][value='instagram']").check();
+  await expect(page.locator("[data-bl-copy]")).toBeEnabled();
+  await page.locator("[data-bl-copy]").click();
+  await expect(page.locator("[data-bl-copy-status]")).toHaveText("✓ 인스타그램 글을 복사했습니다. 명시사항까지 함께 붙여 넣으세요.");
   const [snsText] = await copied(page);
   expect(snsText).toContain(`[매물] 소재지 ${LOCATION} 10층 · 면적 전용 84.97㎡ · 가격 매매 4억 5,000만 원`);
   expect(await overflowOf(page), "결과 화면 360px").toBeLessThanOrEqual(0);
@@ -205,7 +211,7 @@ test("글 초안 다시 열기 360px: 소재지는 저장하지 않아 다시 �
   await page.locator("[data-bl-drafts-summary]").click();
   await page.getByRole("button", { name: "가상숲1단지 매매 4억 5,000만원 열기" }).click();
   await expect(reloc, "'새 글 만들기' 뒤 다시 열면 소재지를 다시 넣어야 함").toHaveValue("");
-  await expect(page.locator("[data-bl-copy='blog']")).toBeDisabled();
+  await expect(page.locator("[data-bl-copy]")).toBeDisabled();
 
   await page.reload();
   await page.locator("[data-bl-drafts-summary]").click();
@@ -313,7 +319,7 @@ test("글 초안 360px 새 꼴(2026-11-23): 소제목 칸·현장에서 확인�
   await expect(page.locator("[data-bl-check]")).toContainText("확인할 곳 1곳(복사는 됨)");
   await expect(page.locator("[data-bl-check]")).toContainText("입력에 없는 생활 편의: 현장에서 확인할 점 '마트'");
   await expect(page.locator("[data-bl-bar-text]")).toHaveText("✓ 복사할 수 있음");
-  await page.locator("[data-bl-copy='blog']").click();
+  await page.locator("[data-bl-copy]").click();
   const [blogText] = await copied(page);
   expect(blogText.startsWith([
     "가상숲 단지 소개",
@@ -469,5 +475,150 @@ test("글 초안 카드 그림 360px: 매물 소재지가 100자로 표지에 �
   await expect(panel.locator("img")).toHaveCount(0);
   await expect(panel.locator("[data-bl-cardset-save]")).toBeHidden();
   expect(await overflowOf(page)).toBeLessThanOrEqual(0);
+  assertNoErrors();
+});
+
+// 2026-11-25 올릴 곳 탭 넷(사용자 답 13:26:16 "카카오톡도 해"): 인스타그램·스레드 글을 따로 받은 새 꼴 초안.
+// 카카오톡 글은 따로 받지 않고 제목 + 인스타그램 글 + 명시사항으로 코드가 만든다.
+const placedResult = {
+  title: "가상숲1단지 매매 4억 5,000만원",
+  paragraphs: ["전용 84.97㎡, 10층 남향입니다."],
+  headings: ["매물 개요"],
+  checklist: ["관리비 고지서 확인"],
+  hashtags: ["천동", "가상숲1단지", "대전동구", "아파트매매", "남향", "천동아파트"],
+  instagram: "가상숲1단지 전용 84.97㎡ 매매입니다.\n10층 남향이고 5억원에 나왔습니다.",
+  threads: "가상숲1단지 전용 84.97㎡, 10층 남향 매매입니다.",
+  factsUsed: [],
+};
+const pickPlace = (page, id) => page.locator(`input[name='bl-place'][value='${id}']`).check();
+const placeTops = (page) => page.locator(".bl-places__list .work-choice").evaluateAll((list) => [...new Set(list.map((item) => Math.round(item.getBoundingClientRect().top)))]);
+
+test("글 초안 올릴 곳 360px: 탭 넷이 한 줄에 들고, 고른 곳의 칸·글자 수·복사 글만 보이며, 그곳 글의 문제만 그곳 복사를 막는다. 스레드는 500자를 넘으면 막고, 카카오톡 글은 [제목] + 인스타그램 글 + 명시사항이다", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const calls = await setup(page, { width: 360, drafts: [draftOf(listing, { result: placedResult })] });
+  await page.goto("/admin/work/blog/");
+  await page.locator("[data-bl-drafts-summary]").click();
+  await page.getByRole("button", { name: "가상숲1단지 매매 4억 5,000만원 열기" }).click();
+  await expect(page.locator("[data-bl-result]")).toBeVisible();
+  await page.locator("#bl-reloc").fill(LOCATION);
+  const copy = page.locator("[data-bl-copy]");
+  const check = page.locator("[data-bl-check]");
+  const meter = page.locator("[data-bl-meter]");
+
+  // 탭 넷: 360·390px에서 한 줄이고 글자가 두 줄로 꺾이지 않는다(고른 뒤에도).
+  await expect(page.locator(".bl-places__list .work-choice")).toHaveText(["블로그", "인스타그램", "스레드", "카카오톡"]);
+  for (const width of [360, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const id of ["instagram", "threads", "kakao", "blog"]) {
+      await pickPlace(page, id);
+      expect(await placeTops(page), `${width}px '${id}'을 고른 뒤 탭 줄 수`).toHaveLength(1);
+      expect(await twoLineChoices(page), `${width}px '${id}'을 고른 뒤 두 줄 단추`).toEqual([]);
+      expect(await overflowOf(page), `${width}px '${id}' 가로 넘침`).toBeLessThanOrEqual(0);
+    }
+  }
+  await page.setViewportSize({ width: 360, height: 900 });
+
+  // 블로그: 인스타그램 글의 문제(입력과 다른 5억원)는 블로그 복사를 막지 않고, 어디에 문제가 있는지만 알린다.
+  await expect(copy).toHaveText("블로그 글 복사");
+  await expect(copy).toBeEnabled();
+  await expect(check).toContainText("✓ 복사할 수 있습니다");
+  await expect(check).toContainText("다른 올릴 곳에도 고칠 곳이 있습니다: 인스타그램·카카오톡");
+  await expect(page.locator("#bl-instagram")).toBeHidden();
+  await expect(page.locator("#bl-threads")).toBeHidden();
+  await expect(page.locator("[data-bl-look]")).toBeHidden();
+  await expect(page.locator("[data-bl-checklist-row]")).toBeVisible();
+
+  // 인스타그램: 그곳 칸만 보이고, 글의 가격이 입력과 달라 막힌다. 고치면 풀리고 해시태그 6개는 알리기만 한다.
+  await pickPlace(page, "instagram");
+  await expect(page.locator("#bl-title")).toBeHidden();
+  await expect(page.locator("[data-bl-paragraphs]")).toBeHidden();
+  await expect(page.locator("[data-bl-checklist-row]")).toBeHidden();
+  await expect(page.locator("#bl-tags")).toBeVisible();
+  await expect(page.locator("[data-bl-instagram-label]")).toHaveText("인스타그램 글");
+  await expect(copy).toHaveText("인스타그램 글 복사");
+  await expect(copy).toBeDisabled();
+  await expect(check).toContainText("복사 전에 고칠 곳 1곳");
+  await expect(check).toContainText("인스타그램 글 '5억원'");
+  await expect(page.locator("[data-bl-where='instagram']")).toHaveClass(/bl-para--block/u);
+  await expect(page.locator("[data-bl-bar-copy]")).toHaveText("인스타그램 글 복사");
+  await expect(page.locator("[data-bl-bar-copy]")).toBeDisabled();
+  const instagramText = "가상숲1단지 전용 84.97㎡ 매매입니다.\n10층 남향입니다.";
+  await page.locator("#bl-instagram").fill(instagramText);
+  await expect(copy).toBeEnabled();
+  await expect(check).toContainText("확인할 곳 1곳(복사는 됨)");
+  await expect(check).toContainText("해시태그가 6개입니다. 인스타그램 앱이 5개까지만 받을 수 있으니, 올릴 때 막히면 5개만 남기세요.");
+  await expect(meter).toHaveText(/^2,200자 중 [\d,]+자 · 내 글 34자 \+ 자동으로 붙는 글 [\d,]+자 · 해시태그 6개$/u);
+  await expect(page.locator("[data-bl-look]")).toBeVisible();
+  await expect(page.locator("[data-bl-look-title]")).toHaveText("인스타그램에 올라갈 모습");
+  await expect(page.locator("[data-bl-look-text]")).toHaveText(instagramText);
+  // 미리보기 해시태그에만 '#'과 낱말이 줄 끝에서 갈라지지 않게 붙임 글자(U+2060)가 들어간다. 복사 글에는 없다(아래 instagramCopy 대조).
+  await expect(page.locator("[data-bl-look-tags]")).toHaveText("#\u2060천동 #\u2060가상숲1단지 #\u2060대전동구 #\u2060아파트매매 #\u2060남향 #\u2060천동아파트");
+  await expect(page.locator("[data-bl-look-img]"), "매물 표지 한 장이 올라갈 모습에 보임").toHaveAttribute("src", /^data:image\/png;base64,/u);
+  await expect(page.locator("[data-bl-step-image-text]")).toHaveText("카드 그림을 휴대폰에 저장합니다.");
+  await expect(page.locator("[data-bl-step-post]")).toHaveText("인스타그램 앱에서 새 게시물 → 저장한 그림 고르기 → 글 붙여 넣기.");
+  await copy.click();
+  await expect(page.locator("[data-bl-copy-status]")).toHaveText("✓ 인스타그램 글을 복사했습니다. 명시사항까지 함께 붙여 넣으세요.");
+  const instagramCopy = (await copied(page)).at(-1);
+  expect(instagramCopy.startsWith(`${instagramText}\n\n#천동 #가상숲1단지 #대전동구 #아파트매매 #남향 #천동아파트\n\n──────────\n`)).toBe(true);
+  expect(instagramCopy).toContain(`[매물] 소재지 ${LOCATION} 10층`);
+  await expect(page.locator("#bl-preview")).toHaveValue(instagramCopy);
+  expect(await overflowOf(page), "인스타그램 360px").toBeLessThanOrEqual(0);
+
+  // 스레드: 해시태그 칸이 없고, 500자를 넘으면 넘은 글자 수를 알리며 막는다. 줄이면 풀린다.
+  await pickPlace(page, "threads");
+  await expect(page.locator("#bl-threads")).toBeVisible();
+  await expect(page.locator("#bl-instagram")).toBeHidden();
+  await expect(page.locator("#bl-tags")).toBeHidden();
+  await expect(copy).toHaveText("스레드 글 복사");
+  await expect(copy).toBeEnabled();
+  await expect(page.locator("[data-bl-threads-count]")).toHaveText("31자 · 남은 자리 136자(스레드 500자에서 자동으로 붙는 글 333자를 뺀 자리)");
+  await page.locator("#bl-threads").fill("가".repeat(400));
+  await expect(copy).toBeDisabled();
+  await expect(check).toContainText("스레드 글은 500자까지인데 지금");
+  await expect(check).toContainText("자동으로 붙는 글");
+  await expect(meter).toHaveClass(/bl-meter--over/u);
+  await expect(page.locator("[data-bl-threads-count]")).toHaveText(/^400자 · \d+자 넘음$/u);
+  await expect(page.locator("[data-bl-bar-text]")).toHaveText("고칠 곳 1곳 · 복사 막힘");
+  await page.locator("#bl-threads").fill(placedResult.threads);
+  await expect(copy).toBeEnabled();
+  await expect(meter).not.toHaveClass(/bl-meter--over/u);
+  await copy.click();
+  const threadsCopy = (await copied(page)).at(-1);
+  expect(threadsCopy.startsWith(`${placedResult.threads}\n\n──────────\n`), "스레드 글에는 해시태그 줄이 없음").toBe(true);
+  expect(threadsCopy.includes("#")).toBe(false);
+  expect([...threadsCopy].length).toBeLessThanOrEqual(500);
+  expect(await overflowOf(page), "스레드 360px").toBeLessThanOrEqual(0);
+
+  // 카카오톡: 제목과 인스타그램 글 칸(같은 칸)을 보이고, 글은 [제목] + 인스타그램 글 + 명시사항(해시태그·구분선 없음).
+  await pickPlace(page, "kakao");
+  await expect(page.locator("#bl-title")).toBeVisible();
+  await expect(page.locator("#bl-instagram")).toHaveValue(instagramText);
+  await expect(page.locator("[data-bl-instagram-label]")).toHaveText("카카오톡 글");
+  await expect(page.locator("[data-bl-instagram-count]")).toContainText("여기서 고치면 인스타그램 글도 바뀝니다");
+  await expect(page.locator("#bl-tags")).toBeHidden();
+  await expect(page.locator("[data-bl-look-title]")).toHaveText("카카오톡으로 보낼 모습");
+  await expect(copy).toHaveText("카카오톡 글 복사");
+  await copy.click();
+  const kakaoCopy = (await copied(page)).at(-1);
+  expect(kakaoCopy.startsWith(`[가상숲1단지 매매 4억 5,000만원]\n${instagramText}\n\n[중개사무소] `)).toBe(true);
+  expect(kakaoCopy).toContain(`[매물] 소재지 ${LOCATION} 10층`);
+  expect(kakaoCopy.includes("#"), "카카오톡 글에는 해시태그가 없음").toBe(false);
+  expect(kakaoCopy.includes("──────────"), "카카오톡 글에는 구분선이 없음").toBe(false);
+  expect(await overflowOf(page), "카카오톡 360px").toBeLessThanOrEqual(0);
+
+  // '올리는 순서' 상자: 980px 이상에서 인스타그램·스레드·카카오톡은 글 칸 아래(왼쪽), 블로그는 오른쪽 고정 칸. 좁히면 오른쪽 칸 순서로 돌아온다.
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect(page.locator(".bl-result__main > [data-bl-do]")).toHaveCount(1);
+  await pickPlace(page, "blog");
+  await expect(page.locator(".bl-result__side > [data-bl-do]")).toHaveCount(1);
+  await expect(page.locator(".bl-result__side .work-primary-button")).toHaveText(["블로그 글 복사"]);
+  await pickPlace(page, "threads");
+  await expect(page.locator(".bl-result__main > [data-bl-do]")).toHaveCount(1);
+  await page.setViewportSize({ width: 360, height: 900 });
+  await expect(page.locator(".bl-result__side > [data-bl-look] + [data-bl-do]")).toHaveCount(1);
+
+  const stored = await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage }, url: location.href }));
+  expect(stored.includes("가상숲"), "글은 브라우저 저장소·주소에 없음").toBe(false);
+  expect(calls.requests.some((line) => line.includes("가상동")), "소재지는 어떤 요청에도 없음").toBe(false);
   assertNoErrors();
 });

@@ -143,12 +143,13 @@ export const BLOG_INSTRUCTIONS = [
   "사무소 이름·연락처와 명시사항은 따로 붙으니 쓰지 않는다.",
   "style.instruction의 글 성격을 따르고, emphasis(중개사가 직접 본 현장 메모)가 있으면 살린다.",
   "글은 sections의 소제목 몇 개로 나누고, checklist에는 글 끝에 붙는 '현장에서 확인할 점'을 쓴다.",
+  "instagram에는 같은 내용으로 인스타그램에 올릴 글을, threads에는 스레드에 올릴 두세 문장을 쓴다. 해시태그는 hashtags에만 쓴다.",
 ].join("\n");
 
 export const BLOG_RESULT_SCHEMA = Object.freeze({
   type: "object",
   additionalProperties: false,
-  required: ["title", "sections", "checklist", "hashtags", "snsShort", "factsUsed"],
+  required: ["title", "sections", "checklist", "hashtags", "instagram", "threads", "factsUsed"],
   properties: {
     title: { type: "string" },
     sections: {
@@ -162,7 +163,8 @@ export const BLOG_RESULT_SCHEMA = Object.freeze({
     },
     checklist: { type: "array", items: { type: "string" } },
     hashtags: { type: "array", items: { type: "string" } },
-    snsShort: { type: "string" },
+    instagram: { type: "string" },
+    threads: { type: "string" },
     factsUsed: { type: "array", items: { type: "string" } },
   },
 });

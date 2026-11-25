@@ -1967,12 +1967,51 @@ html:has(.rt-pick-bar:not([hidden])) { scroll-padding-bottom: calc(var(--rt-pick
 .bl-cardset .work-secondary-button { width: 100%; margin-bottom: 8px; }
 .bl-gap { padding: 0 4px; color: var(--ds-paper); background: var(--ds-stamp); font-weight: 800; }
 .bl-actions { display: grid; gap: 8px; }
-.bl-actions .work-primary-button:disabled, .bl-actions .work-secondary-button:disabled { color: var(--ds-ink-soft); border-color: var(--ds-edge); background: var(--ds-paper-2); cursor: not-allowed; }
+.bl-actions .work-primary-button:disabled, .bl-actions .work-secondary-button:disabled, .bl-do .work-primary-button:disabled { color: var(--ds-ink-soft); border-color: var(--ds-edge); background: var(--ds-paper-2); cursor: not-allowed; }
 .bl-actions__why { margin: 0; color: var(--ds-ink); font-weight: 800; text-align: center; }
 .bl-actions__why:empty { display: none; }
 .bl-actions__row { display: flex; flex-wrap: wrap; gap: 8px; }
 .bl-text-button { min-height: 44px; padding: 0 12px; border: 0; color: var(--ds-stamp); background: transparent; font: inherit; font-weight: 800; text-decoration: underline; text-underline-offset: 4px; cursor: pointer; }
 .bl-doc .work-result-bar__copy:disabled { color: var(--ds-ink-soft); background: var(--ds-paper-2); cursor: not-allowed; }
+/* 올릴 곳 탭 넷(2026-11-25): 블로그·인스타그램·스레드·카카오톡. 360px에서도 한 줄에 들게 칸 폭을 글자 수(3·5·3·4)대로 나누고,
+   고른 표시 "✓"는 .bl-seg와 같이 단추 왼쪽 위에 작게 둔다(글자 폭을 차지하면 '✓ 인스타그램'이 넘친다). */
+.bl-places { display: grid; gap: 6px; margin: 0 0 12px; }
+.bl-places__label { margin: 0; color: var(--ds-ink-soft); font-weight: 800; }
+.work-ui .bl-places__list { grid-template-columns: minmax(0, 3fr) minmax(0, 5fr) minmax(0, 3fr) minmax(0, 4fr); gap: 4px; }
+.work-ui .bl-places__list .work-choice { padding-inline: 2px; white-space: nowrap; }
+.bl-check__else { margin: 8px 0 0; color: var(--ds-ink-soft); }
+/* 올라갈 모습(어림 그림): 인스타그램은 그림 → 글, 스레드는 글 → 그림, 카카오톡은 말풍선. 자동으로 붙는 글은 4줄까지만 보인다. */
+.bl-look { display: grid; gap: 8px; margin: 12px 0; }
+.bl-look[hidden] { display: none; }
+.bl-look h3 { margin: 0; color: var(--ds-navy); font-size: 1rem; }
+.bl-look h3 small { color: var(--ds-ink-soft); font-weight: 700; }
+.bl-post { display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--ds-edge); border-radius: 12px; background: var(--ds-paper); box-shadow: 0 6px 18px rgba(16, 24, 40, 0.07); }
+.bl-post__who { display: flex; align-items: center; gap: 10px; margin: 0; padding: 10px 12px; color: var(--ds-ink); }
+.bl-post__mark { position: relative; flex: 0 0 auto; width: 32px; height: 32px; overflow: hidden; border-radius: 50%; background: var(--ds-paper-2); }
+.bl-post__mark img { position: absolute; top: -8px; left: -29px; width: 90px; max-width: none; height: auto; }
+.bl-post__img { display: block; width: 100%; height: auto; border-block: 1px solid var(--ds-edge); }
+.bl-post__img[hidden] { display: none; }
+.bl-post__text { display: grid; gap: 10px; padding: 12px; line-height: 1.6; }
+.bl-post__text p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.bl-post__text p:empty { display: none; }
+.bl-post__tags { color: var(--ad-blue); word-break: keep-all; }
+.bl-post__auto { padding: 8px 10px; border-radius: 8px; background: var(--ad-auto); }
+.bl-post__auto small { display: block; margin-bottom: 2px; color: var(--ad-warn-ink); font-size: 1rem; font-weight: 800; }
+.bl-post__auto p { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 4; }
+.bl-post[data-place="threads"] .bl-post__img { order: 1; border-bottom: 0; }
+.bl-post[data-place="kakao"] { border: 0; border-radius: 0; background: transparent; box-shadow: none; gap: 8px; }
+.bl-post[data-place="kakao"] .bl-post__who { display: none; }
+.bl-post[data-place="kakao"] .bl-post__img { width: 62%; border: 1px solid var(--ds-edge); border-radius: 12px; }
+.bl-post[data-place="kakao"] .bl-post__text { width: 88%; border: 1px solid var(--ds-edge); border-radius: 4px 14px 14px 14px; background: var(--ds-paper); }
+/* 올리는 순서: 글자 수 한 줄 → ① 그림 저장 ② 글 복사 ③ 그곳에서 붙여 넣기. 980px 이상에서는 스크립트가 고치는 칸 아래로 옮긴다. */
+.bl-do { display: grid; gap: 10px; margin: 12px 0; padding: 14px 16px; border: 1px solid var(--ds-edge); border-radius: var(--ad-radius); background: var(--ds-paper-2); }
+.bl-meter { margin: 0; color: var(--ds-ink-soft); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.bl-meter--over { color: var(--ds-stamp); font-weight: 800; }
+.bl-order { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; counter-reset: bl-order; }
+.bl-order li { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 6px 8px; align-items: start; counter-increment: bl-order; line-height: 1.6; }
+.bl-order li[hidden] { display: none; }
+.bl-order li::before { content: counter(bl-order); display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; color: var(--ds-paper); background: var(--ds-navy); font-weight: 800; font-variant-numeric: tabular-nums; }
+.bl-order li > button { grid-column: 2; width: 100%; }
 
 @media (min-width: 640px) {
   .work-ui .bl-seg[data-cols="4"] { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -1986,6 +2025,9 @@ html:has(.rt-pick-bar:not([hidden])) { scroll-padding-bottom: calc(var(--rt-pick
   .bl-result { grid-template-columns: minmax(0, 1fr) 360px; align-items: start; gap: 28px; }
   .bl-result__side { position: sticky; top: 16px; }
   .bl-result__side .bl-fold { max-width: none; }
+  .work-ui .bl-places__list { max-width: 560px; }
+  .bl-result__main .bl-do { margin: 14px 0 0; }
+  .bl-result__main .bl-order li > button { width: auto; min-width: 240px; justify-self: start; }
   .work-ui .bl-styles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 

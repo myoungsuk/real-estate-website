@@ -329,7 +329,8 @@ for (const [device, width] of DEVICES) {
       headings: ["단지 개요", "생활 환경", "5억 원대 실거주"],
       checklist: ["주차 동선 확인", "동·층·방향을 낮과 저녁에 확인"],
       hashtags: ["신흥동", "대전동구"],
-      snsShort: "신흥 SK뷰 단지 살펴보기",
+      instagram: "신흥 SK뷰 단지를 살펴봤습니다.\n주변 생활 시설은 현장에서 함께 둘러보시면 좋습니다.",
+      threads: "신흥 SK뷰 단지를 살펴봤습니다. 실제 거래 가격은 상담 때 확인해 드립니다.",
       factsUsed: ["규모"],
     };
     const queued = blog.draftOf(sinheung, { status: "queued", needsLocation: false, createdAt: blog.NOW.toISOString(), updatedAt: blog.NOW.toISOString() });
@@ -353,11 +354,12 @@ for (const [device, width] of DEVICES) {
     const check = page.locator("[data-bl-check]");
     await expect(check).toContainText("복사 전에 고칠 곳 1곳");
     const blocked = page.locator("[data-bl-where='h3']");
-    const copy = page.locator("[data-bl-copy='blog']");
+    const copy = page.locator("[data-bl-copy]");
     await expect(copy).toBeDisabled();
-    // 휴대폰은 글 칸이 길어 고칠 곳 줄 ~ 막힌 칸까지만 찍는다(복사 단추는 맨 아래, 번호 글로 알림). PC는 오른쪽 복사 단추·카드 칸까지.
-    if (device === "phone") await snap(page, "blog-phone-3-result", { clip: [check, blocked], fullWidth: true, targets: [check, blocked] });
-    else await snap(page, "blog-wide-3-result", { clip: [check, blocked, copy, page.locator("[data-bl-cardset]")], fullWidth: true, targets: [check, blocked, copy] });
+    const places = page.locator("[data-bl-places]");
+    // 휴대폰은 글 칸이 길어 올릴 곳 단추 ~ 막힌 칸까지만 찍는다(복사 단추는 맨 아래, 번호 글로 알림). PC는 오른쪽 '올리는 순서' 상자(복사 단추)까지.
+    if (device === "phone") await snap(page, "blog-phone-3-result", { clip: [page.locator(".bl-result__title"), places, check, blocked], fullWidth: true, targets: [places, check, blocked] });
+    else await snap(page, "blog-wide-3-result", { clip: [page.locator(".bl-result__title"), places, check, blocked, page.locator("[data-bl-do]")], fullWidth: true, targets: [places, check, copy] });
     const cardset = page.locator("[data-bl-cardset]");
     const images = cardset.locator("[data-bl-cardset-list] img");
     await expect(images).toHaveCount(3);

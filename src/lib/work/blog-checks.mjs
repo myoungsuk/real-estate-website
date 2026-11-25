@@ -31,7 +31,9 @@ export function allowedStyles(source) {
 // sections·heading·sectionParagraphs·checklist·checkItem은 소제목이 있는 새 꼴(2026-11-23 "길이·구성 지시")에만 쓴다.
 // AI 지시문에는 이 숫자를 적지 않는다(2026-11-24). 넘친 결과는 validateBlogResult()가 이 상한으로 잘라서 받는다.
 export const BLOG_RESULT_LIMITS = Object.freeze({ title: 60, paragraphs: 12, paragraph: 600, hashtags: 10, hashtag: 30, snsShort: 200, factsUsed: 30, fact: 200,
-  sections: 8, heading: 40, sectionParagraphs: 4, checklist: 10, checkItem: 120 });
+  sections: 8, heading: 40, sectionParagraphs: 4, checklist: 10, checkItem: 120,
+  // 올릴 곳 글(2026-11-25): 인스타그램 글과 스레드 글. 스레드 500자는 그곳의 글 상한이고, 명시사항을 붙인 뒤의 한도는 화면(blog-places.mjs placeVerdict)이 본다.
+  instagram: 1200, threads: 500 });
 export const EMPHASIS_MAX = 500;
 export const LOCATION_MAX = 100;
 const DIRECTIONS = new Set(["동향", "서향", "남향", "북향", "남동향", "남서향", "북동향", "북서향"]);
@@ -181,9 +183,11 @@ export function validateEmphasis(raw, { officePhone = "" } = {}) {
 }
 
 // ── AI 결과 모양 ──
-// 두 꼴을 받는다.
+// 세 꼴을 받는다.
 // - 옛 꼴(키 5개): title·paragraphs·hashtags·snsShort·factsUsed. 2026-11-23 전에 만든 초안과 같은 모양으로 돌려준다.
-// - 새 꼴(키 6개): title·sections[{ heading, paragraphs[] }]·checklist[]·hashtags·snsShort·factsUsed.
+// - 소제목 꼴(키 6개): title·sections[{ heading, paragraphs[] }]·checklist[]·hashtags·snsShort·factsUsed. 2026-11-25 전에 만든 초안.
+// - 올릴 곳 꼴(키 7개, 2026-11-25부터 AI에 이 꼴로 받는다): 소제목 꼴에서 snsShort 대신 instagram·threads(올릴 곳마다 따로 쓴 글).
+//   돌려주는 값에는 snsShort가 없고 instagram·threads가 있다. 앞의 두 꼴은 그 반대다(화면이 snsShort를 두 곳에 같이 보임).
 //   저장·화면은 문단을 한 줄로 펴서 paragraphs에 두고, headings(paragraphs와 같은 길이, 소제목이 시작되는 문단에만 글자, 나머지는 "")와 checklist를 함께 둔다.
 //   그래서 숫자 검사·복사·화면의 문단 칸은 옛 꼴과 같은 paragraphs를 그대로 쓴다.
 // 2026-11-24부터 AI 지시문에 글자 수·개수를 적지 않고(사용자 결정 "제약을 많이 걸지 말라"), 넘친 결과는 버리지 않고 잘라서 받는다.
@@ -195,11 +199,13 @@ export function validateBlogResult(value) {
   const L = BLOG_RESULT_LIMITS;
   if (!isPlainObject(value)) return { ok: false };
   const keys = Object.keys(value).sort().join(",");
-  const sectioned = keys === "checklist,factsUsed,hashtags,sections,snsShort,title";
+  const placed = keys === "checklist,factsUsed,hashtags,instagram,sections,threads,title";
+  const sectioned = placed || keys === "checklist,factsUsed,hashtags,sections,snsShort,title";
   if (!sectioned && keys !== "factsUsed,hashtags,paragraphs,snsShort,title") return { ok: false };
   const isText = (item) => typeof item === "string";
   const isTextList = (list) => Array.isArray(list) && list.every(isText);
-  if (!isText(value.title) || !isText(value.snsShort) || !isTextList(value.hashtags) || !isTextList(value.factsUsed)) return { ok: false };
+  if (!isText(value.title) || !isTextList(value.hashtags) || !isTextList(value.factsUsed)) return { ok: false };
+  if (placed ? !isText(value.instagram) || !isText(value.threads) : !isText(value.snsShort)) return { ok: false };
   if (sectioned) {
     const isSection = (section) => isPlainObject(section) && Object.keys(section).sort().join(",") === "heading,paragraphs" && isText(section.heading) && isTextList(section.paragraphs);
     if (!isTextList(value.checklist) || !Array.isArray(value.sections) || !value.sections.every(isSection)) return { ok: false };
@@ -221,7 +227,7 @@ export function validateBlogResult(value) {
   const title = cut(value.title, L.title);
   const common = {
     hashtags: textList(value.hashtags, L.hashtags, L.hashtag, (item) => item.replace(/^#*/u, "").trim()).map((item) => `#${item}`),
-    snsShort: cut(value.snsShort, L.snsShort),
+    ...(placed ? { instagram: cut(value.instagram, L.instagram), threads: cut(value.threads, L.threads) } : { snsShort: cut(value.snsShort, L.snsShort) }),
     factsUsed: textList(value.factsUsed, L.factsUsed, L.fact),
   };
   const mark = () => (trimmed ? { trimmed: true } : {});
@@ -363,8 +369,9 @@ const HYPE = /(보장|확실|무조건|반드시\s*오|오를\s*(?:것|수밖에
 
 const sameArea = (a, b) => Math.abs(a - b) < 0.005;
 
-// 글 검사. draft: { title, paragraphs[], hashtags[], snsShort }. 돌려주는 값: { blocks[], warnings[] }.
-// 항목 모양: { kind, text, where }. where는 "title"·"p1"…·"sns". 숫자 다름(block)은 복사를 막는다.
+// 글 검사. draft: { title, paragraphs[], hashtags[], snsShort } 또는 snsShort 대신 { instagram, threads }(올릴 곳 꼴). 돌려주는 값: { blocks[], warnings[] }.
+// 항목 모양: { kind, text, where }. where는 "title"·"p1"…·"sns"(올릴 곳 꼴은 "instagram"·"threads"). 숫자 다름(block)은 복사를 막는다.
+// 카카오톡 글은 따로 받지 않고 제목과 인스타그램 글로 코드가 만들므로(blog-places.mjs) 따로 볼 칸이 없다.
 // 2026-11-24부터 결과 글 칸 전부의 주민등록번호·전화번호(사무소 공개 번호 officePhone 빼고)·이메일·호수 꼴도 복사를 막는다(kind "personal",
 // text는 찾은 글자 대신 종류 이름만 적는다. check_json이 D1에 남기 때문). 공개 자료에 그대로 있는 호수(사무소 '105호' 같은 것)는 막지 않는다.
 // 지번은 따로 보지 않는다(입력에 소재지를 보내지 않으므로 '입력에 있는 사실만' 지시문에 맡김, 대장 결정 2026-11-24).
@@ -379,7 +386,9 @@ export function checkBlogDraft(draft, { source, inputs = {}, emphasis = "", offi
   // 소제목(h1…, 그 문단 번호)과 '현장에서 확인할 점'(check)도 복사하는 글에 들어가므로 같이 본다. 옛 꼴 초안에는 둘 다 없다.
   const headingParts = (draft.headings ?? []).map((text, index) => [`h${index + 1}`, text]).filter(([, text]) => typeof text === "string" && text.trim());
   const parts = [["title", draft.title], ...headingParts, ...draft.paragraphs.map((text, index) => [`p${index + 1}`, text]),
-    ...(draft.checklist ?? []).map((text) => ["check", text]), ["sns", draft.snsShort], ["tags", (draft.hashtags ?? []).join(" ")]];
+    ...(draft.checklist ?? []).map((text) => ["check", text]),
+    ...(typeof draft.instagram === "string" || typeof draft.threads === "string" ? [["instagram", draft.instagram], ["threads", draft.threads]] : [["sns", draft.snsShort]]),
+    ["tags", (draft.hashtags ?? []).join(" ")]];
   for (const [where, raw] of parts) {
     const scrubbed = String(raw ?? "").normalize("NFKC").replace(UNIT_ALL, (unit) => (publicUnits.has(unit.replace(/\s/gu, "")) ? " " : unit));
     for (const kind of findPersonalPatterns(scrubbed, { officePhone, checkUnit: true })) blocks.push({ kind: "personal", text: PERSONAL_LABELS[kind], where });

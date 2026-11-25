@@ -2,6 +2,7 @@
 import AdminIcon from "../../../components/admin/AdminIcon.astro";
 import AdminPageHelp from "../../../components/admin/AdminPageHelp.astro";
 import complexes from "../../../data/complexes.json";
+import office from "../../../data/office.json";
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 import { complexCardData } from "../../../lib/work/blog-cards.mjs";
 
@@ -17,7 +18,7 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
 
 <AdminLayout
   title="글 초안 | 행복한부동산 관리자"
-  description="공개 매물·단지 하나로 블로그 글과 SNS 짧은 글 초안을 만드는 관리자 업무 도구입니다."
+  description="공개 매물·단지 하나로 블로그·인스타그램·스레드·카카오톡에 올릴 글 초안을 만드는 관리자 업무 도구입니다."
 >
   <div class="work-ui work-doc bl-doc" data-bl-tool>
     <script type="application/json" data-bl-card-data set:html={cardData}></script>
@@ -148,9 +149,18 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
         <div class="bl-result__main">
           <h2 class="bl-result__title" tabindex="-1">만든 글 <small data-bl-result-meta></small></h2>
           <p class="admin-inline-notice bl-alert" role="alert" data-bl-source-gone hidden><span aria-hidden="true">!</span><span>고른 자료가 지금 공개 자료에 없어 명시사항을 붙일 수 없습니다. 이 초안은 복사할 수 없습니다.</span></p>
+          <div class="bl-places" role="radiogroup" aria-labelledby="bl-places-label">
+            <p class="bl-places__label" id="bl-places-label">어디에 올릴까요?</p>
+            <div class="work-segment bl-seg bl-places__list" data-bl-places>
+              <label class="work-choice"><input type="radio" name="bl-place" value="blog" autocomplete="off" checked /><span>블로그</span></label>
+              <label class="work-choice"><input type="radio" name="bl-place" value="instagram" autocomplete="off" /><span>인스타그램</span></label>
+              <label class="work-choice"><input type="radio" name="bl-place" value="threads" autocomplete="off" /><span>스레드</span></label>
+              <label class="work-choice"><input type="radio" name="bl-place" value="kakao" autocomplete="off" /><span>카카오톡</span></label>
+            </div>
+          </div>
           <div class="bl-check" role="status" data-bl-check></div>
           <div class="bl-article">
-            <div class="work-row bl-para" data-bl-where="title">
+            <div class="work-row bl-para" data-bl-where="title" data-bl-field="title">
               <label class="work-row__label" for="bl-title">제목</label>
               <div class="work-row__control">
                 <input id="bl-title" type="text" autocomplete="off" data-bl-title />
@@ -158,7 +168,7 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
                 <small class="bl-para__issue" data-bl-issue hidden></small>
               </div>
             </div>
-            <div data-bl-paragraphs></div>
+            <div data-bl-paragraphs data-bl-field="body"></div>
             <div class="work-row bl-para" data-bl-where="check" data-bl-checklist-row hidden>
               <label class="work-row__label" for="bl-checklist">현장에서 확인할 점</label>
               <div class="work-row__control">
@@ -167,19 +177,27 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
                 <small class="bl-para__issue" data-bl-issue hidden></small>
               </div>
             </div>
-            <div class="work-row bl-para" data-bl-where="tags">
+            <div class="work-row bl-para" data-bl-where="instagram" data-bl-field="instagram" hidden>
+              <label class="work-row__label" for="bl-instagram" data-bl-instagram-label>인스타그램 글</label>
+              <div class="work-row__control">
+                <textarea id="bl-instagram" rows="8" autocomplete="off" data-bl-instagram></textarea>
+                <small data-bl-instagram-count></small>
+                <small class="bl-para__issue" data-bl-issue hidden></small>
+              </div>
+            </div>
+            <div class="work-row bl-para" data-bl-where="threads" data-bl-field="threads" hidden>
+              <label class="work-row__label" for="bl-threads">스레드 글</label>
+              <div class="work-row__control">
+                <textarea id="bl-threads" rows="4" autocomplete="off" data-bl-threads></textarea>
+                <small data-bl-threads-count></small>
+                <small class="bl-para__issue" data-bl-issue hidden></small>
+              </div>
+            </div>
+            <div class="work-row bl-para" data-bl-where="tags" data-bl-field="tags">
               <label class="work-row__label" for="bl-tags">해시태그</label>
               <div class="work-row__control">
                 <input id="bl-tags" type="text" autocomplete="off" data-bl-tags />
                 <small>띄어쓰기로 나눕니다. 복사할 때 # 을 붙입니다.</small>
-                <small class="bl-para__issue" data-bl-issue hidden></small>
-              </div>
-            </div>
-            <div class="work-row bl-para" data-bl-where="sns">
-              <label class="work-row__label" for="bl-sns">SNS 짧은 글</label>
-              <div class="work-row__control">
-                <textarea id="bl-sns" rows="3" autocomplete="off" data-bl-sns></textarea>
-                <small data-bl-sns-count></small>
                 <small class="bl-para__issue" data-bl-issue hidden></small>
               </div>
             </div>
@@ -193,10 +211,38 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
               <small>저장하지 않습니다. 초안을 다시 열면 다시 넣어야 복사할 수 있습니다.</small>
             </div>
           </div>
-          <div class="bl-actions">
-            <button class="work-primary-button" type="button" data-bl-copy="blog">블로그 글 복사</button>
-            <button class="work-secondary-button" type="button" data-bl-copy="sns">SNS 글 복사</button>
+          <section class="bl-look" aria-labelledby="bl-look-title" data-bl-look hidden>
+            <h3 id="bl-look-title"><span data-bl-look-title>인스타그램에 올라갈 모습</span> <small>어림 그림</small></h3>
+            <div class="bl-post" data-bl-post>
+              <p class="bl-post__who"><span class="bl-post__mark" aria-hidden="true"><img src="/images/brand/leaders-city-happy-logo.webp" alt="" width="1000" height="800" /></span><strong>{office.brandName}</strong></p>
+              <img class="bl-post__img" alt="카드 그림 미리보기" width="270" height="338" data-bl-look-img hidden />
+              <div class="bl-post__text">
+                <p data-bl-look-text></p>
+                <p class="bl-post__tags" data-bl-look-tags></p>
+                <div class="bl-post__auto">
+                  <small>자동으로 붙는 글 · 명시사항</small>
+                  <p data-bl-look-disc></p>
+                </div>
+              </div>
+            </div>
+          </section>
+          <section class="bl-do" aria-labelledby="bl-do-title" data-bl-do>
+            <h3 class="sr-only" id="bl-do-title">올리는 순서</h3>
+            <p class="bl-meter" data-bl-meter></p>
+            <ol class="bl-order">
+              <li data-bl-step-image hidden>
+                <span data-bl-step-image-text></span>
+                <button class="work-secondary-button" type="button" data-bl-step-save>그림 저장</button>
+              </li>
+              <li>
+                <span data-bl-step-copy-text></span>
+                <button class="work-primary-button" type="button" data-bl-copy>블로그 글 복사</button>
+              </li>
+              <li><span data-bl-step-post></span></li>
+            </ol>
             <p class="bl-actions__why" role="status" data-bl-copy-status></p>
+          </section>
+          <div class="bl-actions">
             <div class="bl-actions__row">
               <button class="work-secondary-button" type="button" data-bl-confirm>다 씀</button>
               <button class="bl-text-button" type="button" data-bl-discard>이 초안 버리기</button>
@@ -276,7 +322,6 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
       BLOG_SOURCE_PAGE_SIZE,
       BLOG_TRIMMED_NOTE,
       apiErrorText,
-      blogCopyText,
       checkView,
       draftStatusText,
       failView,
@@ -285,10 +330,10 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
       limitsView,
       normalizeHashtags,
       pollDelayMs,
-      snsCopyText,
       usdText,
       usdToMicro,
     } from "../../../lib/work/blog-view.mjs";
+    import { BLOG_PLACES, BLOG_PLACE_FIELDS, placeCopyText, placeFieldNote, placeHasWhere, placeMeterText, placeSteps, placeVerdict } from "../../../lib/work/blog-places.mjs";
     import { dateText, kstShort } from "../../../lib/work/realprice-view.mjs";
     import {
       WorkApiError,
@@ -308,6 +353,15 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
     } from "../../../lib/work-blog-client";
 
     interface CheckLine { label: string; whereLabel: string; text: string; where: string }
+    type PlaceId = "blog" | "instagram" | "threads" | "kakao";
+    const PLACE_LABELS = Object.fromEntries(BLOG_PLACES.map((item) => [item.id, item.label])) as Record<PlaceId, string>;
+    // 그 올릴 곳의 글이 비었을 때 복사를 막는 글과, '그 자리로'가 갈 칸.
+    const EMPTY_TEXT: Record<PlaceId, [string, string]> = {
+      blog: ["제목이나 본문이 비어 있습니다.", "title"],
+      instagram: ["인스타그램 글이 비어 있습니다.", "instagram"],
+      threads: ["스레드 글이 비어 있습니다.", "threads"],
+      kakao: ["카카오톡으로 보낼 글이 비어 있습니다.", "instagram"],
+    };
     type Mode = "compose" | "wait" | "result" | "fail";
 
     const root = document.querySelector<HTMLElement>("[data-bl-tool]");
@@ -356,14 +410,31 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
         const titleCount = pick("[data-bl-title-count]");
         const paragraphsBox = pick("[data-bl-paragraphs]");
         const tagsInput = pick<HTMLInputElement>("[data-bl-tags]");
-        const snsInput = pick<HTMLTextAreaElement>("[data-bl-sns]");
+        const placeInputs = [...root.querySelectorAll<HTMLInputElement>('input[name="bl-place"]')];
+        const instagramInput = pick<HTMLTextAreaElement>("[data-bl-instagram]");
+        const instagramLabel = pick("[data-bl-instagram-label]");
+        const instagramCount = pick("[data-bl-instagram-count]");
+        const threadsInput = pick<HTMLTextAreaElement>("[data-bl-threads]");
+        const threadsCount = pick("[data-bl-threads-count]");
         const checklistRow = pick("[data-bl-checklist-row]");
         const checklistInput = pick<HTMLTextAreaElement>("[data-bl-checklist]");
-        const snsCount = pick("[data-bl-sns-count]");
         const relocRow = pick("[data-bl-reloc-row]");
         const relocInput = pick<HTMLInputElement>("[data-bl-reloc]");
-        const copyBlogButton = pick<HTMLButtonElement>('[data-bl-copy="blog"]');
-        const copySnsButton = pick<HTMLButtonElement>('[data-bl-copy="sns"]');
+        const lookPanel = pick("[data-bl-look]");
+        const lookTitle = pick("[data-bl-look-title]");
+        const lookPost = pick("[data-bl-post]");
+        const lookImage = pick<HTMLImageElement>("[data-bl-look-img]");
+        const lookText = pick("[data-bl-look-text]");
+        const lookTags = pick("[data-bl-look-tags]");
+        const lookDisc = pick("[data-bl-look-disc]");
+        const doBox = pick("[data-bl-do]");
+        const meter = pick("[data-bl-meter]");
+        const stepImage = pick("[data-bl-step-image]");
+        const stepImageText = pick("[data-bl-step-image-text]");
+        const stepSave = pick<HTMLButtonElement>("[data-bl-step-save]");
+        const stepCopyText = pick("[data-bl-step-copy-text]");
+        const stepPost = pick("[data-bl-step-post]");
+        const copyButton = pick<HTMLButtonElement>("[data-bl-copy]");
         const copyStatus = pick("[data-bl-copy-status]");
         const confirmButton = pick<HTMLButtonElement>("[data-bl-confirm]");
         const discardButton = pick<HTMLButtonElement>("[data-bl-discard]");
@@ -408,6 +479,11 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
         let busy = false;
         let edited = false;
         let copyReady = false;
+        // 올릴 곳(블로그·인스타그램·스레드·카카오톡). 초안을 열 때마다 블로그로 돌아간다. 주소·브라우저 저장소에 넣지 않는다.
+        let place: PlaceId = "blog";
+        let hasChecklist = false;
+        // 지금 그려 둔 카드 그림(data 주소). '올라갈 모습'과 순서 글이 쓴다.
+        let cardImages: string[] = [];
         let cardsetKey = "";
         let cardsetSeq = 0;
 
@@ -935,7 +1011,11 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
           if (!result) return;
           titleInput.value = result.title;
           tagsInput.value = result.hashtags.join(" ");
-          snsInput.value = result.snsShort;
+          // 2026-11-25 전에 만든 초안에는 인스타그램·스레드 글이 따로 없어, 그때의 SNS 짧은 글을 두 칸에 같이 넣는다.
+          instagramInput.value = result.instagram ?? result.snsShort ?? "";
+          threadsInput.value = result.threads ?? result.snsShort ?? "";
+          place = "blog";
+          for (const input of placeInputs) input.checked = input.value === place;
           // 소제목이 있는 새 꼴이면 그 문단 앞에 소제목 칸을 둔다(옛 꼴 초안은 headings가 없어 이전과 같음).
           const headings = result.headings ?? [];
           paragraphsBox.replaceChildren(...result.paragraphs.flatMap((text, index) => {
@@ -980,7 +1060,7 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
             return [...head, wrap];
           }));
           checklistInput.value = (result.checklist ?? []).join("\n");
-          checklistRow.hidden = !result.checklist;
+          hasChecklist = Boolean(result.checklist);
           const closed = next.closed === "confirmed" ? " · 다 씀" : next.closed === "cancelled" ? " · 버림" : next.closed === "auto" ? " · 30일 지나 닫힘" : "";
           resultMeta.textContent = `${kstShort(next.createdAt)} 만듦${closed} · 고치면 바로 다시 검사합니다. 고친 글은 저장되지 않습니다.${result.trimmed ? ` ${BLOG_TRIMMED_NOTE}` : ""}`;
           relocRow.hidden = !next.needsLocation;
@@ -1003,7 +1083,7 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
           for (const input of paragraphsBox.querySelectorAll<HTMLInputElement>("[data-bl-heading]")) list[Number(input.dataset.blHeading)] = input.value;
           return list;
         };
-        const checklistTexts = () => (checklistRow.hidden ? [] : checklistInput.value.split("\n").map((line) => line.trim().replace(/^[-•·]\s*/u, "")).filter(Boolean));
+        const checklistTexts = () => (!hasChecklist ? [] : checklistInput.value.split("\n").map((line) => line.trim().replace(/^[-•·]\s*/u, "")).filter(Boolean));
         function currentDisclosure() {
           if (!draft?.currentSource || !draft.sourcePublic) return null;
           const inputs = { ...draft.inputs, ...(draft.needsLocation ? { location: relocInput.value } : {}) };
@@ -1015,30 +1095,72 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
           };
         }
         const lineOf = (item: CheckLine): [string, string] => [`${item.label}: ${item.whereLabel} ${item.text}`, item.where];
+        const length = (text: string) => [...text].length;
+
+        // 그 올릴 곳의 복사 글에 넣을 값. 블로그는 제목·문단·확인할 점·해시태그, 인스타그램·스레드는 그곳 글, 카카오톡은 제목과 인스타그램 글.
+        function placeInput(which: PlaceId, disclosureText: string) {
+          const hashtags = normalizeHashtags(tagsInput.value);
+          if (which === "blog") return { title: titleInput.value, paragraphs: paragraphTexts(), headings: headingTexts(), checklist: checklistTexts(), hashtags, disclosureText };
+          if (which === "threads") return { text: threadsInput.value, hashtags, disclosureText };
+          return { title: titleInput.value, text: instagramInput.value, hashtags, disclosureText };
+        }
+        const placeEmpty = (which: PlaceId) => (which === "blog"
+          ? !titleInput.value.trim() || !paragraphTexts().some((text) => text.trim())
+          : which === "threads" ? !threadsInput.value.trim() : !instagramInput.value.trim());
+
+        // '올리는 순서' 상자의 자리. 980px 이상에서 인스타그램·스레드·카카오톡은 글 칸이 짧아 그 바로 아래(왼쪽)로 옮기고,
+        // 블로그는 글이 길어 지금처럼 오른쪽 고정 칸에 둔다. 좁은 화면은 늘 '올라갈 모습' 아래다(키보드 순서 = 보이는 순서).
+        const resultMain = pick(".bl-result__main", resultPanel);
+        const wideQuery = window.matchMedia("(min-width: 980px)");
+        function placeDoBox() {
+          if (wideQuery.matches && place !== "blog") {
+            if (doBox.parentElement !== resultMain) resultMain.append(doBox);
+          } else if (lookPanel.nextElementSibling !== doBox) {
+            lookPanel.after(doBox);
+          }
+        }
 
         function recheck() {
           const current = draft;
           if (!current?.result) return;
+          placeDoBox();
           const title = titleInput.value;
           const paragraphs = paragraphTexts();
           const view = checkView(current.currentSource
-            ? checkBlogDraft({ title, paragraphs, headings: headingTexts(), checklist: checklistTexts(), snsShort: snsInput.value, hashtags: normalizeHashtags(tagsInput.value) }, { source: current.currentSource, inputs: current.inputs, emphasis: current.emphasisNumbers, officePhone })
+            ? checkBlogDraft({ title, paragraphs, headings: headingTexts(), checklist: checklistTexts(), instagram: instagramInput.value, threads: threadsInput.value, hashtags: normalizeHashtags(tagsInput.value) }, { source: current.currentSource, inputs: current.inputs, emphasis: current.emphasisNumbers, officePhone })
             : { blocks: [], warnings: [] });
           const blocks = view.blocks as CheckLine[];
           const warnings = view.warnings as CheckLine[];
           const made = currentDisclosure();
           const missing = made ? (made.disclosure.missing as string[]) : [];
           const locationIssue = Boolean(made && (made.personal.includes("location") || made.errors.includes("location")));
-          const empty = !title.trim() || !paragraphs.some((text) => text.trim());
-          copyReady = Boolean(made) && blocks.length === 0 && missing.length === 0 && !locationIssue && !empty;
+          // 명시사항이 다 찼을 때만 글자 수 한도를 본다(덜 찬 명시사항으로 세면 숫자가 틀림).
+          const discReady = Boolean(made) && missing.length === 0 && !locationIssue;
+          const disclosureText = made ? (made.disclosure.text as string) : "";
+          const verdictOf = (which: PlaceId) => placeVerdict(which, placeInput(which, disclosureText));
+          const blocksOf = (which: PlaceId) => blocks.filter((item) => placeHasWhere(which, item.where));
+          const readyOf = (which: PlaceId) => discReady && blocksOf(which).length === 0 && !placeEmpty(which) && verdictOf(which).ok;
+          const verdict = verdictOf(place);
+          const placeBlocks = blocksOf(place);
+          const placeWarnings = warnings.filter((item) => placeHasWhere(place, item.where));
+          const empty = placeEmpty(place);
+          const textWhere = place === "threads" ? "threads" : place === "blog" ? "title" : "instagram";
+          copyReady = readyOf(place);
+
+          // 올릴 곳에 맞는 칸만 보인다. 카카오톡 글은 따로 받지 않고 제목과 인스타그램 글로 만든다.
+          for (const row of resultPanel.querySelectorAll<HTMLElement>("[data-bl-field]")) row.hidden = !(BLOG_PLACE_FIELDS[place] as readonly string[]).includes(row.dataset.blField ?? "");
+          checklistRow.hidden = place !== "blog" || !hasChecklist;
+          instagramLabel.textContent = place === "kakao" ? "카카오톡 글" : "인스타그램 글";
 
           checkBox.replaceChildren();
           checkBox.className = copyReady ? "bl-check bl-check--ok" : "bl-check";
-          const blockItems: [string, string | null][] = blocks.map(lineOf);
+          const blockItems: [string, string | null][] = placeBlocks.map(lineOf);
           if (!made) blockItems.push(["명시사항을 붙일 수 없습니다(고른 자료가 공개 자료에 없음).", null]);
           else if (locationIssue) blockItems.push(["소재지에 호수·전화번호처럼 보이는 글자가 있습니다.", "reloc"]);
           else if (missing.length > 0) blockItems.push([`명시사항 빈 칸: ${missing.map(fieldLabel).join("·")}`, missing.includes("location") ? "reloc" : null]);
-          if (empty) blockItems.push(["제목이나 본문이 비어 있습니다.", "title"]);
+          if (empty) blockItems.push(EMPTY_TEXT[place]);
+          else if (discReady) for (const reason of verdict.reasons as string[]) blockItems.push([reason, textWhere]);
+          const noteItems: [string, string | null][] = [...placeWarnings.map(lineOf), ...(discReady ? (verdict.notes as string[]).map((note): [string, string | null] => [note, "tags"]) : [])];
           const addList = (heading: string, items: [string, string | null][], className: string) => {
             checkBox.append(el("p", className, heading));
             const list = el("ul");
@@ -1058,8 +1180,11 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
             checkBox.append(list);
           };
           if (blockItems.length > 0) addList(`복사 전에 고칠 곳 ${blockItems.length}곳`, blockItems, "bl-check__title");
-          else checkBox.append(el("p", "bl-check__title", `✓ 복사할 수 있습니다${warnings.length ? ` · 확인할 곳 ${warnings.length}곳` : ""}`));
-          if (warnings.length > 0) addList(`확인할 곳 ${warnings.length}곳(복사는 됨)`, warnings.map(lineOf), "bl-check__title bl-check__title--warn");
+          else checkBox.append(el("p", "bl-check__title", `✓ 복사할 수 있습니다${noteItems.length ? ` · 확인할 곳 ${noteItems.length}곳` : ""}`));
+          if (noteItems.length > 0) addList(`확인할 곳 ${noteItems.length}곳(복사는 됨)`, noteItems, "bl-check__title bl-check__title--warn");
+          // 다른 올릴 곳에만 있는 문제는 여기서 막지 않고 어디인지만 알린다(명시사항 문제는 위에 이미 적힘).
+          const elsewhere = discReady ? BLOG_PLACES.filter((item) => item.id !== place && !readyOf(item.id as PlaceId)).map((item) => item.label) : [];
+          if (elsewhere.length > 0) checkBox.append(el("p", "bl-check__else", `다른 올릴 곳에도 고칠 곳이 있습니다: ${elsewhere.join("·")}`));
 
           for (const wrap of resultPanel.querySelectorAll<HTMLElement>("[data-bl-where]")) {
             const where = wrap.dataset.blWhere;
@@ -1074,8 +1199,11 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
               issue.hidden = all.length === 0;
             }
           }
-          titleCount.textContent = `${title.length} / 60자`;
-          snsCount.textContent = `${snsInput.value.length} / 200자 · 복사할 때 명시사항이 함께 붙습니다.`;
+          titleCount.textContent = place === "kakao" ? `${title.length} / 60자 · 카카오톡 글 첫 줄에 [제목]으로 들어갑니다.` : `${title.length} / 60자`;
+          instagramCount.textContent = place === "kakao"
+            ? `${length(instagramInput.value.trim()).toLocaleString("ko-KR")}자 · 인스타그램 글과 같은 칸입니다(여기서 고치면 인스타그램 글도 바뀝니다). 해시태그 없이 명시사항만 뒤에 붙습니다.`
+            : discReady ? `${placeFieldNote(verdictOf("instagram").count)} · 해시태그와 명시사항은 복사할 때 뒤에 붙습니다.` : `${length(instagramInput.value.trim()).toLocaleString("ko-KR")}자 · 해시태그와 명시사항은 복사할 때 뒤에 붙습니다.`;
+          threadsCount.textContent = discReady ? placeFieldNote(verdictOf("threads").count) : `${length(threadsInput.value.trim()).toLocaleString("ko-KR")}자 · 명시사항은 복사할 때 뒤에 붙습니다.`;
 
           disclosureBox.replaceChildren();
           if (made) {
@@ -1089,14 +1217,60 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
             disclosureBox.append(el("p", "", "붙일 수 없음"));
           }
 
-          copyBlogButton.disabled = !copyReady;
-          copySnsButton.disabled = !copyReady;
+          copyButton.disabled = !copyReady;
           barCopy.disabled = !copyReady;
           barText.textContent = copyReady ? "✓ 복사할 수 있음" : `고칠 곳 ${blockItems.length}곳 · 복사 막힘`;
           if (!copyStatus.dataset.state) copyStatus.textContent = copyReady ? "" : "고칠 곳을 고치면 복사할 수 있습니다.";
-          preview.value = copyReady && made ? copyText("blog", made.disclosure.text as string) : "";
+          preview.value = copyReady && made ? placeCopyText(place, placeInput(place, disclosureText)) : "";
+
+          // 글자 수 줄과 올라갈 모습(블로그는 긴 글이라 모습을 그리지 않고 '복사할 글 미리 보기'만 둔다).
+          meter.textContent = discReady ? placeMeterText(verdict.count) : "명시사항이 다 차면 글자 수를 셉니다.";
+          meter.classList.toggle("bl-meter--over", discReady && !verdict.ok);
+          lookPanel.hidden = place === "blog";
+          lookPost.dataset.place = place;
+          lookTitle.textContent = place === "kakao" ? "카카오톡으로 보낼 모습" : `${PLACE_LABELS[place]}에 올라갈 모습`;
+          const body = place === "threads" ? threadsInput.value.trim() : instagramInput.value.trim();
+          lookText.textContent = place === "kakao" && title.trim() ? `[${title.trim()}]\n${body}` : body;
+          // 줄 끝에서 #과 글자가 갈라지지 않게 미리보기에만 붙임 글자(U+2060)를 넣는다. 복사할 글에는 넣지 않는다.
+          lookTags.textContent = place === "instagram" ? normalizeHashtags(tagsInput.value).map((tag) => tag.replace("#", "#\u2060")).join(" ") : "";
+          lookDisc.textContent = !made ? "붙일 수 없음" : missing.length > 0 ? `비어 있음: ${missing.map(fieldLabel).join("·")}` : disclosureText;
+          renderCardBits();
           void updateCardset(made, locationIssue);
         }
+
+        // 순서 글(① 그림 저장 ② 글 복사 ③ 그곳에서 붙여 넣기)과 올라갈 모습의 그림. 카드 그림이 그려질 때마다 다시 부른다.
+        function renderCardBits() {
+          const steps = placeSteps(place, { cardCount: cardImages.length });
+          stepImage.hidden = !steps.image;
+          stepImageText.textContent = steps.image ?? "";
+          stepSave.textContent = cardImages.length > 1 ? `카드 ${cardImages.length}장 저장` : "그림 저장";
+          stepCopyText.textContent = steps.copy;
+          stepPost.textContent = steps.post;
+          copyButton.textContent = steps.copyLabel;
+          barCopy.textContent = steps.copyLabel;
+          const [first] = cardImages;
+          lookImage.hidden = !first;
+          if (first) lookImage.src = first;
+          else lookImage.removeAttribute("src");
+        }
+
+        wideQuery.addEventListener("change", placeDoBox);
+
+        for (const input of placeInputs) {
+          input.addEventListener("change", () => {
+            if (!input.checked) return;
+            place = input.value as PlaceId;
+            copyStatus.textContent = "";
+            delete copyStatus.dataset.state;
+            window.clearTimeout(recheckTimer);
+            recheck();
+          });
+        }
+        stepSave.addEventListener("click", () => {
+          cardsetSave.click();
+          copyStatus.textContent = cardsetStatus.textContent ?? "";
+          copyStatus.dataset.state = "success";
+        });
 
         // ── 카드 그림: 단지는 빌드 때 실은 공개 단지 자료로 3장, 매물은 명시사항이 다 찼을 때 사진 없는 표지 1장 ──
         // 서버를 부르지 않고, 그림은 data 주소로만 보인다(blob 주소·브라우저 저장소 없음). 같은 내용이면 다시 그리지 않는다.
@@ -1106,6 +1280,8 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
           cardsetList.replaceChildren();
           cardsetSave.hidden = true;
           cardsetStatus.textContent = message;
+          cardImages = [];
+          renderCardBits();
         }
         async function updateCardset(made: ReturnType<typeof currentDisclosure>, locationIssue: boolean) {
           const current = draft;
@@ -1114,6 +1290,8 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
             cardsetPanel.hidden = true;
             cardsetKey = "";
             cardsetSeq += 1;
+            cardImages = [];
+            renderCardBits();
             return;
           }
           cardsetPanel.hidden = false;
@@ -1163,6 +1341,8 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
             cardsetSave.textContent = many ? `카드 ${result.images.length}장 저장` : "표지 저장";
             cardsetSave.hidden = false;
             cardsetStatus.textContent = "";
+            cardImages = result.images.map((image) => image.dataUrl);
+            renderCardBits();
           } catch {
             if (seq !== cardsetSeq) return;
             cardsetKey = "";
@@ -1177,13 +1357,6 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
             : "✓ 표지를 내려받았습니다.";
         });
 
-        function copyText(which: "blog" | "sns", disclosureText: string) {
-          const hashtags = normalizeHashtags(tagsInput.value);
-          return which === "blog"
-            ? blogCopyText({ title: titleInput.value, paragraphs: paragraphTexts(), headings: headingTexts(), checklist: checklistTexts(), hashtags, disclosureText })
-            : snsCopyText({ snsShort: snsInput.value, hashtags, disclosureText });
-        }
-
         resultPanel.addEventListener("input", (event) => {
           if (event.target === relocInput) {
             locationValue = relocInput.value;
@@ -1196,17 +1369,18 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
           recheckTimer = window.setTimeout(recheck, 250);
         });
 
-        async function copy(which: "blog" | "sns") {
+        // 지금 고른 올릴 곳의 글을 복사한다. 누르기 직전에 다시 검사해, 막힌 글은 복사하지 않는다.
+        async function copy() {
           window.clearTimeout(recheckTimer);
           recheck();
           const made = currentDisclosure();
           if (!copyReady || !made) return;
-          const text = copyText(which, made.disclosure.text as string);
-          const name = which === "blog" ? "블로그 글" : "SNS 글";
+          const which = place;
+          const text = placeCopyText(which, placeInput(which, made.disclosure.text as string));
           preview.value = text;
           try {
             await navigator.clipboard.writeText(text);
-            copyStatus.textContent = `✓ ${name}을 복사했습니다. 명시사항까지 함께 붙여 넣으세요.`;
+            copyStatus.textContent = placeSteps(which).copied;
             copyStatus.dataset.state = "success";
             edited = false;
           } catch {
@@ -1218,9 +1392,8 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
             copyStatus.dataset.state = "error";
           }
         }
-        copyBlogButton.addEventListener("click", () => void copy("blog"));
-        copySnsButton.addEventListener("click", () => void copy("sns"));
-        barCopy.addEventListener("click", () => copyBlogButton.click());
+        copyButton.addEventListener("click", () => void copy());
+        barCopy.addEventListener("click", () => copyButton.click());
 
         confirmButton.addEventListener("click", async () => {
           if (!draft) return;
