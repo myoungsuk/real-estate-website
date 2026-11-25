@@ -71,7 +71,7 @@ for (const width of [360, 1280]) {
     const changes = Object.fromEntries(calls.writes[0].changes.map((change) => [change.resource, change.data]));
     expect(changes["naver-listings"].items.map((item) => item.id)).toEqual(["9900000030", "9900000040", "9900000001", "9900000050", "9900000060"]);
     expect(changes["naver-listings"].items.find((item) => item.id === "9900000001")).toMatchObject({ title: "가상마을1BL 901동", floorLabel: "고층", summary: "네이버에 공개된 광고 매물입니다. 자세한 조건은 상세 화면에서 확인해 주세요." });
-    expect(changes["naver-listings"].items.find((item) => item.id === "9900000050")).toMatchObject({ title: "가상상가", propertyType: "상가점포", floorLabel: "1층", areaLabel: "계약 66.1㎡ · 전용 84.91㎡" });
+    expect(changes["naver-listings"].items.find((item) => item.id === "9900000050")).toMatchObject({ title: "가상상가 84㎡", propertyType: "상가점포", floorLabel: "1층", areaLabel: "계약 66.1㎡ · 전용 84.91㎡" });
     expect(Object.fromEntries(Object.entries(changes["listing-review-state"].items).map(([id, item]) => [id, item.source]))).toEqual({
       "9900000030": "bank", "9900000040": "manual", "9900000001": "woori", "9900000050": "woori", "9900000060": "woori",
     });
