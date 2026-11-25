@@ -80,7 +80,8 @@ const price = getNaverListingPriceParts(listing.priceLabel, listing.tradeType);
   )}
 </article>
 
-<style>
+<style is:global>
+  /* 카드가 한 화면에 수십 장 그려지므로 범위 표시(data-astro-cid)가 요소마다 붙지 않게 전역 스타일로 둔다. 이 선택자는 카드 밖에서 쓰지 않는다. */
   .listing-card__selection {
     display: flex;
     flex-wrap: wrap;
