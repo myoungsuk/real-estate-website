@@ -119,7 +119,7 @@ test("관리자 메뉴는 모든 메뉴를 묶음에 한 번씩 넣고, 지금 �
   ]);
   const navigationHrefs = [...layout.matchAll(/\{ href: "(\/admin\/[^"]*)", label: "[^"]+", shortLabel: "[^"]+" \}/gu)].map((match) => match[1]);
   const groupHrefs = [...layout.matchAll(/hrefs: \[([^\]]+)\]/gu)].flatMap((match) => [...match[1].matchAll(/"([^"]+)"/gu)].map((href) => href[1]));
-  assert.equal(navigationHrefs.length, 9, "관리자 메뉴 9개(2026-11-19 사용 안내 추가)");
+  assert.equal(navigationHrefs.length, 10, "관리자 메뉴 10개(2026-11-19 사용 안내, 2026-11-25 거래 완료 소식 추가)");
   assert.deepEqual([...groupHrefs].sort(), [...navigationHrefs].sort(), "메뉴 묶음에 빠지거나 두 번 들어간 메뉴가 없음");
   assert.match(layout, /const currentState = \(href: string\): "page" \| "true" \| undefined => \(currentPath === href \? "page" : isCurrentPath\(href\) \? "true" : undefined\);/u);
   assert.equal(layout.split("<a href={item.href} aria-current={currentState(item.href)}>").length - 1, 2, "아래 탭과 PC 구역 알약 줄(nav.admin-topnav) 두 곳 모두 지금 화면·지금 구역");

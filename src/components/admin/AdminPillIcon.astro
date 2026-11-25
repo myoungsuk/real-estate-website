@@ -21,6 +21,7 @@ export type AdminPillName =
   | "content"
   | "external-links"
   | "complexes"
+  | "deal-news"
   | "deployment"
   | "history"
   | "help";
@@ -106,7 +107,8 @@ const { name } = Astro.props;
         <path d="M12 11h.1" />
       </>
     )}
-    {name === "deployment" && <path d="M12 15.4V8.2M9 11l3-3 3 3M8 17.2h8" />}
+    {name === "deal-news" && <path d="M7.8 12.4 10.6 15.2 16.4 8.8" />}
+    {name === "deployment" &&<path d="M12 15.4V8.2M9 11l3-3 3 3M8 17.2h8" />}
     {name === "history" && (
       <>
         <circle cx="12" cy="12" r="4.9" />

@@ -1,0 +1,649 @@
+---
+import AdminIcon from "../../../components/admin/AdminIcon.astro";
+import AdminPageHelp from "../../../components/admin/AdminPageHelp.astro";
+import AdminWriteGate from "../../../components/admin/AdminWriteGate.astro";
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import { DEAL_NEWS_UMD_NAMES } from "../../../lib/admin-deal-news.mjs";
+import { DEAL_NEWS_DEAL_TYPES, DEAL_NEWS_GUARD, DEAL_NEWS_PROPERTY_KINDS, DEAL_NEWS_PUBLIC_MAX, DEAL_NEWS_TITLE } from "../../../lib/deal-news.mjs";
+
+// 최근 거래 완료 소식 넣기(2026-11-25 사용자 결정 17:32:49 "전부 추천대로": 면적대 단추·괄호 지번 덜기·새 화면·홈 사무소 칸 아래).
+// 저장되는 것은 src/data/deal-news.json의 8칸뿐이다. 계약일·잔금·건수·올릴 수 있는 날은 화면 메모리에만 두고 저장·주소·브라우저 저장소에 넣지 않는다.
+// 올릴 수 없는 거래는 초안으로도 저장하지 않는다(공개 저장소에는 draft도 그대로 올라가므로). 서버를 부르므로 prerender 목록에 넣지 않는다.
+---
+
+<AdminLayout
+  title="거래 완료 소식 | 행복한부동산 관리자"
+  description="잔금이 끝나고 계약일에서 60일이 지난 거래를 홈 '최근 거래 완료 소식'에 한 줄로 올립니다."
+>
+  <div class="work-ui work-doc dn-page" data-dn-page>
+    <header class="work-doc__header">
+      <span class="work-round-icon work-round-icon--title" data-tone="teal">
+        <AdminIcon name="check" size={22} />
+      </span>
+      <h1>거래 완료 소식</h1>
+      <span class="admin-stage-badge">홈에 공개</span>
+    </header>
+
+    <p class="work-doc__lead">잔금이 끝나고 계약일에서 60일이 지난 거래를 홈에 한 줄로 올립니다. 가격·동·층·호수·날짜·손님 정보는 넣을 칸이 없고, 계약일·잔금·건수는 이 화면에서만 보고 저장하지 않습니다.</p>
+
+    <AdminPageHelp page="/admin/deal-news/" />
+
+    <AdminWriteGate />
+
+    <section class="work-tool" aria-labelledby="dn-now-title">
+      <h2 id="dn-now-title">지금 홈에 보이는 소식 <small data-dn-now-count></small></h2>
+      <ul class="dn-now" data-dn-now></ul>
+      <p class="dn-quiet" data-dn-now-empty>GitHub의 최신 소식을 불러오고 있습니다.</p>
+      <p class="dn-quiet">새 소식이 위에 붙고, {DEAL_NEWS_PUBLIC_MAX + 1}번째를 올리면 가장 오래된 소식이 빠집니다. 지우기도 저장 전 확인을 거칩니다.</p>
+    </section>
+
+    <section class="work-tool" aria-labelledby="dn-new-title">
+      <h2 id="dn-new-title">새 소식 넣기</h2>
+      <form class="dn-steps" novalidate autocomplete="off" data-dn-form>
+        <fieldset class="dn-step">
+          <legend><span aria-hidden="true">1</span>거래</legend>
+          <div class="work-row">
+            <span class="work-row__label" id="dn-kind-label">건물 종류</span>
+            <div class="work-row__control">
+              <div class="rt-styles dn-choices" role="radiogroup" aria-labelledby="dn-kind-label">
+                {DEAL_NEWS_PROPERTY_KINDS.map((kind) => (
+                  <label class="rt-style"><input type="radio" name="dn-kind" value={kind.value} checked={kind.value === "apartment"} autocomplete="off" data-dn-kind /><span>{kind.label}</span></label>
+                ))}
+              </div>
+              <small data-dn-kind-note hidden>아파트가 아니면 늘 동네 이름으로 올립니다.</small>
+            </div>
+          </div>
+          <div class="work-row">
+            <span class="work-row__label" id="dn-deal-label">거래 종류</span>
+            <div class="work-row__control">
+              <div class="rt-styles dn-choices" role="radiogroup" aria-labelledby="dn-deal-label">
+                {DEAL_NEWS_DEAL_TYPES.map((deal) => (
+                  <label class="rt-style"><input type="radio" name="dn-deal" value={deal.value} checked={deal.value === "sale"} autocomplete="off" data-dn-deal /><span>{deal.label}</span></label>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div class="work-row">
+            <label class="work-row__label" for="dn-contract">계약일</label>
+            <div class="work-row__control">
+              <input id="dn-contract" type="date" autocomplete="off" data-dn-contract />
+              <small>저장하지 않습니다. 60일이 지났는지 보는 데만 씁니다.</small>
+            </div>
+          </div>
+          <div class="work-row">
+            <span class="work-row__label">확인</span>
+            <div class="work-row__control dn-checks">
+              <label class="work-check"><input type="checkbox" autocomplete="off" data-dn-paid /> 잔금이 끝났습니다</label>
+              <label class="work-check" data-dn-seen-row><input type="checkbox" autocomplete="off" data-dn-seen /> 실거래 자료에 이 거래가 올라온 것을 봤습니다</label>
+              <a class="dn-link" href="/admin/work/realprice/" target="_blank" rel="noopener" data-dn-seen-link>실거래가 화면에서 찾기(새 탭)</a>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="dn-step">
+          <legend><span aria-hidden="true">2</span>어디로 올릴지</legend>
+          <div data-dn-complex-part>
+            <div class="work-row">
+              <label class="work-row__label" for="dn-search">단지 찾기</label>
+              <div class="work-row__control">
+                <div class="dn-search">
+                  <input id="dn-search" type="search" maxlength="30" autocomplete="off" placeholder="예: 가상숲" data-dn-search />
+                  <button class="work-secondary-button" type="button" data-dn-search-go>찾기</button>
+                </div>
+                <small data-dn-search-note>최근 6개월 대전 동구 실거래(매매·전세·월세) 자료에서 찾습니다.</small>
+                <ul class="dn-hits" data-dn-hits></ul>
+                <button class="dn-mini dn-none" type="button" aria-pressed="false" data-dn-no-complex>찾는 단지가 없음 · 동네 이름으로</button>
+              </div>
+            </div>
+            <div class="work-row" data-dn-band-row hidden>
+              <span class="work-row__label" id="dn-band-label">전용면적</span>
+              <div class="work-row__control">
+                <div class="dn-areas" role="radiogroup" aria-labelledby="dn-band-label" data-dn-bands></div>
+                <small>이 단지 실거래 자료에 있는 전용면적대입니다. 건수도 같은 면적대로 셉니다.</small>
+              </div>
+            </div>
+            <div class="work-row" data-dn-count-row hidden>
+              <span class="work-row__label">최근 거래 건수</span>
+              <div class="work-row__control">
+                <div class="dn-count">
+                  <button class="work-secondary-button" type="button" data-dn-count-go>최근 거래 건수 확인</button>
+                  <span class="dn-quiet" data-dn-count-hint>한 번만 셉니다. 단지·면적·거래 종류를 바꾸면 다시 셉니다.</span>
+                </div>
+                <p class="dn-result" role="status" aria-live="polite" tabindex="-1" data-dn-count-result hidden></p>
+              </div>
+            </div>
+            <div class="work-row" data-dn-name-row hidden>
+              <label class="work-row__label" for="dn-name">단지 이름</label>
+              <div class="work-row__control">
+                <input id="dn-name" type="text" maxlength="40" autocomplete="off" data-dn-name />
+                <small data-dn-name-note></small>
+              </div>
+            </div>
+          </div>
+          <div class="work-row" data-dn-area-row hidden>
+            <label class="work-row__label" for="dn-area">전용면적(㎡)</label>
+            <div class="work-row__control">
+              <input id="dn-area" class="dn-area-input" type="text" inputmode="decimal" maxlength="6" autocomplete="off" placeholder="예: 84.97" data-dn-area />
+              <small data-dn-area-note>정수로 내려 '전용 84㎡대'처럼 올립니다.</small>
+            </div>
+          </div>
+          <div class="work-row" data-dn-umd-row hidden>
+            <label class="work-row__label" for="dn-umd">동네</label>
+            <div class="work-row__control">
+              <select id="dn-umd" autocomplete="off" data-dn-umd>
+                <option value="">동네 고르기</option>
+                {DEAL_NEWS_UMD_NAMES.map((name) => <option value={name}>{name}</option>)}
+              </select>
+              <small data-dn-umd-note>대전 동구 법정동 가운데 고릅니다.</small>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="dn-step">
+          <legend><span aria-hidden="true">3</span>홈에 보일 모습</legend>
+          <div class="dn-preview">
+            <p class="dn-preview__cap">홈 '{DEAL_NEWS_TITLE}'에 이렇게 한 줄 붙습니다.</p>
+            <div class="dn-line" data-dn-line><i data-dn-line-deal></i><b data-dn-line-place></b><span data-dn-line-area></span></div>
+            <p class="dn-preview__cap">{DEAL_NEWS_GUARD}</p>
+          </div>
+          <div class="dn-judge" role="status" aria-live="polite" data-dn-judge></div>
+          <p class="dn-quiet" data-dn-drop hidden></p>
+          <div class="work-receipt__actions">
+            <button class="work-primary-button" type="submit" disabled data-write-control data-dn-submit>홈에 올리기 · 저장 전 확인</button>
+          </div>
+          <p class="dn-quiet" data-dn-submit-note></p>
+          <p class="admin-form-status" role="status" aria-live="polite" data-dn-status></p>
+        </fieldset>
+      </form>
+    </section>
+  </div>
+
+  <script>
+    import { getAdminSession, readAdminContent, setAdminFormStatus, writeAdminContent, type AdminResource } from "../../../lib/admin-content-client";
+    import { guardAdminFormChanges, reviewAdminContentChange } from "../../../lib/admin-content-review";
+    import { getWorkSession, readWork, WorkApiError } from "../../../lib/work-realprice-client";
+    import {
+      DEAL_NEWS_UMD_NAMES,
+      appendDealNews,
+      buildDealNewsItem,
+      dealNewsAreaBand,
+      dealNewsNameProblem,
+      dealNewsToday,
+      judgeDealNews,
+      newDealNewsId,
+      validateDealNews,
+    } from "../../../lib/admin-deal-news.mjs";
+    import {
+      dealNewsBands,
+      dealNewsBlockerLines,
+      dealNewsCountResult,
+      dealNewsHitNote,
+      dealNewsNowCount,
+      dealNewsReadyLine,
+      dealNewsTrimName,
+      dealNewsUmdOf,
+    } from "../../../lib/admin-deal-news-view.mjs";
+    import { DEAL_NEWS_PUBLIC_MAX, dealNewsAreaText, dealNewsDealLabel, dealNewsLine, dealNewsPropertyLabel } from "../../../lib/deal-news.mjs";
+
+    // judgeDealNews는 .mjs라 TypeScript가 매개변수 기본값({})만 보고 칸을 좁게 읽는다. 함수는 그대로 쓰고 받는 꼴만 넓혀 부른다.
+    const judgeDealNewsInput = judgeDealNews as (input: Record<string, unknown>) => ReturnType<typeof judgeDealNews>;
+
+    interface DealNewsItem {
+      id: string;
+      status: "draft" | "published";
+      placeKind: "complex" | "area";
+      umdName: string;
+      complexName?: string;
+      propertyKind: string;
+      dealType: string;
+      areaBand: number;
+    }
+    interface DealComplex {
+      aptSeq: string;
+      aptName: string;
+      umdName: string;
+      bands: Record<string, number[]>;
+    }
+    interface DealComplexesData {
+      available: boolean;
+      items: DealComplex[];
+      warnings: { code: string }[];
+    }
+    interface DealCountData {
+      available: boolean;
+      count: number | null;
+      basis: { from: string; to: string };
+      coverage?: { complete: boolean; missingMonths: string[] };
+    }
+
+    const root = document.querySelector<HTMLElement>("[data-dn-page]")!;
+    const $ = <T extends HTMLElement>(name: string) => root.querySelector<T>(`[data-dn-${name}]`)!;
+    const form = $<HTMLFormElement>("form");
+    const statusMessage = $("status");
+    const dirtyGuard = guardAdminFormChanges(form);
+
+    // ── 화면 메모리(저장·주소·브라우저 저장소에 넣지 않음) ──
+    let resource: AdminResource<DealNewsItem[]> | null = null;
+    let writeEnabled = false;
+    let realpriceOn = false;
+    let hits: DealComplex[] = [];
+    let complex: DealComplex | null = null;
+    let noComplex = false;
+    let bandChoice = ""; // 면적대 단추 값("84") 또는 "other"
+    let counted: { key: string; count: number | null; tone: string; text: string } | null = null;
+    let searchToken = 0;
+    let countToken = 0;
+    let busy = false;
+
+    const checked = (name: string) => root.querySelector<HTMLInputElement>(`[data-dn-${name}]:checked`)?.value ?? "";
+    const propertyKind = () => checked("kind");
+    const dealType = () => checked("deal");
+    const complexPath = () => propertyKind() === "apartment" && realpriceOn && !noComplex;
+
+    function currentBand(): number | null {
+      if (complexPath() && complex && bandChoice && bandChoice !== "other") return Number(bandChoice);
+      return dealNewsAreaBand($<HTMLInputElement>("area").value);
+    }
+    const countKey = () => (complex ? `${complex.aptSeq}|${currentBand()}|${dealType()}` : "");
+    const recentCount = () => (counted && counted.key === countKey() ? counted.count : null);
+
+    // ── 지금 목록 ──
+    function renderNow() {
+      const list = $("now");
+      const empty = $("now-empty");
+      list.replaceChildren();
+      if (!resource) return;
+      const published = [...resource.data].reverse().filter((item) => item.status === "published");
+      const drafts = resource.data.filter((item) => item.status !== "published");
+      $("now-count").textContent = dealNewsNowCount(published.length, DEAL_NEWS_PUBLIC_MAX);
+      for (const item of [...published, ...drafts]) {
+        const line = dealNewsLine(item);
+        const li = document.createElement("li");
+        const text = document.createElement("span");
+        const place = document.createElement("b");
+        place.textContent = line.place;
+        text.append(place, ` · ${line.area} · ${line.deal}`);
+        if (item.status !== "published") {
+          const tag = document.createElement("small");
+          tag.textContent = " (초안 · 홈에 보이지 않음)";
+          text.append(tag);
+        }
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "dn-mini";
+        remove.textContent = item.status === "published" ? "홈에서 지우기" : "지우기";
+        remove.disabled = !writeEnabled;
+        remove.dataset.writeControl = "";
+        remove.addEventListener("click", () => void removeItem(item.id));
+        li.append(text, remove);
+        list.append(li);
+      }
+      empty.hidden = resource.data.length > 0;
+      empty.textContent = "아직 올린 소식이 없습니다. 홈에는 소식 칸이 보이지 않습니다.";
+    }
+
+    // ── 단지 찾기 ──
+    function renderHits() {
+      const list = $("hits");
+      list.replaceChildren();
+      for (const entry of hits) {
+        const li = document.createElement("li");
+        const button = document.createElement("button");
+        button.type = "button";
+        button.setAttribute("aria-pressed", String(complex?.aptSeq === entry.aptSeq));
+        button.textContent = entry.aptName;
+        const note = document.createElement("small");
+        note.textContent = dealNewsHitNote(entry, dealType());
+        button.append(note);
+        button.addEventListener("click", () => {
+          complex = entry;
+          noComplex = false;
+          bandChoice = "";
+          $<HTMLInputElement>("name").value = dealNewsTrimName(entry.aptName);
+          $<HTMLSelectElement>("umd").value = dealNewsUmdOf(entry.umdName);
+          renderHits();
+          update();
+        });
+        li.append(button);
+        list.append(li);
+      }
+    }
+
+    async function search() {
+      const query = $<HTMLInputElement>("search").value.trim();
+      const note = $("search-note");
+      if (!query) {
+        note.textContent = "단지 이름 일부를 넣어 주세요.";
+        return;
+      }
+      const token = ++searchToken;
+      note.textContent = "찾고 있습니다.";
+      try {
+        const data = await readWork<DealComplexesData>("/realprice/deal-complexes", `q=${encodeURIComponent(query)}`);
+        if (token !== searchToken) return;
+        hits = data.items;
+        complex = null;
+        bandChoice = "";
+        note.textContent = !data.available
+          ? "오늘은 실거래 자료 읽기 한도에 닿아 찾을 수 없습니다. '찾는 단지가 없음 · 동네 이름으로'를 눌러 주세요."
+          : hits.length === 0
+            ? "최근 6개월 실거래 자료에 맞는 단지가 없습니다. 이름을 줄여 다시 찾거나 '찾는 단지가 없음 · 동네 이름으로'를 눌러 주세요."
+            : `${hits.length}곳을 찾았습니다. 거래한 단지를 고르세요.${data.warnings.some((warning) => warning.code === "RT_DEAL_COMPLEXES_PARTIAL") ? " 더 있을 수 있으니 이름을 더 넣어 좁혀 주세요." : ""}`;
+      } catch (error) {
+        if (token !== searchToken) return;
+        hits = [];
+        complex = null;
+        note.textContent = error instanceof WorkApiError && error.code === "RT_READ_BUDGET"
+          ? "오늘은 실거래 자료 읽기 한도에 닿아 찾을 수 없습니다. '찾는 단지가 없음 · 동네 이름으로'를 눌러 주세요."
+          : error instanceof Error ? error.message : "단지를 찾지 못했습니다.";
+      }
+      renderHits();
+      update();
+    }
+
+    // ── 면적대 단추 ──
+    function renderBands() {
+      const box = $("bands");
+      box.replaceChildren();
+      const bands = dealNewsBands(complex, dealType());
+      if (bandChoice && bandChoice !== "other" && !bands.includes(Number(bandChoice))) bandChoice = "";
+      const values = [...bands.map(String), "other"];
+      for (const value of values) {
+        const label = document.createElement("label");
+        label.className = "rt-style";
+        const input = document.createElement("input");
+        input.type = "radio";
+        input.name = "dn-band";
+        input.value = value;
+        input.autocomplete = "off";
+        input.checked = bandChoice === value;
+        input.addEventListener("change", () => {
+          bandChoice = value;
+          update();
+        });
+        const text = document.createElement("span");
+        text.textContent = value === "other" ? "목록에 없음" : `${value}㎡대`;
+        label.append(input, text);
+        box.append(label);
+      }
+    }
+
+    // ── 건수 ──
+    async function count() {
+      const band = currentBand();
+      if (!complex || band === null) return;
+      const key = countKey();
+      const deal = dealType();
+      const token = ++countToken;
+      const button = $<HTMLButtonElement>("count-go");
+      // 단추가 꺼지면 초점이 body로 빠지므로, 키보드로 누른 경우 끝난 뒤 결과 문단으로 옮긴다.
+      const hadFocus = document.activeElement === button;
+      button.disabled = true;
+      $("count-hint").textContent = "세고 있습니다.";
+      try {
+        const data = await readWork<DealCountData>("/realprice/deal-count", `apt=${encodeURIComponent(complex.aptSeq)}&band=${band}&deal=${deal}`);
+        if (token !== countToken) return;
+        counted = { key, ...dealNewsCountResult(data, { areaBand: band, dealType: deal }) };
+      } catch (error) {
+        if (token !== countToken) return;
+        counted = { key, count: null, tone: "area", text: error instanceof WorkApiError && error.code === "RT_READ_BUDGET"
+          ? "오늘은 실거래 자료 읽기 한도에 닿아 건수를 셀 수 없습니다. 동네 이름으로 올리거나 내일 다시 확인해 주세요."
+          : `건수를 세지 못했습니다(${error instanceof Error ? error.message : "알 수 없는 오류"}). 동네 이름으로 올립니다.` };
+      }
+      update();
+      const result = $("count-result");
+      if (hadFocus && !result.hidden) result.focus();
+    }
+
+    // ── 지금 입력으로 판정·미리보기 ──
+    function compute() {
+      const kind = propertyKind();
+      const deal = dealType();
+      const band = currentBand();
+      const today = dealNewsToday(Date.now());
+      const judged = judgeDealNewsInput({
+        propertyKind: kind,
+        dealType: deal,
+        contractDate: $<HTMLInputElement>("contract").value,
+        today,
+        balancePaid: $<HTMLInputElement>("paid").checked,
+        saleSeenInData: $<HTMLInputElement>("seen").checked,
+        recentCount: complexPath() ? recentCount() : null,
+      });
+      const placeKind = complexPath() && complex ? judged.placeKind : "area";
+      const name = $<HTMLInputElement>("name").value;
+      const umdName = $<HTMLSelectElement>("umd").value;
+      const missing: string[] = [];
+      if (band === null) missing.push(complexPath() && complex && bandChoice !== "other" ? "전용면적대를 골라 주세요." : "전용면적을 '84.97'처럼 넣어 주세요(10 ~ 400㎡).");
+      if (!DEAL_NEWS_UMD_NAMES.includes(umdName)) missing.push("동네를 골라 주세요.");
+      const nameProblem = placeKind === "complex" ? dealNewsNameProblem(name) : null;
+      if (nameProblem) missing.push(nameProblem);
+      const item = buildDealNewsItem({
+        id: "dn-0000000000000000",
+        status: "published",
+        placeKind,
+        umdName,
+        complexName: name,
+        propertyKind: kind,
+        dealType: deal,
+        areaBand: band ?? 0,
+      }) as DealNewsItem;
+      const appended = resource ? appendDealNews(resource.data, item) : null;
+      const formErrors = missing.length === 0 && appended ? validateDealNews(appended.items) : [];
+      return { judged, today, placeKind, item, missing, formErrors, appended, ready: judged.canPublish && missing.length === 0 && formErrors.length === 0 && Boolean(resource) };
+    }
+
+    function update() {
+      const apartment = propertyKind() === "apartment";
+      const sale = dealType() === "sale";
+      $("kind-note").hidden = apartment;
+      $("seen-row").hidden = !sale;
+      $("seen-link").hidden = !sale;
+      const viaComplex = complexPath();
+      $("complex-part").hidden = !(apartment && realpriceOn);
+      $<HTMLButtonElement>("no-complex").setAttribute("aria-pressed", String(noComplex));
+      $("hits").hidden = noComplex;
+      const picked = viaComplex && complex !== null;
+      $("band-row").hidden = !picked;
+      if (picked) renderBands();
+      const band = currentBand();
+      const customArea = !picked || bandChoice === "other";
+      $("area-row").hidden = !customArea;
+      $("count-row").hidden = !(picked && band !== null);
+      const result = $("count-result");
+      const fresh = counted && counted.key === countKey();
+      result.hidden = !fresh;
+      if (fresh && counted) {
+        result.textContent = counted.text;
+        result.classList.toggle("is-area", counted.tone !== "ok");
+      }
+      $<HTMLButtonElement>("count-go").disabled = Boolean(fresh) || band === null;
+      $<HTMLButtonElement>("count-go").textContent = fresh ? "확인함" : "최근 거래 건수 확인";
+      $("count-hint").hidden = Boolean(fresh);
+      if (!fresh) $("count-hint").textContent = "한 번만 셉니다. 단지·면적·거래 종류를 바꾸면 다시 셉니다.";
+
+      const state = compute();
+      const useName = state.placeKind === "complex";
+      $("name-row").hidden = !useName;
+      const nameNote = $("name-note");
+      if (useName) {
+        const trimmed = complex ? dealNewsTrimName(complex.aptName) : "";
+        const problem = dealNewsNameProblem($<HTMLInputElement>("name").value);
+        nameNote.textContent = problem
+          ? `${problem} 직접 고쳐 주세요.`
+          : complex && trimmed !== complex.aptName
+            ? `실거래 이름 '${complex.aptName}'에서 괄호 안 글을 덜어 채웠습니다. 고칠 수 있습니다.`
+            : "실거래 이름으로 채웠습니다. 고칠 수 있습니다. 동 번호·호수·층은 넣지 않습니다.";
+        nameNote.classList.toggle("dn-bad", Boolean(problem));
+      }
+      // 동네: 동네 이름으로 올릴 때, 또는 단지의 법정동을 동네 목록에서 못 찾았을 때 고른다.
+      const umdKnown = picked && dealNewsUmdOf(complex!.umdName) !== "";
+      $("umd-row").hidden = useName && umdKnown;
+      $("umd-note").textContent = picked && umdKnown && !useName
+        ? `단지의 법정동으로 채웠습니다. 홈에는 '${$<HTMLSelectElement>("umd").value} ${dealNewsPropertyLabel(propertyKind())}'로 보입니다.`
+        : "대전 동구 법정동 가운데 고릅니다.";
+      const areaText = $<HTMLInputElement>("area").value.trim();
+      $("area-note").textContent = areaText && dealNewsAreaBand(areaText) !== null
+        ? `'${dealNewsAreaText(dealNewsAreaBand(areaText)!)}'로 올립니다.`
+        : "정수로 내려 '전용 84㎡대'처럼 올립니다.";
+
+      // 미리보기
+      const item = state.item;
+      $("line-deal").textContent = dealNewsDealLabel(item.dealType);
+      $("line-place").textContent = useName ? (item.complexName || "(단지 이름)") : `${item.umdName || "(동네)"} ${dealNewsPropertyLabel(item.propertyKind)}`;
+      $("line-area").textContent = band === null ? "전용 ○○㎡대" : dealNewsAreaText(band);
+
+      // 판정 상자
+      const judge = $("judge");
+      judge.replaceChildren();
+      const blockers = [...dealNewsBlockerLines(state.judged, state.today), ...state.missing, ...state.formErrors];
+      judge.className = `dn-judge ${blockers.length === 0 && resource ? "ok" : "no"}`;
+      if (blockers.length === 0 && resource) {
+        judge.textContent = `✓ ${dealNewsReadyLine(dealType())}`;
+      } else {
+        const head = document.createElement("p");
+        head.textContent = resource ? "아직 올릴 수 없습니다" : "최신 소식을 불러온 뒤에 올릴 수 있습니다";
+        const list = document.createElement("ul");
+        for (const line of blockers) {
+          const li = document.createElement("li");
+          li.textContent = line;
+          list.append(li);
+        }
+        judge.append(head, ...(blockers.length > 0 ? [list] : []));
+      }
+      const drop = $("drop");
+      const dropped = state.ready ? state.appended?.dropped ?? [] : [];
+      drop.hidden = dropped.length === 0;
+      drop.textContent = dropped.length > 0 ? `이미 ${DEAL_NEWS_PUBLIC_MAX}건이라 올리면 가장 오래된 '${dealNewsLine(dropped[0]).text}'가 홈에서 빠집니다.` : "";
+      $<HTMLButtonElement>("submit").disabled = !state.ready || !writeEnabled || busy;
+      $("submit-note").textContent = state.ready
+        ? "계약일·잔금·건수는 저장하지 않습니다. 저장되는 것은 위 한 줄(건물 종류·거래 종류·면적대·동네·단지 이름)뿐입니다."
+        : "올릴 수 없는 거래는 초안으로도 저장하지 않습니다. 날짜가 지나면 그때 다시 넣어 주세요.";
+    }
+
+    function resetForm() {
+      form.reset();
+      hits = [];
+      complex = null;
+      noComplex = false;
+      bandChoice = "";
+      counted = null;
+      searchToken += 1;
+      countToken += 1;
+      $("search-note").textContent = "최근 6개월 대전 동구 실거래(매매·전세·월세) 자료에서 찾습니다.";
+      renderHits();
+      update();
+    }
+
+    async function save(next: DealNewsItem[], { done, cancelled }: { done: string; cancelled: string }) {
+      if (!resource) return false;
+      const confirmed = await reviewAdminContentChange({
+        changes: [{ resource: "deal-news", sha: resource.sha, data: next }],
+        beforeByResource: { "deal-news": resource.data },
+        impactPages: ["홈 '최근 거래 완료 소식'"],
+      });
+      if (!confirmed) {
+        setAdminFormStatus(statusMessage, cancelled);
+        return false;
+      }
+      setAdminFormStatus(statusMessage, "사전 검증을 통과한 소식을 GitHub에 저장하고 있습니다.", "saving");
+      const result = await writeAdminContent("deal-news", resource.sha, next);
+      resource = { resource: "deal-news", sha: result.contentSha ?? resource.sha, data: next };
+      renderNow();
+      setAdminFormStatus(statusMessage, done, "success");
+      return true;
+    }
+
+    async function removeItem(id: string) {
+      if (!resource || busy) return;
+      busy = true;
+      try {
+        await save(resource.data.filter((item) => item.id !== id), {
+          done: "소식을 지웠습니다. 몇 분 뒤 홈에서 빠집니다. '배포 상태'에서 공개 반영을 확인해 주세요.",
+          cancelled: "지우기를 취소했습니다.",
+        });
+      } catch (error) {
+        setAdminFormStatus(statusMessage, error instanceof Error ? error.message : "지우지 못했습니다.", "error");
+      } finally {
+        busy = false;
+        update();
+      }
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const state = compute();
+      if (!state.ready || !resource || busy) return;
+      busy = true;
+      update();
+      try {
+        const next = appendDealNews(resource.data, { ...state.item, id: newDealNewsId() }).items as DealNewsItem[];
+        const saved = await save(next, {
+          done: "GitHub에 저장했습니다. 몇 분 뒤 홈에 보입니다. '배포 상태'에서 공개 반영을 확인해 주세요.",
+          cancelled: "저장을 취소했습니다. 넣은 내용은 그대로 있습니다.",
+        });
+        if (saved) {
+          resetForm();
+          dirtyGuard.markSaved();
+        }
+      } catch (error) {
+        setAdminFormStatus(statusMessage, error instanceof Error ? error.message : "저장하지 못했습니다.", "error");
+      } finally {
+        busy = false;
+        update();
+      }
+    });
+
+    form.addEventListener("input", (event) => {
+      const target = event.target as HTMLElement;
+      if (target.matches("[data-dn-kind], [data-dn-deal]")) renderHits();
+      update();
+    });
+    form.addEventListener("change", () => update());
+    $<HTMLInputElement>("search").addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" || event.isComposing) return;
+      event.preventDefault();
+      void search();
+    });
+    $("search-go").addEventListener("click", () => void search());
+    $("count-go").addEventListener("click", () => void count());
+    $("no-complex").addEventListener("click", () => {
+      noComplex = !noComplex;
+      if (noComplex) {
+        complex = null;
+        bandChoice = "";
+        renderHits();
+      }
+      update();
+    });
+
+    update();
+
+    // 세션 결과는 getAdminSession()의 공유 Promise로 기다린다(AdminWriteGate와 같은 응답). 실패 안내는 AdminWriteGate가 보여 준다.
+    void getAdminSession().then((session) => {
+      writeEnabled = session.writeEnabled;
+      if (!session.writeEnabled) {
+        $("now-empty").textContent = "저장 연결이 꺼져 있어 지금 소식을 불러오지 않았습니다.";
+        update();
+        return;
+      }
+      void readAdminContent<DealNewsItem[]>("deal-news").then((current) => {
+        resource = current;
+        renderNow();
+        update();
+        dirtyGuard.markSaved();
+      }).catch((error) => setAdminFormStatus(statusMessage, error instanceof Error ? error.message : "소식을 불러오지 못했습니다.", "error"));
+    }).catch(() => {
+      $("now-empty").textContent = "관리자 세션을 확인하지 못해 지금 소식을 불러오지 않았습니다.";
+    });
+    // 단지 찾기·건수는 실거래가(단계 P)가 켜져 있을 때만 쓴다. 꺼져 있으면 아파트도 동네 이름으로만 올린다.
+    void getWorkSession().then((session) => {
+      realpriceOn = session.realpriceEnabled;
+    }).catch(() => {
+      realpriceOn = false;
+    }).finally(() => {
+      if (!realpriceOn) $("search-note").textContent = "실거래가 자료가 꺼져 있어 단지를 찾을 수 없습니다. 아파트도 동네 이름으로 올립니다.";
+      update();
+    });
+  </script>
+</AdminLayout>

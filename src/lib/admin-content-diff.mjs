@@ -1,3 +1,5 @@
+import { dealNewsLine } from "./deal-news.mjs";
+
 const RESOURCE_LABELS = Object.freeze({
   "naver-listings": "네이버 매물",
   "home-content": "첫 화면 콘텐츠",
@@ -145,6 +147,14 @@ function arrayIdentityKey(value) {
   return null;
 }
 
+// 거래 완료 소식 한 건은 번호 대신 홈에 보일 한 줄과 공개 여부로 보인다(예: "천동 아파트 · 전용 84㎡대 · 매매 (홈에 공개)").
+function formatDiffValue(resource, value) {
+  if (resource === "deal-news" && isPlainObject(value) && typeof value.placeKind === "string") {
+    return redactText(`${dealNewsLine(value).text} (${value.status === "published" ? "홈에 공개" : "초안"})`);
+  }
+  return formatAdminDiffValue(value);
+}
+
 function pushDiff(diffs, resource, path, kind, before, after) {
   const lastSegment = path.split(".").at(-1) ?? "";
   if (SENSITIVE_KEY_PATTERN.test(lastSegment)) return;
@@ -153,8 +163,8 @@ function pushDiff(diffs, resource, path, kind, before, after) {
     path,
     label: getAdminFieldLabel(resource, path),
     kind,
-    before: formatAdminDiffValue(before),
-    after: formatAdminDiffValue(after),
+    before: formatDiffValue(resource, before),
+    after: formatDiffValue(resource, after),
   });
 }
 

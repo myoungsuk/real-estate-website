@@ -263,15 +263,16 @@ test("관리자 변경 이력 화면은 diff와 정확한 2차 문구 뒤 새 co
 });
 
 test("관리자 저장 화면은 공통 변경 요약·사전 검증과 이탈 경고를 사용한다", async () => {
-  const [listingEditor, homeEditor, externalEditor, complexEditor, review, styles] = await Promise.all([
+  const [listingEditor, homeEditor, externalEditor, complexEditor, dealNewsEditor, review, styles] = await Promise.all([
     readSource("src/pages/admin/listings/editor.astro"),
     readSource("src/pages/admin/content/index.astro"),
     readSource("src/pages/admin/external-links/index.astro"),
     readSource("src/pages/admin/complexes/index.astro"),
+    readSource("src/pages/admin/deal-news/index.astro"),
     readSource("src/lib/admin-content-review.ts"),
     readSource("src/styles/admin.css"),
   ]);
-  for (const source of [listingEditor, homeEditor, externalEditor, complexEditor]) {
+  for (const source of [listingEditor, homeEditor, externalEditor, complexEditor, dealNewsEditor]) {
     assert.match(source, /reviewAdminContentChange/u);
     assert.match(source, /guardAdminFormChanges/u);
   }
