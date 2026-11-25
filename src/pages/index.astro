@@ -1,6 +1,7 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
 import ExternalContentList from "../components/ExternalContentList.astro";
+import HomeBlogLead from "../components/HomeBlogLead.astro";
 import HomeWindowHero from "../components/HomeWindowHero.astro";
 import NaverListingPager from "../components/NaverListingPager.astro";
 import { homeContent, publishedBlogContents, publishedInstagramContents, publishedYoutubeVideoContents } from "../lib/content";
@@ -12,7 +13,8 @@ import homeStyles from "../styles/home.css?inline";
 
 const title = "대전 동구 지역 전문 행복한부동산 | 리더스시티·신흥 SK뷰";
 const description = "리더스시티5블록 단지 내 행복한부동산입니다. 리더스시티 4·5블록과 신흥 SK뷰를 중심으로 천동·신흥동의 매매·전세·월세를 백진옥 대표 공인중개사가 직접 상담합니다.";
-const homeBlogContents = publishedBlogContents.slice(0, 9);
+// 블로그 칸: 최신 글 1건 크게 + 그다음 6건 줄 목록
+const homeBlogContents = publishedBlogContents.slice(0, 7);
 const homeYoutubeContents = publishedYoutubeVideoContents.slice(0, 6);
 const homeInstagramContents = publishedInstagramContents.slice(0, 6);
 const getHomeComplexFact = (
@@ -226,7 +228,9 @@ const structuredData = {
       <div class="home-notes__groups">
         <div class="home-notes__group" id="blog">
           <h3 id="blog-heading">블로그</h3>
-          <ExternalContentList items={homeBlogContents} emptyLabel="공개할 블로그 글을 준비하고 있습니다." pageSize={9} paginate={false} variant="note" />
+          {homeBlogContents.length > 0
+            ? <HomeBlogLead items={homeBlogContents} />
+            : <ExternalContentList items={homeBlogContents} emptyLabel="공개할 블로그 글을 준비하고 있습니다." pageSize={9} paginate={false} variant="note" />}
           <a class="home-more" href="/blog/">블로그 전체 보기</a>
         </div>
         <div class="home-notes__group" id="youtube">

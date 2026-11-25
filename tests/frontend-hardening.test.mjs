@@ -43,7 +43,8 @@ test("홈은 최신 콘텐츠만 렌더하고 페이저는 정확한 상태와 �
     readSource("src/components/ExternalContentList.astro"),
     readSource("src/components/NaverListingPager.astro"),
   ]);
-  assert.match(home, /publishedBlogContents\.slice\(0, 9\)/);
+  // 2026-11-25 홈 블로그 칸: 최신 글 1건 크게 + 6건 줄 목록(9건 카드 → 7건).
+  assert.match(home, /publishedBlogContents\.slice\(0, 7\)/);
   assert.match(home, /publishedYoutubeVideoContents\.slice\(0, 6\)/);
   assert.match(home, /items=\{homeBlogContents\}[^>]*paginate=\{false\}/);
   assert.match(home, /items=\{homeYoutubeContents\}[^>]*paginate=\{false\}/);

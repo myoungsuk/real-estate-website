@@ -4,6 +4,7 @@ import {
   publishedExternalContents,
   type ExternalContent,
 } from "../lib/content";
+import { getBlogCardCategory, getBlogCardSummary } from "../lib/blog-card.mjs";
 
 interface Props {
   items?: ExternalContent[];
@@ -110,10 +111,18 @@ function getYoutubeVideoId(item: ExternalContent) {
             </>
           ) : (
             <div class="content-card__body">
-              <p class="content-card__source">{item.type === "blog" ? "NAVER BLOG" : item.type === "instagram" ? "INSTAGRAM" : item.youtubeFormat === "short" ? "YOUTUBE SHORTS" : "YOUTUBE VIDEO"}</p>
+              {/* 블로그 글에 분류가 있으면 출처 이름표 옆에 분류 딱지를 둔다. 요약은 글 앞부분 요약 → 옛 요약 순서이고, 틀 문장뿐이면 줄을 그리지 않는다(규칙은 blog-card.mjs) */}
+              {getBlogCardCategory(item) ? (
+                <div class="content-card__labels">
+                  <p class="content-card__source">NAVER BLOG</p>
+                  <span class="content-card__category"><span class="sr-only">분류 </span>{getBlogCardCategory(item)}</span>
+                </div>
+              ) : (
+                <p class="content-card__source">{item.type === "blog" ? "NAVER BLOG" : item.type === "instagram" ? "INSTAGRAM" : item.youtubeFormat === "short" ? "YOUTUBE SHORTS" : "YOUTUBE VIDEO"}</p>
+              )}
               <h3><a href={item.url} target="_blank" rel="noopener noreferrer">{item.title}</a></h3>
               {formatContentDate(item.publishedAt) && <time datetime={item.publishedAt!}>{formatContentDate(item.publishedAt)}</time>}
-              <p>{item.summary}</p>
+              {getBlogCardSummary(item) && <p>{getBlogCardSummary(item)}</p>}
               <a class="content-card__link" href={item.url} target="_blank" rel="noopener noreferrer">원문에서 보기 <span aria-hidden="true">↗</span></a>
             </div>
           )}

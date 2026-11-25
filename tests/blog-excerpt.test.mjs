@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { findSensitiveStrings } from "../scripts/content-validation.mjs";
-import { keepBlogExtras } from "../src/lib/admin-blog-extras.mjs";
+import { blogExtrasFromInput, getBlogExtraInputErrors, getBlogExtraNotices, tidyBlogExtraInput } from "../src/lib/admin-blog-extras.mjs";
 import { getAdminFieldLabel } from "../src/lib/admin-content-diff.mjs";
 import {
   BLOG_CATEGORY_MAX_LENGTH,
@@ -368,34 +368,64 @@ test("저장 형식: 요약 1 ~ 300자·분류 1 ~ 30자, 줄바꿈·앞뒤 공�
   assert.equal(normalizeBlogCategory("가".repeat(BLOG_CATEGORY_MAX_LENGTH + 1)), null, "너무 긴 분류는 싣지 않음");
 });
 
-test("관리자 저장: 같은 블로그 글을 고칠 때 요약·분류를 그대로 넘긴다", () => {
-  const existing = {
-    id: "naver-blog-224999999999",
-    type: "blog",
-    status: "published",
-    title: "임대차 계약 신고",
-    summary: "운영자가 적은 설명",
-    excerpt: body,
-    category: "부동산공부",
-    url: "https://blog.naver.com/PostView.naver?blogId=p5468300&logNo=224999999999",
-    publishedAt: "2026-08-26",
-    thumbnail: null,
-  };
-  assert.deepEqual(keepBlogExtras(existing, { type: "blog", url: existing.url }), { excerpt: body, category: "부동산공부" });
-  assert.deepEqual(Object.keys(keepBlogExtras(existing, { type: "blog", url: existing.url })), ["excerpt", "category"], "저장 순서는 요약 → 분류");
+// 2026-11-25 관리자 화면에 '글 앞부분 요약'·'분류' 입력 칸이 생겼다. 그 전에는 저장돼 있던 값을 그대로 넘겼고(keepBlogExtras),
+// 이제는 칸에 적힌 값이 기준이다: 그대로 두면 그대로, 고치면 고친 값, 비우면 키째 빠진다.
+test("관리자 저장: 요약·분류 칸의 값을 저장할 꼴로 바꾸고, 비운 칸은 키째 뺀다", () => {
+  assert.deepEqual(blogExtrasFromInput("blog", { excerpt: body, category: "부동산공부" }), { excerpt: body, category: "부동산공부" }, "그대로 둔 값은 그대로");
+  assert.deepEqual(Object.keys(blogExtrasFromInput("blog", { category: "부동산공부", excerpt: body })), ["excerpt", "category"], "저장 순서는 요약 → 분류");
+  assert.deepEqual(blogExtrasFromInput("blog", { excerpt: "", category: "부동산공부" }), { category: "부동산공부" }, "비운 요약은 키째 빠짐(빈 문자열을 저장하지 않음)");
+  assert.deepEqual(blogExtrasFromInput("blog", { excerpt: body, category: "   " }), { excerpt: body }, "공백뿐인 분류도 비운 것");
+  assert.deepEqual(blogExtrasFromInput("blog", { excerpt: "", category: "" }), {}, "둘 다 비우면 두 칸이 없는 글");
+  assert.deepEqual(blogExtrasFromInput("blog", {}), {}, "새 글");
+  assert.deepEqual(blogExtrasFromInput("blog", undefined), {});
 
-  const { excerpt, ...categoryOnly } = existing;
-  assert.deepEqual(keepBlogExtras(categoryOnly, { type: "blog", url: existing.url }), { category: "부동산공부" }, "없는 칸은 만들지 않음");
-  const { category, ...excerptOnly } = existing;
-  assert.deepEqual(keepBlogExtras(excerptOnly, { type: "blog", url: existing.url }), { excerpt: body });
-  assert.equal(excerpt, body);
-  assert.equal(category, "부동산공부");
+  assert.deepEqual(blogExtrasFromInput("youtube", { excerpt: body, category: "부동산공부" }), {}, "종류를 바꾸면 넘기지 않음(검사가 블로그에만 허용)");
+  assert.deepEqual(blogExtrasFromInput("instagram", { excerpt: body, category: "부동산공부" }), {});
 
-  assert.deepEqual(keepBlogExtras(undefined, { type: "blog", url: existing.url }), {}, "새 글");
-  assert.deepEqual(keepBlogExtras(existing, { type: "youtube", url: existing.url }), {}, "종류를 바꾸면 넘기지 않음(검사가 블로그에만 허용)");
-  assert.deepEqual(keepBlogExtras(existing, { type: "instagram", url: existing.url }), {});
-  assert.deepEqual(keepBlogExtras({ ...existing, type: "youtube" }, { type: "blog", url: existing.url }), {});
-  assert.deepEqual(keepBlogExtras(existing, { type: "blog", url: "https://blog.naver.com/PostView.naver?blogId=p5468300&logNo=224000000000" }), {}, "다른 글 주소로 바꾸면 옛 글의 요약을 남기지 않음");
+  assert.equal(tidyBlogExtraInput("  첫 줄\n둘째   줄\t끝  "), "첫 줄 둘째 줄 끝", "줄바꿈·잇단 공백은 한 칸으로(검사가 줄바꿈·앞뒤 공백을 받지 않음)");
+  assert.equal(tidyBlogExtraInput(null), "");
+  const tidied = blogExtrasFromInput("blog", { excerpt: "  " + body + "\n", category: " 부동산공부 " });
+  assert.deepEqual(tidied, { excerpt: body, category: "부동산공부" });
+  assert.deepEqual(getBlogExcerptErrors(tidied.excerpt), [], "정리한 값은 콘텐츠 검사와 같은 규칙을 통과");
+  assert.deepEqual(getBlogCategoryErrors(tidied.category), []);
+});
+
+test("관리자 저장: 요약·분류 형식 오류는 저장 전에 칸 이름과 함께 알린다", () => {
+  assert.deepEqual(getBlogExtraInputErrors("blog", { excerpt: body, category: "부동산공부" }), []);
+  assert.deepEqual(getBlogExtraInputErrors("blog", { excerpt: "", category: "" }), [], "비운 칸은 오류가 아님(칸이 사라짐)");
+  const long = getBlogExtraInputErrors("blog", { excerpt: "가".repeat(BLOG_EXCERPT_MAX_LENGTH + 1), category: "나".repeat(BLOG_CATEGORY_MAX_LENGTH + 1) });
+  assert.equal(long.some((error) => error.startsWith("글 앞부분 요약: ")), true);
+  assert.equal(long.some((error) => error.startsWith("분류: ")), true);
+  assert.deepEqual(
+    getBlogExtraInputErrors("blog", { excerpt: "가".repeat(BLOG_EXCERPT_MAX_LENGTH), category: "나".repeat(BLOG_CATEGORY_MAX_LENGTH) }),
+    [],
+    "상한까지는 받음",
+  );
+  assert.deepEqual(getBlogExtraInputErrors("youtube", { excerpt: "가".repeat(BLOG_EXCERPT_MAX_LENGTH + 1) }), [], "블로그가 아니면 넘기지 않으므로 보지 않음");
+});
+
+test("관리자 저장: 요약의 금액·동 번호와 바뀐 원문 링크는 막지 않고 알리기만 한다", () => {
+  const url = "https://blog.naver.com/PostView.naver?blogId=p5468300&logNo=224999999999";
+  const other = "https://blog.naver.com/PostView.naver?blogId=p5468300&logNo=224000000000";
+  assert.deepEqual(getBlogExtraNotices({ excerpt: body, category: "부동산공부", url }, { savedUrl: url }), []);
+  assert.deepEqual(getBlogExtraNotices({}), [], "빈 칸");
+
+  const price = getBlogExtraNotices({ excerpt: "가상숲1단지 전용 84㎡가 3억 2,000만원에 나왔습니다." });
+  assert.equal(price.length, 1);
+  assert.match(price[0], /^요약에 금액으로 보이는 숫자가 있습니다\./u);
+  assert.equal(getBlogExtraNotices({ excerpt: "가상숲1단지 입주는 2026/11 예정이라고 안내를 받았습니다." }).length, 1, "날짜 꼴도 금액 규칙에 걸려 알림이 뜬다(그래서 단정하지 않는 문장)");
+  const building = getBlogExtraNotices({ excerpt: "가상숲1단지 103동 앞 놀이터를 둘러봤습니다." });
+  assert.equal(building.length, 1);
+  assert.match(building[0], /^요약에 동 번호가 있습니다\./u);
+  assert.equal(getBlogExtraNotices({ excerpt: "가상숲1단지 103동 전용 84㎡ 3억 2,000만원" }).length, 2, "둘 다 있으면 두 줄");
+  assert.deepEqual(getBlogExtraInputErrors("blog", { excerpt: "가상숲1단지 103동 전용 84㎡ 3억 2,000만원" }), [], "알림은 저장을 막지 않음(형식 오류가 아님)");
+
+  const moved = getBlogExtraNotices({ excerpt: body, url: other }, { savedUrl: url });
+  assert.deepEqual(moved, ["원문 링크를 바꿨습니다. 요약·분류가 새 글의 것인지 확인해 주세요."]);
+  assert.equal(getBlogExtraNotices({ category: "부동산공부", url: other }, { savedUrl: url }).length, 1, "분류만 남아 있어도 알림");
+  assert.deepEqual(getBlogExtraNotices({ excerpt: "", category: "", url: other }, { savedUrl: url }), [], "두 칸을 비웠으면 알릴 것이 없음");
+  assert.deepEqual(getBlogExtraNotices({ excerpt: body, url: other }), [], "새 글(저장된 링크 없음)");
+  assert.deepEqual(getBlogExtraNotices({ excerpt: body, url: "" }, { savedUrl: url }), [], "링크 칸을 비운 동안에는 알리지 않음(필수 칸 검사가 따로 막음)");
 });
 
 test("관리자 변경 미리보기는 요약·분류 칸을 쉬운 이름으로 보인다", () => {
