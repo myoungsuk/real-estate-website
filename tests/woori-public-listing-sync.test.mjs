@@ -203,7 +203,7 @@ test("자동 받기: 새 매물을 넣고 재확인 상태를 woori로 적으며
   assert.equal(added.priceLabel, "4억 1,500");
   assert.equal(added.url, "https://fin.land.naver.com/articles/2700000001");
   const shop = content.items.find(({ id }) => id === "2700000006");
-  assert.deepEqual([shop.title, shop.propertyType, shop.floorLabel, shop.areaLabel], ["가상동 복합상가", "상가점포", "1/4층", "계약 112.4㎡ · 전용 84.91㎡"]);
+  assert.deepEqual([shop.title, shop.propertyType, shop.floorLabel, shop.areaLabel], ["가상동 복합상가 84㎡", "상가점포", "1/4층", "계약 112.4㎡ · 전용 84.91㎡"]);
   assert.deepEqual(review.items["2700000006"], { source: "woori", lastSeenAt: "2026-11-15", lastReviewedAt: null });
   assert.deepEqual(content.items.find(({ id }) => id === bank.id), bank, "부동산뱅크 매물 값 그대로");
   assert.deepEqual(content.items.find(({ id }) => id === manual.id), manual);

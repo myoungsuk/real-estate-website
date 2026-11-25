@@ -157,14 +157,14 @@ test("월세 상가처럼 동 번호가 없는 줄도 공개 매물명과 층 �
   const shop = result.nextData.items.find((item) => item.id === "9900000003");
   assert.deepEqual(
     { title: shop.title, propertyType: shop.propertyType, tradeType: shop.tradeType, priceLabel: shop.priceLabel, areaLabel: shop.areaLabel, floorLabel: shop.floorLabel, summary: shop.summary },
-    { title: "가상상가", propertyType: "상가점포", tradeType: "monthly-rent", priceLabel: "2,000/80", areaLabel: "계약 66.1㎡ · 전용 50.2㎡", floorLabel: "1층", summary: WOORI_LISTING_DEFAULT_SUMMARY },
+    { title: "가상상가 50㎡", propertyType: "상가점포", tradeType: "monthly-rent", priceLabel: "2,000/80", areaLabel: "계약 66.1㎡ · 전용 50.2㎡", floorLabel: "1층", summary: WOORI_LISTING_DEFAULT_SUMMARY },
   );
   const text = JSON.stringify(result);
   for (const banned of ["101,102호", "123-4", "102호"]) assert.equal(text.includes(banned), false, banned);
   assert.deepEqual(validateNaverListings(result.nextData), []);
 });
 
-test("아파트·분양권 밖의 종류: 매물명이 지번·호수 꼴이거나 비면 '{동네} {종류}' 제목, 동네도 없으면 '{종류} 매물'", () => {
+test("아파트·분양권 밖의 종류: 매물명이 지번·호수 꼴이거나 비면 '{동네} {종류}' 제목, 동네도 없으면 '{종류} 매물', 끝에 면적 정수(2026-11-25)", () => {
   const rows = [
     makeRow({ "네이버매물번호": "9900000051", "매물종류": "상가점포", "소재지": "대전광역시 동구 가상동 123-4", "매물명": "123-4 가상빌딩 101호", "상세주소": "123-4 2층 201호", "면적1(㎡)": "[계약] 40", "면적2(㎡)": "[전용] 30" }),
     makeRow({ "네이버매물번호": "9900000052", "매물종류": "빌라/연립", "소재지": "대전광역시 동구 가상동", "매물명": "", "상세주소": "(2/3층)", "면적1(㎡)": "[공급] 65", "면적2(㎡)": "[전용] 59.9" }),
@@ -178,11 +178,11 @@ test("아파트·분양권 밖의 종류: 매물명이 지번·호수 꼴이거�
     const item = result.nextData.items.find((listing) => listing.id === id);
     return [item.title, item.propertyType, item.areaLabel, item.floorLabel];
   };
-  assert.deepEqual(pick("9900000051"), ["가상동 상가", "상가점포", "계약 40㎡ · 전용 30㎡", "2층"]);
-  assert.deepEqual(pick("9900000052"), ["가상동 빌라", "빌라/연립", "공급 65㎡ · 전용 59.9㎡", "2/3층"]);
-  assert.deepEqual(pick("9900000053"), ["가상2동 토지", "토지", "토지 1200㎡", null], "토지는 층 없음(null)");
-  assert.deepEqual(pick("9900000054"), ["단독주택 매물", "단독/다가구", "대지 330㎡ · 연면적 125.5㎡", "2/2층"]);
-  assert.deepEqual(pick("9900000055"), ["가상타워", "사무실", "계약 80㎡ · 전용 60㎡", "5/10층"]);
+  assert.deepEqual(pick("9900000051"), ["가상동 상가 30㎡", "상가점포", "계약 40㎡ · 전용 30㎡", "2층"]);
+  assert.deepEqual(pick("9900000052"), ["가상동 빌라 59㎡", "빌라/연립", "공급 65㎡ · 전용 59.9㎡", "2/3층"]);
+  assert.deepEqual(pick("9900000053"), ["가상2동 토지 1,200㎡", "토지", "토지 1200㎡", null], "토지는 층 없음(null)");
+  assert.deepEqual(pick("9900000054"), ["단독주택 매물 125㎡", "단독/다가구", "대지 330㎡ · 연면적 125.5㎡", "2/2층"]);
+  assert.deepEqual(pick("9900000055"), ["가상타워 60㎡", "사무실", "계약 80㎡ · 전용 60㎡", "5/10층"]);
   const text = JSON.stringify(result.nextData);
   for (const banned of ["123-4", "101호", "201호"]) assert.equal(text.includes(banned), false, banned);
   assert.deepEqual(validateNaverListings(result.nextData), []);
