@@ -761,9 +761,10 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
             showPreviewBlocked(blocked, selection.items.length > 0 && !selection.receivedAt);
             return;
           }
-          previewTexts = promoTexts(input) as Record<PromoKind, string>;
           const flow = await previewInsights(selection.items);
           if (seq !== previewSeq) return;
+          // 글 4가지는 흐름을 받은 뒤 만든다(그린 흐름이 있을 때만 출처 줄 아래 흐름 기준 줄, 홍보물 화면과 같음, 2026-11-25).
+          previewTexts = promoTexts({ ...input, insights: flow }) as Record<PromoKind, string>;
           previewLoaded = { input, flow, count: selection.items.length };
         }
         const { input, flow, count } = previewLoaded as NonNullable<typeof previewLoaded>;

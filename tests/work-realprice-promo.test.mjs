@@ -298,6 +298,51 @@ test("출처·신고 기한 안내·신고가 판정 기준은 그림에서 빠�
   }
 });
 
+// 거래 흐름 응답(보드 63번, 가상 값): FLOW는 흐름선·직전·앞선 최고가 모두 있는 거래, ONE_MONTH는 거래 있는 달이 하나뿐인 첫 거래.
+const flowSeries = (values) => values.map((won, index) => ({ ym: `2026-${String(index + 1).padStart(2, "0")}`, medianWon: won, count: won === null ? 0 : 1 }));
+const FLOW = (tradeKey) => ({ tradeKey, available: true, series: flowSeries([null, 480_000_000, null, 490_000_000, 495_000_000, null, null, null, null, null, 500_000_000, 520_000_000]), prev: { dealDate: "2026-10-05", floor: 9, priceWon: 500_000_000 }, prevMaxWon: 495_000_000, ratioPct: 105.1, recent3m: 4, households: null });
+const ONE_MONTH = (tradeKey) => ({ tradeKey, available: true, series: flowSeries([null, null, null, null, null, null, null, null, null, null, null, 610_000_000]), prev: null, prevMaxWon: null, ratioPct: null, recent3m: 1, households: null });
+const FULL_BASIS = "흐름 기준: 같은 단지·같은 전용면적 · 흐름선: 12개월 월별 가운데 값 · 최고·직전: 실제 거래";
+
+test("흐름 기준 줄(TR-11 PR #156 권함 2, 2026-11-25): 카드에 흐름을 그린 거래가 있을 때만 글 4가지 출처 줄 바로 아래에, 그린 항목만", () => {
+  const insights = { [HIGH.tradeKey]: FLOW(HIGH.tradeKey) };
+  const texts = promoTexts(input(THREE, { insights }));
+  // 스레드 3건 글은 기준 줄을 더하면 500자를 넘으므로 기준 줄을 빼고 지금 글 그대로 둔다(기준 줄 때문에 거래 줄이 '그림에 정리' 한 줄로 줄지 않음).
+  assert.equal(texts.threads, promoTexts(input(THREE)).threads, "스레드 3건: 들어가지 않으면 지금 글 그대로");
+  const single = promoTexts(input([HIGH], { insights }));
+  const checks = [...Object.entries(texts).filter(([kind]) => kind !== "threads").map(([kind, text]) => [kind, text, promoTexts(input(THREE))[kind]]), ["threads(1건)", single.threads, promoTexts(input([HIGH])).threads]];
+  for (const [kind, text, before] of checks) {
+    const lines = text.split("\n");
+    const at = lines.indexOf(FULL_BASIS);
+    assert.ok(at > 0, `${kind}: 흐름 기준 줄 하나`);
+    assert.equal(lines.filter((line) => line.startsWith("흐름 기준:")).length, 1, `${kind}: 한 번만`);
+    // 바로 위가 출처 줄(스레드·카카오톡은 출처·안내 한 줄) 또는 계약일 기준 안내 줄이다.
+    const above = lines[at - 1];
+    assert.ok(above.startsWith(`출처: ${PROMO_SOURCE}`) || above === PROMO_NOTICE, `${kind}: 출처 줄 아래(${above})`);
+    // 신고가 판정 기준·명시사항 줄은 그대로 남는다.
+    assert.ok(text.includes(kind === "kakao" ? PROMO_HIGH_RULE_SHORT : PROMO_HIGH_RULE) || text.includes(PROMO_HIGH_RULE_SHORT), `${kind}: 신고가 기준 그대로`);
+    for (const field of ["legalName", "address", "mobile", "registrationNumber", "representative"]) assert.ok(text.includes(office[field]), `${kind}: 명시사항 ${field}`);
+    // 줄을 빼면 흐름이 없을 때의 글과 같다(다른 줄은 바꾸지 않음).
+    assert.equal(lines.filter((_, index) => index !== at).join("\n"), before, `${kind}: 다른 줄 그대로`);
+  }
+  assert.ok(textCount("threads", single.threads).count <= PROMO_LIMITS.threads, "스레드 500자 안");
+  // 거래 6건(이미 '그림에 정리' 한 줄)이면 기준 줄이 붙는다.
+  const six = [HIGH, HIGH2, PLAIN, { ...PLAIN, tradeKey: "p2" }, { ...PLAIN, tradeKey: "p3" }, { ...PLAIN, tradeKey: "p4" }];
+  const sixThreads = promoTexts(input(six, { insights })).threads;
+  assert.ok(sixThreads.split("\n").includes(FULL_BASIS) && [...sixThreads].length <= PROMO_LIMITS.threads, "스레드 요약 글에는 붙음");
+  // 흐름을 받지 못했거나(빈 값·계산 못 함) 매매가 없으면 줄이 없다.
+  for (const none of [{}, { [HIGH.tradeKey]: { tradeKey: HIGH.tradeKey, available: false, reason: "budget" } }, undefined]) {
+    for (const [kind, text] of Object.entries(promoTexts(input(THREE, { insights: none })))) assert.doesNotMatch(text, /흐름 기준/u, `${kind}: 그린 흐름 없음`);
+  }
+  const rentOnly = promoTexts(input([MONTHLY], { insights: { [MONTHLY.tradeKey]: FLOW(MONTHLY.tradeKey) } }));
+  for (const [kind, text] of Object.entries(rentOnly)) assert.doesNotMatch(text, /흐름 기준/u, `${kind}: 전월세는 흐름을 그리지 않음`);
+  // 흐름선을 그리지 못한(거래 있는 달이 하나) 첫 거래만이면 3개월 거래 수 기준만 적는다(카드와 같은 promoBasisLine).
+  const first = promoTexts(input([PLAIN], { insights: { [PLAIN.tradeKey]: ONE_MONTH(PLAIN.tradeKey) } }));
+  for (const [kind, text] of Object.entries(first)) assert.ok(text.includes("흐름 기준: 같은 단지·같은 전용면적 · 최근 3개월: 계약일 기준 거래 수"), kind);
+  // 글의 기준 줄은 카드 자료의 basis 칸과 같은 글이다(그림에는 2026-11-24 사용자 답으로 그리지 않음).
+  assert.equal(promoCards(input(THREE, { insights }))[0].basis, FULL_BASIS.replace("흐름 기준: ", ""));
+});
+
 test("파일 이름은 날짜만(realprice-YYYYMMDD.png, 두 장이면 -1·-2), 받은 시각은 한국 시각", () => {
   assert.equal(promoFileName("2026-11-20"), "realprice-20261120.png");
   assert.equal(promoFileName("2026-11-20", 1, 2), "realprice-20261120-2.png");
