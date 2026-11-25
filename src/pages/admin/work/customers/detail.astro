@@ -12,7 +12,17 @@ import {
   COPY_TO_CHECK_LABEL,
   COPY_VIEW_BIG_LABEL,
 } from "../../../../lib/work/contract-copy-view.mjs";
-import { NOTE_BODY_MAX } from "../../../../lib/work/customers-view.mjs";
+import {
+  DEAL_PROPERTY_KIND_LABELS,
+  DEAL_PROPERTY_KIND_ORDER,
+  DEAL_SCHEDULE_TARGET_LABELS,
+  DEAL_TITLE_MAX,
+  DEAL_TYPE_LABELS,
+  DEAL_TYPE_ORDER,
+  NOTE_BODY_MAX,
+  PARTY_ROLE_LABELS,
+  PARTY_ROLE_ORDER,
+} from "../../../../lib/work/customers-view.mjs";
 import { PHOTO_CAPTION_MAX, PHOTO_GO_LABEL, PHOTO_KIND_LABELS, PHOTO_PAGE_SIZE, PHOTO_PICK_MAX } from "../../../../lib/work/photo-view.mjs";
 import { TRASH_MOVE_NOTICE } from "../../../../lib/work/trash-view.mjs";
 
@@ -22,6 +32,10 @@ import { TRASH_MOVE_NOTICE } from "../../../../lib/work/trash-view.mjs";
 // - 서버를 부르므로 탭 미리 그리기 prerender 목록에 넣지 않는다. 업무 세션이 꺼져 있으면 손님 자료를 부르지 않는다.
 // - 지운 손님은 휴지통으로 간다(7일 보관, 시안 2026-11-22 14:42:41). 이름 넣기 확인은 그대로다.
 // - 거래 칸마다 접어 둔 '계약서 사본' 칸이 있다(단계 4 K-b, 사용자 결정 2026-11-23 10:22:02). 주민등록번호를 검게 칠하는 화면 전체 창은 거래 칸 아래에 하나만 두고 함께 쓴다.
+// - '거래·일정' 위 '새 거래'로 이 손님을 참여자로 붙인 거래를 만든다(2026-11-24 사용자가 찾은 "거래를 만들 곳이 없음", 2026-11-25).
+const dealTypeLabels = DEAL_TYPE_LABELS as Record<string, string>;
+const propertyKindLabels = DEAL_PROPERTY_KIND_LABELS as Record<string, string>;
+const roleLabels = PARTY_ROLE_LABELS as Record<string, string>;
 ---
 
 <AdminLayout
@@ -106,8 +120,79 @@ import { TRASH_MOVE_NOTICE } from "../../../../lib/work/trash-view.mjs";
       <div class="cu-two__main">
         <section class="cu-block" aria-labelledby="cu-deals-title">
           <h2 id="cu-deals-title" class="cu-block__title">거래·일정 <span class="cu-block__n" data-cu-deals-count></span></h2>
+          <!-- 새 거래(2026-11-25): 이 손님을 참여자로 붙여 POST /work/deals로 만든 뒤 손님 카드를 다시 읽어 거래 칸(장부·계약서 사본)을 그린다.
+               금액·날짜·규제 칸은 받지 않는다(서버 기본값). 거래 제목은 주소·브라우저 저장소·문서 제목에 넣지 않는다. -->
+          <div class="cu-actions cu-deal-new">
+            <button class="work-secondary-button cu-act" type="button" aria-expanded="false" aria-controls="cu-deal-panel" data-cu-deal-open><AdminIcon name="page" size={20} /><span>새 거래</span></button>
+          </div>
+          <p class="admin-form-status" role="status" aria-live="polite" data-cu-deals-status></p>
+          <button class="work-secondary-button" type="button" data-cu-deals-reload hidden>다시 불러오기</button>
+          <section class="cu-form cu-panel" id="cu-deal-panel" aria-labelledby="cu-deal-title" data-cu-deal-panel hidden>
+            <h3 id="cu-deal-title" class="cu-panel__title">새 거래</h3>
+            <div class="cu-fields">
+              <div class="work-row">
+                <label class="work-row__label" for="cu-deal-name">거래 제목 <span class="cu-required">필수</span></label>
+                <div class="work-row__control">
+                  <input id="cu-deal-name" type="text" maxlength={DEAL_TITLE_MAX} placeholder="예: 리더스시티5블록 84㎡ 매매" autocomplete="off" aria-describedby="cu-deal-name-help cu-deal-name-error" data-cu-deal-field="title" data-cu-deal-group="title" />
+                  <small id="cu-deal-name-help">매출장부·휴지통에도 이 제목이 보입니다. 손님 이름·호수·주민등록번호는 넣지 않습니다.</small>
+                  <small class="cu-error" id="cu-deal-name-error" data-cu-deal-error="title"></small>
+                </div>
+              </div>
+              <div class="work-row" role="radiogroup" aria-labelledby="cu-deal-type-label" aria-describedby="cu-deal-type-error" data-cu-deal-group="dealType">
+                <span class="work-row__label" id="cu-deal-type-label">거래 종류 <span class="cu-required">필수</span></span>
+                <div class="work-row__control">
+                  <div class="work-segment">
+                    {DEAL_TYPE_ORDER.map((value: string) => (
+                      <label class="work-choice"><input type="radio" name="cu-deal-type" value={value} autocomplete="off" data-cu-deal-field="dealType" /><span>{dealTypeLabels[value]}</span></label>
+                    ))}
+                  </div>
+                  <small class="cu-error" id="cu-deal-type-error" data-cu-deal-error="dealType"></small>
+                </div>
+              </div>
+              <div class="work-row" role="radiogroup" aria-labelledby="cu-deal-kind-label" aria-describedby="cu-deal-kind-error" data-cu-deal-group="propertyKind">
+                <span class="work-row__label" id="cu-deal-kind-label">물건 종류 <span class="cu-required">필수</span></span>
+                <div class="work-row__control">
+                  <div class="work-segment">
+                    {DEAL_PROPERTY_KIND_ORDER.map((value: string) => (
+                      <label class="work-choice"><input type="radio" name="cu-deal-kind" value={value} autocomplete="off" data-cu-deal-field="propertyKind" /><span>{propertyKindLabels[value]}</span></label>
+                    ))}
+                  </div>
+                  <small class="cu-error" id="cu-deal-kind-error" data-cu-deal-error="propertyKind"></small>
+                </div>
+              </div>
+              <div class="work-row" role="radiogroup" aria-labelledby="cu-deal-target-label" aria-describedby="cu-deal-target-help cu-deal-target-error" data-cu-deal-group="scheduleTarget" data-cu-deal-officetel hidden>
+                <span class="work-row__label" id="cu-deal-target-label">오피스텔 일정 기준 <span class="cu-required">필수</span></span>
+                <div class="work-row__control">
+                  <div class="work-segment">
+                    {Object.entries(DEAL_SCHEDULE_TARGET_LABELS).map(([value, label]) => (
+                      <label class="work-choice"><input type="radio" name="cu-deal-target" value={value} autocomplete="off" data-cu-deal-field="scheduleTarget" /><span>{label}</span></label>
+                    ))}
+                  </div>
+                  <small id="cu-deal-target-help">주거용 오피스텔이 주택 임대차 신고·자금조달계획서 대상인지는 법률 해석이 필요합니다. 주거용으로 쓰면 '주택'을, 아니면 '그 밖의 건축물'을 고르세요.</small>
+                  <small class="cu-error" id="cu-deal-target-error" data-cu-deal-error="scheduleTarget"></small>
+                </div>
+              </div>
+              <div class="work-row" role="radiogroup" aria-labelledby="cu-deal-role-label" aria-describedby="cu-deal-role-error" data-cu-deal-group="role">
+                <span class="work-row__label" id="cu-deal-role-label">이 손님은 <span class="cu-required">필수</span></span>
+                <div class="work-row__control">
+                  <div class="work-segment">
+                    {PARTY_ROLE_ORDER.map((value: string) => (
+                      <label class="work-choice" data-cu-deal-role={value}><input type="radio" name="cu-deal-role" value={value} autocomplete="off" data-cu-deal-field="role" /><span>{roleLabels[value]}</span></label>
+                    ))}
+                  </div>
+                  <small class="cu-error" id="cu-deal-role-error" data-cu-deal-error="role"></small>
+                </div>
+              </div>
+            </div>
+            <p class="cu-soft" data-cu-deal-note></p>
+            <div class="cu-actions">
+              <button class="work-primary-button cu-save" type="button" data-cu-deal-save>거래 저장</button>
+              <button class="work-secondary-button" type="button" data-cu-deal-cancel>그만두기</button>
+            </div>
+            <p class="admin-form-status" role="status" aria-live="polite" data-cu-deal-status></p>
+          </section>
           <div class="cu-deals" data-cu-deals></div>
-          <p class="cu-soft" data-cu-deals-empty hidden>아직 이 손님과 이은 거래가 없습니다.</p>
+          <p class="cu-soft" data-cu-deals-empty hidden>아직 이 손님과 이은 거래가 없습니다. '새 거래'를 눌러 만듭니다.</p>
 
           <!-- 계약서 사본(단계 4 K-b): 거래 칸의 '계약서 찍기'·'사진첩에서 고르기'가 아래 입력을 열고, 고른 사진은 화면 전체 창에서 주민등록번호를 검게 칠한 뒤에만 올린다.
                가리기 전 사진은 서버로 보내지 않고, 한 번에 한 장만 받는다(multiple 없음). 같은 창이 올린 사본 '보기'에도 쓰인다. -->
@@ -326,6 +411,7 @@ import { TRASH_MOVE_NOTICE } from "../../../../lib/work/trash-view.mjs";
   <script>
     import {
       WorkApiError,
+      createDeal,
       createNote,
       deleteCustomer,
       getCustomerSession,
@@ -348,12 +434,16 @@ import { TRASH_MOVE_NOTICE } from "../../../../lib/work/trash-view.mjs";
       PARTY_ROLE_LABELS,
       agoText,
       checkCustomerInput,
+      checkDealInput,
       checkNoteBody,
       customerChanges,
       customerErrorText,
       customerSaveErrorText,
       customerIdFromSearch,
       dateText,
+      dealCreateNote,
+      dealRoleChoices,
+      dealServerErrors,
       deleteResultText,
       dueText,
       isCleanupDue,
@@ -457,6 +547,7 @@ import { TRASH_MOVE_NOTICE } from "../../../../lib/work/trash-view.mjs";
         }
         box.replaceChildren(...[...deals.values()].map(({ deal, roles }) => {
           const article = element("article", "cu-deal");
+          article.dataset.cuDeal = deal.id;
           article.append(element("h3", "cu-deal__title", deal.title));
           const meta = element("p", "cu-deal__meta", `${labelOf(DEAL_TYPE_LABELS, deal.dealType)} · ${roles.join("·")} · `);
           meta.append(element("span", "cu-deal__status", labelOf(DEAL_STATUS_LABELS, deal.status)));
@@ -907,10 +998,135 @@ import { TRASH_MOVE_NOTICE } from "../../../../lib/work/trash-view.mjs";
       // 하단 막대 '사진 찍기': 누른 그 자리에서 카메라를 연다(찍은 뒤 사진 칸의 확인 칸으로 감).
       barCamera.addEventListener("click", () => photos.openCamera());
 
-      // 저장하지 않은 메모·고치기 칸, 아직 올리지 못한 사진·계약서 사본이 있으면 떠나기 전에 묻는다.
+      // ── 새 거래(이 손님을 참여자로 붙임) ──
+      // 만든 뒤에는 메모 저장처럼 손님 카드를 다시 읽어 거래 칸(장부·계약서 사본·AI 상자)을 그 거래에 붙여 그린다.
+      // 다시 읽기만 실패하면 '만들었습니다'와 '다시 불러오기'를 보인다(다시 누르면 같은 거래가 둘 생기므로 저장 단추로 되돌리지 않음).
+      const dealOpen = pick<HTMLButtonElement>("[data-cu-deal-open]");
+      const dealPanel = pick("[data-cu-deal-panel]");
+      const dealSave = pick<HTMLButtonElement>("[data-cu-deal-save]");
+      const dealStatus = pick("[data-cu-deal-status]");
+      const dealsStatus = pick("[data-cu-deals-status]");
+      const dealsReload = pick<HTMLButtonElement>("[data-cu-deals-reload]");
+      const dealTitle = pick<HTMLInputElement>('[data-cu-deal-field="title"]');
+      const dealOfficetel = pick("[data-cu-deal-officetel]");
+      const dealChecked = (key: string) => dealPanel.querySelector<HTMLInputElement>(`[data-cu-deal-field="${key}"]:checked`)?.value ?? "";
+      const readDealFields = () => ({
+        title: dealTitle.value,
+        dealType: dealChecked("dealType"),
+        propertyKind: dealChecked("propertyKind"),
+        scheduleTarget: dealChecked("scheduleTarget"),
+        role: dealChecked("role"),
+      });
+      // 오피스텔일 때만 일정 기준 줄을 보이고, 거래 종류에 맞는 역할만 보인다(숨긴 역할을 골라 두었으면 풀어 둠).
+      function syncDealForm() {
+        dealOfficetel.hidden = dealChecked("propertyKind") !== "officetel";
+        const roles = dealRoleChoices(dealChecked("dealType"));
+        for (const choice of dealPanel.querySelectorAll<HTMLElement>("[data-cu-deal-role]")) {
+          const shown = roles.includes(choice.dataset.cuDealRole ?? "");
+          choice.hidden = !shown;
+          const radio = choice.querySelector<HTMLInputElement>("input");
+          if (!shown && radio) radio.checked = false;
+        }
+      }
+      // 칸별 오류 표시(손님 칸 showFieldErrors와 같은 모양). 오류가 있으면 첫 칸(고르기 줄은 보이는 첫 단추)으로 포커스를 옮긴다.
+      function showDealErrors(errors: Record<string, string>) {
+        let first: HTMLElement | null = null;
+        for (const slot of dealPanel.querySelectorAll<HTMLElement>("[data-cu-deal-error]")) {
+          const key = slot.dataset.cuDealError ?? "";
+          const message = errors[key] ?? "";
+          slot.textContent = message;
+          const group = dealPanel.querySelector<HTMLElement>(`[data-cu-deal-group="${key}"]`);
+          if (!group) continue;
+          if (message) group.setAttribute("aria-invalid", "true");
+          else group.removeAttribute("aria-invalid");
+          if (message && !first) first = group instanceof HTMLInputElement ? group : group.querySelector<HTMLInputElement>("label:not([hidden]) input");
+        }
+        first?.focus();
+      }
+      function openDeal(open: boolean) {
+        dealPanel.hidden = !open;
+        dealOpen.setAttribute("aria-expanded", String(open));
+        if (!open) return;
+        dealTitle.value = "";
+        for (const radio of dealPanel.querySelectorAll<HTMLInputElement>('input[type="radio"]')) radio.checked = false;
+        syncDealForm();
+        showDealErrors({});
+        setStatus(dealStatus, "", "idle");
+        setStatus(dealsStatus, "", "idle");
+        dealsReload.hidden = true;
+        pick("[data-cu-deal-note]").textContent = dealCreateNote({ aiReady: filesEnabled && aiEnabled });
+        dealTitle.focus();
+      }
+      dealOpen.addEventListener("click", () => openDeal(Boolean(dealPanel.hidden)));
+      pick("[data-cu-deal-cancel]").addEventListener("click", () => {
+        openDeal(false);
+        dealOpen.focus();
+      });
+      dealPanel.addEventListener("change", syncDealForm);
+      dealSave.addEventListener("click", async () => {
+        if (busy || !id) return;
+        const checked = checkDealInput(readDealFields(), id);
+        if (!checked.ok) {
+          showDealErrors(checked.errors);
+          setStatus(dealStatus, "빨간 글자가 있는 칸을 고쳐 주세요.", "error");
+          return;
+        }
+        showDealErrors({});
+        busy = true;
+        dealSave.disabled = true;
+        setStatus(dealStatus, "저장하고 있습니다…", "saving");
+        let dealId: string;
+        try {
+          dealId = (await createDeal(checked.value)).deal.id;
+        } catch (error) {
+          const code = errorCode(error);
+          const server = code === "VALIDATION_FAILED" && error instanceof WorkApiError ? dealServerErrors(error.details) : null;
+          if (server?.missingCustomer) setStatus(dealStatus, `저장하지 못했습니다. ${customerErrorText("NOT_FOUND")}`, "error");
+          else setStatus(dealStatus, `저장하지 못했습니다. ${customerSaveErrorText(code, error)}`, "error");
+          if (server) showDealErrors(server.fields);
+          busy = false;
+          dealSave.disabled = false;
+          return;
+        }
+        // 여기부터는 저장이 끝난 뒤다. 다시 읽기가 실패해도 '저장하지 못했습니다'로 알리지 않는다.
+        openDeal(false);
+        try {
+          await load();
+          setStatus(dealsStatus, `✓ 거래를 만들었습니다. 아래 거래 칸에서 장부를 ${filesEnabled ? "보고 계약서 사본을 올립니다" : "봅니다"}.`, "success");
+          const heading = root.querySelector<HTMLElement>(`[data-cu-deal="${dealId}"] .cu-deal__title`);
+          if (heading) {
+            heading.tabIndex = -1;
+            heading.focus();
+          } else dealOpen.focus();
+        } catch {
+          setStatus(dealsStatus, "✓ 거래는 만들었습니다. 다만 손님 카드를 새로 읽지 못해 아래 거래 목록에는 아직 없습니다. '다시 불러오기'를 눌러 주세요.", "error");
+          dealsReload.hidden = false;
+          dealOpen.focus();
+        } finally {
+          busy = false;
+          dealSave.disabled = false;
+        }
+      });
+      // 거래 만들기 뒤 다시 읽기만 실패했을 때: 손님 카드만 다시 읽는다(거래는 다시 보내지 않음).
+      dealsReload.addEventListener("click", async () => {
+        if (busy) return;
+        busy = true;
+        try {
+          await load();
+          dealsReload.hidden = true;
+          setStatus(dealsStatus, "✓ 손님 카드를 새로 읽었습니다.", "success");
+        } catch (error) {
+          showLoadError(error);
+        } finally {
+          busy = false;
+        }
+      });
+
+      // 저장하지 않은 메모·고치기 칸·새 거래 칸, 아직 올리지 못한 사진·계약서 사본이 있으면 떠나기 전에 묻는다.
       window.addEventListener("beforeunload", (event) => {
         const editing = !editPanel.hidden;
-        if (!memo.value.trim() && !editing && !photos.hasPending() && !copies.hasPending()) return;
+        const dealing = !dealPanel.hidden && (dealTitle.value.trim() !== "" || dealPanel.querySelector("input:checked") !== null);
+        if (!memo.value.trim() && !editing && !dealing && !photos.hasPending() && !copies.hasPending()) return;
         event.preventDefault();
       });
 
@@ -955,6 +1171,9 @@ import { TRASH_MOVE_NOTICE } from "../../../../lib/work/trash-view.mjs";
         setStatus(basicStatus, "", "idle");
         openEdit(false);
         openDelete(false);
+        openDeal(false);
+        setStatus(dealsStatus, "", "idle");
+        dealsReload.hidden = true;
         photos.reset();
         copies.reset();
         aiBoxes.reset();

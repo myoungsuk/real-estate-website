@@ -3,7 +3,7 @@
   "figures": {
     "contract-copy": {
       "route": "/admin/work/customers/detail/",
-      "sources": "d2e921c728a4daadea108f7f48d7de9990c510f69758a4feae4a3dc968d4f0a0",
+      "sources": "f35b93714255ca2229ceac206148b9165afa28ed66e5a2a667b72d83cceb4c6a",
       "shots": {
         "contract-phone-1-panel": {
           "width": 712,
@@ -74,8 +74,8 @@
         "contract-phone-4-done": {
           "width": 712,
           "height": 1102,
-          "bytes": 28372,
-          "sha256": "0cbffd1e671c82309d6aafe708d02f0f7e8e265f294912625b02ee7179f02082",
+          "bytes": 28356,
+          "sha256": "f7d3822a13e55819fce889284d4356e89f905b00a7061d5d987e479e78bc0f39",
           "marks": [
             [
               0.0337,
@@ -88,8 +88,8 @@
         "contract-wide-1-panel": {
           "width": 1444,
           "height": 664,
-          "bytes": 26182,
-          "sha256": "dc97459d32266d8a0d964aa68312cd1c1db9e46f896ba3fcfd92177a0b427960",
+          "bytes": 26088,
+          "sha256": "b779860981ae31b9c8ee0aa00049e7834be21d527286a5bd1fe24c3a41fceafd",
           "marks": [
             [
               0.0166,
@@ -154,8 +154,8 @@
         "contract-wide-4-done": {
           "width": 1444,
           "height": 814,
-          "bytes": 33792,
-          "sha256": "8b082ace72da9d72cad553e8347a65b3a583b248114c4fbcf78db3b706af9814",
+          "bytes": 33798,
+          "sha256": "db59da5e15003cc9ebc0e0379c4d016e9ce366a63e310583eb44a6ba2c06676a",
           "marks": [
             [
               0.0166,
@@ -337,7 +337,7 @@
     },
     "contract-ai-box": {
       "route": "/admin/work/customers/detail/",
-      "sources": "15fbe1043747e0de307829c8cb20c6ebea8fffdfe568f99d2a1b3f7b3de476d8",
+      "sources": "b7bf93f4eeb87d0426f430e06b467648c9c0b58a61b70047a506c3cff1c67f6c",
       "shots": {
         "aibox-phone-1-start": {
           "width": 712,
@@ -409,7 +409,7 @@
           "width": 1444,
           "height": 440,
           "bytes": 12368,
-          "sha256": "fa4ef339c656db295ed4f68bb15686e2c071dfbf0342c8ff1b3255dd6efbfb53",
+          "sha256": "61b52d07a2315cbcbb41a612a45ac1b71c415739622a07bdca8120a4c4b2b571",
           "marks": [
             [
               0.0374,
@@ -423,7 +423,7 @@
       "files": {
         "src/lib/work-ai-section.ts": "61f2f691aba1d09ca2672f069d503f46f0e170ae8d11d1c8ec3ba1ee9165f06c",
         "src/lib/work/contract-ai-view.mjs": "3c78fa23c782c42f3b124b79699b05123cd6340fff75a1c3e6b6d6f4dd6650f1",
-        "src/pages/admin/work/customers/detail.astro": "7fb6910a724695ba8de511173801efe4d7eb3e087a390bba7a086d746b778ce2"
+        "src/pages/admin/work/customers/detail.astro": "034d77ea579ff057c90d8054d4e8b5944a91c2c238ec7218d27edf0f378d8582"
       }
     },
     "contract-ai-review": {

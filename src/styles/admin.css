@@ -2031,6 +2031,7 @@ html:has(.rt-pick-bar:not([hidden])) { scroll-padding-bottom: calc(var(--rt-pick
 .cu-save:disabled { color: var(--ds-ink-soft); background: var(--ds-paper-2); cursor: not-allowed; }
 .cu-delete-go:not(:disabled) { background: var(--ds-stamp); }
 
+.cu-deal-new { margin: 0 0 8px; }
 .cu-deals { display: grid; gap: 8px; }
 .cu-deal { padding: 12px 14px; border: 1px solid var(--ds-edge); border-radius: var(--ad-radius); background: var(--ds-paper); }
 .cu-deal__title { display: flex; align-items: center; min-height: 44px; margin: 0; color: var(--ds-navy); font-size: 1.0625rem; font-weight: 800; overflow-wrap: anywhere; }
@@ -2072,6 +2073,7 @@ html:has(.rt-pick-bar:not([hidden])) { scroll-padding-bottom: calc(var(--rt-pick
 @media (min-width: 640px) {
   .cu-top { grid-template-columns: minmax(0, 1fr) auto; align-items: start; }
   .cu-new { width: auto; padding: 0 22px; }
+  .cu-deal-new .cu-act { flex: 0 1 auto; padding: 0 22px; }
   .cu-card { grid-template-columns: minmax(0, 1fr) auto; column-gap: 16px; }
   .cu-card > :not(.cu-card__call):not(.cu-card__nophone) { grid-column: 1; }
   .cu-card__call, .cu-card__nophone { grid-column: 2; grid-row: 1 / span 3; align-self: center; }

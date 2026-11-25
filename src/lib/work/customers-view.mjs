@@ -16,6 +16,73 @@ export const DEAL_TYPE_LABELS = Object.freeze({ sale: "매매", exchange: "교�
 export const DEAL_STATUS_LABELS = Object.freeze({ open: "진행 중", contracted: "계약함", completed: "끝", cancelled: "취소" });
 export const PARTY_ROLE_LABELS = Object.freeze({ buyer: "매수인", seller: "매도인", tenant: "임차인", landlord: "임대인", other: "기타" });
 
+// ── 거래 만들기(손님 카드 '새 거래', 2026-11-25) ──
+// 칸 이름·값은 worker/work-input.mjs parseDealCreate와 같다(제목 1 ~ 80자, 거래 종류 4가지, 물건 종류 4가지,
+// 오피스텔이면 일정 판정 housing·other 필수, 참여자 역할 5가지). 금액·날짜·규제 칸은 보내지 않아 서버 기본값(DEAL_DEFAULTS)이 들어간다.
+export const DEAL_TITLE_MAX = 80;
+export const DEAL_TYPE_ORDER = Object.freeze(["sale", "exchange", "jeonse", "monthly_rent"]);
+export const DEAL_PROPERTY_KIND_LABELS = Object.freeze({ housing: "주택", officetel: "오피스텔", other: "그 밖의 건축물", land: "토지" });
+export const DEAL_PROPERTY_KIND_ORDER = Object.freeze(["housing", "officetel", "other", "land"]);
+export const DEAL_SCHEDULE_TARGET_LABELS = Object.freeze({ housing: "주택", other: "그 밖의 건축물" });
+export const PARTY_ROLE_ORDER = Object.freeze(["buyer", "seller", "tenant", "landlord", "other"]);
+
+// 이 손님 역할로 고를 수 있는 것: 거래 종류의 두 쪽 + 기타. 거래 종류를 안 골랐으면 5가지 모두.
+// 두 쪽은 매출장부 낸 쪽(ledger-view.mjs DEAL_PAYER_SIDES)과 같다(시험이 견줌). 이 파일은 일정·할 일 화면도 불러 써서 매출장부 계산 모듈을 끌어오지 않게 따로 둔다.
+const DEAL_SIDES = Object.freeze({ sale: ["buyer", "seller"], exchange: ["buyer", "seller"], jeonse: ["tenant", "landlord"], monthly_rent: ["tenant", "landlord"] });
+/** @param {string} dealType @returns {readonly string[]} */
+export function dealRoleChoices(dealType) {
+  const sides = DEAL_SIDES[/** @type {keyof typeof DEAL_SIDES} */ (dealType)];
+  return sides ? [...sides, "other"] : PARTY_ROLE_ORDER;
+}
+
+// 거래 만들기 입력 검사. 칸별 오류 문장 또는 서버로 보낼 본문(참여자는 이 손님 한 명)을 돌려준다.
+/**
+ * @param {{ title?: string, dealType?: string, propertyKind?: string, scheduleTarget?: string, role?: string }} input
+ * @param {string} customerId
+ * @returns {{ ok: true, value: { title: string, dealType: string, propertyKind: string, scheduleTarget?: string, parties: { customerId: string, role: string }[] }, errors?: undefined }
+ *   | { ok: false, errors: Record<string, string>, value?: undefined }}
+ */
+export function checkDealInput({ title = "", dealType = "", propertyKind = "", scheduleTarget = "", role = "" } = {}, customerId) {
+  /** @type {Record<string, string>} */
+  const errors = {};
+  const text = String(title).trim();
+  if (!text) errors.title = "거래 제목을 넣어 주세요. '리더스시티5블록 84㎡ 매매'처럼 씁니다.";
+  else if (text.length > DEAL_TITLE_MAX) errors.title = `거래 제목은 ${DEAL_TITLE_MAX}자까지 넣을 수 있습니다.`;
+  if (!DEAL_TYPE_ORDER.includes(dealType)) errors.dealType = "거래 종류를 골라 주세요.";
+  if (!DEAL_PROPERTY_KIND_ORDER.includes(propertyKind)) errors.propertyKind = "물건 종류를 골라 주세요.";
+  const officetel = propertyKind === "officetel";
+  if (officetel && !Object.hasOwn(DEAL_SCHEDULE_TARGET_LABELS, scheduleTarget)) errors.scheduleTarget = "오피스텔 일정 기준을 골라 주세요.";
+  if (!dealRoleChoices(dealType).includes(role)) errors.role = "이 손님이 거래에서 어느 쪽인지 골라 주세요.";
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+  return {
+    ok: true,
+    value: { title: text, dealType, propertyKind, ...(officetel ? { scheduleTarget } : {}), parties: [{ customerId, role }] },
+  };
+}
+
+// 서버가 400 VALIDATION_FAILED로 돌려준 칸 이름(error.details) → 칸별 오류 문장. parties는 이 손님이 그사이 지워졌을 때다.
+const DEAL_SERVER_FIELD_TEXTS = Object.freeze({
+  title: `거래 제목을 확인해 주세요(1 ~ ${DEAL_TITLE_MAX}자).`,
+  dealType: "거래 종류를 다시 골라 주세요.",
+  propertyKind: "물건 종류를 다시 골라 주세요.",
+  scheduleTarget: "오피스텔 일정 기준을 다시 골라 주세요.",
+});
+/** @param {string[]} details @returns {{ fields: Record<string, string>, missingCustomer: boolean }} */
+export function dealServerErrors(details = []) {
+  /** @type {Record<string, string>} */
+  const fields = {};
+  for (const key of details) if (Object.hasOwn(DEAL_SERVER_FIELD_TEXTS, key)) fields[key] = DEAL_SERVER_FIELD_TEXTS[key];
+  return { fields, missingCustomer: details.includes("parties") };
+}
+
+// '새 거래' 칸 아래 안내. 계약일·금액·일정은 이 칸에서 넣지 않는다. AI 일정 뽑기가 쓰일 때만 그 길을 알려 준다.
+/** @param {{ aiReady: boolean }} options */
+export function dealCreateNote({ aiReady }) {
+  return aiReady
+    ? "계약일·금액·일정은 여기서 넣지 않습니다. 거래를 만든 뒤 그 거래의 계약서 사본을 올리고 'AI로 일정 뽑기'로 넣습니다."
+    : "계약일·금액·일정은 아직 이 화면에서 넣을 수 없습니다.";
+}
+
 const DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/u;
 const dayNumber = (date) => {
   const match = DATE_PATTERN.exec(date ?? "");
