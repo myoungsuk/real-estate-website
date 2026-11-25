@@ -845,6 +845,9 @@
 .admin-field input,
 .admin-field select { border-color: var(--ds-field-edge); border-radius: var(--ad-radius); color: var(--ds-ink); background-color: var(--ds-paper); font-size: 1rem; }
 .admin-field input::placeholder { color: var(--ds-ink-soft); }
+/* 입력 칸 아래 알림(저장은 막지 않고 한 번 더 보게 하는 글). 색만으로 알리지 않게 왼쪽 줄과 글로 구분한다. */
+.admin-field__notice { display: grid; gap: 4px; margin: 0; padding: 2px 0 2px 10px; border-left: 3px solid var(--ds-navy); color: var(--ds-ink); font-size: 1rem; line-height: 1.5; }
+.admin-field__notice[hidden] { display: none !important; }
 .admin-filter-reset { border: 1.5px solid var(--ds-navy); border-radius: var(--ad-radius); color: var(--ds-navy); background: var(--ds-paper); }
 .admin-filter-reset:disabled { border-color: var(--ds-edge); color: var(--ds-ink-soft); background: var(--ds-paper-2); }
 .admin-listing-count { color: var(--ds-ink); font-size: 1rem; }

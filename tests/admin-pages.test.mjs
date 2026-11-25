@@ -188,20 +188,20 @@ test("관리자 인스타그램: 메뉴 이름에 인스타그램을 넣고, 콘
   assert.match(editor, /idField\.required = !isInstagram/u, "인스타그램은 ID 칸을 비워도 저장 단계로 넘어감");
 });
 
-test("관리자 블로그 카드 저장: 입력 칸이 없는 글 앞부분 요약·분류를 다시 조립할 때 그대로 넘긴다", async () => {
+// 2026-11-25 입력 칸이 생겨 기대가 바뀌었다(그 전: 입력 칸 없음 + keepBlogExtras로 저장된 값을 그대로 넘김).
+test("관리자 블로그 카드 저장: 글 앞부분 요약·분류 입력 칸의 값을 summary 뒤에 넘기고, 블로그가 아니면 칸을 숨긴다", async () => {
   const editor = await readSource("src/pages/admin/external-links/index.astro");
-  assert.match(editor, /import \{ keepBlogExtras \} from "\.\.\/\.\.\/\.\.\/lib\/admin-blog-extras\.mjs";/u);
+  assert.match(editor, /import \{ blogExtrasFromInput, getBlogExtraInputErrors, getBlogExtraNotices \} from "\.\.\/\.\.\/\.\.\/lib\/admin-blog-extras\.mjs";/u);
+  assert.match(editor, /<div class="admin-field admin-field--wide" data-blog-extra-field><label for="external-excerpt">글 앞부분 요약<\/label><textarea id="external-excerpt" name="excerpt" rows="5" maxlength="300"/u, "요약 칸(검사 상한 300자)");
+  assert.match(editor, /<div class="admin-field" data-blog-extra-field><label for="external-category">분류<\/label><input id="external-category" name="category" maxlength="30"/u, "분류 칸(검사 상한 30자)");
+  assert.match(editor, /data-external-excerpt-notice aria-live="polite" hidden/u, "금액·동 번호 알림 줄은 처음에 숨김");
   assert.match(
     editor,
-    /const existing = resource\.data\.find\(\(item\) => item\.id === originalId\);/u,
-    "고치는 중인 저장 항목",
+    /summary: field\("summary"\)!\.value\.trim\(\), \.\.\.blogExtrasFromInput\(type, blogExtraInput\(\)\), url: /u,
+    "저장 항목을 다시 조립할 때 요약 → 분류를 summary 뒤에 넘김(비운 칸은 키째 빠짐)",
   );
-  assert.match(
-    editor,
-    /summary: field\("summary"\)!\.value\.trim\(\), \.\.\.keepBlogExtras\(existing, \{ type, url: field\("url"\)!\.value\.trim\(\) \}\), url: /u,
-    "저장 항목을 다시 조립할 때 요약 → 분류를 summary 뒤에 그대로 넘김",
-  );
-  assert.doesNotMatch(editor, /name="excerpt"|name="category"/u, "요약·분류를 고치는 입력 칸은 아직 없음(다음 단계)");
+  assert.match(editor, /const extraErrors = getBlogExtraInputErrors\(type, blogExtraInput\(\)\) as string\[\];\s+if \(extraErrors\.length > 0\) \{\s+setAdminFormStatus\(statusMessage, extraErrors\.join\(" "\), "error"\);\s+return;/u, "형식 오류는 확인 창을 열기 전에 알리고 멈춤");
+  assert.doesNotMatch(editor, /keepBlogExtras/u, "저장돼 있던 값을 몰래 넘기던 옛 길은 없음(칸의 값이 기준)");
 });
 
 test("관리자 인스타그램: 계정 이름이 들어간 게시물 주소는 저장 전에 /p/·/reel/ 주소로 바꾼다", async () => {
@@ -330,7 +330,8 @@ test("외부 콘텐츠는 블로그와 유튜브를 나누고 일반 영상을 �
   assert.match(contentSource, /timeZone: "Asia\/Seoul"/);
   assert.match(headers, /frame-src https:\/\/www\.youtube-nocookie\.com/);
   assert.match(privacy, /youtube-nocookie\.com/);
-  assert.match(home, /publishedBlogContents\.slice\(0, 9\)/);
+  // 2026-11-25 홈 블로그 칸이 '최신 글 1건 크게 + 6건 줄 목록'으로 바뀌어 9건 → 7건(사용자 승인 "전부 추천대로", 안 다).
+  assert.match(home, /publishedBlogContents\.slice\(0, 7\)/);
   assert.match(home, /publishedYoutubeVideoContents\.slice\(0, 6\)/);
   assert.match(home, /publishedInstagramContents\.slice\(0, 6\)/);
   assert.match(home, /homeInstagramContents\.length > 0 && <ExternalContentList items=\{homeInstagramContents\}[^>]*paginate=\{false\}[^>]*variant="note"/u, "0건이면 목록 없이 바로가기만");

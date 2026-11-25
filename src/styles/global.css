@@ -438,6 +438,10 @@ h3 { font-size: 1.35rem; }
 .content-card__media.is-previewing .content-card__preview-label { background: rgba(159,63,75,0.9); }
 .content-card__body { min-height: 236px; display: grid; align-content: start; padding: 20px; }
 .content-card__source { margin-bottom: 14px; color: var(--ds-navy) !important; font-size: 0.875rem; font-weight: 850; letter-spacing: 0.14em; }
+/* 블로그 분류 딱지: 출처 이름표 옆 작은 칸(분류가 저장된 블로그 글에만). 누르는 곳이 아니라 글자다 */
+.content-card__labels { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0 0 14px; }
+.content-card__labels .content-card__source { margin: 0; }
+.content-card__category { min-height: 28px; display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 2px; color: var(--ds-navy); background: var(--ds-paper-2); font-size: 0.875rem; font-weight: 800; line-height: 1.4; }
 .content-card h3 { margin: 0 0 10px; color: var(--navy-950); font-size: 1.28rem; }
 .content-card time { margin-bottom: 10px; color: var(--muted); font-size: 0.875rem; font-weight: 700; }
 .content-card__body > p:not(.content-card__source) { display: -webkit-box; overflow: hidden; color: var(--muted); -webkit-box-orient: vertical; -webkit-line-clamp: 3; }

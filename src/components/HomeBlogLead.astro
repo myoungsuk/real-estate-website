@@ -1,0 +1,57 @@
+---
+// 홈 "블로그·유튜브 새 글"의 블로그 칸: 최신 글 1건을 요약과 함께 크게, 그다음 글은 줄 목록으로(2026-11-25 사용자 승인 "전부 추천대로").
+// 칸 하나에 누르는 곳은 제목 링크 하나이고 칸 전체를 덮는다. 썸네일은 꾸밈이라 대체 글을 비운다(홈 새 글 카드와 같음).
+// 요약·분류는 저장된 값 가운데 고르기만 한다(규칙은 blog-card.mjs). 스타일은 src/styles/home.css(홈 전용).
+import { formatContentDate, type ExternalContent } from "../lib/content";
+import { formatShortContentDate, getBlogCardCategory, getBlogCardSummary } from "../lib/blog-card.mjs";
+
+interface Props {
+  items: ExternalContent[];
+}
+
+const { items } = Astro.props;
+const [lead, ...rest] = items;
+const leadSummary = lead ? getBlogCardSummary(lead) : null;
+const leadCategory = lead ? getBlogCardCategory(lead) : null;
+const baseYear = lead?.publishedAt?.slice(0, 4);
+---
+
+{lead && (
+  <div class="home-blog">
+    <article class="home-blog__lead">
+      <div class="home-blog__media">
+        {lead.thumbnail ? <img src={lead.thumbnail.src} alt="" width="960" height="540" loading="lazy" decoding="async" /> : <span aria-hidden="true">N</span>}
+      </div>
+      <div class="home-blog__body">
+        {(leadCategory || formatContentDate(lead.publishedAt)) && (
+          <p class="home-blog__meta">
+            {leadCategory && <span class="home-blog__tag"><span class="sr-only">분류 </span>{leadCategory}</span>}
+            {formatContentDate(lead.publishedAt) && <time datetime={lead.publishedAt!}>{formatContentDate(lead.publishedAt)}</time>}
+          </p>
+        )}
+        <a class="home-blog__title" href={lead.url} target="_blank" rel="noopener noreferrer">{lead.title}</a>
+        {leadSummary && <p class="home-blog__excerpt">{leadSummary}</p>}
+      </div>
+    </article>
+    {rest.length > 0 && (
+      <ul class="home-blog__rows">
+        {rest.map((item) => (
+          <li class="home-blog__row">
+            <div class="home-blog__media">
+              {item.thumbnail ? <img src={item.thumbnail.src} alt="" width="960" height="540" loading="lazy" decoding="async" /> : <span aria-hidden="true">N</span>}
+            </div>
+            <div class="home-blog__text">
+              <a class="home-blog__row-title" href={item.url} target="_blank" rel="noopener noreferrer">{item.title}</a>
+              {(getBlogCardCategory(item) || formatShortContentDate(item.publishedAt, baseYear)) && (
+                <p class="home-blog__row-meta">
+                  {getBlogCardCategory(item) && <span><span class="sr-only">분류 </span>{getBlogCardCategory(item)}</span>}
+                  {formatShortContentDate(item.publishedAt, baseYear) && <time datetime={item.publishedAt!}>{formatShortContentDate(item.publishedAt, baseYear)}</time>}
+                </p>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+    )}
+  </div>
+)}

@@ -444,6 +444,142 @@
   font-size: 0.875rem;
 }
 
+/* 블로그 칸: 최신 글 1건을 요약과 함께 크게, 그다음 글은 줄 목록(휴대폰은 위아래, 700px 이상은 좌우) */
+.home-blog {
+  display: grid;
+  gap: 12px;
+  margin: 0 0 6px;
+}
+
+.home-blog__lead,
+.home-blog__rows {
+  border: 1px solid var(--home-edge);
+  border-radius: 2px;
+  background: var(--home-paper);
+}
+
+.home-blog__lead {
+  position: relative;
+  display: grid;
+  align-content: start;
+}
+
+.home-blog__media {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  color: var(--home-navy);
+  background: var(--home-edge);
+  font-weight: 800;
+}
+
+.home-blog__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.home-blog__body {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px 16px;
+}
+
+.home-blog__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 0;
+  color: var(--home-ink-soft);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.home-blog__tag {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: 2px;
+  color: var(--home-navy);
+  background: var(--home-paper-2);
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+.home-blog__title {
+  color: var(--home-navy);
+  font-size: 1.25rem;
+  font-weight: 800;
+  line-height: 1.35;
+  letter-spacing: -0.02em;
+}
+
+/* 제목 링크 하나가 칸 전체를 덮는다(홈 새 글 카드와 같은 방식) */
+.home-blog__title::after,
+.home-blog__row-title::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.home-blog__excerpt {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.home-blog__rows {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.home-blog__row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-height: 72px;
+  padding: 12px;
+}
+
+.home-blog__row + .home-blog__row {
+  border-top: 1px solid var(--home-edge);
+}
+
+.home-blog__row .home-blog__media {
+  border-radius: 2px;
+}
+
+.home-blog__row-title {
+  display: -webkit-box;
+  overflow: hidden;
+  font-weight: 800;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.home-blog__row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 6px;
+  margin: 4px 0 0;
+  color: var(--home-ink-soft);
+  font-size: 0.875rem;
+}
+
+.home-blog__row-meta span + time::before {
+  content: "· ";
+}
+
 /* 상담 구역 */
 .home-contact__box {
   display: grid;
@@ -506,6 +642,25 @@
   .content-notes {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 22px 16px;
+  }
+
+  .home-blog {
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    gap: 16px;
+    align-items: start;
+  }
+
+  .home-blog__title {
+    font-size: 1.375rem;
+  }
+
+  .home-blog__excerpt {
+    -webkit-line-clamp: 4;
+  }
+
+  .home-blog__row {
+    grid-template-columns: 128px minmax(0, 1fr);
+    gap: 14px;
   }
 
   .home-contact__row {
@@ -596,7 +751,8 @@
 @media (prefers-reduced-motion: no-preference) and (hover: hover) and (pointer: fine) {
   .listing-card--sheet,
   .home-area__complexes a,
-  .content-note .content-card__media {
+  .content-note .content-card__media,
+  .home-blog__row .home-blog__media {
     transition: transform 0.18s ease-out, box-shadow 0.18s ease-out;
   }
 
@@ -615,7 +771,8 @@
   }
 
   .home-area__complexes li:hover > a,
-  .content-note:hover .content-card__media {
+  .content-note:hover .content-card__media,
+  .home-blog__row:hover .home-blog__media {
     transform: translateY(-3px);
     box-shadow: 0 12px 24px rgba(20, 20, 20, 0.14);
   }

@@ -71,6 +71,8 @@ const instagramContents = externalContents.filter((item) => item.type === "insta
         <div class="admin-field"><label for="external-id">콘텐츠 ID</label><input id="external-id" name="id" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" placeholder="예: blog-cheondong-2026-01" required data-write-control disabled /></div>
         <div class="admin-field"><label for="external-title">제목</label><input id="external-title" name="title" required data-write-control disabled /></div>
         <div class="admin-field"><label for="external-summary">짧은 설명</label><textarea id="external-summary" name="summary" rows="4" required data-write-control disabled></textarea></div>
+        <div class="admin-field admin-field--wide" data-blog-extra-field><label for="external-excerpt">글 앞부분 요약</label><textarea id="external-excerpt" name="excerpt" rows="5" maxlength="300" autocomplete="off" data-write-control disabled></textarea><small>블로그 카드와 홈 새 글 칸에 보이는 요약입니다(300자까지, 줄바꿈은 한 칸으로 바뀝니다). 비워 두면 위 짧은 설명이 보이고, 짧은 설명이 자동으로 들어간 안내 문장뿐이면 요약 없이 보입니다.</small><p class="admin-field__notice" data-external-excerpt-notice aria-live="polite" hidden></p></div>
+        <div class="admin-field" data-blog-extra-field><label for="external-category">분류</label><input id="external-category" name="category" maxlength="30" autocomplete="off" placeholder="예: 부동산공부" data-write-control disabled /><small>네이버 블로그의 분류 이름입니다. 카드에 딱지로 보이고, 비워 두면 딱지가 없습니다.</small></div>
         <div class="admin-field"><label for="external-date">게시일</label><input id="external-date" name="publishedAt" type="date" data-write-control disabled /></div>
         <div class="admin-field"><label for="external-thumbnail">썸네일 직접 업로드</label><input id="external-thumbnail" name="thumbnailFile" type="file" accept="image/jpeg,image/png,image/webp" data-write-control disabled /><small data-external-thumbnail-hint>링크에서 썸네일을 못 불러온 경우 선택합니다.</small></div>
         <div class="admin-field"><label for="external-thumbnail-alt">썸네일 설명</label><input id="external-thumbnail-alt" name="thumbnailAlt" placeholder="예: 리더스시티 전세 안내 썸네일" data-write-control disabled /></div>
@@ -96,7 +98,7 @@ const instagramContents = externalContents.filter((item) => item.type === "insta
       type AdminResource,
     } from "../../../lib/admin-content-client";
     import { guardAdminFormChanges, reviewAdminContentChange } from "../../../lib/admin-content-review";
-    import { keepBlogExtras } from "../../../lib/admin-blog-extras.mjs";
+    import { blogExtrasFromInput, getBlogExtraInputErrors, getBlogExtraNotices } from "../../../lib/admin-blog-extras.mjs";
     import { suggestInstagramContentId } from "../../../lib/admin-external-id.mjs";
     import { normalizeInstagramUrl } from "../../../lib/admin-instagram-url.mjs";
     import type { ExternalContent } from "../../../lib/content";
@@ -119,6 +121,10 @@ const instagramContents = externalContents.filter((item) => item.type === "insta
     const previewFigure = document.querySelector<HTMLElement>("[data-external-thumbnail-preview]");
     const previewImage = previewFigure?.querySelector<HTMLImageElement>("img");
     const thumbnailHint = document.querySelector<HTMLElement>("[data-external-thumbnail-hint]");
+    const blogExtraFields = Array.from(document.querySelectorAll<HTMLElement>("[data-blog-extra-field]"));
+    const excerptNotice = document.querySelector<HTMLElement>("[data-external-excerpt-notice]");
+    // 고치는 중인 블로그 글의 저장된 원문 링크(새 글·다른 종류는 null). 링크를 다른 글로 바꿨는지 알리는 데만 쓴다.
+    let loadedBlogUrl: string | null = null;
     let resource: AdminResource<ExternalContent[]> | null = null;
     let previewDataUrl: string | null = null;
     let fileObjectUrl: string | null = null;
@@ -179,6 +185,19 @@ const instagramContents = externalContents.filter((item) => item.type === "insta
       if (youtubeFormatField) youtubeFormatField.hidden = field("type")?.value !== "youtube";
     };
 
+    // 글 앞부분 요약·분류는 블로그 글에만 있는 칸이다. 다른 종류에서는 숨기고 저장할 때도 넘기지 않는다(blogExtrasFromInput).
+    // 요약에 금액·동 번호 꼴이 있거나 원문 링크를 다른 글로 바꿨으면 칸 아래에 알리기만 한다(저장은 막지 않음).
+    const blogExtraInput = () => ({ excerpt: field("excerpt")?.value ?? "", category: field("category")?.value ?? "", url: field("url")?.value ?? "" });
+    const syncBlogExtraFields = () => {
+      const isBlog = field("type")?.value === "blog";
+      blogExtraFields.forEach((element) => { element.hidden = !isBlog; });
+      const notices = isBlog ? getBlogExtraNotices(blogExtraInput(), { savedUrl: loadedBlogUrl ?? "" }) as string[] : [];
+      if (excerptNotice) {
+        excerptNotice.replaceChildren(...notices.map((notice) => Object.assign(document.createElement("span"), { textContent: notice })));
+        excerptNotice.hidden = notices.length === 0;
+      }
+    };
+
     // 인스타그램은 로그인 없이 제목·사진을 불러올 수 없어 '정보 불러오기'를 숨기고 사진을 직접 올린다(링크 미리보기 허용 주소는 블로그·유튜브뿐).
     const syncInstagramFields = () => {
       const isInstagram = field("type")?.value === "instagram";
@@ -210,9 +229,11 @@ const instagramContents = externalContents.filter((item) => item.type === "insta
       if (formTitle) formTitle.textContent = `새 ${categoryName(activeType)}`;
       if (deleteButton) deleteButton.hidden = true;
       previewDataUrl = null;
+      loadedBlogUrl = null;
       showThumbnail(null);
       syncYoutubeFormatField();
       syncInstagramFields();
+      syncBlogExtraFields();
       setAdminFormStatus(statusMessage, "링크와 공개 문구를 입력해 주세요.");
       dirtyGuard.markSaved();
     };
@@ -234,14 +255,16 @@ const instagramContents = externalContents.filter((item) => item.type === "insta
     const editItem = (id: string) => {
       const item = resource?.data.find((candidate) => candidate.id === id);
       if (!item) return;
-      const values: Record<string, string> = { originalId: item.id, id: item.id, type: item.type, youtubeFormat: item.youtubeFormat ?? "video", status: item.status, url: item.url, title: item.title, summary: item.summary, publishedAt: item.publishedAt ?? "", thumbnailAlt: item.thumbnail?.alt ?? "" };
+      const values: Record<string, string> = { originalId: item.id, id: item.id, type: item.type, youtubeFormat: item.youtubeFormat ?? "video", status: item.status, url: item.url, title: item.title, summary: item.summary, excerpt: item.excerpt ?? "", category: item.category ?? "", publishedAt: item.publishedAt ?? "", thumbnailAlt: item.thumbnail?.alt ?? "" };
       Object.entries(values).forEach(([name, value]) => { if (field(name)) field(name)!.value = value; });
       if (formTitle) formTitle.textContent = `${categoryName(item.type)} 수정`;
       if (deleteButton) deleteButton.hidden = false;
       previewDataUrl = null;
+      loadedBlogUrl = item.type === "blog" ? item.url : null;
       showThumbnail(item.thumbnail?.src ?? null);
       syncYoutubeFormatField();
       syncInstagramFields();
+      syncBlogExtraFields();
       setAdminFormStatus(statusMessage, "수정할 내용을 확인해 주세요.");
       dirtyGuard.markSaved();
     };
@@ -261,6 +284,8 @@ const instagramContents = externalContents.filter((item) => item.type === "insta
     searchInput?.addEventListener("input", applyListFilter);
     field("type")?.addEventListener("change", syncYoutubeFormatField);
     field("type")?.addEventListener("change", syncInstagramFields);
+    field("type")?.addEventListener("change", syncBlogExtraFields);
+    ["excerpt", "category", "url"].forEach((name) => field(name)?.addEventListener("input", syncBlogExtraFields));
     // 직접 고른 사진도 저장 전에 미리 본다(이 브라우저 안에서만 보이고, 저장할 때 WebP로 바꿔 올린다).
     field("thumbnailFile")?.addEventListener("change", () => {
       if (fileObjectUrl) URL.revokeObjectURL(fileObjectUrl);
@@ -320,9 +345,14 @@ const instagramContents = externalContents.filter((item) => item.type === "insta
           }
           field("id")!.value = suggestedId;
         }
-        // 입력 칸이 없는 글 앞부분 요약·분류는 같은 블로그 글을 고칠 때 저장돼 있던 값을 그대로 넘긴다(keepBlogExtras).
+        // 글 앞부분 요약·분류는 블로그 글에만 넘기고, 비운 칸은 키째 뺀다(blogExtrasFromInput). 형식 오류는 확인 창을 열기 전에 알린다.
+        const extraErrors = getBlogExtraInputErrors(type, blogExtraInput()) as string[];
+        if (extraErrors.length > 0) {
+          setAdminFormStatus(statusMessage, extraErrors.join(" "), "error");
+          return;
+        }
         const createNext = (nextThumbnail: ExternalContent["thumbnail"]) => {
-          const nextItem: ExternalContent = { id: field("id")!.value.trim(), type, ...(type === "youtube" ? { youtubeFormat: field("youtubeFormat")!.value as ExternalContent["youtubeFormat"] } : {}), status: field("status")!.value as ExternalContent["status"], title: field("title")!.value.trim(), summary: field("summary")!.value.trim(), ...keepBlogExtras(existing, { type, url: field("url")!.value.trim() }), url: type === "instagram" ? normalizeInstagramUrl(field("url")!.value.trim()) : field("url")!.value.trim(), publishedAt: field("publishedAt")!.value || null, thumbnail: nextThumbnail };
+          const nextItem: ExternalContent = { id: field("id")!.value.trim(), type, ...(type === "youtube" ? { youtubeFormat: field("youtubeFormat")!.value as ExternalContent["youtubeFormat"] } : {}), status: field("status")!.value as ExternalContent["status"], title: field("title")!.value.trim(), summary: field("summary")!.value.trim(), ...blogExtrasFromInput(type, blogExtraInput()), url: type === "instagram" ? normalizeInstagramUrl(field("url")!.value.trim()) : field("url")!.value.trim(), publishedAt: field("publishedAt")!.value || null, thumbnail: nextThumbnail };
           return originalId ? resource!.data.map((item) => item.id === originalId ? nextItem : item) : [...resource!.data, nextItem];
         };
         const reviewCandidate = createNext(thumbnail);
