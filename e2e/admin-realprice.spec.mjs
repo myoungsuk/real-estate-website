@@ -1084,6 +1084,10 @@ test("거래 흐름 홍보물: 담은 매매 ID만 한 번 묻고, 흐름을 못
     await page.goto(`/admin/work/realprice/promo/?ids=${ids}`);
     await expect(page.locator(".rt-promo__card img").first()).toHaveAttribute("src", /^data:image\/png;base64,/u);
     expect(calls.insights.at(-1), state).toBe([firstPage[0].tradeKey, firstPage[3].tradeKey].join(","));
+    // 흐름 기준 줄(2026-11-25): 흐름을 그렸으면 글 출처 줄 아래 한 줄, 못 받았으면 줄 없음(글은 흐름을 받은 뒤 만든다).
+    const text = await page.locator("[data-promo-preview]").inputValue();
+    if (state === "ok") expect(text.split("\n"), state).toContain("흐름 기준: 같은 단지·같은 전용면적 · 흐름선: 12개월 월별 가운데 값 · 최고·직전: 실제 거래");
+    else expect(text, state).not.toContain("흐름 기준");
   }
   assertNoErrors();
 });
