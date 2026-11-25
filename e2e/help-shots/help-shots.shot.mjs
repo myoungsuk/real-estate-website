@@ -366,7 +366,9 @@ for (const [device, width] of DEVICES) {
     const images = cardset.locator("[data-bl-cardset-list] img");
     await expect(images).toHaveCount(3);
     await expect.poll(() => images.evaluateAll((list) => list.every((image) => image.complete && image.naturalWidth > 0))).toBe(true);
-    await snap(page, `blog-${device}-4-cards`, { clip: [cardset], targets: [cardset.locator("[data-bl-cardset-list]"), cardset.locator("[data-bl-cardset-save]")] });
+    // 1221px 이상은 카드가 결과 아래 전체 폭에서 크게(한 장 320px) 보여 그림이 70KB를 넘으므로, 넓은 화면은 1440px 화면 전체 폭으로 찍어 줄인다(칸 모양은 1280px와 같음).
+    if (device === "wide") await page.setViewportSize({ width: 1440, height: 900 });
+    await snap(page, `blog-${device}-4-cards`, { clip: [cardset], fullWidth: device === "wide", targets: [cardset.locator("[data-bl-cardset-list]"), cardset.locator("[data-bl-cardset-save]")] });
   });
 
   test(`그림 찍기: 홍보물 ${device}`, async ({ page }) => {

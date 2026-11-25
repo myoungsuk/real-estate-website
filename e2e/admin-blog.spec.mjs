@@ -717,3 +717,69 @@ test("글 초안 글 성격·빠르게 넣기 360px: 묶음 넷에 21가지가 �
   expect(stored.includes("놀이터"), "메모는 브라우저 저장소·주소에 없음").toBe(false);
   assertNoErrors();
 });
+
+// 카드 그림 칸(2026-11-25 사용자 선택 "② B"): 1221px 이상은 결과 칸 바로 뒤 전체 폭에 한 장 320 × 400px, 오른쪽 '올리는 순서' 1번 줄에 '아래 카드 그림 보기' 고리. 1220px 이하는 오른쪽(좁으면 아래) 칸의 원래 자리.
+test("글 초안 카드 그림 칸 자리 1280·1220·390px: 넓으면 결과 아래 전체 폭에 크게(320 × 400px) 놓이고 따라 내려오는 오른쪽 칸이 덮지 않으며, 고리로 키보드로 가고, 좁히면 원래 자리로 돌아온다", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const done = draftOf(sinheung, { result: cardResult });
+  await setup(page, { width: 1280, drafts: [done] });
+  await page.goto("/admin/work/blog/");
+  await page.locator("[data-bl-drafts-summary]").click();
+  await page.getByRole("button", { name: "신흥 SK뷰 단지 살펴보기 열기" }).click();
+  await expect(page.locator("[data-bl-result]")).toBeVisible();
+  const panel = page.locator("[data-bl-cardset]");
+  const images = panel.locator("[data-bl-cardset-list] img");
+  await expect(images).toHaveCount(3);
+  await expect(page.locator("[data-bl-result] + [data-bl-cardset]"), "1280px: 결과 칸 바로 뒤").toHaveCount(1);
+  const sizes = () => images.evaluateAll((list) => list.map((image) => { const r = image.getBoundingClientRect(); return `${Math.round(r.width)}x${Math.round(r.height)}`; }));
+  await expect.poll(sizes).toEqual(["320x400", "320x400", "320x400"]);
+
+  // '복사 순서' 1번 줄의 고리: 키보드로 가서 Enter → 카드 칸이 화면에 들어오고 오른쪽 칸과 겹치지 않는다.
+  const jump = page.locator("[data-bl-step-image] [data-bl-step-jump]");
+  await expect(jump).toBeVisible();
+  await expect(jump).toHaveAttribute("href", "#bl-cardset");
+  await page.locator("[data-bl-step-save]").focus();
+  await page.keyboard.press("Tab");
+  await expect(jump).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(panel).toBeInViewport();
+  const overlap = await page.evaluate(() => {
+    const side = document.querySelector(".bl-result__side").getBoundingClientRect();
+    const set = document.querySelector("[data-bl-cardset]").getBoundingClientRect();
+    return side.bottom > set.top && side.top < set.bottom;
+  });
+  expect(overlap, "오른쪽 칸이 카드 칸을 덮지 않음").toBe(false);
+  expect(await overflowOf(page)).toBeLessThanOrEqual(0);
+
+  // 1220px·390px: 원래 자리(오른쪽 칸 안 '다 씀' 줄 다음, 명시사항 위), 고리 없음.
+  for (const width of [1220, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(page.locator(".bl-result__side > .bl-actions + [data-bl-cardset] + .bl-disc"), `${width}px: 원래 자리`).toHaveCount(1);
+    await expect(jump).toBeHidden();
+    expect(await overflowOf(page), `${width}px 가로 넘침`).toBeLessThanOrEqual(0);
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect(page.locator("[data-bl-result] + [data-bl-cardset]"), "다시 넓히면 결과 칸 뒤로").toHaveCount(1);
+
+  // 결과 화면을 떠나면 칸도 함께 숨는다.
+  await page.locator("[data-bl-new]").click();
+  await expect(page.locator("[data-bl-result]")).toBeHidden();
+  await expect(panel).toBeHidden();
+  assertNoErrors();
+});
+
+test("글 초안 카드 그림 칸 1280px: 매물 초안 표지 1장도 결과 아래에 320 × 400px로 놓인다", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const result = { title: "가상숲1단지 매매", paragraphs: ["전용 84.97㎡, 10층 남향입니다."], hashtags: ["천동"], snsShort: "가상숲1단지", factsUsed: [] };
+  await setup(page, { width: 1280, drafts: [draftOf(listing, { result })] });
+  await page.goto("/admin/work/blog/");
+  await page.locator("[data-bl-drafts-summary]").click();
+  await page.getByRole("button", { name: "가상숲1단지 매매 열기" }).click();
+  await page.locator("#bl-reloc").fill(LOCATION);
+  const image = page.locator("[data-bl-result] + [data-bl-cardset] img");
+  await expect(image).toHaveCount(1);
+  await expect.poll(() => image.evaluate((element) => { const r = element.getBoundingClientRect(); return `${Math.round(r.width)}x${Math.round(r.height)}`; })).toBe("320x400");
+  await expect(page.locator("[data-bl-step-image] [data-bl-step-jump]")).toBeVisible();
+  expect(await overflowOf(page)).toBeLessThanOrEqual(0);
+  assertNoErrors();
+});

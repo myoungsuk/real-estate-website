@@ -238,6 +238,7 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
               <li data-bl-step-image hidden>
                 <span data-bl-step-image-text></span>
                 <button class="work-secondary-button" type="button" data-bl-step-save>그림 저장</button>
+                <a class="bl-jump bl-order__jump" href="#bl-cardset" data-bl-step-jump>아래 카드 그림 보기</a>
               </li>
               <li>
                 <span data-bl-step-copy-text></span>
@@ -253,7 +254,7 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
               <button class="bl-text-button" type="button" data-bl-discard>이 초안 버리기</button>
             </div>
           </div>
-          <section class="bl-disc bl-cardset" aria-labelledby="bl-cardset-title" data-bl-cardset hidden>
+          <section class="bl-disc bl-cardset" id="bl-cardset" aria-labelledby="bl-cardset-title" data-bl-cardset hidden>
             <h3 id="bl-cardset-title">카드 그림 <small>공개 자료로 그림 · AI가 그리지 않음</small></h3>
             <p class="bl-cardset__status" role="status" data-bl-cardset-status></p>
             <ul class="bl-cardset__list" data-bl-cardset-list></ul>
@@ -1169,6 +1170,19 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
             lookPanel.after(doBox);
           }
         }
+        // '카드 그림' 칸의 자리(2026-11-25 사용자 선택 "② B"). 1221px 이상은 결과 칸 바로 뒤(밖)로 옮겨 전체 폭에 크게 보이고,
+        // 1220px 이하는 원래 자리(명시사항 바로 위)다. 결과 칸 안 격자로 두면 따라 내려오는 오른쪽 칸이 카드를 덮는다. 키보드 순서 = 보이는 순서.
+        const cardsetHome = cardsetPanel.nextElementSibling;
+        const cardsetWideQuery = window.matchMedia("(min-width: 1221px)");
+        function placeCardset() {
+          if (cardsetWideQuery.matches) {
+            if (cardsetPanel.previousElementSibling !== resultPanel) resultPanel.after(cardsetPanel);
+          } else if (cardsetHome && cardsetPanel.nextElementSibling !== cardsetHome) {
+            cardsetHome.before(cardsetPanel);
+          }
+        }
+        placeCardset();
+        cardsetWideQuery.addEventListener("change", placeCardset);
 
         function recheck() {
           const current = draft;
