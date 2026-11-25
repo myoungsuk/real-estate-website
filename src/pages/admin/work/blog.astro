@@ -117,15 +117,20 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
             <div class="work-row" role="radiogroup" aria-labelledby="bl-style-label">
               <span class="work-row__label" id="bl-style-label">글 성격</span>
               <div class="work-row__control">
-                <div class="work-segment bl-styles" data-bl-styles></div>
+                <div class="bl-style-groups" data-bl-styles></div>
                 <p class="bl-style-note" data-bl-style-note></p>
               </div>
             </div>
             <div class="work-row">
               <label class="work-row__label" for="bl-emphasis" data-bl-emphasis-label>대표 현장 메모(선택)</label>
               <div class="work-row__control">
+                <div class="bl-quick" role="group" aria-labelledby="bl-quick-label">
+                  <span class="bl-quick__label" id="bl-quick-label">빠르게 넣기</span>
+                  <div class="bl-quick__list" data-bl-quick></div>
+                </div>
                 <textarea id="bl-emphasis" rows="4" maxlength="500" placeholder="예: 2024년 욕실 수리, 남향 거실, 앞 동 없이 트인 전망" autocomplete="off" data-bl-emphasis></textarea>
                 <small data-bl-emphasis-count>0 / 500자 · 저장하지 않고 이번에만 씁니다(숫자 표기만 검사용으로 남김).</small>
+                <p class="bl-memo-note" role="status" data-bl-memo-note hidden></p>
               </div>
             </div>
             <p class="admin-inline-notice bl-alert" role="alert" tabindex="-1" data-bl-make-alert hidden><span aria-hidden="true">!</span><span></span></p>
@@ -333,6 +338,7 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
       usdText,
       usdToMicro,
     } from "../../../lib/work/blog-view.mjs";
+    import { MEMO_FULL_TEXT, addMemoHead, lockedStylesText, memoNeedText, memoQuickHeads, styleGroups } from "../../../lib/work/blog-style-view.mjs";
     import { BLOG_PLACES, BLOG_PLACE_FIELDS, placeCopyText, placeFieldNote, placeHasWhere, placeMeterText, placeSteps, placeVerdict } from "../../../lib/work/blog-places.mjs";
     import { dateText, kstShort } from "../../../lib/work/realprice-view.mjs";
     import {
@@ -394,6 +400,9 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
         const emphasisInput = pick<HTMLTextAreaElement>("[data-bl-emphasis]");
         const emphasisCount = pick("[data-bl-emphasis-count]");
         const emphasisLabel = pick("[data-bl-emphasis-label]");
+        const quickBox = pick("[data-bl-quick]");
+        const memoNote = pick("[data-bl-memo-note]");
+        type StyleGroup = { id: string; label: string; items: { id: string; label: string; off: boolean }[] };
         const makeAlert = pick("[data-bl-make-alert]");
         const makeButton = pick<HTMLButtonElement>("[data-bl-make]");
         const makeNote = pick("[data-bl-make-note]");
@@ -776,18 +785,29 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
           const allowed = allowedStyles(picked) as string[];
           const previous = stylesBox.querySelector<HTMLInputElement>("input:checked")?.value ?? "";
           const chosen = allowed.includes(previous) ? previous : allowed[0];
-          stylesBox.replaceChildren(...styles.map((style) => {
-            const choice = el("label", "work-choice");
-            const input = el("input");
-            input.type = "radio";
-            input.name = "bl-style";
-            input.value = style.id;
-            input.autocomplete = "off";
-            input.checked = style.id === chosen;
-            input.disabled = !allowed.includes(style.id);
-            if (input.disabled) choice.classList.add("is-off");
-            choice.append(input, el("span", "", style.label));
-            return choice;
+          // 성격을 묶음 넷으로 나눠 그린다(2026-11-25 글 성격 21가지). 라디오 이름은 하나라 묶음을 넘어 하나만 골라진다.
+          stylesBox.replaceChildren(...(styleGroups(styles, picked) as StyleGroup[]).map((group) => {
+            const box = el("div", "bl-style-group");
+            box.setAttribute("role", "group");
+            const name = el("p", "bl-style-group__name", group.label);
+            name.id = `bl-style-group-${group.id}`;
+            box.setAttribute("aria-labelledby", name.id);
+            const list = el("div", "work-segment bl-styles");
+            list.append(...group.items.map((style) => {
+              const choice = el("label", "work-choice");
+              const input = el("input");
+              input.type = "radio";
+              input.name = "bl-style";
+              input.value = style.id;
+              input.autocomplete = "off";
+              input.checked = style.id === chosen;
+              input.disabled = style.off;
+              if (input.disabled) choice.classList.add("is-off");
+              choice.append(input, el("span", "", style.label));
+              return choice;
+            }));
+            box.append(name, list);
+            return box;
           }));
           renderStyleNote();
         }
@@ -795,12 +815,42 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
         function renderStyleNote() {
           const style = styles.find((entry) => entry.id === selectedStyle());
           styleNote.replaceChildren(style?.note ?? "");
-          if (stylesBox.querySelector("input:disabled")) styleNote.append(el("span", "bl-soft", "이 자료의 거래 형태에 맞지 않는 성격은 잠갔습니다."));
+          const locked = lockedStylesText(styles, picked) as string;
+          if (locked) styleNote.append(el("span", "bl-soft", locked));
+          renderMemo();
         }
         stylesBox.addEventListener("change", renderStyleNote);
-        emphasisInput.addEventListener("input", () => {
+
+        // 메모 칸 아래 글자 수와, 메모에 사실이 있어야 글이 되는 성격인데 메모가 비었을 때의 한 줄(막지 않음).
+        function renderMemoCount(note = "") {
           emphasisCount.textContent = `${emphasisInput.value.length} / ${EMPHASIS_MAX}자 · ${EMPHASIS_NOTE}`;
+          const text = note || (memoNeedText(selectedStyle(), emphasisInput.value) as string);
+          memoNote.textContent = text;
+          memoNote.hidden = text === "";
+        }
+        // '빠르게 넣기' 단추: 고른 자료·성격에 맞는 머리말. 누르면 메모 끝 새 줄에 "머리말: "을 넣고 그 뒤에 커서를 둔다.
+        function renderMemo() {
+          const heads = memoQuickHeads(picked, selectedStyle()) as string[];
+          const shown = [...quickBox.querySelectorAll("button")].map((button) => button.textContent);
+          if (shown.join("|") !== heads.join("|")) {
+            quickBox.replaceChildren(...heads.map((head) => {
+              const button = el("button", "bl-quick__chip", head);
+              button.type = "button";
+              return button;
+            }));
+          }
+          renderMemoCount();
+        }
+        quickBox.addEventListener("click", (event) => {
+          const button = event.target instanceof HTMLElement ? event.target.closest("button") : null;
+          if (!button) return;
+          const result = addMemoHead(emphasisInput.value, button.textContent ?? "", EMPHASIS_MAX) as { value: string; caret: number; added: boolean; full: boolean };
+          if (result.added) emphasisInput.value = result.value;
+          renderMemoCount(result.full ? MEMO_FULL_TEXT : "");
+          emphasisInput.focus();
+          emphasisInput.setSelectionRange(result.caret, result.caret);
         });
+        emphasisInput.addEventListener("input", () => renderMemoCount());
 
         function renderMake() {
           const reason = limitsView(limits).reason as string | null;
@@ -995,7 +1045,7 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
           locationValue = "";
           locationKey = "";
           emphasisInput.value = "";
-          emphasisCount.textContent = `0 / ${EMPHASIS_MAX}자 · ${EMPHASIS_NOTE}`;
+          renderMemo();
           buildFields();
           backToCompose();
           openStep = 1;
@@ -1535,7 +1585,7 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
           openStep = 1;
           fieldsTouched = false;
           emphasisInput.value = "";
-          emphasisCount.textContent = `0 / ${EMPHASIS_MAX}자 · ${EMPHASIS_NOTE}`;
+          renderMemo();
           relocInput.value = "";
           edited = false;
           busy = false;

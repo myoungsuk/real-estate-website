@@ -622,3 +622,89 @@ test("글 초안 올릴 곳 360px: 탭 넷이 한 줄에 들고, 고른 곳의 �
   expect(calls.requests.some((line) => line.includes("가상동")), "소재지는 어떤 요청에도 없음").toBe(false);
   assertNoErrors();
 });
+
+// 2026-11-25 글 성격 21가지(묶음 넷)와 현장 메모 '빠르게 넣기'. 사용자 결정 13:26:16 "마음대로 뺴지마 다 넣어"·"추천대로 해".
+test("글 초안 글 성격·빠르게 넣기 360px: 묶음 넷에 21가지가 한 줄 단추로 들고, 자료에 맞지 않는 성격은 잠기며, 머리말 단추는 메모 칸에 머리말만 넣고, 메모가 빈 경험담은 알리기만 한다", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const queued = draftOf(complex, { status: "queued", needsLocation: false, createdAt: NOW.toISOString(), updatedAt: NOW.toISOString() });
+  const calls = await setup(page, { width: 360, create: () => queued, draftReads: { "zz-draft-1": () => queued } });
+  await page.goto("/admin/work/blog/");
+  const lockedOf = () => page.locator("input[name='bl-style']:disabled").evaluateAll((inputs) => inputs.map((input) => input.closest("label").textContent.trim()));
+
+  // 매매 매물: 전세 안내·월세만 잠긴다(3단계를 열기 전에도 단추는 그려져 있다).
+  await page.getByRole("button", { name: "가상숲1단지 고르기" }).click();
+  await expect(page.locator("input[name='bl-style']")).toHaveCount(21);
+  expect(await lockedOf()).toEqual(["전세 안내", "월세"]);
+  await expect(page.locator("[data-bl-quick] button")).toHaveText(["역·교통", "학교", "상권", "수리·상태", "전망·채광"]);
+
+  // 단지 소개 글: 거래 조건 성격 넷이 잠기고 머리말은 단지에 맞는 넷.
+  await page.locator("[data-bl-change='1']").click();
+  await page.locator("input[name='bl-kind'][value='complex']").check();
+  await page.getByRole("button", { name: "가상숲 단지 고르기" }).click();
+  await page.getByRole("button", { name: "다음: 글 성격" }).click();
+  await expect(step(page, 3)).toHaveClass(/bl-step--open/u);
+  const groups = step(page, 3).getByRole("radiogroup", { name: "글 성격" }).getByRole("group");
+  await expect(groups).toHaveCount(4);
+  for (const [index, name, count] of [[0, "기본·거래 조건", 8], [1, "누구에게 권할지", 5], [2, "무엇을 앞에 둘지", 5], [3, "글 짜임", 3]]) {
+    await expect(groups.nth(index), name).toHaveAccessibleName(name);
+    await expect(groups.nth(index).locator("input[name='bl-style']"), name).toHaveCount(count);
+  }
+  expect(await lockedOf()).toEqual(["급매", "전세 안내", "월세", "수익형"]);
+  await expect(page.locator("input[name='bl-style']:checked")).toHaveValue("plain");
+  await expect(page.locator("[data-bl-style-note]")).toContainText("급매·전세 안내·월세·수익형은 단지 소개 글이라 잠겼습니다.");
+  await expect(page.locator("[data-bl-quick] button")).toHaveText(["역·교통", "학교", "상권", "단지 시설"]);
+  await expect(page.locator("[data-bl-memo-note]")).toBeHidden();
+
+  // 360·390px에서 성격 단추 글자는 모두 한 줄이고(높이 한 가지), 누르는 곳은 44px 이상, 가로 넘침이 없다.
+  const sizes = () => page.evaluate(() => {
+    const boxes = [...document.querySelectorAll("[data-bl-styles] .work-choice, [data-bl-quick] button")].map((element) => element.getBoundingClientRect());
+    const styleHeights = new Set([...document.querySelectorAll("[data-bl-styles] .work-choice")].map((element) => Math.round(element.getBoundingClientRect().height)));
+    return { styleHeights: styleHeights.size, small: boxes.filter((box) => box.height < 44 || box.width < 44).length };
+  });
+  for (const width of [390, 360]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await sizes(), `${width}px 단추`).toEqual({ styleHeights: 1, small: 0 });
+    expect(await overflowOf(page), `${width}px 가로 넘침`).toBeLessThanOrEqual(0);
+  }
+
+  // 머리말 단추: 메모 끝 새 줄에 "머리말: "만 넣고 그 뒤에 커서를 둔다. 같은 머리말을 또 누르면 글은 그대로다.
+  const memo = page.locator("#bl-emphasis");
+  await page.locator("[data-bl-quick] button", { hasText: "학교" }).click();
+  await expect(memo).toHaveValue("학교: ");
+  await expect(memo).toBeFocused();
+  await expect(page.locator("[data-bl-emphasis-count]")).toContainText("4 / 500자");
+  await page.keyboard.type("가상초등학교가 단지 옆");
+  await page.locator("[data-bl-quick] button", { hasText: "상권" }).click();
+  await page.keyboard.type("가상시장");
+  await expect(memo).toHaveValue("학교: 가상초등학교가 단지 옆\n상권: 가상시장");
+  await page.locator("[data-bl-quick] button", { hasText: "학교" }).click();
+  await expect(memo).toHaveValue("학교: 가상초등학교가 단지 옆\n상권: 가상시장");
+  expect(await memo.evaluate((element) => element.selectionStart), "이미 있는 머리말은 그 줄 끝으로").toBe("학교: 가상초등학교가 단지 옆".length);
+
+  // 경험담: 그 성격의 머리말 단추가 맨 앞에 생기고, 메모가 비면 한 줄로 알리기만 한다(만들기는 막지 않음).
+  await step(page, 3).locator("label:has(input[name='bl-style'][value='story'])").click();
+  await expect(page.locator("[data-bl-quick] button")).toHaveText(["직접 본 것", "역·교통", "학교", "상권", "단지 시설"]);
+  await expect(page.locator("[data-bl-style-note]")).toContainText("직접 본 것을 아래 칸에 적어야 글이 됩니다.");
+  await expect(page.locator("[data-bl-memo-note]"), "메모가 있으면 알리지 않음").toBeHidden();
+  await memo.fill("");
+  await expect(page.locator("[data-bl-memo-note]")).toHaveText("'경험담' 글은 이 칸에 확인한 사실을 적어야 글이 됩니다. 비워 두면 평범한 소개 글이 됩니다(그대로 만들 수는 있습니다).");
+  await expect(page.getByRole("button", { name: "글 초안 만들기" })).toBeEnabled();
+
+  // 500자를 넘게 되는 머리말은 넣지 않고 까닭을 알린다.
+  await memo.fill("가".repeat(497));
+  await page.locator("[data-bl-quick] button", { hasText: "직접 본 것" }).click();
+  await expect(memo).toHaveValue("가".repeat(497));
+  await expect(page.locator("[data-bl-memo-note]")).toHaveText("머리말을 넣으면 500자를 넘습니다. 글을 줄인 뒤 다시 눌러 주세요.");
+  await memo.fill("");
+  await page.locator("[data-bl-quick] button", { hasText: "직접 본 것" }).click();
+  await page.keyboard.type("오후에 놀이터 쪽이 조용함");
+  await expect(page.locator("[data-bl-memo-note]")).toBeHidden();
+
+  // 만들기 요청에는 고른 성격의 id와 메모가 그대로 간다. 메모는 브라우저 저장소·주소에 남지 않는다.
+  await page.getByRole("button", { name: "글 초안 만들기" }).click();
+  await expect(page.locator("[data-bl-wait]")).toBeVisible();
+  expect(calls.creates).toEqual([{ source: { type: "complex", id: "zz-forest" }, style: "story", inputs: {}, emphasis: "직접 본 것: 오후에 놀이터 쪽이 조용함" }]);
+  const stored = await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage }, url: location.href }));
+  expect(stored.includes("놀이터"), "메모는 브라우저 저장소·주소에 없음").toBe(false);
+  assertNoErrors();
+});

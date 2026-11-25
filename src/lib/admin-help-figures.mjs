@@ -222,7 +222,7 @@ export const ADMIN_HELP_FIGURES = Object.freeze({
   "blog-draft": {
     section: "work-blog",
     route: "/admin/work/blog/",
-    sources: ["src/pages/admin/work/blog.astro", "src/lib/work-blog-card.ts", "src/lib/work/blog-view.mjs", "src/lib/work/blog-checks.mjs", "src/lib/work/blog-cards.mjs"],
+    sources: ["src/pages/admin/work/blog.astro", "src/lib/work-blog-card.ts", "src/lib/work/blog-view.mjs", "src/lib/work/blog-checks.mjs", "src/lib/work/blog-cards.mjs", "src/lib/work/blog-places.mjs", "src/lib/work/blog-style-view.mjs"],
     title: "단지 소개 글 초안 만들기",
     note: "그림 속 글은 예시입니다. 매물 글은 2단계에서 명시사항 빈 칸을 다 채워야 만들 수 있습니다.",
     phone: [
@@ -233,8 +233,8 @@ export const ADMIN_HELP_FIGURES = Object.freeze({
       },
       {
         shot: "blog-phone-2-make",
-        alt: "글 초안 3단계. 글 성격 단추들, 오늘 만든 편수 안내, '글 초안 만들기' 단추가 있다.",
-        pins: ["글 성격을 고릅니다.", "'글 초안 만들기'를 누릅니다. 1 ~ 3분 걸립니다."],
+        alt: "글 초안 3단계. 묶음 넷으로 나뉜 글 성격 단추들(자료에 맞지 않는 것은 줄이 그어져 잠김), 메모 칸 위 '빠르게 넣기' 단추 줄, 오늘 만든 편수 안내, '글 초안 만들기' 단추가 있다.",
+        pins: ["글 성격을 하나 고릅니다. 줄이 그어진 것은 이 자료에 맞지 않아 잠긴 것입니다.", "글에 넣을 사실을 메모 칸에 적습니다. '빠르게 넣기' 단추를 누르면 머리말이 들어갑니다.", "'글 초안 만들기'를 누릅니다. 1 ~ 3분 걸립니다."],
       },
       {
         shot: "blog-phone-3-result",
@@ -255,8 +255,8 @@ export const ADMIN_HELP_FIGURES = Object.freeze({
       },
       {
         shot: "blog-wide-2-make",
-        alt: "글 초안 3단계. 글 성격 단추들, 오늘 만든 편수 안내, '글 초안 만들기' 단추가 있다.",
-        pins: ["글 성격을 고릅니다.", "'글 초안 만들기'를 누릅니다. 1 ~ 3분 걸립니다."],
+        alt: "글 초안 3단계. 묶음 넷으로 나뉜 글 성격 단추들(자료에 맞지 않는 것은 줄이 그어져 잠김), 메모 칸 위 '빠르게 넣기' 단추 줄, 오늘 만든 편수 안내, '글 초안 만들기' 단추가 있다.",
+        pins: ["글 성격을 하나 고릅니다. 줄이 그어진 것은 이 자료에 맞지 않아 잠긴 것입니다.", "글에 넣을 사실을 메모 칸에 적습니다. '빠르게 넣기' 단추를 누르면 머리말이 들어갑니다.", "'글 초안 만들기'를 누릅니다. 1 ~ 3분 걸립니다."],
       },
       {
         shot: "blog-wide-3-result",

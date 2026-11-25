@@ -1,5 +1,5 @@
 // 글 초안(P3) 검사(설계서 22.11절 2·5·6, 운영자 결정 2026-11-20). 화면과 Worker가 같은 함수를 쓴다.
-// - 글 성격 7가지와 거래 형태별로 쓸 수 있는 성격.
+// - 글 성격 21가지(2026-11-25, 그 전 7가지. 묶음 넷)와 거래 형태별로 쓸 수 없는 성격.
 // - 화면 입력 칸 형식 검사(형식 밖이면 칸 이름만 돌려줌)와 개인정보 형식 검사(주민등록번호·사무소 번호가 아닌 전화번호·이메일·호수).
 // - AI 결과 모양 검사(키 이름·글자 칸 모양). 글자 수·개수 상한(BLOG_RESULT_LIMITS)을 넘는 칸은 잘라서 받는다.
 // - 글 검사: 입력과 다른 금액·면적·층·날짜는 복사를 막고, 평 표기·입력에 없는 생활 편의·직선거리·후기·가상 인물·과장 표현은 경고한다.
@@ -8,24 +8,52 @@ import { FEE_ITEM_KEYS } from "./ad-disclosure.mjs";
 import { complexDetailTexts } from "./blog-sources.mjs";
 
 export const BLOG_STYLES = Object.freeze([
-  { id: "plain", label: "담백하게", note: "사실만 차분하게 씁니다.", instruction: "과장 없이 사실을 차분하게 정리한다." },
-  { id: "urgent", label: "급매", note: "가격·조건이 좋은 점을 앞에 둡니다. 급매로 의뢰받은 매물에만 쓰세요.", instruction: "급매 매물로 소개하되 입력된 가격·조건만 앞에 두고, 가격이 오른다·손해 없다 같은 말은 쓰지 않는다." },
-  { id: "live", label: "실거주", note: "구조·방향·생활 동선처럼 사는 사람 눈으로 씁니다.", instruction: "실제로 살 사람 눈으로 구조·방향·채광처럼 입력된 사실을 풀어 쓴다." },
-  { id: "jeonse", label: "전세 안내", note: "전세 조건과 계약 때 확인할 점을 씁니다.", instruction: "전세 조건을 정리하고 계약 전에 등기부·보증금 반환 조건을 확인하라는 일반 안내를 덧붙인다." },
-  { id: "monthly", label: "월세", note: "보증금·월세 조건과 입주 조건을 씁니다.", instruction: "보증금·월세 조건과 입주 조건을 정리한다." },
-  { id: "yield", label: "수익형", note: "임대 조건을 숫자 그대로 씁니다. 수익을 약속하는 말은 쓰지 않습니다.", instruction: "임대·수익형 관점으로 쓰되 입력에 없는 수익률·임대료를 지어내지 않고 수익을 약속하는 말을 쓰지 않는다." },
-  { id: "invest", label: "투자", note: "공개 자료의 사실만 씁니다. 오른다·보장 같은 말은 쓰지 않습니다.", instruction: "입력된 사실만으로 투자 관점의 장점을 정리하되 시세 상승·시세차익·보장 같은 단정은 쓰지 않는다." },
+  // 기본·거래 조건
+  { id: "plain", group: "terms", label: "담백하게", note: "사실만 차분하게 씁니다.", instruction: "과장 없이 사실을 차분하게 정리한다." },
+  { id: "urgent", group: "terms", label: "급매", note: "가격·조건이 좋은 점을 앞에 둡니다. 급매로 의뢰받은 매물에만 쓰세요.", instruction: "급매 매물로 소개하되 입력된 가격·조건만 앞에 두고, 가격이 오른다·손해 없다 같은 말은 쓰지 않는다." },
+  { id: "jeonse", group: "terms", label: "전세 안내", note: "전세 조건과 계약 때 확인할 점을 씁니다.", instruction: "전세 조건을 정리하고 계약 전에 등기부·보증금 반환 조건을 확인하라는 일반 안내를 덧붙인다." },
+  { id: "monthly", group: "terms", label: "월세", note: "보증금·월세 조건과 입주 조건을 씁니다.", instruction: "보증금·월세 조건과 입주 조건을 정리한다." },
+  { id: "yield", group: "terms", label: "수익형", note: "임대 조건을 숫자 그대로 씁니다. 수익을 약속하는 말은 쓰지 않습니다.", instruction: "임대·수익형 관점으로 쓰되 입력에 없는 수익률·임대료를 지어내지 않고 수익을 약속하는 말을 쓰지 않는다." },
+  { id: "invest", group: "terms", label: "투자", note: "공개 자료의 사실만 씁니다. 오른다·보장 같은 말은 쓰지 않습니다.", instruction: "입력된 사실만으로 투자 관점의 장점을 정리하되 시세 상승·시세차익·보장 같은 단정은 쓰지 않는다." },
+  { id: "redevelop", group: "terms", label: "재건축·재개발", memoHead: "사업 단계", note: "재건축·재개발 이야기를 앞에 둡니다. 사업 단계·일정처럼 확인한 사실을 아래 칸에 적어야 글이 됩니다. 앞으로의 가격은 쓰지 않습니다.", instruction: "재건축·재개발 관점으로 쓰되 입력에 있는 사업 단계·일정만 말하고, 입력에 없으면 사업 이야기를 꺼내지 않는다." },
+  { id: "market", group: "terms", label: "시황·타이밍", memoHead: "최근 거래", note: "요즘 거래 흐름 속에서 소개합니다. 최근 거래·시세처럼 확인한 사실을 아래 칸에 적어야 글이 됩니다. 앞으로의 가격은 쓰지 않습니다.", instruction: "요즘 시장 흐름 속에서 소개하되 입력에 있는 거래·시세 사실만 말하고 앞으로의 가격은 내다보지 않는다." },
+  // 누구에게 권할지
+  { id: "live", group: "who", label: "실거주", note: "구조·방향·생활 동선처럼 사는 사람 눈으로 씁니다.", instruction: "실제로 살 사람 눈으로 구조·방향·채광처럼 입력된 사실을 풀어 쓴다." },
+  { id: "firsthome", group: "who", label: "신혼부부·첫 집", note: "처음 집을 마련하는 신혼부부 눈으로 씁니다.", instruction: "신혼부부나 처음 집을 마련하는 사람 눈으로 입력된 사실을 풀어 쓴다." },
+  { id: "retire", group: "who", label: "은퇴·실속", note: "관리비·층·면적처럼 살림에 드는 것을 앞에 둡니다.", instruction: "은퇴했거나 실속을 따지는 사람 눈으로 관리비·층·면적처럼 입력된 사실을 풀어 쓴다." },
+  { id: "upgrade", group: "who", label: "갈아타기", note: "더 넓거나 여건이 나은 집으로 옮기려는 분 눈으로 씁니다.", instruction: "지금 집에서 더 넓거나 여건이 나은 집으로 옮기려는 사람 눈으로 입력된 사실을 풀어 쓴다." },
+  { id: "beginner", group: "who", label: "처음 사는 분", note: "부동산 용어를 풀어서, 처음 알아보는 분도 알 수 있게 씁니다.", instruction: "부동산을 처음 알아보는 사람도 알 수 있게 용어를 풀어 쓴다." },
+  // 무엇을 앞에 둘지
+  { id: "school", group: "point", label: "학군·교육", note: "학교·교육 여건을 앞에 둡니다. 공개 자료와 아래 칸에 적은 것만 씁니다.", instruction: "학교·교육 여건을 앞에 두되 입력에 있는 학교·시설만 말한다." },
+  { id: "transit", group: "point", label: "역세권·교통", note: "역·버스처럼 다니는 길을 앞에 둡니다. 공개 자료와 아래 칸에 적은 것만 씁니다.", instruction: "역·버스 같은 교통을 앞에 두되 입력에 있는 역·노선·시간만 말한다." },
+  { id: "community", group: "point", label: "대단지·시설", note: "단지 규모와 단지 안 시설을 앞에 둡니다. 공개 자료와 아래 칸에 적은 것만 씁니다.", instruction: "단지 규모와 단지 안 시설을 앞에 두되 입력에 있는 세대수·시설만 말한다." },
+  { id: "condition", group: "point", label: "신축·상태", note: "지은 해와 집 상태를 앞에 둡니다. 공개 자료와 아래 칸에 적은 것만 씁니다.", instruction: "지은 해와 집 상태를 앞에 두되 입력에 있는 사용승인일·수리 내용만 말한다." },
+  { id: "view", group: "point", label: "조망·채광", note: "창밖 전망과 햇빛을 앞에 둡니다. 공개 자료와 아래 칸에 적은 것만 씁니다.", instruction: "창밖 전망과 채광을 앞에 두되 입력에 있는 방향·층·전망만 말한다." },
+  // 글 짜임
+  { id: "faq", group: "form", label: "자주 묻는 질문", note: "손님이 자주 묻는 것을 묻고 답하는 꼴로 씁니다.", instruction: "손님이 자주 묻는 질문과 답의 꼴로 쓰되 입력된 사실로 답할 수 있는 질문만 쓴다." },
+  { id: "fit", group: "form", label: "이런 분께 추천", note: "어떤 분께 맞는 집인지 짚어 씁니다.", instruction: "어떤 사람에게 맞는 집인지 입력된 사실을 근거로 짚어 쓴다." },
+  { id: "story", group: "form", label: "경험담", memoHead: "직접 본 것", note: "대표가 현장에서 직접 본 것을 이야기하듯 씁니다. 직접 본 것을 아래 칸에 적어야 글이 됩니다. 손님 후기는 쓰지 않습니다.", instruction: "중개사가 현장에서 직접 본 것을 이야기하듯 쓰되 입력의 현장 메모에 있는 것만 경험으로 말한다." },
+]);
+// 화면에서 성격을 나눠 보이는 묶음 넷(차례대로). 성격의 group이 이 id다.
+export const BLOG_STYLE_GROUPS = Object.freeze([
+  { id: "terms", label: "기본·거래 조건" },
+  { id: "who", label: "누구에게 권할지" },
+  { id: "point", label: "무엇을 앞에 둘지" },
+  { id: "form", label: "글 짜임" },
 ]);
 const STYLE_IDS = new Set(BLOG_STYLES.map((style) => style.id));
-// 거래 형태별로 고를 수 있는 성격(매매에 전세 안내·월세를 쓰지 않음 등). 단지 소개 글은 매물 조건이 없다.
-const STYLES_BY_TRADE = {
-  sale: ["plain", "urgent", "live", "yield", "invest"],
-  jeonse: ["plain", "live", "jeonse"],
-  "monthly-rent": ["plain", "live", "monthly"],
-  complex: ["plain", "live", "invest"],
+// 거래 형태별로 고를 수 없는 성격(매매에 전세 안내·월세를 쓰지 않음 등). 그 밖의 성격은 모두 고를 수 있다.
+// 급매·수익형·투자·재건축·재개발은 사는 사람 쪽 이야기라 전세·월세 매물에 쓰지 않고, 단지 소개 글은 매물 조건이 없어 급매·전세 안내·월세·수익형을 쓰지 않는다.
+const STYLES_OFF_BY_TRADE = {
+  sale: ["jeonse", "monthly"],
+  jeonse: ["urgent", "monthly", "yield", "invest", "redevelop"],
+  "monthly-rent": ["urgent", "jeonse", "yield", "invest", "redevelop"],
+  complex: ["urgent", "jeonse", "monthly", "yield"],
 };
 export function allowedStyles(source) {
-  return STYLES_BY_TRADE[source?.type === "complex" ? "complex" : source?.facts?.tradeType] ?? ["plain"];
+  const off = STYLES_OFF_BY_TRADE[source?.type === "complex" ? "complex" : source?.facts?.tradeType];
+  if (!off) return ["plain"];
+  return BLOG_STYLES.filter((style) => !off.includes(style.id)).map((style) => style.id);
 }
 
 // sections·heading·sectionParagraphs·checklist·checkItem은 소제목이 있는 새 꼴(2026-11-23 "길이·구성 지시")에만 쓴다.
@@ -366,6 +394,12 @@ const DISTANCE = /직선\s*거리/u;
 const REVIEW = /(후기|실제\s*입주민|입주민\s*(?:들의|분들|이\s*말)|살아\s*보니|살아\s*본|만족도\s*\d|추천\s*후기)/u;
 const PERSONA = /(?:[가-힣]{2,3}|[A-Z])\s?씨(?=[는가의께이,\s])/u;
 const HYPE = /(보장|확실|무조건|반드시\s*오|오를\s*(?:것|수밖에|일만)|오른다|상승\s*(?:예정|확실|보장)|시세\s*차익|수익률\s*\d|대박|100\s*%|손해\s*(?:없|볼\s*일)|투자\s*가치\s*최고|프리미엄\s*(?:확정|보장))/u;
+// 2026-11-25 글 성격을 늘리며(경험담·시황·타이밍·재건축·재개발 등) 더한 꼴. AI 지시문에는 금지 목록을 넣지 않고 받은 뒤 여기서 잡는다(경고, 복사는 됨).
+// 지어낸 손님 말(따옴표로 옮긴 말·"손님이 … 만족하셨")과 지어낸 손님 사례("어느 손님이"·"30대 … 고객이"), 수익·가격을 약속하는 말을 더 잡는다.
+// 중개사가 직접 본 것을 쓴 문장이 사실인지는 글자로 가릴 수 없다(사람이 읽고 확인).
+const REVIEW_MORE = /((?:손님|고객|세입자|입주민|매수인|임차인)(?:들|분들)?(?:이|은|께서|도)\s*[^.!?\n]{0,15}(?:만족하셨|만족해\s*하|칭찬|호평|말씀하셨|좋아하셨)|["“][^"”\n]{4,80}["”]\s*(?:(?:라고|라며)\s*(?:말씀|하셨|하시|했|칭찬|만족|좋아|전하)|라는\s*(?:말씀|말|반응|평|후기))|별점|평점\s*\d)/u;
+const PERSONA_MORE = /((?<![가-힣])(?:어느|한)\s*(?:손님|고객|부부|신혼부부|어르신)(?:분|분들)?(?:이|가|께서|도)(?![가-힣])|[2-7]0대[^.!?\n]{0,10}(?:손님|고객|부부)(?:분|분들)?(?:이|가|께서|도)(?![가-힣]))/u;
+const HYPE_MORE = /(확정\s*수익|수익\s*확정|안전\s*마진|불패|폭등|급등|마지막\s*기회|놓치면\s*후회|(?<![가-힣])연\s*\d+(?:[.,]\d+)?\s*%|(?<![가-힣])월\s*수익|상승\s*(?:여력|전망|기대)|(?:값|가격|시세)(?:이|가)?\s*(?:더\s*)?오를|더\s*오르)/u;
 
 const sameArea = (a, b) => Math.abs(a - b) < 0.005;
 
@@ -416,11 +450,11 @@ export function checkBlogDraft(draft, { source, inputs = {}, emphasis = "", offi
     const listed = [...amenities].filter((word) => ![...amenities].some((other) => other !== word && other.includes(word)));
     if (listed.length > 0) warnings.push({ kind: "amenity", text: listed.join(", "), where });
     if (DISTANCE.test(text)) warnings.push({ kind: "distance", text: "직선거리", where });
-    const review = text.match(REVIEW);
+    const review = text.match(REVIEW) ?? text.match(REVIEW_MORE);
     if (review) warnings.push({ kind: "review", text: review[0], where });
-    const persona = text.match(PERSONA);
+    const persona = text.match(PERSONA) ?? text.match(PERSONA_MORE);
     if (persona) warnings.push({ kind: "persona", text: persona[0], where });
-    const hype = text.match(HYPE);
+    const hype = text.match(HYPE) ?? text.match(HYPE_MORE);
     if (hype) warnings.push({ kind: "hype", text: hype[0], where });
   }
   return { blocks, warnings };

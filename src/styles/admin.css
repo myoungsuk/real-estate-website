@@ -1886,6 +1886,22 @@ html:has(.rt-pick-bar:not([hidden])) { scroll-padding-bottom: calc(var(--rt-pick
 .work-ui .bl-styles .work-choice.is-off { border-style: dashed; color: var(--ds-ink-soft); background: var(--ds-paper-2); text-decoration: line-through; cursor: not-allowed; }
 .bl-style-note { margin: 6px 0 0; color: var(--ds-ink); font-size: 1rem; line-height: 1.55; }
 .bl-style-note .bl-soft { display: block; }
+/* 글 성격 21가지를 묶음 넷으로(2026-11-25). 묶음 이름 아래 그 묶음의 단추 줄. 긴 이름('신혼부부·첫 집')이 360px 두 칸에서 꺾이지 않게 안쪽 여백을 줄인다. */
+.bl-style-groups { display: grid; gap: 12px; }
+.bl-style-group__name { margin: 0 0 4px; color: var(--ds-ink-soft); font-size: 1rem; font-weight: 800; }
+.work-ui .bl-styles .work-choice { padding-inline: 4px; }
+/* 현장 메모 '빠르게 넣기': 누르면 메모에 머리말만 넣는 단추(고르는 단추가 아니라 점선 알약 모양으로 가름). */
+.bl-quick { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0 0 8px; }
+.bl-quick__label { color: var(--ds-ink-soft); font-weight: 800; }
+.bl-quick__list { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.bl-quick__chip { min-height: 44px; padding: 6px 14px; border: 1.5px dashed var(--ds-field-edge); border-radius: 999px; color: var(--ds-ink); background: var(--ds-paper); font: inherit; font-weight: 700; cursor: pointer; }
+.bl-quick__chip:hover { border-style: solid; }
+.bl-quick__chip:active { transform: translateY(1px); }
+.bl-quick__chip:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+.bl-memo-note { margin: 6px 0 0; padding: 2px 0 2px 10px; border-left: 3px solid var(--ds-navy); color: var(--ds-ink); line-height: 1.5; }
+@media (prefers-reduced-motion: reduce) {
+  .bl-quick__chip:active { transform: none; }
+}
 .bl-make { display: grid; gap: 6px; margin-top: 10px; }
 .bl-make .work-primary-button:disabled { color: var(--ds-ink-soft); background: var(--ds-paper-2); cursor: not-allowed; }
 .bl-make__note { margin: 0; color: var(--ds-ink-soft); font-size: 1rem; text-align: center; }
