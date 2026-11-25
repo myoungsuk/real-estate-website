@@ -5,7 +5,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { INTRO_COPY, INTRO_SHAPES } from "../src/lib/work/intro-paper.mjs";
 import { LISTING_SHAPES, LISTING_SHAPE_COPY } from "../src/lib/work/listing-paper.mjs";
-import { checkPaperCopy, copyTextProblem, defaultPaperCopy, paperCopyFields, stampLines } from "../src/lib/work/paper-copy.mjs";
+import { CARD_AREA_FIT_HINT, checkPaperCopy, copyTextProblem, defaultPaperCopy, paperCopyFields, stampLines } from "../src/lib/work/paper-copy.mjs";
 import { STAMP_TEXT, findDateText } from "../src/lib/work/paper-parts.mjs";
 import { CARD_AREA_HEADLINE, CARD_AREA_LINE, CARD_SHAPES, DONE_CONSULT, DONE_COPY, DONE_SHAPES, DONE_STAMP, DONE_TITLE, weekdayCloseTag } from "../src/lib/work/promo-paper.mjs";
 
@@ -47,6 +47,22 @@ test("문구 고치기: 처음 값은 지금 문구 그대로다(새 글을 지�
   // 평일 닫는 시각이 없으면 꼬리표 칸을 두지 않는다(그림에도 꼬리표가 없음).
   assert.equal(paperCopyFields("card", { ...office, hours: [] }).night.some((item) => item.key === "tag"), false);
   assert.equal(defaultPaperCopy("listing", "night", { ...office, hours: [] }).tag, "");
+});
+
+test("문구 고치기: 폭 안내는 명함 지역 줄에만 붙는다(36자는 섞은 글 기준, 한글만이면 30자쯤에서 넘침 검사가 막음, 2026-11-25)", () => {
+  const hinted = [];
+  for (const [tool, shapes] of Object.entries(TOOLS)) {
+    const fields = paperCopyFields(tool, office);
+    for (const [shape] of shapes) for (const item of fields[shape]) if (item.hint) hinted.push(`${tool}/${shape}/${item.key}`);
+  }
+  assert.deepEqual(hinted, CARD_SHAPES.map(([shape]) => `card/${shape}/areas`));
+  for (const [shape] of CARD_SHAPES) {
+    const areas = paperCopyFields("card", office)[shape].find((item) => item.key === "areas");
+    assert.equal(areas.max, 36, `${shape} 한도는 그대로`);
+    assert.equal(areas.hint, CARD_AREA_FIT_HINT);
+  }
+  // 한도 숫자는 그대로라 글자 수 검사는 36자까지 통과시킨다(넘침은 화면의 미리 보기 검사가 막음).
+  assert.equal(checkPaperCopy("card", "white", { areas: "가".repeat(36) }, office).ok, true);
 });
 
 test("문구 고치기: 고친 글은 다듬어 그대로 쓰고, 빈 optional 칸은 그 줄을 뺀다", () => {

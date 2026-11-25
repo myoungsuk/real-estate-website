@@ -396,6 +396,9 @@ test("홍보 종이 문구 고치기 390px: 고친 글로 그림이 바뀜, 동�
   // 명함: 고친 글이 미리 보기에 바로 들어가고, 인쇄 칸에도 그대로 복사된다. 막히면 인쇄 단추를 끄고 까닭을 보인다.
   const card = page.locator(".paper-card");
   await card.locator("[data-copy-tool='card'] summary").click();
+  // 지역 줄 칸 아래 안내: 36자는 섞은 글 기준이라 한글만이면 그 전에 넘침 검사가 막는다고 알린다(뒷면 제목 칸에는 없음).
+  await expect(page.locator("#card-copy-white-areas + small")).toHaveText("36자까지 · 한글만 쓰면 30자쯤에서 명함 폭을 넘어 인쇄를 막습니다 · 비우면 그 줄을 뺍니다");
+  await expect(page.locator("#card-copy-white-headline + small")).toHaveText("18자까지");
   await page.locator("#card-copy-white-headline").fill("동구 전역 직접 상담");
   const backHeadline = page.locator("[data-card-set='white'] [data-card-face='back'] [data-card-text='headline']");
   await expect(backHeadline).toHaveText("동구 전역 직접 상담");

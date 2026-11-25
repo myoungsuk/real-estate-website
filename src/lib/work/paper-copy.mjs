@@ -11,9 +11,11 @@ import { LISTING_SHAPE_COPY } from "./listing-paper.mjs";
 import { STAMP_TEXT, findDateText } from "./paper-parts.mjs";
 import { cleanSingleLine } from "./work-format.mjs";
 
-/** @typedef {{ key: string, label: string, max: number, value: string, optional: boolean }} PaperCopyField */
+/** @typedef {{ key: string, label: string, max: number, value: string, optional: boolean, hint: string }} PaperCopyField */
+// hint: 칸 아래 'n자까지' 뒤에 붙이는 안내(없으면 빈 글자). 한도 안이어도 폭 검사에 걸릴 수 있는 칸만 쓴다.
 /** @returns {PaperCopyField} */
-const field = (key, label, max, value, optional = false) => Object.freeze({ key, label, max, value: String(value ?? ""), optional });
+const field = (key, label, max, value, optional = false, hint = "") => Object.freeze({ key, label, max, value: String(value ?? ""), optional, hint });
+export const CARD_AREA_FIT_HINT = "한글만 쓰면 30자쯤에서 명함 폭을 넘어 인쇄를 막습니다";
 const stampFields = () => [field("stamp1", "도장 글(위)", 3, STAMP_TEXT[0]), field("stamp2", "도장 글(아래)", 3, STAMP_TEXT[1], true)];
 
 // 칸 목록: { 모양: [칸] }. 칸이 없는 모양(매물 '기본'·'사진 크게')은 빈 배열.
@@ -46,7 +48,8 @@ export function paperCopyFields(tool, office) {
     };
   }
   if (tool === "card") {
-    const back = () => [field("headline", "뒷면 제목", 18, CARD_AREA_HEADLINE), field("areas", "뒷면 지역 줄", 36, CARD_AREA_LINE, true)];
+    // 지역 줄 36자는 띄어쓰기·숫자·'·'를 섞은 길이다. 한글만 쓰면 30자쯤(글꼴에 따라 29 ~ 31자)에서 명함 폭을 넘어 미리 보기 넘침 검사가 막으므로 칸 아래에 알린다(2026-11-25).
+    const back = () => [field("headline", "뒷면 제목", 18, CARD_AREA_HEADLINE), field("areas", "뒷면 지역 줄", 36, CARD_AREA_LINE, true, CARD_AREA_FIT_HINT)];
     const tag = weekdayCloseTag(office?.hours);
     return {
       white: back(),
