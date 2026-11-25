@@ -50,3 +50,15 @@ test("관리자 diff는 공개 순서 변경을 별도 표시하고 민감 문�
   assert.match(redacted[0].after, /이메일 가림/u);
   assert.equal(redacted.some((diff) => diff.path.includes("secretToken")), false);
 });
+
+test("관리자 diff는 거래 완료 소식 한 건을 홈에 보일 한 줄과 공개 여부로 보인다(번호만 보이지 않음)", () => {
+  const old = { id: "dn-0000000000000001", status: "published", placeKind: "area", umdName: "판암동", propertyKind: "apartment", dealType: "sale", areaBand: 59 };
+  const added = { id: "dn-0000000000000002", status: "published", placeKind: "complex", umdName: "천동", complexName: "가상숲1단지", propertyKind: "apartment", dealType: "jeonse", areaBand: 84 };
+  const diffs = createAdminContentDiff("deal-news", [old], [added]);
+  assert.deepEqual(diffs.map((diff) => [diff.kind, diff.label, diff.before, diff.after]), [
+    ["removed", "거래 완료 소식 · 소식 한 건", "판암동 아파트 · 전용 59㎡대 · 매매 (홈에 공개)", "없음"],
+    ["added", "거래 완료 소식 · 소식 한 건", "없음", "가상숲1단지 · 전용 84㎡대 · 전세 (홈에 공개)"],
+  ]);
+  // 다른 자료는 그대로 번호·제목 요약을 쓴다.
+  assert.equal(createAdminContentDiff("external-links", [], [{ id: "x-1", title: "글" }])[0].after, "글 · x-1");
+});

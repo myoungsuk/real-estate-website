@@ -10,6 +10,8 @@ import { featuredComplexes, getComplexFact } from "../lib/complexes";
 import { naverListings } from "../lib/naver-listings";
 import { getResponsivePublicImageSrcSet } from "../lib/responsive-images";
 import { formatOfficeHours, kakaoHref, office, phoneHref, smsHref } from "../lib/site";
+import dealNewsData from "../data/deal-news.json";
+import { DEAL_NEWS_GUARD, DEAL_NEWS_TITLE, publicDealNews } from "../lib/deal-news.mjs";
 import homeStyles from "../styles/home.css?inline";
 
 const title = "대전 동구 지역 전문 행복한부동산 | 리더스시티·신흥 SK뷰";
@@ -18,6 +20,8 @@ const description = "리더스시티5블록 단지 내 행복한부동산입니�
 const homeBlogContents = publishedBlogContents.slice(0, 7);
 const homeYoutubeContents = publishedYoutubeVideoContents.slice(0, 6);
 const homeInstagramContents = publishedInstagramContents.slice(0, 6);
+// 최근 거래 완료 소식: 공개(published) 새 것부터 5건. 0건이면 칸을 그리지 않는다(2026-11-25 사용자 결정 17:32:49, 그림·스크립트 없음).
+const homeDealNews = publicDealNews(dealNewsData);
 const getHomeComplexFact = (
   complex: (typeof featuredComplexes)[number],
   labels: string[],
@@ -222,6 +226,20 @@ const structuredData = {
       </div>
     </div>
   </section>
+
+  {homeDealNews.length > 0 && (
+    <section class="home-sec home-deals" aria-labelledby="home-deals-heading">
+      <div class="shell" data-home-reveal>
+        <h2 class="home-sec__title" id="home-deals-heading">{DEAL_NEWS_TITLE}</h2>
+        <p class="home-deals__guard">{DEAL_NEWS_GUARD}</p>
+        <ul class="home-deals__list">
+          {homeDealNews.map((item) => (
+            <li class="home-deals__item"><span class="home-deals__deal">{item.deal}</span><span class="home-deals__place">{item.place}</span><span class="home-deals__area">{item.area}</span></li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  )}
 
   <section class="home-sec home-sec--tint home-notes" aria-labelledby="home-notes-heading">
     <div class="shell" data-home-reveal>

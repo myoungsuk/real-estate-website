@@ -1100,7 +1100,7 @@
     },
     "content-restore": {
       "route": "/admin/history/",
-      "sources": "30550cff05f466a51c65f1acd47e183c4e6e928139f648450d44833a60566e26",
+      "sources": "43bdae8bd5a04c7f1451c1f143d2bb313193d3bb755bb0123a83ba9bac41df99",
       "shots": {
         "history-phone-1-list": {
           "width": 680,

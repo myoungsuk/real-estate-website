@@ -21,6 +21,7 @@ const navigation = [
   { href: "/admin/content/", label: "첫 화면·사무소", shortLabel: "홈글" },
   { href: "/admin/external-links/", label: "블로그·유튜브·인스타그램", shortLabel: "링크" },
   { href: "/admin/complexes/", label: "지역·단지 설명", shortLabel: "지역" },
+  { href: "/admin/deal-news/", label: "거래 완료 소식", shortLabel: "소식" },
   { href: "/admin/deployment/", label: "배포 상태", shortLabel: "배포" },
   { href: "/admin/history/", label: "변경 이력·복원", shortLabel: "이력" },
   { href: "/admin/help/", label: "사용 안내", shortLabel: "안내" },
@@ -34,12 +35,13 @@ const navigationIcons: Record<string, AdminIconName> = {
   "/admin/content/": "page",
   "/admin/external-links/": "play",
   "/admin/complexes/": "map",
+  "/admin/deal-news/": "check",
   "/admin/deployment/": "cloud",
   "/admin/history/": "history",
   "/admin/help/": "help",
 };
 
-// 위 알약 메뉴의 그림(사용자 승인 2026-11-23 11:34:13 시안). 구역 9개와 아래 단계 13개에 하나씩이고, 그림과 색은 AdminPillIcon·admin.css에 있다.
+// 위 알약 메뉴의 그림(사용자 승인 2026-11-23 11:34:13 시안). 구역 10개와 아래 단계 13개에 하나씩이고, 그림과 색은 AdminPillIcon·admin.css에 있다.
 const sectionPills: Record<string, AdminPillName> = {
   "/admin/": "dashboard",
   "/admin/work/": "work",
@@ -47,6 +49,7 @@ const sectionPills: Record<string, AdminPillName> = {
   "/admin/content/": "content",
   "/admin/external-links/": "external-links",
   "/admin/complexes/": "complexes",
+  "/admin/deal-news/": "deal-news",
   "/admin/deployment/": "deployment",
   "/admin/history/": "history",
   "/admin/help/": "help",
@@ -69,11 +72,11 @@ const subPills: Record<string, AdminPillName> = {
 
 // 관리자 공용 틀(사용자 선택 2026-11-23 11:34:13 "이대로 구현", 관리자 화면 전체): 왼쪽 고정 목록을 없애고 위 알약 메뉴 한 줄로 바꿨다.
 // PC(980px 이상)는 위 한 줄(로고 + 알약 + '전체 메뉴' 단추), 휴대폰은 위 제목 줄(고정하지 않음) + 알약 줄 + 아래 탭 4개. '전체 메뉴' 창은 PC·휴대폰이 같은 창을 쓴다.
-// 알약 줄은 지금 구역의 아래 단계(업무 도구·네이버 매물)이고, 아래 단계가 없는 구역에서는 PC에서만 구역 9개를 보인다(휴대폰은 아래 탭·전체 메뉴로 간다).
+// 알약 줄은 지금 구역의 아래 단계(업무 도구·네이버 매물)이고, 아래 단계가 없는 구역에서는 PC에서만 구역 10개를 보인다(휴대폰은 아래 탭·전체 메뉴로 간다).
 // 메뉴 묶음(전체 메뉴 창). navigation의 모든 메뉴가 한 묶음에 한 번씩 들어간다.
 const navigationGroups = [
   { label: "업무", hrefs: ["/admin/", "/admin/work/", "/admin/listings/"] },
-  { label: "홈페이지 글", hrefs: ["/admin/content/", "/admin/external-links/", "/admin/complexes/"] },
+  { label: "홈페이지 글", hrefs: ["/admin/content/", "/admin/external-links/", "/admin/complexes/", "/admin/deal-news/"] },
   { label: "확인", hrefs: ["/admin/deployment/", "/admin/history/", "/admin/help/"] },
 ];
 
