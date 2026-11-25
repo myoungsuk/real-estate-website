@@ -272,6 +272,34 @@ export function customerSaveErrorText(code, error) {
   return SAVE_ERROR_TEXTS[code] ?? customerErrorText(code);
 }
 
+// 손님 카드 '새 거래' 저장 실패가 서버의 확실한 거절인지. 코드가 없거나(응답 없이 끊김·JSON이 아닌 502 등) 5xx면
+// 서버가 거래를 만들고 답만 잃었을 수 있어, 화면이 손님 카드를 한 번 다시 읽어 확인한다(같은 거래가 둘 생기지 않게).
+// 코드가 있는 4xx(VALIDATION_FAILED·NOT_FOUND·로그인·보안 확인 만료)와 Access 이동(AUTH_REQUIRED, status 0)은 거절이다.
+/** @param {string | null | undefined} code 서버 오류 코드 @param {number} [status] HTTP 상태(응답이 없으면 0) */
+export const dealSaveUnsure = (code, status = 0) => !code || status >= 500;
+
+/**
+ * 다시 읽은 손님 카드에서 보내기 전에 없던 거래 가운데 넣은 제목·거래 종류·이 손님의 쪽이 모두 같은 것. 없으면 null
+ * (2026-11-25 사용자 결정: 제목만이 아니라 종류·쪽까지 견줌). 손님 카드는 한 거래에 이 손님의 쪽이 둘이면 줄이 둘이라, 그 가운데 하나만 맞으면 된다.
+ * 서버는 제목 앞뒤 빈칸을 덜고 주민등록번호 꼴을 가려 저장하므로, 가린 제목은 같지 않아 null(지금 실패 문장 그대로)이다.
+ * @template {{ id: string, title: string, dealType: string, role: string }} T
+ * @param {Iterable<string>} beforeIds 보내기 직전 손님 카드의 거래 ID
+ * @param {T[]} deals 다시 읽은 손님 카드의 거래
+ * @param {{ title: string, dealType: string, role: string }} sent 보낸 제목·거래 종류·이 손님의 쪽
+ * @returns {T | null}
+ */
+export function findCreatedDeal(beforeIds, deals, { title, dealType, role }) {
+  const before = new Set(beforeIds);
+  const wanted = String(title).trim();
+  return deals.find((deal) => !before.has(deal.id) && deal.title === wanted && deal.dealType === dealType && deal.role === role) ?? null;
+}
+
+// 다시 읽는 동안과, 다시 읽어 보니 만들어져 있었을 때의 문장
+export const DEAL_RECHECK_TEXT = "답이 오지 않아 거래가 만들어졌는지 손님 카드를 다시 읽어 확인하고 있습니다…";
+/** @param {{ filesEnabled?: boolean }} [options] */
+export const dealRecheckFoundText = ({ filesEnabled = false } = {}) =>
+  `✓ 저장한 뒤 답이 오지 않아 손님 카드를 다시 읽어 보니 거래가 만들어져 있었습니다. 다시 누르지 않아도 됩니다. 아래 거래 칸에서 장부를 ${filesEnabled ? "보고 계약서 사본을 올립니다" : "봅니다"}.`;
+
 // 다시 해 볼 만한 오류인지(다시 불러오기 단추를 보일지)
 export const isRetryable = (code) => !["AUTH_REQUIRED", "WORK_DISABLED", "WORK_CONFIG_MISSING", "WORK_SCHEMA_OUTDATED", "NOT_FOUND"].includes(code ?? "");
 

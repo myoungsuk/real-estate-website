@@ -31,9 +31,13 @@ import {
   PARTY_ROLE_LABELS,
   PARTY_ROLE_ORDER,
   checkDealInput,
+  DEAL_RECHECK_TEXT,
   dealCreateNote,
+  dealRecheckFoundText,
   dealRoleChoices,
+  dealSaveUnsure,
   dealServerErrors,
+  findCreatedDeal,
 } from "../src/lib/work/customers-view.mjs";
 import { DEAL_PAYER_SIDES } from "../src/lib/work/ledger-view.mjs";
 import { DEAL_TYPES, OFFICETEL_SCHEDULE_TARGETS, PARTY_ROLES, PROPERTY_KINDS, parseDealCreate } from "../worker/work-input.mjs";
@@ -231,4 +235,46 @@ test("새 거래 서버 검사 실패: 칸 이름은 그 칸 아래 문장으로
 test("새 거래 칸 안내: AI 일정 뽑기가 켜졌을 때만 그 길을 알려 준다", () => {
   assert.match(dealCreateNote({ aiReady: true }), /'AI로 일정 뽑기'/u);
   assert.equal(dealCreateNote({ aiReady: false }), "계약일·금액·일정은 아직 이 화면에서 넣을 수 없습니다.");
+});
+
+test("새 거래 답을 잃었을 때: 코드 없음·5xx만 다시 읽어 확인하고, 코드가 있는 4xx와 Access 이동은 거절로 본다", () => {
+  assert.equal(dealSaveUnsure(null, 0), true, "응답 없이 끊김(fetch TypeError)");
+  assert.equal(dealSaveUnsure(undefined), true);
+  assert.equal(dealSaveUnsure(null, 502), true, "JSON이 아닌 502");
+  assert.equal(dealSaveUnsure(null, 200), true, "응답을 읽지 못함");
+  assert.equal(dealSaveUnsure("STORAGE_UNAVAILABLE", 503), true);
+  assert.equal(dealSaveUnsure("TEST_OFFLINE", 500), true);
+  for (const [code, status] of [["VALIDATION_FAILED", 400], ["NOT_FOUND", 404], ["CSRF_INVALID", 403], ["AUTH_REQUIRED", 401], ["AUTH_REQUIRED", 0], ["ORIGIN_DENIED", 403], ["RATE_LIMITED", 429]]) {
+    assert.equal(dealSaveUnsure(code, status), false, `${code} ${status}`);
+  }
+});
+
+test("새 거래 답을 잃었을 때: 보내기 전에 없던 거래 가운데 제목·거래 종류·이 손님의 쪽이 모두 같은 것만 만들어진 것으로 본다(서버가 앞뒤 빈칸을 더는 것과 같게)", () => {
+  const TITLE = "가상숲1단지 84㎡ 매매";
+  const want = { title: TITLE, dealType: "sale", role: "buyer" };
+  const before = [{ id: "a", title: TITLE, dealType: "sale", role: "buyer" }];
+  const sent = checkDealInput({ title: `  ${TITLE} `, dealType: "sale", propertyKind: "housing", role: "buyer" }, CUSTOMER_ID);
+  assert.equal(sent.ok, true);
+  const sentKeys = { title: sent.value.title, dealType: sent.value.dealType, role: sent.value.parties[0].role };
+  const saved = parseDealCreate(sent.value);
+  const after = [{ id: "b", title: saved.deal.title, dealType: saved.deal.dealType, role: saved.parties[0].role }, ...before];
+  assert.deepEqual(findCreatedDeal(before.map((deal) => deal.id), after, sentKeys), after[0]);
+  assert.equal(findCreatedDeal(before.map((deal) => deal.id), before, want), null, "보내기 전에 있던 같은 거래는 새 거래가 아님");
+  assert.equal(findCreatedDeal(["a"], [{ id: "c", title: "가상숲2단지 59㎡ 전세", dealType: "sale", role: "buyer" }], want), null, "제목만 다름");
+  assert.equal(findCreatedDeal(["a"], [{ id: "c", title: TITLE, dealType: "jeonse", role: "buyer" }], want), null, "거래 종류만 다름");
+  assert.equal(findCreatedDeal(["a"], [{ id: "c", title: TITLE, dealType: "sale", role: "seller" }], want), null, "이 손님의 쪽만 다름");
+  // 한 거래에 이 손님의 쪽이 둘이면 손님 카드에 줄이 둘이고, 그 가운데 하나가 맞으면 된다.
+  const twoRoles = [{ id: "e", title: TITLE, dealType: "sale", role: "other" }, { id: "e", title: TITLE, dealType: "sale", role: "buyer" }];
+  assert.deepEqual(findCreatedDeal([], twoRoles, want), twoRoles[1]);
+  assert.equal(findCreatedDeal(new Set(), [], want), null);
+  // 서버가 주민등록번호 꼴을 가려 저장한 제목은 같지 않으므로 만들어졌다고 보지 않는다(지금 실패 문장 그대로).
+  const masked = parseDealCreate({ title: "가상 900101-1234567 거래", dealType: "sale", propertyKind: "housing" }).deal.title;
+  assert.notEqual(masked, "가상 900101-1234567 거래");
+  assert.equal(findCreatedDeal([], [{ id: "d", title: masked, dealType: "sale", role: "buyer" }], { title: "가상 900101-1234567 거래", dealType: "sale", role: "buyer" }), null);
+});
+
+test("새 거래 답을 잃었을 때 문장: 확인 중·만들어져 있었음, 다시 누르지 않아도 된다고 알리고 파일 저장소가 켜졌을 때만 계약서 사본을 말한다", () => {
+  assert.equal(DEAL_RECHECK_TEXT, "답이 오지 않아 거래가 만들어졌는지 손님 카드를 다시 읽어 확인하고 있습니다…");
+  assert.equal(dealRecheckFoundText(), "✓ 저장한 뒤 답이 오지 않아 손님 카드를 다시 읽어 보니 거래가 만들어져 있었습니다. 다시 누르지 않아도 됩니다. 아래 거래 칸에서 장부를 봅니다.");
+  assert.equal(dealRecheckFoundText({ filesEnabled: true }), "✓ 저장한 뒤 답이 오지 않아 손님 카드를 다시 읽어 보니 거래가 만들어져 있었습니다. 다시 누르지 않아도 됩니다. 아래 거래 칸에서 장부를 보고 계약서 사본을 올립니다.");
 });

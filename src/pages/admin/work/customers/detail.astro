@@ -441,10 +441,14 @@ const roleLabels = PARTY_ROLE_LABELS as Record<string, string>;
       customerSaveErrorText,
       customerIdFromSearch,
       dateText,
+      DEAL_RECHECK_TEXT,
       dealCreateNote,
+      dealRecheckFoundText,
       dealRoleChoices,
+      dealSaveUnsure,
       dealServerErrors,
       deleteResultText,
+      findCreatedDeal,
       dueText,
       isCleanupDue,
       isRetryable,
@@ -1001,6 +1005,7 @@ const roleLabels = PARTY_ROLE_LABELS as Record<string, string>;
       // ── 새 거래(이 손님을 참여자로 붙임) ──
       // 만든 뒤에는 메모 저장처럼 손님 카드를 다시 읽어 거래 칸(장부·계약서 사본·AI 상자)을 그 거래에 붙여 그린다.
       // 다시 읽기만 실패하면 '만들었습니다'와 '다시 불러오기'를 보인다(다시 누르면 같은 거래가 둘 생기므로 저장 단추로 되돌리지 않음).
+      // 저장 답을 잃으면(확실한 거절이 아닌 실패) 손님 카드를 한 번 다시 읽어, 새로 생긴 같은 제목의 거래가 있으면 만들어진 것으로 본다.
       const dealOpen = pick<HTMLButtonElement>("[data-cu-deal-open]");
       const dealPanel = pick("[data-cu-deal-panel]");
       const dealSave = pick<HTMLButtonElement>("[data-cu-deal-save]");
@@ -1075,29 +1080,60 @@ const roleLabels = PARTY_ROLE_LABELS as Record<string, string>;
         busy = true;
         dealSave.disabled = true;
         setStatus(dealStatus, "저장하고 있습니다…", "saving");
+        // 답을 잃었을 때 다시 읽어 견줄 수 있게, 보내기 직전 손님 카드의 거래 ID를 화면 메모리에만 적어 둔다.
+        const beforeIds = (detail?.deals ?? []).map((deal) => deal.id);
         let dealId: string;
+        let recovered = false;
         try {
           dealId = (await createDeal(checked.value)).deal.id;
         } catch (error) {
           const code = errorCode(error);
-          const server = code === "VALIDATION_FAILED" && error instanceof WorkApiError ? dealServerErrors(error.details) : null;
-          if (server?.missingCustomer) setStatus(dealStatus, `저장하지 못했습니다. ${customerErrorText("NOT_FOUND")}`, "error");
-          else setStatus(dealStatus, `저장하지 못했습니다. ${customerSaveErrorText(code, error)}`, "error");
-          if (server) showDealErrors(server.fields);
-          busy = false;
-          dealSave.disabled = false;
-          return;
+          // 확실한 거절이 아니면(응답 없이 끊김·코드 없음·5xx) 손님 카드를 한 번만 다시 읽어, 새로 생긴 같은 제목의 거래가 있으면 만들어진 것으로 본다.
+          // 거래는 다시 보내지 않는다. 다시 읽기도 실패하거나 같은 거래가 없으면 아래 지금 실패 문장 그대로다.
+          let found: { id: string } | null = null;
+          if (dealSaveUnsure(code, error instanceof WorkApiError ? error.status : 0)) {
+            setStatus(dealStatus, DEAL_RECHECK_TEXT, "saving");
+            try {
+              await load();
+              found = findCreatedDeal(beforeIds, detail?.deals ?? [], { title: checked.value.title, dealType: checked.value.dealType, role: checked.value.parties[0].role });
+            } catch {
+              found = null;
+            }
+          }
+          if (found) {
+            dealId = found.id;
+            recovered = true;
+          } else {
+            const server = code === "VALIDATION_FAILED" && error instanceof WorkApiError ? dealServerErrors(error.details) : null;
+            if (server?.missingCustomer) setStatus(dealStatus, `저장하지 못했습니다. ${customerErrorText("NOT_FOUND")}`, "error");
+            else setStatus(dealStatus, `저장하지 못했습니다. ${customerSaveErrorText(code, error)}`, "error");
+            if (server) showDealErrors(server.fields);
+            busy = false;
+            dealSave.disabled = false;
+            return;
+          }
         }
         // 여기부터는 저장이 끝난 뒤다. 다시 읽기가 실패해도 '저장하지 못했습니다'로 알리지 않는다.
         openDeal(false);
-        try {
-          await load();
-          setStatus(dealsStatus, `✓ 거래를 만들었습니다. 아래 거래 칸에서 장부를 ${filesEnabled ? "보고 계약서 사본을 올립니다" : "봅니다"}.`, "success");
+        const focusDeal = () => {
           const heading = root.querySelector<HTMLElement>(`[data-cu-deal="${dealId}"] .cu-deal__title`);
           if (heading) {
             heading.tabIndex = -1;
             heading.focus();
           } else dealOpen.focus();
+        };
+        if (recovered) {
+          // 손님 카드는 방금 다시 읽었으므로 또 읽지 않는다.
+          setStatus(dealsStatus, dealRecheckFoundText({ filesEnabled }), "success");
+          focusDeal();
+          busy = false;
+          dealSave.disabled = false;
+          return;
+        }
+        try {
+          await load();
+          setStatus(dealsStatus, `✓ 거래를 만들었습니다. 아래 거래 칸에서 장부를 ${filesEnabled ? "보고 계약서 사본을 올립니다" : "봅니다"}.`, "success");
+          focusDeal();
         } catch {
           setStatus(dealsStatus, "✓ 거래는 만들었습니다. 다만 손님 카드를 새로 읽지 못해 아래 거래 목록에는 아직 없습니다. '다시 불러오기'를 눌러 주세요.", "error");
           dealsReload.hidden = false;

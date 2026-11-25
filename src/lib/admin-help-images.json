@@ -3,7 +3,7 @@
   "figures": {
     "contract-copy": {
       "route": "/admin/work/customers/detail/",
-      "sources": "f35b93714255ca2229ceac206148b9165afa28ed66e5a2a667b72d83cceb4c6a",
+      "sources": "5653385cce3504b8c9650375c851fcee401ff5e423463404d3727ed5a60c11f5",
       "shots": {
         "contract-phone-1-panel": {
           "width": 712,
@@ -337,7 +337,7 @@
     },
     "contract-ai-box": {
       "route": "/admin/work/customers/detail/",
-      "sources": "b7bf93f4eeb87d0426f430e06b467648c9c0b58a61b70047a506c3cff1c67f6c",
+      "sources": "887fa0476df36bd42aa09f8ebcbe63ef8d7b38e3913529894f1edc5da73177de",
       "shots": {
         "aibox-phone-1-start": {
           "width": 712,
@@ -423,7 +423,7 @@
       "files": {
         "src/lib/work-ai-section.ts": "61f2f691aba1d09ca2672f069d503f46f0e170ae8d11d1c8ec3ba1ee9165f06c",
         "src/lib/work/contract-ai-view.mjs": "3c78fa23c782c42f3b124b79699b05123cd6340fff75a1c3e6b6d6f4dd6650f1",
-        "src/pages/admin/work/customers/detail.astro": "034d77ea579ff057c90d8054d4e8b5944a91c2c238ec7218d27edf0f378d8582"
+        "src/pages/admin/work/customers/detail.astro": "8fb2093c742451adff57d37d468cec9c7e7e12f9ac4fd08481f9238fb5c81a9f"
       }
     },
     "contract-ai-review": {
