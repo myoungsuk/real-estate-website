@@ -191,13 +191,24 @@ export const moneyKindText = (kind) => /** @type {Record<string, string>} */ (LE
 export const BANK_SYNC_STALE_HOURS = 36;
 const HOUR_MS = 60 * 60 * 1000;
 
-/** 부동산뱅크 매물 가운데 가장 늦은 받은 날. 부동산뱅크 매물이 없으면 null @param {{ items?: Record<string, { source: string, lastSeenAt: string | null }> }} reviewState */
-export function bankLastSeenOn(reviewState) {
+// 우리집부동산 매물 자동 받기(사무소 PC 작업 스케줄러, 매일 09:20, scripts/run-woori-sync-local.mjs)도 같은 파일의 우리집부동산 매물(source "woori") lastSeenAt으로 본다(2026-11-25).
+// 기준은 '오늘 받았나'다(사용자 결정 2026-11-25 "못키는 날도 있을텐데 그럴땐 뭐 대시보드에 오늘 못 받았다고 알림정도만 올려놔 그럼 보고 엑셀로 올리거나 컴퓨터 키겠지뭐").
+// PC가 꺼진 날은 PC 쪽 실패 이슈도 열리지 않으므로 이 줄만 알린다. 받은 날이 어제여도 한국 시각 10:00 전이면 09:20 받기·배포를 기다리는 중이라 정상으로 본다.
+export const WOORI_SYNC_DUE_TIME = "10:00";
+
+/** 한 출처 매물 가운데 가장 늦은 받은 날. 그 출처 매물이 없으면 null @param {{ items?: Record<string, { source: string, lastSeenAt: string | null }> }} reviewState @param {string} source */
+function sourceLastSeenOn(reviewState, source) {
   const dates = Object.values(reviewState?.items ?? {})
-    .filter((item) => item?.source === "bank" && /^\d{4}-\d{2}-\d{2}$/u.test(item.lastSeenAt ?? ""))
+    .filter((item) => item?.source === source && /^\d{4}-\d{2}-\d{2}$/u.test(item.lastSeenAt ?? ""))
     .map((item) => /** @type {string} */ (item.lastSeenAt));
   return dates.length > 0 ? dates.sort().at(-1) ?? null : null;
 }
+
+/** 부동산뱅크 매물 가운데 가장 늦은 받은 날. 부동산뱅크 매물이 없으면 null @param {{ items?: Record<string, { source: string, lastSeenAt: string | null }> }} reviewState */
+export const bankLastSeenOn = (reviewState) => sourceLastSeenOn(reviewState, "bank");
+
+/** 우리집부동산 매물 가운데 가장 늦은 받은 날. 우리집부동산 매물이 없으면 null @param {{ items?: Record<string, { source: string, lastSeenAt: string | null }> }} reviewState */
+export const wooriLastSeenOn = (reviewState) => sourceLastSeenOn(reviewState, "woori");
 
 /**
  * 받은 날(한국 날짜)의 0시부터 36시간이 넘으면 멈춤으로 본다(00:10 실행·배포가 늦어지는 몫을 넉넉히 둠). 색만으로 알리지 않게 '!'와 '멈춤'을 글에 넣는다.
@@ -211,3 +222,26 @@ export function bankSyncState(lastSeenOn, today, nowMs) {
     ? { stale, text: `! 부동산뱅크 자동 받기 멈춤 · 마지막 ${shortDate(lastSeenOn)}(${ago})` }
     : { stale, text: `부동산뱅크 자동 받기 ${ago} · ${shortDate(lastSeenOn)}` };
 }
+
+/** 달력에 있는 'YYYY-MM-DD'인지 @param {unknown} value @returns {value is string} */
+const isDateText = (value) => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/u.test(value) && Number.isFinite(dayIndex(value)) && new Date(dayIndex(value) * DAY_MS).toISOString().slice(0, 10) === value;
+
+/**
+ * 우리집부동산: 받은 날이 오늘이면 정상, 어제면 한국 시각 10:00 전까지만 정상, 그 밖은 '오늘 못 받음'이다.
+ * 색만으로 알리지 않게 '!'를 글 앞에 넣는다. 받은 날·오늘이 날짜가 아니면 받은 날을 모르는 채 '오늘 못 받음'으로 본다.
+ * @param {string} lastSeenOn 'YYYY-MM-DD' @param {string} today 한국 날짜 'YYYY-MM-DD' @param {number} nowMs 지금 시각(밀리초)
+ */
+export function wooriSyncState(lastSeenOn, today, nowMs) {
+  if (!isDateText(lastSeenOn) || !isDateText(today)) return { stale: true, text: "! 우리집부동산 오늘 못 받음 · 마지막 받은 날 모름" };
+  const days = dayIndex(today) - dayIndex(lastSeenOn);
+  const beforeDue = nowMs < Date.parse(`${today}T${WOORI_SYNC_DUE_TIME}:00.000+09:00`);
+  if (days <= 0) return { stale: false, text: `우리집부동산 자동 받기 오늘 · ${shortDate(lastSeenOn)}` };
+  if (days === 1 && beforeDue) return { stale: false, text: `우리집부동산 자동 받기 어제 · ${shortDate(lastSeenOn)}` };
+  return { stale: true, text: `! 우리집부동산 오늘 못 받음 · 마지막 ${shortDate(lastSeenOn)}` };
+}
+
+// '오늘 못 받음'일 때만 그 줄 아래에 보이는 고리 글(엑셀 가져오기 칸이 있는 매물 등록 화면으로 감).
+export const WOORI_SYNC_LATE_HELP_TEXT = "사무소 PC를 켜거나 '우리집부동산 엑셀 가져오기'로 올려 주세요";
+
+// 우리집부동산 매물이 0건이면 받은 날이 남지 않아 받았는지 알 수 없다(공개 목록이 비면 자동 받기는 파일을 바꾸지 않고 실패한다).
+export const WOORI_SYNC_NO_LISTINGS_TEXT = "우리집부동산 자동 받기 · 매물 0건이라 받은 날을 알 수 없음";

@@ -194,3 +194,41 @@ test("대시보드: '부동산뱅크 자동 받기' 줄은 받은 날 0시(한�
     expect(await overflowOf(page), String(width)).toBe(0);
   }
 });
+
+test("대시보드: '우리집부동산 자동 받기' 줄은 부동산뱅크 줄 아래에 있고, 오늘 받은 기록이 없으면 10:00부터 '! … 오늘 못 받음'과 엑셀 가져오기 고리를 보인다", async ({ page }) => {
+  await setup(page);
+  const realprice = panel(page, "realprice");
+  const listing = realprice.locator(".dsh-listing");
+  const line = listing.locator("[data-dsh-woori-sync]");
+  const help = realprice.locator("[data-dsh-woori-help]");
+  // 받은 날은 빌드 때 실제 .github/listing-review-state.json에서 온다. 우리집부동산 매물이 0건이면 날짜 없는 안내 글만 있다.
+  if ((await line.count()) === 0) {
+    await expect(listing).toContainText("우리집부동산 자동 받기 · 매물 0건이라 받은 날을 알 수 없음");
+    await expect(help).toHaveCount(0);
+    test.skip(true, "우리집부동산 매물이 없어 날짜 줄이 없음");
+  }
+  await expect(listing.locator(".dsh-sync").last()).toHaveAttribute("data-dsh-woori-sync", /^\d{4}-\d{2}-\d{2}$/u);
+  const seenOn = await line.getAttribute("data-dsh-woori-sync");
+  const kst = (hours) => new Date(Date.parse(`${seenOn}T00:00:00+09:00`) + hours * 3_600_000);
+
+  // 다음 날 09:59까지는 보통 글(어제), 고리는 숨김
+  await page.clock.setSystemTime(kst(24 + 9.98));
+  await page.reload();
+  await expect(line).toHaveText(/^우리집부동산 자동 받기 어제 · \d+\.\d+\(.\)$/u);
+  await expect(line).not.toHaveClass(/is-late/u);
+  await expect(help).toBeHidden();
+
+  // 다음 날 10:00이 지나면 오늘 못 받음 + 엑셀 가져오기 고리
+  await page.clock.setSystemTime(kst(24 + 10.5));
+  await page.reload();
+  await expect(line).toHaveText(/^! 우리집부동산 오늘 못 받음 · 마지막 \d+\.\d+\(.\)$/u);
+  await expect(line).toHaveClass(/is-late/u);
+  await expect(help).toBeVisible();
+  await expect(help).toHaveText("사무소 PC를 켜거나 '우리집부동산 엑셀 가져오기'로 올려 주세요");
+  await expect(help).toHaveAttribute("href", "/admin/listings/editor/#woori-import-heading");
+  expect((await help.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  for (const width of [360, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await overflowOf(page), String(width)).toBe(0);
+  }
+});
