@@ -1,7 +1,7 @@
 // 실거래가 단지 상세 칸(2026-11-25)을 가짜 업무 API로 본다. 1221px 이상은 미리보기 칸 자리에 겹치고, 1220px 이하는 화면 전체 칸이다.
 // 단지명·금액·시각은 모두 지어낸 값이다.
 import { expect, test } from "@playwright/test";
-import { PRODUCTION_CSP, cancelledTrade, collectErrors, envelope, failure, firstPage, overflowOf, rows, setup, trade } from "./support/realprice-mock.mjs";
+import { PRODUCTION_CSP, cancelledTrade, collectErrors, complexOf, envelope, failure, firstPage, overflowOf, rows, setup, trade } from "./support/realprice-mock.mjs";
 
 const detail = (page) => page.locator("[data-rt-detail]");
 // 미리보기가 담은 거래를 다시 읽는 요청(trades?ids=)에 답한다. 목록에 없는 거래도 같은 모양으로 돌려준다.
@@ -190,5 +190,41 @@ test("단지 상세: 조회 한도·채우는 중은 까닭 글, 오류는 다�
     await page.keyboard.press("Escape");
     await expect(detail(page)).toBeHidden();
   }
+  assertNoErrors();
+});
+
+// 큰 모니터(2026-11-25 사용자 선택 "① B"): 1440px 이상만 실거래가 화면 틀이 1680px까지 넓어지고, 오른쪽 칸(미리보기·단지 상세)이 틀의 32%(480 ~ 560px)이며 미리보기 카드는 칸 폭에 맞춘다.
+test("큰 모니터 1366·1440·1920px: 1440px 이상만 틀·오른쪽 칸이 넓어지고(480·538px) 미리보기 카드가 칸에 맞춰 커지며, 단지 상세도 같은 폭이고 1920px은 면적 탭 5개가 다 보인다", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const fiveAreas = (params) => {
+    const data = complexOf(params);
+    data.areas = [59.92, 74.58, 84.97, 101.36, 114.82].map((areaM2) => ({ areaM2, tradeCount: 9, lastDealDate: "2026-10-21" }));
+    return envelope(data);
+  };
+  await setup(page, { width: 1366, trades: listAndIds, complex: fiveAreas });
+  await page.goto("/admin/work/realprice/");
+  await expect(rows(page)).toHaveCount(30);
+  await rows(page).nth(0).getByRole("checkbox").check();
+  await rows(page).nth(2).getByRole("checkbox").check();
+  await expect(page.locator("[data-rt-preview-cards] img").first()).toBeVisible();
+  const measure = () => page.evaluate(() => {
+    const width = (selector) => Math.round(document.querySelector(selector)?.getBoundingClientRect().width ?? 0);
+    const side = document.querySelector("[data-rt-detail]")?.open ? "[data-rt-detail]" : "[data-rt-preview]";
+    const tabs = document.querySelector("[data-rt-detail-tabs]");
+    const box = tabs?.getBoundingClientRect();
+    const full = box ? [...tabs.querySelectorAll("[data-rt-detail-area]")].filter((tab) => { const r = tab.getBoundingClientRect(); return r.left >= box.left - 1 && r.right <= box.right + 1; }).length : null;
+    return { main: width(".admin-main"), table: width("[data-rt-main]"), side: width(side), card: width("[data-rt-preview-cards] img"), tabs: side === "[data-rt-detail]" ? full : null, overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth };
+  });
+  const wide = { 1366: { main: 1240, table: 844, side: 380, card: 300 }, 1440: { main: 1384, table: 888, side: 480, card: 446 }, 1920: { main: 1680, table: 1126, side: 538, card: 504 } };
+  for (const [width, want] of Object.entries(wide)) {
+    await page.setViewportSize({ width: Number(width), height: 900 });
+    await expect.poll(measure, `${width}px 미리보기 칸`).toEqual({ ...want, tabs: null, overflow: 0 });
+  }
+  await rows(page).first().locator("td.rt-date").click();
+  await expect(detail(page)).toBeVisible();
+  await expect(detail(page).locator("[data-rt-detail-area]")).toHaveCount(5);
+  await expect.poll(measure, "1920px 단지 상세: 같은 칸 폭, 면적 탭 5개가 다 보임").toEqual({ ...wide[1920], tabs: 5, overflow: 0 });
+  await page.setViewportSize({ width: 1366, height: 900 });
+  await expect.poll(measure, "1366px 단지 상세: 380px 그대로").toMatchObject({ main: 1240, side: 380, overflow: 0 });
   assertNoErrors();
 });

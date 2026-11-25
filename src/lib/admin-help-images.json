@@ -532,7 +532,7 @@
     },
     "blog-draft": {
       "route": "/admin/work/blog/",
-      "sources": "cdd3d6c17c7dba7b2885627d5e213d2f0141c5ecf705ed4e880af42d42366266",
+      "sources": "f5f994efa350b6535c05715d85482e4b6715f1aec6bb12db567002df18af390b",
       "shots": {
         "blog-phone-1-source": {
           "width": 772,
@@ -675,8 +675,8 @@
         "blog-wide-3-result": {
           "width": 1520,
           "height": 894,
-          "bytes": 61172,
-          "sha256": "f885dab493cf959b4ca1c6875d85700eb36968e80013178f569ee156096c0d1e",
+          "bytes": 47854,
+          "sha256": "92d5534c6b605d6c6ae339c23ec07b1a4bbebe9d37e42ed535cb95ebf75599a0",
           "marks": [
             [
               0.0391,
@@ -692,29 +692,29 @@
             ],
             [
               0.7211,
-              0.2879,
+              0.6926,
               0.9477,
-              0.3569
+              0.7616
             ]
           ]
         },
         "blog-wide-4-cards": {
-          "width": 768,
-          "height": 790,
-          "bytes": 34082,
-          "sha256": "1956de4df82c6b41db8289264bcf1f87eb05c0207c50f8fc7f5bc8e7e27c74d8",
+          "width": 1520,
+          "height": 675,
+          "bytes": 52066,
+          "sha256": "905fd41b8e4503a4b8bbdcb02348a332e974c5787a90160743445420233421fb",
           "marks": [
             [
-              0.0703,
-              0.1328,
-              0.9297,
-              0.6485
+              0.1007,
+              0.0821,
+              0.8993,
+              0.8215
             ],
             [
-              0.0703,
-              0.6738,
-              0.9297,
-              0.776
+              0.1007,
+              0.8372,
+              0.2674,
+              0.9003
             ]
           ]
         }
