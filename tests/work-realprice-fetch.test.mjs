@@ -11,6 +11,7 @@ import {
   RT_DAILY_LIMIT,
   RT_KEY_EXPIRED,
   RT_KEY_INVALID,
+  RT_REGION_MISMATCH,
   RT_REQUEST_INVALID,
   RT_RESPONSE_INVALID,
   RT_SERVICE_GONE,
@@ -20,6 +21,7 @@ import {
   fetchRealpriceMonth,
   fetchRealpriceTotalCount,
   REALPRICE_LAWD_CODES,
+  REALPRICE_RETRY_POLICY,
   planRealpriceRetry,
 } from "../worker/realprice-fetch.mjs";
 import { REALPRICE_ROW_LIMITS, buildTradeRows, toAreaX100, toShortDate, toWon, tradeSignatureSource } from "../worker/realprice-rows.mjs";
@@ -679,4 +681,11 @@ test("TK-32·TK-31(부분): 가짜 fetcher가 받은 요청 주소는 모두 4�
     }
     if (!result.ok) assert.deepEqual(Object.keys(result).sort(), ["calls", "code", "httpStatus", "ok"], "실패 결과는 코드·HTTP 상태·호출 수만");
   }
+});
+
+test("TK-154: 구 코드 다름(RT_REGION_MISMATCH)은 재시도 표에 그 종류 6시간 미룸·경고로 있다(표에 없으면 그 달만 30분 뒤가 됨)", () => {
+  assert.equal(RT_REGION_MISMATCH, "RT_REGION_MISMATCH");
+  assert.ok(RT_REGION_MISMATCH.length <= 40, "rt_fetch_months.last_error 40자 제한 안");
+  assert.deepEqual({ ...REALPRICE_RETRY_POLICY[RT_REGION_MISMATCH] }, { scope: "kind", delayMinutes: 6 * 60, warning: true });
+  assert.deepEqual(planRealpriceRetry(RT_REGION_MISMATCH, NOW), { code: RT_REGION_MISMATCH, scope: "kind", retryAt: "2026-11-19T09:00:00.000Z", warning: true });
 });

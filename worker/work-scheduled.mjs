@@ -263,18 +263,25 @@ async function runInner(env, options, state) {
     state.month = month;
     const fetched = await fetchRealpriceMonth({ api: month.kind, lawdCd: month.lawd_cd, dealYmd: month.deal_ymd, serviceKey: env.MOLIT_RT_SERVICE_KEY.trim(), fetcher });
     totals.calls += fetched.calls;
+    let failureCode = fetched.ok ? null : fetched.code;
     if (fetched.ok) {
       const applied = await applyRealpriceMonth(db, { month, fetched, nowMs, apiCalls: fetched.calls });
-      estimatedRecorded += applied.rowsWrittenEstimate;
-      measuredWritten += rowsWrittenOf(applied.results);
-      totals.months += 1;
-      totals.inserted += applied.inserted;
-      totals.updated += applied.updated;
-      totals.deleted += applied.deleted;
-      if (applied.outcome === "held") codes.push("RT_HELD_DROP");
-    } else {
+      if (applied.outcome === "region_mismatch") {
+        // 구 코드가 다른 응답(0008): 거래 표·보류 상태를 건드리지 않고 받기 오류와 같은 길(그 종류 6시간 미룸)로 적는다.
+        failureCode = applied.code;
+      } else {
+        estimatedRecorded += applied.rowsWrittenEstimate;
+        measuredWritten += rowsWrittenOf(applied.results);
+        totals.months += 1;
+        totals.inserted += applied.inserted;
+        totals.updated += applied.updated;
+        totals.deleted += applied.deleted;
+        if (applied.outcome === "held") codes.push("RT_HELD_DROP");
+      }
+    }
+    if (failureCode) {
       // 오류 뒤 다음 차례(22.4절 표): 그 달만 / 그 종류 모든 달 / 모든 종류. 앞서 받은 자료는 지우지 않는다.
-      const plan = planRealpriceRetry(fetched.code, new Date(nowMs));
+      const plan = planRealpriceRetry(failureCode, new Date(nowMs));
       const statements = [db.prepare(FAIL_MONTH_SQL).bind(plan.code, plan.retryAt, month.kind, month.deal_ymd, month.lawd_cd)];
       if (plan.scope === "all" || plan.scope === "kind") statements.push(upsertSettingStatement(db, REALPRICE_HOLD_SETTING, mergeHold(hold, plan, month.kind), nowMs));
       const estimate = statements.length + 1;

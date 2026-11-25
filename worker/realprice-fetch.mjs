@@ -36,6 +36,8 @@ export const RT_ACCESS_DENIED = "RT_ACCESS_DENIED";
 export const RT_KEY_INVALID = "RT_KEY_INVALID";
 export const RT_KEY_EXPIRED = "RT_KEY_EXPIRED";
 export const RT_DAILY_LIMIT = "RT_DAILY_LIMIT";
+// 한 달 응답에서 요청한 구와 sggCd가 다른 항목이 받은 항목의 절반을 넘음(0008, realprice-store.mjs). 받기 오류가 아니라 반영 전 검사에서 정한다.
+export const RT_REGION_MISMATCH = "RT_REGION_MISMATCH";
 
 // 공공데이터포털 결과·오류 코드(두 자리로 맞춘 값) → 바꾼 코드(설계서 22.4절 표, 2026-11-19 D-6으로 29 보탬).
 // "00"은 정상, "03"은 자료 없음(정상 0건). 표에 없는 코드는 RT_UPSTREAM_FAILED.
@@ -93,6 +95,8 @@ export const REALPRICE_RETRY_POLICY = Object.freeze({
   [RT_REQUEST_INVALID]: Object.freeze({ scope: "kind", delayMinutes: 6 * 60, warning: true }),
   [RT_SERVICE_GONE]: Object.freeze({ scope: "kind", delayMinutes: 24 * 60, warning: true }),
   [RT_ACCESS_DENIED]: Object.freeze({ scope: "kind", delayMinutes: 60, warning: true }),
+  // sggCd 글자 꼴이 예상과 다르면 같은 종류의 모든 구·달이 똑같이 걸리므로 그 종류를 6시간 미루고 알린다(30분마다 다시 부르지 않게).
+  [RT_REGION_MISMATCH]: Object.freeze({ scope: "kind", delayMinutes: 6 * 60, warning: true }),
   [RT_KEY_INVALID]: Object.freeze({ scope: "all", delayMinutes: 60, warning: false }),
   [RT_KEY_EXPIRED]: Object.freeze({ scope: "all", delayMinutes: 60, warning: false }),
   [RT_DAILY_LIMIT]: Object.freeze({ scope: "all", nextKstTime: "00:10", warning: false }),

@@ -281,7 +281,7 @@ export function daysAgo(iso, nowMs) {
 // ── 자료 받기 상태(GET /work/realprice/status) ──
 
 // 받기를 멈추게 하는 마지막 오류(키·한도·권한). 일시 오류(RT_UPSTREAM_FAILED 등)는 다음 차례에 저절로 다시 받으므로 알리지 않는다.
-const STOP_CODES = new Set(["RT_KEY_EXPIRED", "RT_KEY_INVALID", "RT_DAILY_LIMIT", "RT_ACCESS_DENIED", "RT_SERVICE_GONE", "RT_REQUEST_INVALID"]);
+const STOP_CODES = new Set(["RT_KEY_EXPIRED", "RT_KEY_INVALID", "RT_DAILY_LIMIT", "RT_ACCESS_DENIED", "RT_SERVICE_GONE", "RT_REQUEST_INVALID", "RT_REGION_MISMATCH"]);
 
 // 상태 코드 → 쉬운 말(짧은 이름, 할 일). 설계서 22.9절 끝.
 export const REALPRICE_CODE_TEXT = Object.freeze({
@@ -291,6 +291,7 @@ export const REALPRICE_CODE_TEXT = Object.freeze({
   RT_ACCESS_DENIED: { label: "활용 신청 확인 필요", message: "이 자료의 활용 신청이 승인되지 않았습니다. 공공데이터포털에서 활용 신청 상태를 확인해 주세요." },
   RT_SERVICE_GONE: { label: "자료 서비스 바뀜", message: "국토교통부 자료 서비스가 바뀌었거나 없어졌습니다. 홈페이지 담당자에게 알려 주세요." },
   RT_REQUEST_INVALID: { label: "요청 형식 문제", message: "자료 요청 형식에 문제가 있습니다. 홈페이지 담당자에게 알려 주세요." },
+  RT_REGION_MISMATCH: { label: "구 코드 다름", message: "받은 자료의 구 코드가 요청한 구와 달라 저장하지 않았습니다. 6시간 뒤 다시 받습니다. 계속되면 홈페이지 담당자에게 알려 주세요." },
   RT_ABORTED: { label: "받기가 자꾸 끊김", message: "같은 달 받기가 3번 연속 끝나지 못했습니다. 계속되면 홈페이지 담당자에게 알려 주세요." },
   RT_INTERNAL: { label: "처리 오류 반복", message: "같은 달을 처리하다 오류가 3번 연속 났습니다. 홈페이지 담당자에게 알려 주세요." },
   RT_HELD_DROP: { label: "건수 크게 줄어 보류", message: "새로 받은 건수가 크게 줄어든 달을 지우지 않고 한 번 보류했습니다. 다음 받기에서 다시 확인합니다." },

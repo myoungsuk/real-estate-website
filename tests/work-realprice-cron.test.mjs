@@ -597,3 +597,79 @@ test("TK-136: 0008 뒤 첫 실행은 동구 676달을 건드리지 않고 새 4�
   assert.equal(state.recordHighReady, false);
   assert.equal(state.coveredThrough, "2026-09", "5개 구가 모두 받은 달까지만(새 구는 방금 받은 3달)");
 });
+
+// 0008 구 대조: 실제 응답의 sggCd 꼴은 받아 본 적이 없다(**추정**). 꼴이 다르면 모든 항목이 다른 구로 버려진다.
+const FOREIGN_SGG = "3011000000";
+const holdOf = (database) => {
+  const row = rows(database, "SELECT value_json FROM settings WHERE key = 'realprice_fetch_hold'")[0];
+  return row ? JSON.parse(row.value_json) : null;
+};
+
+test("TK-151: 동구 30행을 저장한 달에 sggCd가 모두 다른 응답이 두 번 와도 거래 삭제 0·보류 아님, 그 달은 RT_REGION_MISMATCH 실패·매매 6시간 미룸·같은 실행에서 더 부르지 않음", async () => {
+  const { database, db } = freshDb({ d1Meta: true });
+  await seedAllDone(db, database);
+  makeDue(database, "sale", "202611");
+  const items = saleMonthItems("202611", 30);
+  let foreign = false;
+  const { fetcher, calls } = portal({}, (kind, ymd, pageNo, parsed, lawd) => {
+    if (kind !== "sale" || ymd !== "202611" || lawd !== BASE) return undefined;
+    const list = foreign ? items.map((item) => ({ ...item, sggCd: FOREIGN_SGG })) : items;
+    return xmlResponse(realpriceXml({ items: list, totalCount: list.length, pageNo }));
+  });
+  const first = await cron(cronEnv(db), { fetcher });
+  assert.deepEqual([first.outcome, first.inserted], ["ok", 30]);
+  const stored = rows(database, "SELECT * FROM rt_trades ORDER BY trade_key");
+  assert.equal(stored.length, 30);
+  foreign = true;
+  // 두 번째는 첫 실패의 6시간 미룸이 끝난 뒤(같은 0건이 두 번 오면 지우는 길을 타지 않는지 본다).
+  for (const at of [NOW + HOUR, NOW + 8 * HOUR]) {
+    makeDue(database, "sale", "202611", { at: at - MINUTE });
+    const callsBefore = calls.length;
+    const result = await cron(cronEnv(db), { now: at, fetcher });
+    assert.deepEqual([result.outcome, result.code, result.inserted, result.updated, result.deleted, result.months], ["failed", "RT_REGION_MISMATCH", 0, 0, 0, 0], iso(at));
+    assert.equal(calls.length - callsBefore, 1, "종류 단위 오류라 같은 실행에서 더 부르지 않음");
+    assert.deepEqual(rows(database, "SELECT * FROM rt_trades ORDER BY trade_key"), stored, "거래 표 삽입·수정·삭제 0");
+    const month = monthRow(database, "sale", "202611");
+    assert.deepEqual([month.status, month.last_error, month.held_count, month.row_count, month.attempts, month.next_due_at], ["failed", "RT_REGION_MISMATCH", null, 30, 0, iso(at + 6 * HOUR)], "보류(held) 길을 타지 않고 실패로 적음");
+    assert.equal(holdOf(database).kinds.sale.code, "RT_REGION_MISMATCH");
+    assert.equal(holdOf(database).kinds.sale.until, iso(at + 6 * HOUR));
+  }
+  const warnings = (await status(db, NOW + 8 * HOUR + MINUTE)).warnings.map((warning) => warning.code);
+  assert.ok(warnings.includes("RT_REGION_MISMATCH"), "갱신 상태 경고");
+  assert.ok(!warnings.includes("RT_HELD_DROP"));
+});
+
+test("TK-152: 새 구(서구) 달에 sggCd가 모두 다른 응답이 오면 '성공 0건'으로 끝내지 않고 실패로 남겨 6시간 뒤 다시 받는다", async () => {
+  const { database, db } = freshDb({ d1Meta: true });
+  await seedAllDone(db, database);
+  makeDue(database, "sale", "202611", { lawd: "30170", neverFetched: true });
+  // 서구 요청에 동구(30110) 자료가 오는 경우.
+  const { fetcher, picked } = portal({ "30170:sale:202611": saleMonthItems("202611", 12) });
+  const result = await cron(cronEnv(db), { fetcher });
+  assert.deepEqual([result.outcome, result.code, result.inserted], ["failed", "RT_REGION_MISMATCH", 0]);
+  assert.deepEqual(picked(), ["30170:sale:202611"]);
+  const month = monthRow(database, "sale", "202611", "30170");
+  assert.deepEqual([month.status, month.last_success_at, month.row_count, month.last_error, month.next_due_at], ["failed", null, 0, "RT_REGION_MISMATCH", iso(NOW + 6 * HOUR)]);
+  assert.equal(rows(database, "SELECT COUNT(*) AS n FROM rt_trades")[0].n, 0);
+  const state = await status(db, NOW + MINUTE);
+  assert.ok(!state.recordHighLawds.includes("30170"), "받지 못한 달이 있는 구는 신고가 판정 준비가 아님");
+});
+
+test("TK-153: 다른 구 항목이 받은 항목의 절반 이하(10건 중 1건·5건)면 지금처럼 나머지를 저장하고 버린 수만 적으며, 절반을 넘으면(10건 중 6건) 저장하지 않는다", async () => {
+  for (const [foreignCount, expected] of [[1, { status: "ok", stored: 9, dropped: 1, error: null }], [5, { status: "ok", stored: 5, dropped: 5, error: null }], [6, { status: "failed", stored: 0, dropped: 0, error: "RT_REGION_MISMATCH" }]]) {
+    const { database, db } = freshDb({ d1Meta: true });
+    await seedAllDone(db, database);
+    makeDue(database, "sale", "202611");
+    const items = saleMonthItems("202611", 10).map((item, index) => (index < foreignCount ? { ...item, sggCd: "30170" } : item));
+    const { fetcher } = portal({ "sale:202611": items });
+    const result = await cron(cronEnv(db), { fetcher });
+    const month = monthRow(database, "sale", "202611");
+    assert.deepEqual(
+      [month.status, rows(database, "SELECT COUNT(*) AS n FROM rt_trades")[0].n, month.dropped_count, month.last_error],
+      [expected.status, expected.stored, expected.dropped, expected.error],
+      `${foreignCount}/10`,
+    );
+    assert.equal(result.code, expected.error, `${foreignCount}/10 실행 결과`);
+    assert.equal(holdOf(database) === null, expected.error === null, `${foreignCount}/10 미룸`);
+  }
+});

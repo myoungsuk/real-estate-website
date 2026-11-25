@@ -6,6 +6,7 @@
 // - 지역(0008, 2026-11-25 사용자 결정 "대전만 하면 될 것 같아"): 받을 차례는 구·종류·달마다 한 줄(rt_fetch_months 기본 키 lawd_cd·kind·deal_ymd)이다.
 //   거래 ID 범위(종류·연월)에는 모든 구의 거래가 함께 들어 있으므로, 한 달 반영은 lawd_cd로 그 구의 행만 읽고 고친다(다른 구 행을 지우지 않게).
 import { buildTradeRows } from "./realprice-rows.mjs";
+import { RT_REGION_MISMATCH } from "./realprice-fetch.mjs";
 import { REALPRICE_LAWD_CODES } from "../src/lib/work/realprice-regions.mjs";
 
 export const REALPRICE_KINDS = Object.freeze(["sale", "presale", "rent"]); // 과거 채우기 순서(신고가에 매매가 먼저 필요, 22.7절 순서 2)
@@ -31,6 +32,7 @@ export const REALPRICE_LEASE_MS = 5 * 60 * 1000;
 export const REALPRICE_JSON_CHUNK = 1000;
 export const REALPRICE_HOLD_MIN_STORED = 20; // 저장 건수가 이 이상인데 새로 받은 건수가 절반보다 적으면 보류(22.6절 5). 0건 응답은 저장 1건 이상이면 보류
 export const REALPRICE_DROP_WARN_RATIO = 0.05; // 버린 수가 받은 건수의 5%를 넘으면 경고(2026-11-19 B-2)
+export const REALPRICE_REGION_MISMATCH_RATIO = 0.5; // 요청한 구와 sggCd가 다른 항목이 받은 항목의 이 비율을 넘으면 그 달을 반영하지 않음(RT_REGION_MISMATCH)
 export const REALPRICE_ABORT_WARN_ATTEMPTS = 3; // 같은 달이 3번 연속 끊기면 경고(22.6절 6)
 export const REALPRICE_ABORT_RETRY_MS = 30 * 60 * 1000;
 export const REALPRICE_RUNS_KEEP_DAYS = 30;
@@ -276,10 +278,19 @@ export function hasMeta(results) {
 }
 
 // 받은 한 달을 반영한다. month: rt_fetch_months 행(받기 전 상태). fetched: fetchRealpriceMonth 성공 결과.
-// 돌려주는 값: { outcome: "ok" | "held", inserted, updated, deleted, droppedCount, cleared, rowsRead, rowsWrittenEstimate, results, statements }
+// 돌려주는 값: { outcome: "ok" | "held" | "region_mismatch", inserted, updated, deleted, droppedCount, cleared, rowsRead, rowsWrittenEstimate, results, statements }
+// "region_mismatch"(code RT_REGION_MISMATCH)는 D1을 한 번도 부르지 않는다. 부른 쪽(work-scheduled.mjs)이 받기 오류와 같은 길로 실패를 적는다.
 export async function applyRealpriceMonth(db, { month, fetched, nowMs, apiCalls }) {
   const { lawd_cd: lawdCd, kind, deal_ymd: dealYmd } = month;
   const built = await buildTradeRows({ kind, dealYmd, lawdCd, items: fetched.items });
+  // 구 대조(0008): 응답의 sggCd 꼴을 실제로 받아 보지 못했다(**추정**). 꼴이 달라 대부분이 다른 구로 버려지면 그 달이 0건처럼 보여
+  // 보류 → 같은 0건 확인 → 저장 행 삭제로 가거나, 새 구 달이 "성공 0건"으로 끝나 다시 받지 않는다. 그래서 버린 수가 받은 항목의 절반을 넘으면
+  // 거래 표를 읽지도 쓰지도 않고 보류·확인 길도 타지 않는다.
+  const received = Array.isArray(fetched.items) ? fetched.items.length : 0;
+  const otherRegion = built.dropped.otherRegion ?? 0;
+  if (otherRegion > received * REALPRICE_REGION_MISMATCH_RATIO) {
+    return { outcome: "region_mismatch", code: RT_REGION_MISMATCH, received, otherRegion, inserted: 0, updated: 0, deleted: 0, droppedCount: built.droppedCount, cleared: built.cleared, rowsRead: 0, rowsWrittenEstimate: 0, results: [], statements: 0 };
+  }
   const [from, to] = monthKeyRange(kind, dealYmd);
   const read = await db.prepare(READ_MONTH_TRADES_SQL).bind(from, to, lawdCd).all();
   const existingRows = read.results ?? [];

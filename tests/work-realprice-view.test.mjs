@@ -164,6 +164,9 @@ test("자료 받기 상태: 정상·받기 전·처음 채우는 중·받기 멈
   assert.equal(stopView.problem.label, "인증키 연장 필요");
   assert.equal(statusProblem({ ...stopped, lastSuccessAt: "2026-11-17T02:00:00Z" }), null, "멈춘 뒤 다시 받았으면 알리지 않음");
   assert.equal(statusProblem({ ...readyStatus, lastError: { code: "RT_UPSTREAM_FAILED", at: "2026-11-19T04:00:00Z" } }), null, "일시 오류는 다음 차례에 저절로 다시 받음");
+  // TK-154: 구 코드가 다른 응답은 저장하지 않고 그 종류를 6시간 미루므로 멈춤으로 쉬운 말로 알린다.
+  const regionProblem = statusProblem({ ...readyStatus, warnings: [{ code: "RT_REGION_MISMATCH", count: 1, months: [], kind: "sale" }] });
+  assert.deepEqual([regionProblem.stop, regionProblem.label, regionProblem.message], [true, "구 코드 다름", "받은 자료의 구 코드가 요청한 구와 달라 저장하지 않았습니다. 6시간 뒤 다시 받습니다. 계속되면 홈페이지 담당자에게 알려 주세요."]);
 
   assert.equal(statusProblem({ ...readyStatus, warnings: [{ code: "RT_READ_BUDGET", level: "soft" }, { code: "RT_READ_BUDGET_NEAR" }] }), null, "읽기 첫 상한·가까움은 목록 알림으로만");
   const counted = statusView({ ...readyStatus, warnings: [{ code: "RT_COUNT_DIFF", count: 1 }] }, { nowMs: NOW, todayKst: TODAY });
