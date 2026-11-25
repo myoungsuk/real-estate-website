@@ -7,7 +7,7 @@ const NOW = new Date("2026-11-21T03:00:00Z"); // 한국 12:00
 const TODAY = "2026-11-21";
 const uuid = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const envelope = (data, status = 200) => ({ status, json: { ok: true, data, requestId: "test" } });
-const failure = (status, code) => ({ status, json: { ok: false, error: { code, message: "시험 오류", retryable: false }, requestId: "test" } });
+const failure = (status, code, details) => ({ status, json: { ok: false, error: { code, message: "시험 오류", retryable: false, ...(details ? { details } : {}) }, requestId: "test" } });
 
 function customer(n, extra = {}) {
   return {
@@ -56,7 +56,8 @@ function makeStore({ customers, count } = {}) {
 
 // 늘 같은 시각에서 시작하고 실제 서버는 부르지 않는다(맞지 않는 관리 API는 503).
 // failCustomerReadAfterNote: 손님 메모 저장(POST /notes) 바로 뒤의 손님 카드 읽기 한 번만 503으로 실패시킨다.
-async function setup(page, { width = 390, enabled = true, store = makeStore(), patchConflict = false, failCustomerReadAfterNote = false } = {}) {
+// failCustomerReadAfterDeal: 새 거래 저장(POST /deals) 바로 뒤의 손님 카드 읽기 한 번만 503으로 실패시킨다.
+async function setup(page, { width = 390, enabled = true, filesEnabled = false, aiEnabled = false, store = makeStore(), patchConflict = false, failCustomerReadAfterNote = false, failCustomerReadAfterDeal = false } = {}) {
   await page.clock.install({ time: NOW });
   await page.setViewportSize({ width, height: 900 });
   const calls = { all: [], writes: [] };
@@ -74,7 +75,7 @@ async function setup(page, { width = 390, enabled = true, store = makeStore(), p
       calls.writes.push({ method, path, body, csrf: request.headers()["x-admin-csrf"] ?? null, type: request.headers()["content-type"] ?? "" });
       if (request.headers()["x-admin-csrf"] !== "test-csrf") return route.fulfill(failure(403, "CSRF_INVALID"));
     }
-    if (path === "/session") return route.fulfill(envelope({ enabled, filesEnabled: false, administrator: "시험 관리자", csrfToken: enabled ? "test-csrf" : null, schemaVersion: enabled ? 4 : null }));
+    if (path === "/session") return route.fulfill(envelope({ enabled, filesEnabled, aiEnabled, administrator: "시험 관리자", csrfToken: enabled ? "test-csrf" : null, schemaVersion: enabled ? 4 : null }));
     if (!enabled) return route.fulfill(failure(503, "WORK_DISABLED"));
 
     if (path === "/customers" && method === "GET") {
@@ -157,6 +158,25 @@ async function setup(page, { width = 390, enabled = true, store = makeStore(), p
         return route.fulfill(envelope({ deleted: true, trash: { batchId: uuid(991), purgeAfter: "2026-11-28T03:00:00.000Z" } }));
       }
     }
+    // 새 거래(서버 parseDealCreate와 같은 필수 칸: 제목·거래 종류·물건 종류, 오피스텔이면 일정 판정, 참여자 손님이 있어야 함)
+    if (path === "/deals" && method === "POST") {
+      const bad = ["title", "dealType", "propertyKind"].filter((key) => !body[key]);
+      if ((body.propertyKind === "officetel") !== Boolean(body.scheduleTarget)) bad.push("scheduleTarget");
+      if (!(body.parties ?? []).every((party) => store.customers.some((item) => item.id === party.customerId))) bad.push("parties");
+      if (bad.length > 0) return route.fulfill(failure(400, "VALIDATION_FAILED", bad.slice(0, 1)));
+      const deal = { id: uuid(nextId++), title: body.title, dealType: body.dealType, saleKind: body.dealType === "sale" ? "sale" : null, propertyKind: body.propertyKind, scheduleTarget: body.scheduleTarget ?? null, propertyLabel: "", priceWon: null, depositWon: null, monthlyRentWon: null, contractOn: null, middlePaymentOn: null, balanceOn: null, status: "open", version: 1, createdAt: "2026-11-21T03:00:00.000Z", updatedAt: "2026-11-21T03:00:00.000Z" };
+      store.createdDeals = [...(store.createdDeals ?? []), deal];
+      for (const party of body.parties) {
+        store.deals[party.customerId] = [{ id: deal.id, title: deal.title, dealType: deal.dealType, status: deal.status, role: party.role, version: 1, updatedAt: deal.updatedAt, events: [], files: [] }, ...(store.deals[party.customerId] ?? [])];
+      }
+      if (failCustomerReadAfterDeal) failNextCustomerRead = true;
+      return route.fulfill(envelope({ deal, parties: body.parties.map((party) => ({ ...party, displayName: store.customers.find((item) => item.id === party.customerId).displayName })) }, 201));
+    }
+    // 새로 만든 거래의 '장부 보기'(거래 하나 + 그 거래의 장부 줄, 줄은 아직 없음)
+    const dealMatch = path.match(/^\/deals\/([^/]+)$/u);
+    const created = dealMatch && (store.createdDeals ?? []).find((item) => item.id === decodeURIComponent(dealMatch[1]));
+    if (created && method === "GET") return route.fulfill(envelope({ deal: created, parties: [], events: [], notes: [], files: [] }));
+    if (path === "/ledger" && method === "GET" && (store.createdDeals ?? []).some((item) => item.id === url.searchParams.get("dealId"))) return route.fulfill(envelope({ items: [], nextCursor: null }));
     return route.fulfill(failure(404, "NOT_FOUND"));
   });
   return calls;
@@ -898,4 +918,193 @@ test("처음 불러올 때 업무 세션이 Access 302를 받으면 로그인 �
   await expect(page.locator("[data-nt-memo-status]")).toHaveText(`저장하지 못했습니다. ${AUTH_SAVE}`);
   await expect(page.locator("#nt-memo")).toHaveValue("가상 급한 메모: 59㎡ 전세 문의");
   expect(followed).toEqual([]);
+});
+
+// ── 새 거래(손님 카드, 2026-11-25) ──
+// 2026-11-24 사용자가 찾은 "화면에서 거래를 만들 곳이 없음". 이 손님을 참여자로 붙여 POST /deals로 만들고, 손님 카드를 다시 읽어 거래 칸(장부·계약서 사본)을 그린다.
+const NEW_DEAL_TITLE = "가상숲3단지 59㎡ 매매";
+for (const width of [360, 1280]) {
+  test(`새 거래 ${width}px: 빈 칸은 칸 아래 오류, 오피스텔이면 일정 기준을 묻고, 저장하면 이 손님 역할과 함께 보내 새 거래 칸에 장부·계약서 사본이 붙는다`, async ({ page }) => {
+    const assertNoErrors = collectErrors(page);
+    // 1280px은 운영처럼 AI 일정 뽑기도 켠 세션(칸 아래 안내가 그 길을 알려 줌)
+    const calls = await setup(page, { width, filesEnabled: true, aiEnabled: width === 1280 });
+    await page.goto(`/admin/work/customers/detail/?id=${uuid(3)}`);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("가상 손님 3");
+    await expect(page.locator("[data-cu-deals-empty]")).toHaveText("아직 이 손님과 이은 거래가 없습니다. '새 거래'를 눌러 만듭니다.");
+    const open = page.getByRole("button", { name: "새 거래" });
+    await expect(open).toHaveAttribute("aria-expanded", "false");
+    await open.click();
+    await expect(open).toHaveAttribute("aria-expanded", "true");
+    const panel = page.locator("[data-cu-deal-panel]");
+    await expect(panel).toBeVisible();
+    await expect(page.locator("#cu-deal-name")).toBeFocused();
+    await expect(panel.locator("[data-cu-deal-note]")).toHaveText(width === 1280
+      ? "계약일·금액·일정은 여기서 넣지 않습니다. 거래를 만든 뒤 그 거래의 계약서 사본을 올리고 'AI로 일정 뽑기'로 넣습니다."
+      : "계약일·금액·일정은 아직 이 화면에서 넣을 수 없습니다.");
+    await expect(panel.locator("[data-cu-deal-officetel]")).toBeHidden();
+
+    const save = page.getByRole("button", { name: "거래 저장" });
+    await save.click();
+    await expect(page.locator("[data-cu-deal-status]")).toHaveText("빨간 글자가 있는 칸을 고쳐 주세요.");
+    await expect(page.locator("#cu-deal-name-error")).toHaveText("거래 제목을 넣어 주세요. '리더스시티5블록 84㎡ 매매'처럼 씁니다.");
+    await expect(page.locator("#cu-deal-type-error")).toHaveText("거래 종류를 골라 주세요.");
+    await expect(page.locator("#cu-deal-kind-error")).toHaveText("물건 종류를 골라 주세요.");
+    await expect(page.locator("#cu-deal-role-error")).toHaveText("이 손님이 거래에서 어느 쪽인지 골라 주세요.");
+    await expect(page.locator("#cu-deal-name")).toBeFocused();
+    await expect(page.locator("#cu-deal-name")).toHaveAttribute("aria-invalid", "true");
+    expect(calls.writes, "검사에서 막히면 서버에 보내지 않음").toEqual([]);
+
+    // 거래 종류를 고르면 그 거래의 두 쪽 + 기타만 보이고, 숨은 역할을 골라 두었으면 풀린다.
+    const roles = panel.locator("[data-cu-deal-role]:visible");
+    await expect(roles).toHaveText(["매수인", "매도인", "임차인", "임대인", "기타"]);
+    await panel.locator('input[name="cu-deal-role"][value="tenant"]').check();
+    await panel.locator('input[name="cu-deal-type"][value="sale"]').check();
+    await expect(roles).toHaveText(["매수인", "매도인", "기타"]);
+    await expect(panel.locator('input[name="cu-deal-role"]:checked')).toHaveCount(0);
+    await panel.locator('input[name="cu-deal-kind"][value="officetel"]').check();
+    await expect(panel.locator("[data-cu-deal-officetel]")).toBeVisible();
+    await page.locator("#cu-deal-name").fill(NEW_DEAL_TITLE);
+    await panel.locator('input[name="cu-deal-role"][value="buyer"]').check();
+    await save.click();
+    await expect(page.locator("#cu-deal-target-error")).toHaveText("오피스텔 일정 기준을 골라 주세요.");
+    await expect(page.locator("#cu-deal-name-error")).toHaveText("");
+    expect(calls.writes).toEqual([]);
+    await panel.locator('input[name="cu-deal-target"][value="housing"]').check();
+    // 다시 주택으로 바꾸면 일정 기준 줄은 숨고 보내지 않는다.
+    await panel.locator('input[name="cu-deal-kind"][value="housing"]').check();
+    await expect(panel.locator("[data-cu-deal-officetel]")).toBeHidden();
+    expect(await overflowOf(page), "열린 새 거래 칸도 가로 넘침 없음").toBeLessThanOrEqual(0);
+
+    await save.click();
+    await expect(page.locator("[data-cu-deals-status]")).toHaveText("✓ 거래를 만들었습니다. 아래 거래 칸에서 장부를 보고 계약서 사본을 올립니다.");
+    const posts = calls.writes.filter((item) => item.path === "/deals");
+    expect(posts).toHaveLength(1);
+    expect(posts[0]).toMatchObject({ method: "POST", csrf: "test-csrf" });
+    expect(posts[0].type).toContain("application/json");
+    expect(posts[0].body).toEqual({ title: NEW_DEAL_TITLE, dealType: "sale", propertyKind: "housing", parties: [{ customerId: uuid(3), role: "buyer" }] });
+    await expect(panel).toBeHidden();
+    await expect(open).toHaveAttribute("aria-expanded", "false");
+    const deal = page.locator(".cu-deal");
+    await expect(deal).toHaveCount(1);
+    await expect(page.locator("[data-cu-deals-count]")).toHaveText("1건");
+    await expect(page.locator("[data-cu-deals-empty]")).toBeHidden();
+    await expect(deal.locator(".cu-deal__title")).toHaveText(NEW_DEAL_TITLE);
+    await expect(deal.locator(".cu-deal__title")).toBeFocused();
+    await expect(deal.locator(".cu-deal__meta")).toHaveText("매매 · 매수인 · 진행 중");
+    await expect(deal).toContainText("아직 일정이 없습니다.");
+    const dealId = await deal.getAttribute("data-cu-deal");
+    expect(dealId).toBe(uuid(900));
+    await expect(deal.locator(`[data-kc-toggle="${dealId}"]`)).toBeVisible();
+    await deal.locator(`[data-cu-ledger-toggle="${dealId}"]`).click();
+    await expect(deal.locator(`[data-cu-ledger="${dealId}"]`)).toContainText("이 거래에 이은 장부 줄이 없습니다.");
+    await expect(deal.getByRole("button", { name: "보수 줄 만들기" })).toBeVisible();
+    expect(calls.all).toContain(`GET /deals/${dealId}`);
+    expect(calls.all.some((line) => line.startsWith("GET /ledger?") && line.includes(`dealId=${dealId}`))).toBe(true);
+
+    // 다시 열면 칸이 비어 있고, '그만두기'는 '새 거래' 단추로 포커스를 돌린다.
+    await open.click();
+    await expect(page.locator("#cu-deal-name")).toHaveValue("");
+    await expect(panel.locator("input:checked")).toHaveCount(0);
+    await expect(page.locator("[data-cu-deals-status]")).toHaveText("");
+    await panel.getByRole("button", { name: "그만두기" }).click();
+    await expect(panel).toBeHidden();
+    await expect(open).toBeFocused();
+
+    await expect(page).toHaveTitle("손님 카드 | 행복한부동산 관리자");
+    await expectNoPersonalTrace(page);
+    expect(decodeURIComponent(page.url())).not.toContain(NEW_DEAL_TITLE);
+    expect(await overflowOf(page)).toBeLessThanOrEqual(0);
+    assertNoErrors();
+  });
+}
+
+test("새 거래: 서버 검사 실패(400)는 그 칸 아래 까닭과 함께 넣던 값을 남기고, 손님이 그사이 지워졌으면 찾지 못했다고 알리며, 저장 뒤 다시 읽기만 실패하면 '다시 불러오기'로 거래를 다시 보내지 않고 읽는다", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const calls = await setup(page, { width: 390, failCustomerReadAfterDeal: true });
+  const seen = await failRequests(page, "POST", (path) => path === "/deals", [failure(400, "VALIDATION_FAILED", ["title"]), failure(400, "VALIDATION_FAILED", ["parties"])]);
+  await page.goto(`/admin/work/customers/detail/?id=${uuid(2)}`);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("가상 손님 2");
+  await expect(page.locator(".cu-deal")).toHaveCount(0);
+  await page.getByRole("button", { name: "새 거래" }).click();
+  const panel = page.locator("[data-cu-deal-panel]");
+  await expect(panel.locator("[data-cu-deal-note]")).toHaveText("계약일·금액·일정은 아직 이 화면에서 넣을 수 없습니다.");
+  await page.locator("#cu-deal-name").fill("가상강변마을 59㎡ 전세");
+  await panel.locator('input[name="cu-deal-type"][value="jeonse"]').check();
+  await expect(panel.locator("[data-cu-deal-role]:visible")).toHaveText(["임차인", "임대인", "기타"]);
+  await panel.locator('input[name="cu-deal-kind"][value="housing"]').check();
+  await panel.locator('input[name="cu-deal-role"][value="tenant"]').check();
+  const save = page.getByRole("button", { name: "거래 저장" });
+  await save.click();
+  await expect(page.locator("[data-cu-deal-status]")).toHaveText("저장하지 못했습니다. 넣은 값의 형식이 맞지 않습니다. 칸을 다시 확인해 주세요.");
+  await expect(page.locator("#cu-deal-name-error")).toHaveText("거래 제목을 확인해 주세요(1 ~ 80자).");
+  await expect(page.locator("#cu-deal-name")).toBeFocused();
+  await expect(page.locator("#cu-deal-name")).toHaveValue("가상강변마을 59㎡ 전세");
+  await expect(panel.locator('input[name="cu-deal-role"][value="tenant"]')).toBeChecked();
+  await expect(save).toBeEnabled();
+  await save.click();
+  await expect(page.locator("[data-cu-deal-status]")).toHaveText("저장하지 못했습니다. 찾지 못했습니다. 다른 화면에서 지웠을 수 있습니다.");
+  await expect(page.locator("#cu-deal-name-error")).toHaveText("");
+  await expect(panel).toBeVisible();
+  expect(seen).toEqual(["/deals", "/deals"]);
+  expect(calls.writes, "실패한 두 번은 가짜 업무 API까지 가지 않음").toEqual([]);
+
+  // 이번에는 저장되지만 바로 뒤 손님 카드 읽기가 실패한다.
+  await save.click();
+  await expect(page.locator("[data-cu-deals-status]")).toHaveText("✓ 거래는 만들었습니다. 다만 손님 카드를 새로 읽지 못해 아래 거래 목록에는 아직 없습니다. '다시 불러오기'를 눌러 주세요.");
+  await expect(panel).toBeHidden();
+  await expect(page.locator(".cu-deal")).toHaveCount(0);
+  const reload = page.locator("[data-cu-deals-reload]");
+  await expect(reload).toBeVisible();
+  await reload.click();
+  await expect(page.locator("[data-cu-deals-status]")).toHaveText("✓ 손님 카드를 새로 읽었습니다.");
+  await expect(reload).toBeHidden();
+  await expect(page.locator(".cu-deal")).toHaveCount(1);
+  await expect(page.locator(".cu-deal .cu-deal__meta")).toHaveText("전세 · 임차인 · 진행 중");
+  expect(calls.writes.filter((item) => item.path === "/deals"), "만든 거래는 하나(다시 불러오기는 거래를 다시 보내지 않음)").toHaveLength(1);
+  await expectNoPersonalTrace(page);
+  assertNoErrors();
+});
+
+test("새 거래: 로그인·보안 확인 만료로 실패하면 새로고침하라고 하지 않고 넣던 칸을 남긴 채 같은 단추로 다시 저장한다", async ({ page }) => {
+  const assertNoErrors = collectErrors(page);
+  const calls = await setup(page, { width: 360 });
+  const seen = await failRequests(page, "POST", (path) => path === "/deals", [authExpired, ...csrfExpired]);
+  await page.goto(`/admin/work/customers/detail/?id=${uuid(3)}`);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("가상 손님 3");
+  await page.getByRole("button", { name: "새 거래" }).click();
+  const panel = page.locator("[data-cu-deal-panel]");
+  await page.locator("#cu-deal-name").fill("가상들판 토지 매매");
+  await panel.locator('input[name="cu-deal-type"][value="sale"]').check();
+  await panel.locator('input[name="cu-deal-kind"][value="land"]').check();
+  await panel.locator('input[name="cu-deal-role"][value="seller"]').check();
+  const save = page.getByRole("button", { name: "거래 저장" });
+  await save.click();
+  await expect(page.locator("[data-cu-deal-status]")).toHaveText(`저장하지 못했습니다. ${AUTH_SAVE}`);
+  await expect(page.locator("#cu-deal-name")).toHaveValue("가상들판 토지 매매");
+  await save.click();
+  await expect(page.locator("[data-cu-deal-status]")).toHaveText(`저장하지 못했습니다. ${CSRF_SAVE}`);
+  await expect(panel.locator('input[name="cu-deal-kind"][value="land"]')).toBeChecked();
+  await expect(panel.locator('input[name="cu-deal-role"][value="seller"]')).toBeChecked();
+  expect(seen).toEqual(["/deals", "/deals", "/deals"]);
+  expect(calls.all.filter((line) => line === "GET /session").length, "보안 확인 만료면 세션을 한 번 다시 읽어 새 토큰으로 보냄").toBeGreaterThanOrEqual(2);
+  await save.click();
+  await expect(page.locator("[data-cu-deals-status]")).toHaveText("✓ 거래를 만들었습니다. 아래 거래 칸에서 장부를 봅니다.");
+  await expect(page.locator(".cu-deal .cu-deal__meta")).toHaveText("매매 · 매도인 · 진행 중");
+  const posts = calls.writes.filter((item) => item.path === "/deals");
+  expect(posts).toHaveLength(1);
+  expect(posts[0].body).toEqual({ title: "가상들판 토지 매매", dealType: "sale", propertyKind: "land", parties: [{ customerId: uuid(3), role: "seller" }] });
+  await expectNoPersonalTrace(page);
+  assertNoErrors();
+
+  await page.getByRole("button", { name: "새 거래" }).click();
+  expect(await asksBeforeLeaving(page), "빈 새 거래 칸은 묻지 않음").toBe(false);
+});
+
+test("새 거래: 제목을 넣던 새 거래 칸이 열려 있으면 떠나기 전에 묻는다", async ({ page }) => {
+  await setup(page, { width: 390 });
+  await page.goto(`/admin/work/customers/detail/?id=${uuid(3)}`);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("가상 손님 3");
+  await page.getByRole("button", { name: "새 거래" }).click();
+  await page.locator("#cu-deal-name").fill("가상숲5단지 전세");
+  expect(await asksBeforeLeaving(page)).toBe(true);
 });

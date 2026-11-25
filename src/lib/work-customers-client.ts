@@ -73,6 +73,8 @@ export interface CustomerFile { id: string; kind: string; mimeType: string; byte
 export interface CustomerDetail { customer: Customer; deals: CustomerDeal[]; notes: Note[]; files: CustomerFile[] }
 export interface Page<T> { items: T[]; nextCursor: string | null }
 export interface CustomerInput { displayName?: string; phoneDigits?: string | null; needs?: string; status?: CustomerStatus }
+// 손님 카드 '새 거래'(POST /work/deals). 참여자는 이 손님 한 명이고, 금액·날짜·규제 칸은 보내지 않아 서버 기본값이 들어간다.
+export interface DealCreateInput { title: string; dealType: string; propertyKind: string; scheduleTarget?: string; parties: { customerId: string; role: string }[] }
 
 let sessionPromise: Promise<CustomerSession> | null = null;
 
@@ -127,6 +129,8 @@ export const createCustomer = (body: CustomerInput) => write<{ customer: Custome
 export const updateCustomer = (id: string, body: CustomerInput & { version: number }) => write<{ customer: Customer }>(`/customers/${idPath(id)}`, "PATCH", body);
 export const deleteCustomer = (id: string, confirmName: string) =>
   write<{ deleted: { customers: number; deals: number; notes: number; files: number; tasks?: number }; kept: { notes: number; ledger?: number }; trash?: TrashRef }>(`/customers/${idPath(id)}`, "DELETE", { confirmName });
+export const createDeal = (body: DealCreateInput) =>
+  write<{ deal: { id: string; title: string; version: number }; parties: { customerId: string; role: string; displayName: string }[] }>("/deals", "POST", body);
 export const listNotes = (query: URLSearchParams) => read<Page<Note>>("/notes", query);
 export const createNote = (body: { body: string; customerId?: string | null }) => write<{ note: Note }>("/notes", "POST", body);
 export const updateNote = (id: string, body: { version: number; body?: string; customerId?: string | null }) => write<{ note: Note }>(`/notes/${idPath(id)}`, "PATCH", body);

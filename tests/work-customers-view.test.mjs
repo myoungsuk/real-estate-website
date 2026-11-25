@@ -22,7 +22,21 @@ import {
   noteListQuery,
   noteTimeText,
   phoneText,
+  DEAL_PROPERTY_KIND_LABELS,
+  DEAL_PROPERTY_KIND_ORDER,
+  DEAL_SCHEDULE_TARGET_LABELS,
+  DEAL_TITLE_MAX,
+  DEAL_TYPE_LABELS,
+  DEAL_TYPE_ORDER,
+  PARTY_ROLE_LABELS,
+  PARTY_ROLE_ORDER,
+  checkDealInput,
+  dealCreateNote,
+  dealRoleChoices,
+  dealServerErrors,
 } from "../src/lib/work/customers-view.mjs";
+import { DEAL_PAYER_SIDES } from "../src/lib/work/ledger-view.mjs";
+import { DEAL_TYPES, OFFICETEL_SCHEDULE_TARGETS, PARTY_ROLES, PROPERTY_KINDS, parseDealCreate } from "../worker/work-input.mjs";
 
 const TODAY = "2026-11-21";
 
@@ -150,4 +164,71 @@ test("손님 카드 주소는 무작위 UUID만 받고 이름·전화는 주소�
   assert.equal(customerHref(id), `/admin/work/customers/detail/?id=${id}`);
   assert.equal(customerIdFromSearch(`?id=${id}`), id);
   for (const search of ["", "?id=가상 손님 1", "?id=01000000001", `?id=${id.toUpperCase()}`, `?id=${id}x`]) assert.equal(customerIdFromSearch(search), null, search);
+});
+
+// 손님 카드 '새 거래'(2026-11-25). 고르기 값은 서버 값과 같아야 하고, 화면 검사를 지난 값은 서버 parseDealCreate도 받아야 한다.
+const CUSTOMER_ID = "3f2b8c1e-5a6d-4e7f-8a9b-0c1d2e3f4a5b";
+
+test("새 거래 고르기 값(거래 종류·물건 종류·오피스텔 일정 기준·역할)은 서버 허용 값과 같고, 이름이 모두 있다", () => {
+  assert.deepEqual([...DEAL_TYPE_ORDER], [...DEAL_TYPES]);
+  assert.deepEqual([...DEAL_PROPERTY_KIND_ORDER], [...PROPERTY_KINDS]);
+  assert.deepEqual(Object.keys(DEAL_SCHEDULE_TARGET_LABELS), [...OFFICETEL_SCHEDULE_TARGETS]);
+  assert.deepEqual([...PARTY_ROLE_ORDER], [...PARTY_ROLES]);
+  for (const value of DEAL_TYPE_ORDER) assert.ok(DEAL_TYPE_LABELS[value], value);
+  for (const value of DEAL_PROPERTY_KIND_ORDER) assert.ok(DEAL_PROPERTY_KIND_LABELS[value], value);
+  for (const value of PARTY_ROLE_ORDER) assert.ok(PARTY_ROLE_LABELS[value], value);
+  assert.equal(DEAL_TITLE_MAX, 80);
+});
+
+test("새 거래 역할: 거래 종류의 두 쪽(매출장부와 같은 짝) + 기타, 거래 종류를 고르기 전에는 다섯 가지", () => {
+  for (const [dealType, sides] of Object.entries(DEAL_PAYER_SIDES)) assert.deepEqual(dealRoleChoices(dealType), [...sides, "other"], dealType);
+  assert.deepEqual([...dealRoleChoices("")], [...PARTY_ROLE_ORDER]);
+  assert.deepEqual([...dealRoleChoices("모름")], [...PARTY_ROLE_ORDER]);
+});
+
+test("새 거래 검사: 빈 칸·긴 제목·오피스텔 일정 기준·거래와 맞지 않는 역할은 칸별 문장으로 막는다", () => {
+  const empty = checkDealInput({}, CUSTOMER_ID);
+  assert.equal(empty.ok, false);
+  assert.deepEqual(Object.keys(empty.errors).sort(), ["dealType", "propertyKind", "role", "title"]);
+  assert.match(empty.errors.title, /거래 제목을 넣어 주세요/u);
+  assert.equal(checkDealInput({ title: "   ", dealType: "sale", propertyKind: "housing", role: "buyer" }, CUSTOMER_ID).errors.title, empty.errors.title, "공백만은 빈 제목");
+  const long = checkDealInput({ title: "가".repeat(81), dealType: "sale", propertyKind: "housing", role: "buyer" }, CUSTOMER_ID);
+  assert.deepEqual(long.errors, { title: "거래 제목은 80자까지 넣을 수 있습니다." });
+  assert.equal(checkDealInput({ title: ` ${"가".repeat(80)} `, dealType: "sale", propertyKind: "housing", role: "buyer" }, CUSTOMER_ID).ok, true, "앞뒤 공백은 빼고 센다");
+  assert.deepEqual(checkDealInput({ title: "가상 거래", dealType: "sale", propertyKind: "officetel", role: "buyer" }, CUSTOMER_ID).errors, { scheduleTarget: "오피스텔 일정 기준을 골라 주세요." });
+  assert.deepEqual(checkDealInput({ title: "가상 거래", dealType: "sale", propertyKind: "officetel", scheduleTarget: "toString", role: "buyer" }, CUSTOMER_ID).errors, { scheduleTarget: "오피스텔 일정 기준을 골라 주세요." }, "물려받은 속성 이름은 값이 아님");
+  assert.deepEqual(checkDealInput({ title: "가상 거래", dealType: "sale", propertyKind: "housing", role: "tenant" }, CUSTOMER_ID).errors, { role: "이 손님이 거래에서 어느 쪽인지 골라 주세요." });
+  assert.deepEqual(checkDealInput({ title: "가상 거래", dealType: "rent", propertyKind: "flat", role: "buyer" }, CUSTOMER_ID).errors, { dealType: "거래 종류를 골라 주세요.", propertyKind: "물건 종류를 골라 주세요." });
+});
+
+test("새 거래 검사를 지난 값은 제목을 다듬고 이 손님 한 명을 참여자로 붙이며, 모든 조합을 서버 parseDealCreate가 받는다", () => {
+  const ok = checkDealInput({ title: "  가상숲5단지 84㎡ 매매 ", dealType: "sale", propertyKind: "housing", scheduleTarget: "housing", role: "buyer" }, CUSTOMER_ID);
+  assert.deepEqual(ok, { ok: true, value: { title: "가상숲5단지 84㎡ 매매", dealType: "sale", propertyKind: "housing", parties: [{ customerId: CUSTOMER_ID, role: "buyer" }] } }, "주택이면 일정 기준을 보내지 않음");
+  for (const dealType of DEAL_TYPE_ORDER) {
+    for (const propertyKind of DEAL_PROPERTY_KIND_ORDER) {
+      for (const role of dealRoleChoices(dealType)) {
+        const scheduleTarget = propertyKind === "officetel" ? "housing" : "";
+        const checked = checkDealInput({ title: "가상 거래", dealType, propertyKind, scheduleTarget, role }, CUSTOMER_ID);
+        assert.equal(checked.ok, true, `${dealType}/${propertyKind}/${role}`);
+        const parsed = parseDealCreate(checked.value);
+        assert.equal(parsed.deal.dealType, dealType);
+        assert.equal(parsed.deal.propertyKind, propertyKind);
+        assert.equal(parsed.deal.scheduleTarget, propertyKind === "officetel" ? "housing" : null);
+        assert.deepEqual(parsed.parties, [{ customerId: CUSTOMER_ID, role }]);
+      }
+    }
+  }
+});
+
+test("새 거래 서버 검사 실패: 칸 이름은 그 칸 아래 문장으로, parties는 손님을 찾지 못한 것으로 본다", () => {
+  assert.deepEqual(dealServerErrors(["title"]), { fields: { title: "거래 제목을 확인해 주세요(1 ~ 80자)." }, missingCustomer: false });
+  assert.deepEqual(dealServerErrors(["parties"]), { fields: {}, missingCustomer: true });
+  assert.deepEqual(dealServerErrors(["scheduleTarget", "body"]), { fields: { scheduleTarget: "오피스텔 일정 기준을 다시 골라 주세요." }, missingCustomer: false });
+  assert.deepEqual(dealServerErrors(), { fields: {}, missingCustomer: false });
+  assert.deepEqual(dealServerErrors(["constructor"]), { fields: {}, missingCustomer: false });
+});
+
+test("새 거래 칸 안내: AI 일정 뽑기가 켜졌을 때만 그 길을 알려 준다", () => {
+  assert.match(dealCreateNote({ aiReady: true }), /'AI로 일정 뽑기'/u);
+  assert.equal(dealCreateNote({ aiReady: false }), "계약일·금액·일정은 아직 이 화면에서 넣을 수 없습니다.");
 });
