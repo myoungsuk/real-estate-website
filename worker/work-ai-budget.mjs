@@ -92,6 +92,13 @@ export function settleUsageStatement(db, { draftId, day, reservedCostMicroUsd, a
   return db.prepare(SETTLE_SQL).bind(day, reservedCostMicroUsd, actualCostMicroUsd, inputTokens, outputTokens, draftId);
 }
 
+// 글 초안 카드 배경 그림(설계서 22.22절)처럼 행을 남기지 않는 동기 요청의 바로잡기. 한 요청에서 한 번만 부른다(조건 없음).
+const SETTLE_UNCONDITIONAL_SQL = `UPDATE ai_usage_daily SET estimated_cost_micro_usd = MAX(estimated_cost_micro_usd - ?2 + ?3, 0),
+  input_tokens = input_tokens + ?4, output_tokens = output_tokens + ?5 WHERE day = ?1`;
+export function settleUnconditionalStatement(db, { day, reservedCostMicroUsd, actualCostMicroUsd, inputTokens, outputTokens }) {
+  return db.prepare(SETTLE_UNCONDITIONAL_SQL).bind(day, reservedCostMicroUsd, actualCostMicroUsd, inputTokens, outputTokens);
+}
+
 const LIMITS_GUARD_SQL = "SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM settings WHERE key = ?1 AND value_json = ?2) THEN json('guard') ELSE 1 END AS ok";
 const UPSERT_SETTING_SQL = `INSERT INTO settings (key, value_json, updated_at) VALUES (?1, ?2, ?3)
 ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at`;
