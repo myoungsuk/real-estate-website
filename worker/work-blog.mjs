@@ -385,10 +385,22 @@ function parseResultText(text) {
   }
 }
 
+// 서버가 기다리는 끝(2026-11-25 사용자 결정 "30분"). 만든 지 이 시간이 지나도 끝나지 않은 초안은 실패로 닫는다(끝없는 조회 방지).
+// 토큰 수를 모르므로 미리 더한 최대 예상 비용을 실제 비용으로 남긴다(예산을 적게 세지 않게). OpenAI 쪽 요청은 취소하지 않는다.
+export const BLOG_WAIT_MAX_MS = 30 * 60 * 1000;
+// 1분 예약(work-blog-cron.mjs)이 한 번에 보는 열린 초안 수와, 만든 지 얼마 안 된 초안만 보는 범위.
+// 열린 초안은 30분이면 닫히므로 최근 24시간만 본다(created_at 색인으로 그 범위 행만 읽음. 예약이 하루 넘게 멈춘 뒤 남은 초안은 화면에서 열 때 닫힌다).
+export const BLOG_POLL_MAX_ROWS = 10;
+export const BLOG_POLL_LOOKBACK_MS = 24 * 60 * 60 * 1000;
+export const OPEN_DRAFTS_SQL = `SELECT ${DRAFT_COLUMNS} FROM blog_drafts
+  WHERE created_at >= ?1 AND status IN ('queued','in_progress') AND closed IS NULL ORDER BY created_at, id LIMIT ?2`;
+
 // 진행 중인 초안의 OpenAI 상태를 1번 본다. 돌려주는 값: 바뀌었으면 batch 문장들, 아니면 [].
-async function pollDraft(context, row) {
+// 화면 조회(getBlogDraft)와 1분 예약이 같이 쓴다. 그 사이 다른 쪽이 먼저 닫았으면 guard 때문에 아무것도 바뀌지 않는다.
+export async function pollDraft(context, row) {
   const { db, env, requestId, now, auditLog, openaiFetch } = context;
   const at = iso(now);
+  const waitOver = now - Date.parse(row.created_at) > BLOG_WAIT_MAX_MS;
   const stmtsFor = (status, fields) => {
     const { resultJson = null, checkJson = null, errorCode = null, tokens = null } = fields;
     const settle = [];
@@ -417,12 +429,14 @@ async function pollDraft(context, row) {
     if (code === "AI_NOT_FOUND") {
       return now - Date.parse(row.created_at) > BLOG_RESULT_KEEP_MS ? stmtsFor("expired", { errorCode: "AI_RESULT_EXPIRED" }) : stmtsFor("unknown", { errorCode: "AI_STATE_UNKNOWN" });
     }
-    return []; // 네트워크·5xx: 그대로 두고 다음 조회에서 다시 본다.
+    // 네트워크·5xx: 그대로 두고 다음 조회에서 다시 본다. 다만 기다리는 끝이 지났으면 닫는다.
+    return waitOver ? stmtsFor("failed", { errorCode: "AI_WAIT_TIMEOUT", tokens: { input: 0, output: 0, known: false } }) : [];
   }
   const output = readResponseOutput(json);
   logOpenAi(auditLog, { requestId, model: row.model, effort: row.reasoning_effort, status: output.status, inputTokens: output.inputTokens, outputTokens: output.outputTokens, ms: Date.now() - started });
   const tokens = { input: output.inputTokens, output: output.outputTokens, known: output.usageKnown };
   if (output.status === "queued" || output.status === "in_progress") {
+    if (waitOver) return stmtsFor("failed", { errorCode: "AI_WAIT_TIMEOUT", tokens: { input: 0, output: 0, known: false } });
     return output.status !== row.status ? stmtsFor(output.status, {}) : [];
   }
   if (output.status === "completed") {

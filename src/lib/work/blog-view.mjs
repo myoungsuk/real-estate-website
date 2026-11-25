@@ -10,6 +10,8 @@ export const BLOG_POLL_SLOW_MS = 15_000;
 export const BLOG_POLL_FAST_FOR_MS = 60_000;
 // OpenAI가 결과를 잠시 맡아 두는 시간(worker/work-blog.mjs BLOG_RESULT_KEEP_MS와 같은 값).
 export const BLOG_RESULT_KEEP_MINUTES = 10;
+// 서버(1분 예약·화면 조회)가 끝나지 않는 글을 기다리는 끝(worker/work-blog.mjs BLOG_WAIT_MAX_MS와 같은 값).
+export const BLOG_WAIT_MAX_MINUTES = 30;
 export const BLOG_RETENTION_DAYS = 30;
 export const BLOG_SOURCE_PAGE_SIZE = 10;
 
@@ -168,7 +170,8 @@ export const isOpenStatus = (status) => status === "queued" || status === "in_pr
 export function failView(draft) {
   const cost = "비용은 들었을 수 있습니다(추정). 다시 만들면 새 비용이 듭니다.";
   const table = {
-    AI_RESULT_EXPIRED: ["결과를 받지 못했습니다(10분 지남)", `화면을 닫은 사이 ${BLOG_RESULT_KEEP_MINUTES}분이 지나 AI 쪽에 잠시 맡겨 둔 결과가 사라졌습니다. ${cost}`],
+    AI_RESULT_EXPIRED: ["결과를 받지 못했습니다(10분 지남)", `서버가 받기 전에 ${BLOG_RESULT_KEEP_MINUTES}분이 지나 AI 쪽에 잠시 맡겨 둔 결과가 사라졌습니다. ${cost}`],
+    AI_WAIT_TIMEOUT: [`${BLOG_WAIT_MAX_MINUTES}분을 기다렸지만 글이 끝나지 않았습니다`, `서버가 ${BLOG_WAIT_MAX_MINUTES}분 동안 확인했지만 AI가 글을 끝내지 못해 그만 기다립니다. ${cost}`],
     AI_STATE_UNKNOWN: ["AI 요청이 만들어졌는지 확인하지 못했습니다", `보낸 뒤 답을 받지 못했습니다. 이 초안은 결과를 받을 수 없습니다. ${cost}`],
     AI_RESULT_INVALID: ["AI 답이 정해진 모양이 아니었습니다", `글을 쓸 수 없어 버렸습니다(원문은 저장하지 않음). ${cost}`],
     AI_RESULT_INCOMPLETE: ["AI 답이 중간에 끊겼습니다", `글이 다 나오지 않아 버렸습니다. ${cost}`],

@@ -1917,6 +1917,18 @@ html:has(.rt-pick-bar:not([hidden])) { scroll-padding-bottom: calc(var(--rt-pick
 .bl-fail p { margin: 0 0 10px; color: var(--ds-ink); line-height: 1.6; }
 .bl-fail__actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .bl-fail__actions .work-primary-button { flex: 1 1 200px; width: auto; }
+/* 기다리던 글 알림(맨 위, 화면을 닫은 동안 서버가 받아 둔 글. 2026-11-25) */
+.bl-waited { display: grid; gap: 8px; margin: 0 0 14px; }
+.bl-waited__item { display: grid; gap: 12px; align-items: center; padding: 14px 16px; border: 1.5px solid var(--ad-primary); border-left-width: 6px; border-radius: var(--ad-radius); background: var(--ds-paper); }
+.bl-waited__item[data-state="failed"] { border-color: var(--ds-stamp); background: var(--ad-bad-soft); }
+.bl-waited__item p { min-width: 0; margin: 0; color: var(--ds-ink); line-height: 1.5; overflow-wrap: anywhere; }
+.bl-waited__item strong, .bl-waited__item span { display: block; }
+.bl-waited__item strong { color: var(--ad-primary-dark); font-size: 1.1rem; }
+.bl-waited__item[data-state="failed"] strong { color: var(--ds-stamp); }
+@media (min-width: 700px) {
+  .bl-waited__item { grid-template-columns: minmax(0, 1fr) auto; }
+  .bl-waited__item button { width: auto; padding: 0 22px; }
+}
 .bl-picked { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 8px 8px 8px 14px; border: 1px solid var(--ds-edge); border-left: 4px solid var(--ds-navy); border-radius: var(--ad-radius); background: var(--ds-paper); }
 .bl-picked p { flex: 1; min-width: 0; margin: 0; color: var(--ds-ink); line-height: 1.5; overflow-wrap: anywhere; }
 .bl-picked p span { display: block; color: var(--ds-ink-soft); font-size: 1rem; }
@@ -1968,7 +1980,7 @@ html:has(.rt-pick-bar:not([hidden])) { scroll-padding-bottom: calc(var(--rt-pick
 }
 @media (min-width: 980px) {
   .bl-doc { max-width: 1180px; }
-  .bl-steps, .bl-fail, .bl-wait, .bl-fold, .bl-picked { max-width: 760px; }
+  .bl-steps, .bl-fail, .bl-wait, .bl-waited, .bl-fold, .bl-picked { max-width: 760px; }
   .bl-picked p span { display: inline; }
   .bl-picked p span::before { content: " · "; }
   .bl-result { grid-template-columns: minmax(0, 1fr) 360px; align-items: start; gap: 28px; }

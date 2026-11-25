@@ -224,8 +224,8 @@ test("글 초안 사용 안내 숫자는 서버·화면 상수와 맞다", async
   assert.equal(facts.blogPollFastSeconds * 1000, view.BLOG_POLL_FAST_MS, "처음 확인 간격");
   assert.equal(facts.blogPollSlowSeconds * 1000, view.BLOG_POLL_SLOW_MS, "1분 뒤 확인 간격");
   assert.equal(view.BLOG_POLL_FAST_FOR_MS, 60_000, "처음 간격은 1분 동안");
-  assert.equal(facts.blogResultKeepMinutes * 60 * 1000, blog.BLOG_RESULT_KEEP_MS, "결과 맡아 두는 시간");
-  assert.equal(facts.blogResultKeepMinutes, view.BLOG_RESULT_KEEP_MINUTES, "화면 문구의 결과 맡아 두는 시간");
+  assert.equal(facts.blogWaitMaxMinutes * 60 * 1000, blog.BLOG_WAIT_MAX_MS, "서버가 기다리는 끝");
+  assert.equal(facts.blogWaitMaxMinutes, view.BLOG_WAIT_MAX_MINUTES, "화면 문구의 기다리는 끝");
   assert.equal(facts.blogRetentionDays, blog.BLOG_RETENTION_DAYS, "보관 기간");
   assert.equal(facts.blogRetentionDays, view.BLOG_RETENTION_DAYS, "화면 문구의 보관 기간");
 });

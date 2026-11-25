@@ -9,6 +9,8 @@ import { complexCardData } from "../../../lib/work/blog-cards.mjs";
 // - 명시사항은 AI가 아니라 코드(ad-disclosure.mjs)가 붙인다. 빈 칸이 있으면 만들기부터 막는다(같은 결정).
 // - 소재지는 매번 직접 넣고 어디에도 저장하지 않는다(브라우저·D1·OpenAI 모두). 다시 열면 다시 넣어야 복사가 풀린다.
 // - 입력값·글 본문은 브라우저 저장소·주소에 넣지 않는다. 글을 고친 것은 서버에 저장하지 않으므로 떠날 때 경고한다.
+// - 만드는 중에 화면을 닫아도 서버(1분 예약)가 글을 받아 둔다. 이 브라우저가 기다리던 초안 번호(UUID)만 브라우저 저장소에 기억했다가
+//   다시 열면 맨 위에서 알린다(work-blog-wait.ts, 2026-11-25 사용자 결정 "추천대로"). 글·제목·단지 이름·소재지는 넣지 않는다.
 // - 카드 그림(2026-11-23 사용자 선택 "B 큰 숫자 인포그래픽"·"3장 한 벌"): 단지 숫자는 빌드 때 공개 단지 자료에서만 줄여 싣고, AI 글에서 가져오지 않는다.
 const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).replace(/</gu, "\\u003c");
 ---
@@ -27,6 +29,7 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
       <span class="admin-stage-badge">AI 초안</span>
     </header>
     <p class="bl-usage" data-bl-usage hidden><span data-bl-usage-text></span><a href="#bl-limits" data-bl-usage-link>한도</a></p>
+    <div class="bl-waited" role="status" data-bl-waited hidden></div>
 
     <AdminPageHelp page="/admin/work/blog/" />
     <p class="work-doc__notice">
@@ -137,7 +140,7 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
         <h2 id="bl-wait-title" tabindex="-1">글을 만들고 있습니다</h2>
         <p role="status" data-bl-wait-text></p>
         <p>보통 1 ~ 3분 걸립니다(추정). 처음 1분은 5초마다, 그 뒤에는 15초마다 확인합니다.</p>
-        <p class="bl-wait__note">화면을 닫아도 됩니다. <strong>10분 안에</strong> '보관 중인 초안'에서 다시 열면 결과를 받습니다. 10분이 지나면 결과를 잃고, 다시 만들면 새 비용이 듭니다.</p>
+        <p class="bl-wait__note"><strong>화면을 닫거나 휴대폰을 꺼도 됩니다.</strong> 다 만든 글은 서버가 받아 '보관 중인 초안'에 넣어 둡니다. 이 기기에서 이 화면을 다시 열면 맨 위에서 알려 드립니다. 30분이 지나도 끝나지 않으면 만들지 못한 것으로 닫습니다.</p>
         <button class="work-secondary-button" type="button" data-bl-cancel>만들기 취소</button>
       </section>
 
@@ -267,6 +270,7 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
     import { matchesBlogSourceQuery } from "../../../lib/work/blog-sources.mjs";
     import { todayInKorea } from "../../../lib/work/legal-dates.mjs";
     import { renderBlogCards, type BlogCard } from "../../../lib/work-blog-card";
+    import { createBlogWaitNotice } from "../../../lib/work-blog-wait";
     import { createDisclosureFields, keepHeight, releaseHeight, type FieldState } from "../../../lib/work-disclosure-fields";
     import {
       BLOG_SOURCE_PAGE_SIZE,
@@ -342,6 +346,8 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
         const waitPanel = pick("[data-bl-wait]");
         const waitText = pick("[data-bl-wait-text]");
         const cancelButton = pick<HTMLButtonElement>("[data-bl-cancel]");
+        // 기다리던 글 알림(맨 위). 만드는 중인 초안 번호만 이 브라우저에 기억한다.
+        const waited = createBlogWaitNotice(pick("[data-bl-waited]"), (id) => void openDraft(id));
         const resultPanel = pick("[data-bl-result]");
         const resultMeta = pick("[data-bl-result-meta]");
         const sourceGone = pick("[data-bl-source-gone]");
@@ -813,6 +819,7 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
         function showDraft(next: BlogDraft) {
           draft = next;
           pollSeq += 1;
+          waited.track(next);
           renderPicked();
           if (isOpenStatus(next.status) && !next.closed) {
             setMode("wait");
@@ -1294,6 +1301,7 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
           if (nextDrafts.status === "fulfilled") {
             drafts = nextDrafts.value.items;
             renderDrafts();
+            waited.sync(drafts, mode === "wait" && draft ? draft.id : null);
           }
         }
 
@@ -1329,6 +1337,7 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
           renderLimits();
           limitsFold.open = !limitsView(limits).saved;
           renderDrafts();
+          waited.sync(drafts);
           renderSources();
           setMode("compose");
           renderSteps();
