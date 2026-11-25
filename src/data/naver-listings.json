@@ -1064,6 +1064,48 @@
       "registeredAt": "2026-11-21",
       "source": "네이버페이 부동산",
       "url": "https://fin.land.naver.com/articles/2663243981"
+    },
+    {
+      "id": "2660284315",
+      "title": "천동 복합상가",
+      "propertyType": "상가점포",
+      "tradeType": "monthly-rent",
+      "priceLabel": "6,000/355",
+      "areaLabel": "계약 299.04㎡ · 전용 168.8㎡",
+      "floorLabel": "4/6층",
+      "direction": null,
+      "summary": "네이버에 공개된 광고 매물입니다. 자세한 조건은 상세 화면에서 확인해 주세요.",
+      "registeredAt": "2026-11-07",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2660284315"
+    },
+    {
+      "id": "2660054276",
+      "title": "천동 복합상가",
+      "propertyType": "상가점포",
+      "tradeType": "monthly-rent",
+      "priceLabel": "1억 6,000/830",
+      "areaLabel": "계약 716.23㎡ · 전용 404.3㎡",
+      "floorLabel": "6/6층",
+      "direction": null,
+      "summary": "네이버에 공개된 광고 매물입니다. 자세한 조건은 상세 화면에서 확인해 주세요.",
+      "registeredAt": "2026-11-06",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2660054276"
+    },
+    {
+      "id": "2659251557",
+      "title": "천동 복합상가",
+      "propertyType": "상가점포",
+      "tradeType": "monthly-rent",
+      "priceLabel": "3,000/180",
+      "areaLabel": "계약 147.89㎡ · 전용 83.48㎡",
+      "floorLabel": "6/6층",
+      "direction": null,
+      "summary": "네이버에 공개된 광고 매물입니다. 자세한 조건은 상세 화면에서 확인해 주세요.",
+      "registeredAt": "2026-11-02",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2659251557"
     }
   ]
 }
