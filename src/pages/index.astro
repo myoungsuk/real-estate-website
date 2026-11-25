@@ -2,6 +2,7 @@
 import BaseLayout from "../layouts/BaseLayout.astro";
 import ExternalContentList from "../components/ExternalContentList.astro";
 import HomeBlogLead from "../components/HomeBlogLead.astro";
+import HomeYoutubeLead from "../components/HomeYoutubeLead.astro";
 import HomeWindowHero from "../components/HomeWindowHero.astro";
 import NaverListingPager from "../components/NaverListingPager.astro";
 import { homeContent, publishedBlogContents, publishedInstagramContents, publishedYoutubeVideoContents } from "../lib/content";
@@ -235,7 +236,10 @@ const structuredData = {
         </div>
         <div class="home-notes__group" id="youtube">
           <h3 id="youtube-heading">유튜브</h3>
-          <ExternalContentList items={homeYoutubeContents} emptyLabel="공개할 일반 영상을 준비하고 있습니다." pageSize={6} categoryLabel="유튜브 일반 영상" paginate={false} hoverPreview variant="note" />
+          {/* 2026-11-25: 최신 일반 영상 1개 크게 + 5개 줄 목록(블로그 칸과 같은 짜임). Shorts는 넣지 않는다 */}
+          {homeYoutubeContents.length > 0
+            ? <HomeYoutubeLead items={homeYoutubeContents} />
+            : <ExternalContentList items={homeYoutubeContents} emptyLabel="공개할 일반 영상을 준비하고 있습니다." pageSize={6} categoryLabel="유튜브 일반 영상" paginate={false} hoverPreview variant="note" />}
           <a class="home-more" href="/youtube/">유튜브 전체 보기</a>
         </div>
         <div class="home-notes__group" id="instagram">
