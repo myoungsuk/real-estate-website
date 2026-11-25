@@ -40,6 +40,7 @@ import {
   saveLimitsStatements,
   settleUsageStatement,
 } from "./work-ai-budget.mjs";
+import { createBlogBackgrounds } from "./work-blog-backgrounds.mjs";
 import { auditStatement, runBatch } from "./work-audit.mjs";
 import { invalid, isUuid } from "./work-input.mjs";
 import { WorkApiError } from "./work-security.mjs";
@@ -572,6 +573,10 @@ export async function routeBlog(context) {
     }
     if (method !== "POST") throw methodNotAllowed("POST");
     return closeBlogDraft(context, id, action, body);
+  }
+  if (route === "/blog/backgrounds") {
+    if (method !== "POST") throw methodNotAllowed("POST");
+    return createBlogBackgrounds(context, body);
   }
   throw notFound();
 }
