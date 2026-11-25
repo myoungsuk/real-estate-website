@@ -815,6 +815,29 @@ test("2026-11-23 대표 현장 메모: 500자까지 받고 숫자 표기만 남�
   assert.equal(emphasisNumbersOf(`${"2억 6,000만 원 ".repeat(60)}`).length, EMPHASIS_MAX, "숫자 표기 모음도 500자까지");
 });
 
+test("TK-189 빈 머리말은 서버도 뺀다: 머리말 단추만 누른 메모는 메모 없이 만든 것과 같은 요청이 되고, 쓴 줄만 AI에 간다(2026-11-25)", async (t) => {
+  installNetworkTrap(t);
+  const sent = async (emphasis) => {
+    const { database, env } = blogDb();
+    await setLimits(env);
+    const openai = scriptedOpenAi([{ kind: "create", respond: created("resp_fake_heads") }]);
+    const made = await work(env, "/blog/drafts", { method: "POST", body: { source: COMPLEX, style: "story", ...(emphasis === undefined ? {} : { emphasis }) }, openaiFetch: openai.fetcher });
+    assert.equal(made.status, 201, JSON.stringify(made.json));
+    const [row] = draftRows(database);
+    return { payload: JSON.parse(openai.calls[0].body.input[0].content[0].text), stored: JSON.parse(row.disclosure_json) };
+  };
+  const none = await sent(undefined);
+  assert.equal(none.payload.emphasis, null);
+  for (const memo of ["직접 본 것: ", "직접 본 것: \n역·교통: \n학교:", "  단지 시설 :  "]) {
+    const heads = await sent(memo);
+    assert.deepEqual(heads.payload, none.payload, `AI에 가는 자료가 메모 없이 만든 것과 같음: ${JSON.stringify(memo)}`);
+    assert.deepEqual(heads.stored, none.stored);
+  }
+  const mixed = await sent("직접 본 것: \n역·교통: 가상역 걸어서 8분\n학교: ");
+  assert.equal(mixed.payload.emphasis, "역·교통: 가상역 걸어서 8분", "쓴 줄만 감");
+  assert.equal((await sent("주차: ")).payload.emphasis, "주차:", "단추에 없는 머리말은 사용자가 쓴 줄이라 그대로(앞뒤 공백만 정리)");
+});
+
 test("기본은 번들 자료: 가상 매물을 넣지 않으면 /blog/sources·만들기는 운영과 같은 번들 공개 자료를 쓰고, 넣은 가상 매물은 그 호출에만 쓰인다", async (t) => {
   installNetworkTrap(t);
   assert.strictEqual(blogSourcesFor(undefined), blogSources(), "옵션이 없으면 모듈 상수 그대로");

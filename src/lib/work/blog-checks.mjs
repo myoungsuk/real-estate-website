@@ -64,6 +64,24 @@ export const BLOG_RESULT_LIMITS = Object.freeze({ title: 60, paragraphs: 12, par
   instagram: 1200, threads: 500 });
 export const EMPHASIS_MAX = 500;
 export const LOCATION_MAX = 100;
+
+// ── 현장 메모 머리말 ──
+// 화면의 '빠르게 넣기' 단추가 메모 칸에 넣는 머리말("역·교통: "). 화면 단추(blog-style-view.mjs)와 서버가 같이 쓴다.
+export const MEMO_HEADS = Object.freeze({
+  listing: Object.freeze(["역·교통", "학교", "상권", "수리·상태", "전망·채광"]),
+  complex: Object.freeze(["역·교통", "학교", "상권", "단지 시설"]),
+});
+const KNOWN_MEMO_HEADS = new Set([...MEMO_HEADS.listing, ...MEMO_HEADS.complex, ...BLOG_STYLES.map((style) => style.memoHead).filter(Boolean)]);
+// 단추가 넣은 머리말만 있고 뒤에 쓴 글이 없는 줄("학교: ")인지. 단추가 아는 머리말만 본다(사용자가 직접 쓴 "주차:" 같은 줄은 건드리지 않음).
+const isEmptyMemoHeadLine = (line) => {
+  const text = line.trim();
+  return text.endsWith(":") && KNOWN_MEMO_HEADS.has(text.slice(0, -1).trimEnd());
+};
+// 머리말만 있는 줄을 뺀 메모(앞뒤 공백 정리). 단추만 누르고 글을 쓰지 않은 메모는 빈 글자가 된다.
+// 빈 메모 알림(memoNeedText)과 AI에 보내는 메모(validateEmphasis)가 같이 써서, 화면이 비었다고 본 메모는 서버도 빈 메모로 받는다.
+export function dropEmptyMemoHeads(value) {
+  return String(value ?? "").split("\n").filter((line) => !isEmptyMemoHeadLine(line)).join("\n").trim();
+}
 const DIRECTIONS = new Set(["동향", "서향", "남향", "북향", "남동향", "남서향", "북동향", "북서향"]);
 const MOVE_IN_PARTS = new Set(["초순", "중순", "하순"]);
 const INPUT_KEYS = new Set(["location", "areaM2", "kind", "violation", "totalFloors", "floorMode", "floorNumber", "floorBand", "moveIn", "rooms", "bathrooms",
@@ -206,7 +224,8 @@ export function validateBlogInputs(raw, { officePhone = "" } = {}) {
 export function validateEmphasis(raw, { officePhone = "" } = {}) {
   if (raw === undefined || raw === null || raw === "") return { emphasis: "", error: false, personal: false };
   if (typeof raw !== "string" || raw.length > EMPHASIS_MAX || /[\u0000-\u0009\u000b-\u001f\u007f]/u.test(raw)) return { emphasis: "", error: true, personal: false };
-  const emphasis = raw.trim();
+  // 머리말만 있는 줄("학교: ")은 사실이 아니라 빈 칸이므로 빼고 받는다(화면이 보내기 전과 서버가 받은 뒤 둘 다 이 함수를 지난다).
+  const emphasis = dropEmptyMemoHeads(raw);
   return { emphasis, error: false, personal: findPersonalPatterns(emphasis, { officePhone, checkUnit: true }).length > 0 };
 }
 

@@ -70,6 +70,17 @@ test("TK-181 메모 알림: 재건축·재개발, 시황·타이밍, 경험담�
   assert.ok(memoNeedText("redevelop", "  \n").startsWith("'재건축·재개발' 글은"));
   assert.ok(memoNeedText("market", null).startsWith("'시황·타이밍' 글은"));
   assert.equal(memoNeedText("story", "직접 본 것: 거실 창이 넓음"), "");
+  // 2026-11-25: 머리말 단추만 누른 메모는 빈 메모다(단추가 알림을 끄지 않음).
+  assert.ok(memoNeedText("story", "직접 본 것: ").startsWith("'경험담' 글은"));
+  assert.ok(memoNeedText("market", "최근 거래: \n역·교통: \n학교:").startsWith("'시황·타이밍' 글은"));
+  assert.equal(memoNeedText("story", "직접 본 것: \n학교: 가상초등학교가 단지 옆"), "", "한 줄이라도 쓴 글이 있으면 알리지 않음");
+  assert.equal(memoNeedText("story", "주차: "), "", "단추에 없는 머리말은 사용자가 쓴 글로 봄");
+  for (const style of BLOG_STYLES.filter((item) => item.memoHead)) {
+    for (const source of [SALE, COMPLEX]) {
+      const pressed = memoQuickHeads(source, style.id).reduce((value, head) => addMemoHead(value, head).value, "");
+      assert.notEqual(memoNeedText(style.id, pressed), "", `${style.id}: 보이는 단추를 모두 누르기만 한 메모(${pressed.split("\n").length}줄)`);
+    }
+  }
   for (const style of BLOG_STYLES.filter((item) => !item.memoHead)) assert.equal(memoNeedText(style.id, ""), "", style.id);
   assert.equal(memoNeedText("zz-none", ""), "");
 });

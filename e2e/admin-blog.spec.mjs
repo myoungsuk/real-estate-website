@@ -697,10 +697,19 @@ test("글 초안 글 성격·빠르게 넣기 360px: 묶음 넷에 21가지가 �
   await expect(page.locator("[data-bl-memo-note]")).toHaveText("머리말을 넣으면 500자를 넘습니다. 글을 줄인 뒤 다시 눌러 주세요.");
   await memo.fill("");
   await page.locator("[data-bl-quick] button", { hasText: "직접 본 것" }).click();
+  // 머리말 단추만 누른 메모는 빈 메모다: 알림이 그대로 있고, 글을 써야 사라진다(2026-11-25).
+  await expect(memo).toHaveValue("직접 본 것: ");
+  await expect(page.locator("[data-bl-memo-note]")).toHaveText("'경험담' 글은 이 칸에 확인한 사실을 적어야 글이 됩니다. 비워 두면 평범한 소개 글이 됩니다(그대로 만들 수는 있습니다).");
+  await page.locator("[data-bl-quick] button", { hasText: "역·교통" }).click();
+  await expect(page.locator("[data-bl-memo-note]"), "머리말을 더 눌러도 빈 메모").toBeVisible();
+  await memo.fill("");
+  await page.locator("[data-bl-quick] button", { hasText: "직접 본 것" }).click();
   await page.keyboard.type("오후에 놀이터 쪽이 조용함");
   await expect(page.locator("[data-bl-memo-note]")).toBeHidden();
+  await page.locator("[data-bl-quick] button", { hasText: "학교" }).click();
+  await expect(memo).toHaveValue("직접 본 것: 오후에 놀이터 쪽이 조용함\n학교: ");
 
-  // 만들기 요청에는 고른 성격의 id와 메모가 그대로 간다. 메모는 브라우저 저장소·주소에 남지 않는다.
+  // 만들기 요청에는 고른 성격의 id와 메모가 간다(머리말만 있는 '학교: ' 줄은 빼고 보냄). 메모는 브라우저 저장소·주소에 남지 않는다.
   await page.getByRole("button", { name: "글 초안 만들기" }).click();
   await expect(page.locator("[data-bl-wait]")).toBeVisible();
   expect(calls.creates).toEqual([{ source: { type: "complex", id: "zz-forest" }, style: "story", inputs: {}, emphasis: "직접 본 것: 오후에 놀이터 쪽이 조용함" }]);

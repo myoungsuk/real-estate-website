@@ -12,9 +12,11 @@ import {
   BLOG_RESULT_LIMITS,
   BLOG_STYLE_GROUPS,
   BLOG_STYLES,
+  MEMO_HEADS,
   allowedStyles,
   checkBlogDraft,
   cutBlogText,
+  dropEmptyMemoHeads,
   extractAllMoney,
   findPersonalPatterns,
   validateBlogInputs,
@@ -500,4 +502,26 @@ test("올릴 곳 꼴 글 검사(2026-11-25): 인스타그램·스레드 글의 �
   // 화면은 옛 초안의 snsShort를 두 칸에 넣어 보이므로, 한 칸만 문자열이어도 두 칸으로 검사한다.
   assert.deepEqual(wheres({ title: "제목", paragraphs: ["남향입니다."], hashtags: [], instagram: "매매 3억 원입니다." }), [["money", "instagram"]]);
   assert.deepEqual(wheres({ title: "제목", paragraphs: ["남향입니다."], hashtags: [], snsShort: "매매 3억 원입니다." }), [["money", "sns"]]);
+});
+
+// 2026-11-25 '빠르게 넣기' 단추가 빈 메모 알림을 끄던 문제(날개-2 검토). 머리말만 있는 줄은 사실이 아니라 빈 칸이다.
+test("TK-188 빈 머리말: 머리말 단추만 누르고 글을 쓰지 않은 줄은 메모에서 뺀다(단추가 아는 머리말만, 직접 쓴 줄은 그대로)", () => {
+  assert.equal(dropEmptyMemoHeads("직접 본 것: "), "");
+  assert.equal(dropEmptyMemoHeads("역·교통: \n학교: \n상권:"), "", "머리말 셋만 누른 메모");
+  assert.equal(dropEmptyMemoHeads("역·교통: 가상역 걸어서 8분\n학교: \n상권: 가상시장"), "역·교통: 가상역 걸어서 8분\n상권: 가상시장");
+  assert.equal(dropEmptyMemoHeads("  학교 :  \n욕실을 새로 고침\n\n전망·채광: "), "욕실을 새로 고침", "앞뒤 빈칸·쌍점 앞 빈칸이 있어도 같은 줄로 봄");
+  assert.equal(dropEmptyMemoHeads("주차: \n참고:"), "주차: \n참고:", "단추에 없는 머리말은 사용자가 쓴 줄이라 그대로");
+  assert.equal(dropEmptyMemoHeads("학교"), "학교", "쌍점이 없으면 머리말 줄이 아님");
+  assert.equal(dropEmptyMemoHeads("학교: 학교:"), "학교: 학교:");
+  assert.equal(dropEmptyMemoHeads(null), "");
+  // 단추에 나올 수 있는 머리말은 하나도 빠짐없이 빈 줄로 본다(목록이 어긋나면 여기서 떨어짐).
+  const heads = new Set([...MEMO_HEADS.listing, ...MEMO_HEADS.complex, ...BLOG_STYLES.map((style) => style.memoHead).filter(Boolean)]);
+  assert.equal(heads.size, 9);
+  for (const head of heads) assert.equal(dropEmptyMemoHeads(`${head}: `), "", head);
+  // 보내는 메모(화면이 보내기 전·서버가 받은 뒤)도 같은 규칙을 지난다.
+  assert.deepEqual(validateEmphasis("직접 본 것: "), validateEmphasis(""), "머리말만 누른 메모는 빈 메모와 같은 값");
+  assert.deepEqual(validateEmphasis(""), { emphasis: "", error: false, personal: false });
+  assert.equal(validateEmphasis("직접 본 것: \n역·교통: 가상역 걸어서 8분").emphasis, "역·교통: 가상역 걸어서 8분");
+  assert.equal(validateEmphasis(`학교: \n${"가".repeat(495)}`).error, false, "받은 글 500자까지");
+  assert.equal(validateEmphasis(`학교: \n${"가".repeat(496)}`).error, true, "길이는 받은 글 그대로 셈(머리말 줄을 빼기 전 501자, 그 전과 같음)");
 });
