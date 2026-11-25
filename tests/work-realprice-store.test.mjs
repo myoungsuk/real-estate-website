@@ -354,6 +354,33 @@ test("TK-132: 한 구의 달을 반영해도 같은 종류·같은 달의 다른
   assert.deepEqual([monthRow(database).row_count, monthRow(database, "sale", "202610", "30170").row_count], [30, 1]);
 });
 
+test("TK-16·TK-132(보류의 구 조건): 한 구의 달을 보류해도 같은 종류·같은 달의 다른 구 줄은 한 칸도 바뀌지 않고, 그 구는 뒤에 같은 건수를 받아도 처음 보류부터 거친다", async () => {
+  const { database, db } = freshDb({ d1Meta: true });
+  await seedMonth(db, "sale", "202610", "30110");
+  await seedMonth(db, "sale", "202610", "30170");
+  await seedMonth(db, "sale", "202610", "30140");
+  const seoItems = (count) => saleItems(count).map((item) => ({ ...item, sggCd: "30170", aptSeq: item.aptSeq.replace("30110", "30170") }));
+  await apply(db, database, saleItems(40));
+  await apply(db, database, seoItems(40), { lawdCd: "30170" });
+  const count = (lawd) => rows(database, "SELECT COUNT(*) AS n FROM rt_trades WHERE lawd_cd = ?", lawd)[0].n;
+  const seoBefore = monthRow(database, "sale", "202610", "30170");
+  const jungBefore = monthRow(database, "sale", "202610", "30140");
+  assert.deepEqual([seoBefore.status, seoBefore.held_count, seoBefore.row_count, jungBefore.status], ["ok", null, 40, "pending"]);
+
+  // 동구에 15건만 오면 동구 줄만 보류. 서구(받은 달)·중구(아직 안 받은 달) 줄은 그대로.
+  const held = await apply(db, database, saleItems(15), { nowMs: NOW + HOUR });
+  assert.equal(held.outcome, "held");
+  const east = monthRow(database);
+  assert.deepEqual([east.status, east.held_count, east.row_count, east.last_error], ["held", 15, 40, "RT_HELD_DROP"]);
+  assert.deepEqual(monthRow(database, "sale", "202610", "30170"), seoBefore, "서구 줄 그대로");
+  assert.deepEqual(monthRow(database, "sale", "202610", "30140"), jungBefore, "중구 줄 그대로");
+
+  // 서구가 뒤에 우연히 같은 15건을 받아도 '확인된 보류'로 보지 않는다(바로 지우지 않고 서구도 처음 보류).
+  const seoHeld = await apply(db, database, seoItems(15), { lawdCd: "30170", nowMs: NOW + 2 * HOUR });
+  assert.deepEqual([seoHeld.outcome, seoHeld.deleted], ["held", 0]);
+  assert.deepEqual([count("30110"), count("30170")], [40, 40]);
+});
+
 test("TK-133: 차례 고르기는 같은 순서·같은 달이면 동구 → 중구 → 서구 → 유성구 → 대덕구, 신고가 준비는 구마다 따로 본다", () => {
   const due = iso(NOW - 1000);
   const months = [...REALPRICE_LAWDS].reverse().map((lawd) => ({ lawd_cd: lawd, kind: "sale", deal_ymd: "202001", status: "pending", row_count: 0, dropped_count: 0, held_count: null, attempts: 0, last_error: null, last_success_at: null, next_due_at: due }));
