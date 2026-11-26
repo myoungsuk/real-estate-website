@@ -274,7 +274,7 @@
       },
       {
         "label": "지번",
-        "value": "대전광역시 동구 천동 228-9 일대"
+        "value": "대전광역시 동구 천동 560"
       },
       {
         "label": "규모",
@@ -401,6 +401,7 @@
     "amenityGroups": [
       {
         "title": "사업자료에 계획·소개된 시설",
+        "verification": "historical-plan",
         "items": [
           "어린이집",
           "키즈룸·키즈스테이션",
@@ -414,7 +415,6 @@
           "경로당",
           "쉼터"
         ],
-        "verification": "historical-plan",
         "note": "사업자료에 계획·소개된 시설입니다. 실제 운영 시설과 이용 조건은 관리사무소 또는 현장에서 확인해 주세요."
       }
     ],
@@ -480,50 +480,50 @@
         "id": "daejeon-2023-159",
         "publisher": "대전광역시",
         "label": "천동3구역 정비계획 변경 고시",
-        "url": "https://www.eum.go.kr/web/gs/gv/gvGosiDet.jsp?mobile_yn=&seq=584384",
         "kind": "official",
-        "checkedAt": "2026-08-25"
+        "checkedAt": "2026-08-25",
+        "url": "https://www.eum.go.kr/web/gs/gv/gvGosiDet.jsp?mobile_yn=&seq=584384"
       },
       {
         "id": "lh-leaders-city-5-supply",
         "publisher": "LH 청약플러스",
         "label": "리더스시티 5블록 공급정보",
-        "url": "https://apply.lh.or.kr/lhapply/apply/wt/wrtanc/selectWrtancInfo.do?aisTpCd=08&ccrCnntSysDsCd=02&mi=1026&panId=0000060351&uppAisTpCd=06",
         "kind": "official",
-        "checkedAt": "2026-08-25"
+        "checkedAt": "2026-08-25",
+        "url": "https://apply.lh.or.kr/lhapply/apply/wt/wrtanc/selectWrtancInfo.do?aisTpCd=08&ccrCnntSysDsCd=02&mi=1026&panId=0000060351&uppAisTpCd=06"
       },
       {
         "id": "lh-hanaro-leaders-city-5",
         "publisher": "LH 하나로 내집",
         "label": "리더스시티 5블록 생활환경",
-        "url": "https://hanaro.lh.or.kr/siteDetail/view?menuKey=60O0Um5kwF&sPageCnt=&schArea=&schHsClsfCd=&schPoint=&schRegion=&schSplyHH=&schStatus=&schText=&siteDetailId=79",
         "kind": "official",
-        "checkedAt": "2026-08-25"
+        "checkedAt": "2026-08-25",
+        "url": "https://hanaro.lh.or.kr/siteDetail/view?menuKey=60O0Um5kwF&sPageCnt=&schArea=&schHsClsfCd=&schPoint=&schRegion=&schSplyHH=&schStatus=&schText=&siteDetailId=79"
       },
       {
         "id": "schoolinfo-cheondong-elementary",
         "publisher": "학교알리미",
         "label": "대전천동초등학교 정보",
-        "url": "https://www.schoolinfo.go.kr/ei/ss/Pneiss_b01_s0.do?SHL_IDF_CD=5dccf925-e168-4b84-a93f-734c5d5f581c",
         "kind": "public-data",
-        "checkedAt": "2026-08-25"
+        "checkedAt": "2026-08-25",
+        "url": "https://www.schoolinfo.go.kr/ei/ss/Pneiss_b01_s0.do?SHL_IDF_CD=5dccf925-e168-4b84-a93f-734c5d5f581c"
       },
       {
         "id": "ccnnews-leaders-city-5-supply",
         "publisher": "충청뉴스",
         "label": "리더스시티 5블록 공급·커뮤니티 보도",
-        "url": "https://www.ccnnews.co.kr/news/articleView.html?idxno=253199",
         "kind": "news",
         "checkedAt": "2026-08-25",
+        "url": "https://www.ccnnews.co.kr/news/articleView.html?idxno=253199",
         "note": "커뮤니티 시설은 당시 계획·소개 내용이며 현재 운영 여부 확인이 필요합니다."
       },
       {
         "id": "daejeon-council-cheondong-middle-2026",
         "publisher": "대전광역시의회",
         "label": "천동중학교 2027년 3월 개교 예정 확인",
-        "url": "https://council.daejeon.go.kr/cms/mntsViewer.do?mntsId=8359&var08=MBR000185",
         "kind": "official",
         "checkedAt": "2026-08-26",
+        "url": "https://council.daejeon.go.kr/cms/mntsViewer.do?mntsId=8359&var08=MBR000185",
         "note": "2026년 1월 29일 교육위원회 회의록에서 교육청이 개교 일정에 지장이 없다고 답변했습니다."
       }
     ],
