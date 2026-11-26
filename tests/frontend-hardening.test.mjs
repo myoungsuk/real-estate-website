@@ -168,7 +168,7 @@ test("CSP는 Cloudflare Web Analytics와 Google 태그 공식 도메인만 추�
 
 test("처리방침에 계약서 사본 AI 일정 뽑기의 OpenAI 국외 이전·AI 결과 30일 보관이 있다(사용자 승인 2026-11-24 09:23 '이대로 올림')", async () => {
   const privacy = await readSource("src/pages/privacy.astro");
-  assert.match(privacy, /중개 업무\(상담 기록, 계약 일정과 할 일 관리, 계약서 사본에서 일정 뽑기, 매출장부 정리, 현장·서류 사진 보관\)/u);
+  assert.match(privacy, /중개 업무\(상담 기록, 계약 일정·안내·상담 약속과 할 일 관리, 계약서 사본에서 일정 뽑기, 매출장부 정리, 현장·서류 사진 보관\)/u);
   assert.match(privacy, /<p>AI가 뽑은 일정 결과\(뽑은 값과 근거 글\): 거래에 넣거나 취소한 뒤, 또는 손대지 않은 채 30일이 지나면 지웁니다\./u);
   assert.match(privacy, /<p>이전받는 자: OpenAI OpCo, LLC\(미국\), 연락처: dpo@openai\.com<\/p>/u);
   assert.match(privacy, /AI 학습에 쓰지 않고, 처리하는 동안 약 10분 임시 보관한 뒤 지웁니다\. 다만 남용 감시를 위해 최대 30일 보관할 수 있고/u);
@@ -176,6 +176,20 @@ test("처리방침에 계약서 사본 AI 일정 뽑기의 OpenAI 국외 이전�
   // 8항 안(9항 앞)에 있어야 국외 이전 항목으로 읽힌다.
   const eighth = privacy.slice(privacy.indexOf("<h2>8. 처리 위탁과 국외 이전</h2>"), privacy.indexOf("<h2>9. "));
   assert.match(eighth, /OpenAI OpCo, LLC/u);
+});
+
+test("처리방침에 직접 넣은 일정(거래 없는 일정)의 처리 정보·1년 자동 삭제·캘린더 이전 항목이 있다(6·7·8항 사용자 승인 2026-11-26 09:18·09:30)", async () => {
+  const privacy = await readSource("src/pages/privacy.astro");
+  const section = (number) => privacy.slice(privacy.indexOf(`<h2>${number}. `), privacy.indexOf(`<h2>${number + 1}. `));
+  // 글자 그대로 본다(정규식 특수 문자를 피하려고 includes). 6·7·8항마다 그 항 안(다음 항 앞)에 있어야 한다.
+  const has = (text, part, name) => assert.ok(text.includes(part), name);
+  has(section(6), "<p>일정: 사무소가 직접 넣은 일정(안내·상담·일상·비과세·임대차 종료 등)의 제목, 날짜와 시각, 반복 규칙. 일정 제목에는 손님 이름이 함께 적힐 수 있습니다.</p>", "6항 일정 문단");
+  has(section(7), "<p>직접 넣은 일정: 일정 날짜가 지난 지 1년이 지나면 하루 안에 자동으로 영구 삭제합니다. 반복 일정은 반복이 끝나는 날을 기준으로 하며, 끝나는 날을 정하지 않은 반복 일정은 사무소가 삭제할 때까지 보관합니다.", "7항 1년 자동 삭제");
+  const eighth = section(8);
+  has(eighth, "<p>계약 일정과 사무소가 직접 넣은 일정의 알림을 위해 사무소 대표와 직원의 휴대폰 캘린더", "8항 첫 문장");
+  has(eighth, "이전 항목: 일정 종류(계약·중도금·잔금·안내·상담 등), 거래 제목, 할 일 제목, 직접 넣은 일정 제목, 일정 날짜와 시각.", "8항 이전 항목");
+  has(eighth, "이용 목적과 보유기간: 계약 일정과 직접 넣은 일정의 알림.", "8항 이용 목적");
+  has(eighth, "그 손님의 거래 제목, 할 일 제목, 일정 제목에 손님을 알아볼 수 있는 내용을 적지 않습니다.", "8항 거부");
 });
 
 test("Google 태그는 공개 레이아웃의 Production 빌드와 운영 도메인에서만 실행된다", async () => {
