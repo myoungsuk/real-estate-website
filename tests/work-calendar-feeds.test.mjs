@@ -1,4 +1,4 @@
-// 업무 도구 단계 3 캘린더 구독 주소 시험(테스트 체크리스트 T3-01 ~ T3-07·T3-05a·T3-09, 설계서 12.3절·DEC-WT-42).
+// 업무 도구 단계 3 캘린더 구독 주소 시험(테스트 체크리스트 T3-01 ~ T3-07·T3-05a·T3-09·T3-23 ~ T3-26, 설계서 12.3절·DEC-WT-42).
 // 진짜 SQLite(node:sqlite)에 migrations/work 전부를 적용하고 가상 자료만 쓴다. 날짜는 now를 넣어 고정한다
 // (NOW = 2026-11-17 14:00 한국 시각, 한국 날짜가 바뀌는 UTC 15시 앞뒤 경계 포함). 토큰 해시 키(pepper)도 가상 값이다.
 import test from "node:test";
@@ -397,4 +397,118 @@ test("T3-09 run_worker_first는 /api/admin·/api/admin/*·/api/calendar/* 세 �
     assert.equal(await response.text(), "asset", path);
   }
   assert.deepEqual(assetCalls, ["/api/calendar", "/api/calendarx/a.ics", "/properties/", "/calendar/a.ics"]);
+});
+
+// ── 거래 없는 일정(0009)을 구독에 싣기(설계서 6.15·12.3절, 테스트 체크리스트 T3-23 ~ T3-27) ─────────────────
+// NOW = 2026-11-17 14:00 한국 시각 → 넣는 범위는 2026-10-18(오늘 −30일) ~ 2027-05-16(오늘 +180일).
+
+const appt = async (env, body) => {
+  const result = await work(env, "/appointments", { method: "POST", body: { tag: "showing", title: "가상 집 보여 주기", startsOn: "2026-11-20", ...body } });
+  assert.equal(result.status, 201, JSON.stringify(result.json));
+  return result.json.data.appointment;
+};
+function veventBlocks(text) {
+  return unfold(text).split("BEGIN:VEVENT").slice(1).map((chunk) => {
+    const lines = chunk.split("\r\n");
+    const value = (name) => lines.find((line) => line.startsWith(`${name}:`) || line.startsWith(`${name};`)) ?? null;
+    return {
+      uid: value("UID")?.slice(4) ?? null,
+      start: value("DTSTART"),
+      end: value("DTEND"),
+      summary: value("SUMMARY")?.slice(8) ?? null,
+      description: value("DESCRIPTION")?.slice(12) ?? null,
+      triggers: lines.filter((line) => line.startsWith("TRIGGER:")).map((line) => line.slice(8)),
+    };
+  });
+}
+
+test("T3-23 거래 없는 일정은 '꼬리표 · 제목', 설명 '직접 넣은 일정', UID appt-<id>-<날짜>로 실리고, 시각 있으면 UTC DTSTART·DTEND와 시작 기준 알림, 하루 종일은 거래 일정과 같은 꼴이다", async () => {
+  const { database, env } = setup();
+  seedSchedule(database);
+  const allDay = await appt(env, {});
+  const timed = await appt(env, { tag: "consult", title: "가상 상담 약속", startsOn: "2026-11-18", startTime: "16:00", endTime: "17:00", alarms: ["day-before-18", "hour-before"] });
+  const open = await appt(env, { tag: "routine", title: "가상 은행 들르기", startsOn: "2026-11-19", startTime: "10:30", alarms: ["same-day-09"] });
+  const early = await appt(env, { tag: "other", title: "가상 이른 약속", startsOn: "2026-11-18", startTime: "08:00", alarms: [] });
+  const created = await createFeed(env);
+  const result = await fetchFeed(env, feedPath(created.token));
+  assert.equal(result.status, 200);
+  const byUid = Object.fromEntries(veventBlocks(result.text).map((item) => [item.uid, item]));
+  assert.deepEqual(byUid[`appt-${allDay.id}-20261120@leaderscityhappy.com`], {
+    uid: `appt-${allDay.id}-20261120@leaderscityhappy.com`, start: "DTSTART;VALUE=DATE:20261120", end: "DTEND;VALUE=DATE:20261121",
+    summary: "안내 · 가상 집 보여 주기", description: "직접 넣은 일정", triggers: ["-PT6H"],
+  });
+  assert.deepEqual(byUid[`appt-${timed.id}-20261118@leaderscityhappy.com`], {
+    uid: `appt-${timed.id}-20261118@leaderscityhappy.com`, start: "DTSTART:20261118T070000Z", end: "DTEND:20261118T080000Z",
+    summary: "상담 · 가상 상담 약속", description: "직접 넣은 일정", triggers: ["-PT22H", "-PT1H"],
+  });
+  const openItem = byUid[`appt-${open.id}-20261119@leaderscityhappy.com`];
+  assert.deepEqual([openItem.start, openItem.end, openItem.triggers], ["DTSTART:20261119T013000Z", null, ["-PT1H30M"]], "끝 시각이 없으면 DTEND 없음");
+  // 08:00 한국 시각은 UTC로 전날 23:00(날짜가 바뀌는 경계)
+  assert.equal(byUid[`appt-${early.id}-20261118@leaderscityhappy.com`].start, "DTSTART:20261117T230000Z");
+  // 거래 일정·할 일은 예전 그대로(9개), 전체는 날짜 순
+  assert.equal(veventBlocks(result.text).filter((item) => !item.uid.startsWith("appt-")).length, 9);
+  const dates = veventBlocks(result.text).map((item) => item.start.replace(/^.*:/u, "").slice(0, 8));
+  assert.deepEqual(dates, [...dates].sort());
+  // 손님 정보는 여전히 없음
+  for (const secret of ["가상손님홍길", "01098765432", "가상 비밀 메모 문구"]) assert.equal(unfold(result.text).includes(secret), false);
+});
+
+test("T3-24 반복 일정은 오늘 −30일 ~ +180일 안의 날짜마다 실리고(뺀 날·범위 밖 없음), 오늘 전 날에는 알림을 넣지 않으며, 범위 밖 한 번짜리 일정은 없다", async () => {
+  const { env } = setup();
+  const weekly = await appt(env, { title: "가상 주간 회의", startsOn: "2026-10-01", repeatRule: "weekly" }); // 목요일마다, 끝 없음
+  await appt(env, { title: "가상 너무 옛날", startsOn: "2026-10-17" });
+  await appt(env, { title: "가상 첫날", startsOn: "2026-10-18" });
+  await appt(env, { title: "가상 마지막 날", startsOn: "2027-05-16" });
+  await appt(env, { title: "가상 너무 먼 날", startsOn: "2027-05-17" });
+  const today = await appt(env, { title: "가상 오늘 약속", startsOn: "2026-11-17", startTime: "16:00", alarms: ["hour-before"] });
+  const skipped = await work(env, `/appointments/${weekly.id}`, { method: "DELETE", body: { version: 1, scope: "one", occurrenceOn: "2026-11-26" } });
+  assert.equal(skipped.status, 200, JSON.stringify(skipped.json));
+  const created = await createFeed(env);
+  const items = veventBlocks((await fetchFeed(env, feedPath(created.token))).text);
+  const weeklyItems = items.filter((item) => item.uid.startsWith(`appt-${weekly.id}-`));
+  const weeklyDates = weeklyItems.map((item) => item.start.slice(-8));
+  assert.equal(weeklyDates[0], "20261022", "10-18 뒤 첫 목요일");
+  assert.equal(weeklyDates.at(-1), "20270513", "05-16 앞 마지막 목요일");
+  assert.equal(weeklyDates.includes("20261126"), false, "'이 날만' 지운 날은 없음");
+  assert.equal(weeklyDates.length, 29, "목요일 30번 - 지운 1번");
+  for (const item of weeklyItems) {
+    assert.deepEqual(item.triggers, item.start.slice(-8) < "20261117" ? [] : ["-PT6H"], item.start);
+  }
+  // 오늘 날짜(오늘 전 날이 아님)는 알림을 넣는다
+  assert.deepEqual(items.find((item) => item.uid.startsWith(`appt-${today.id}-20261117`)).triggers, ["-PT1H"]);
+  const titles = items.map((item) => item.summary);
+  assert.deepEqual(titles.filter((title) => /너무|첫날|마지막 날/u.test(title)), ["안내 · 가상 첫날", "안내 · 가상 마지막 날"]);
+});
+
+test("T3-25 거래 없는 일정은 펼친 뒤 500개까지만(넘으면 먼 미래부터 뺌) 싣고, 거래 일정·할 일 몫(각 500)에는 영향이 없다", async () => {
+  const { database, env } = setup();
+  seedSchedule(database);
+  for (const title of ["가상 매일 하나", "가상 매일 둘", "가상 매일 셋"]) await appt(env, { title, startsOn: "2026-10-01", repeatRule: "daily" }); // 211일 × 3 = 633
+  const created = await createFeed(env);
+  const items = veventBlocks((await fetchFeed(env, feedPath(created.token))).text);
+  const appointments = items.filter((item) => item.uid.startsWith("appt-"));
+  assert.equal(appointments.length, 500);
+  const dates = appointments.map((item) => item.start.slice(-8));
+  assert.equal(dates[0], "20261018");
+  assert.ok(dates.at(-1) < "20270516", `먼 미래부터 빠짐: 마지막 ${dates.at(-1)}`);
+  assert.equal(items.length - appointments.length, 9, "거래 일정·할 일은 그대로");
+});
+
+test("T3-26 시각 일정 .ics 만들기: 시작 기준 알림만(양수·하루 기준 세 값 밖의 글자는 버림), 하루 종일 일정은 예전 세 값 그대로, 시각 꼴이 틀리면 만들지 않는다", async () => {
+  const { buildDealIcsCalendar, isAllowedTimedAlarmTriggers, koreaDateTimeToIcs } = await import("../worker/work-calendar.mjs");
+  assert.equal(isAllowedTimedAlarmTriggers(["-PT22H", "-PT1H30M"]), true);
+  assert.equal(isAllowedTimedAlarmTriggers(["PT0S"]), true, "시작 그때");
+  for (const bad of [["PT9H"], ["-PT"], ["-P2DT15H"], ["-PT1H", "-PT1H"], ["-PT1H", "-PT2H", "-PT3H"], [1], "x"]) {
+    assert.equal(isAllowedTimedAlarmTriggers(bad), false, JSON.stringify(bad));
+  }
+  assert.equal(koreaDateTimeToIcs("2026-12-31", "23:30"), "20261231T143000Z");
+  assert.equal(koreaDateTimeToIcs("2027-01-01", "00:10"), "20261231T151000Z", "한국 새해 00:10 = UTC 전날");
+  assert.throws(() => koreaDateTimeToIcs("2026-11-18", "24:00"));
+  const now = new Date(NOW);
+  const timedBad = buildDealIcsCalendar({ now, events: [{ uidKey: "appt-a-20261118", date: "2026-11-18", title: "가상", startTime: "16:00", endTime: null, alarmTriggers: ["PT9H"] }] });
+  assert.equal(timedBad.includes("BEGIN:VALARM"), false, "시각 일정의 양수 알림은 버림");
+  assert.match(timedBad, /\r\nDTSTART:20261118T070000Z\r\nSUMMARY:/u, "끝 시각 null이면 DTEND 없음");
+  const allDayTimedTrigger = buildDealIcsCalendar({ now, events: [{ uidKey: "x", date: "2026-11-18", title: "가상", alarmTriggers: ["-PT22H"] }] });
+  assert.equal(allDayTimedTrigger.includes("BEGIN:VALARM"), false, "하루 종일 일정은 예전 세 값만");
+  assert.throws(() => buildDealIcsCalendar({ now, events: [{ uidKey: "x", date: "2026-11-18", title: "가상", startTime: "4pm" }] }));
 });
