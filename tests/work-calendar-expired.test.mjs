@@ -69,6 +69,8 @@ test("고치기: 반복 없는 줄·'이 날만'·'이 날부터 모두'(나누�
     [{ startsOn: "2024-11-05", repeatRule: "weekly" }, "2024-11-05", { untilMode: "date", repeatUntil: "2025-11-01" }, "following"],
     [{ startsOn: "2025-06-03", repeatRule: "weekly", untilMode: "date", repeatUntil: "2025-11-11" }, "2025-11-04", { title: "가상 뒤" }, "following"], // 나눈 새 줄이 옛 끝나는 날을 이어받음
     [{ startsOn: "2025-06-03", repeatRule: "weekly", untilMode: "date", repeatUntil: "2025-11-11" }, "2025-06-03", { title: "가상 앞" }, "following"],
+    [{ startsOn: "2025-06-03", repeatRule: "weekly", untilMode: "date", repeatUntil: "2025-11-11" }, "2025-06-03", { repeatRule: "monthly" }, "following"], // 그 자리 고치기에서 규칙만 바꿔도 옛 끝나는 날을 봄
+    [{ startsOn: "2024-11-05", repeatRule: "weekly" }, "2025-11-25", { repeatRule: "none" }, "following"], // 나눈 새 줄이 반복 없음 → 원래 시작일이 아니라 그날을 봄
   ];
   const seen = [];
   for (const [made, on, changes, scope] of cases) {
@@ -86,5 +88,5 @@ test("고치기: 반복 없는 줄·'이 날만'·'이 날부터 모두'(나누�
     assert.deepEqual(screen, serverFields(result), JSON.stringify([made, on, changes, scope]));
     seen.push(screen === null ? "통과" : screen.join());
   }
-  assert.deepEqual(seen, ["통과", "startsOn", "통과", "repeatUntil", "startsOn", "통과", "통과", "통과", "repeatUntil", "startsOn", "통과", "repeatUntil", "repeatUntil", "통과"]);
+  assert.deepEqual(seen, ["통과", "startsOn", "통과", "repeatUntil", "startsOn", "통과", "통과", "통과", "repeatUntil", "startsOn", "통과", "repeatUntil", "repeatUntil", "통과", "repeatUntil", "통과"]);
 });
