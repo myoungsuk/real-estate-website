@@ -27,7 +27,6 @@ const tools = [
   },
 ] as const;
 
-const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
 ---
 
 <AdminLayout
@@ -77,41 +76,28 @@ const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
     </p>
 
     <div class="work-home__grid">
-      <section class="work-card work-calendar" aria-labelledby="work-calendar-title" data-work-calendar>
+      {/* 빈 '이번 달' 달력을 달력 화면 고리로 바꿈(사용자 답 2026-11-26 08:59:51). 서버를 부르지 않아 이 화면의 탭 미리 그리기를 그대로 둔다. */}
+      <section class="work-card work-calendar-link" aria-labelledby="work-calendar-title">
         <div class="work-card__head">
           <span class="work-round-icon" data-tone="gold">
             <AdminIcon name="schedule" size={15} />
           </span>
-          <h2 id="work-calendar-title" data-work-calendar-title>이번 달</h2>
-          <div class="work-calendar__nav">
-            <button type="button" data-work-calendar-move="-1">
-              <AdminIcon name="chevron-left" size={18} />
-              <span class="sr-only">이전 달</span>
-            </button>
-            <button type="button" data-work-calendar-move="1">
-              <AdminIcon name="chevron-right" size={18} />
-              <span class="sr-only">다음 달</span>
-            </button>
-          </div>
+          <h2 id="work-calendar-title">달력</h2>
         </div>
-        <table class="work-calendar__table">
-          <caption class="sr-only" data-work-calendar-caption>이번 달 달력</caption>
-          <thead>
-            <tr>{weekdays.map((day) => <th scope="col">{day}</th>)}</tr>
-          </thead>
-          <tbody data-work-calendar-body></tbody>
-        </table>
-        <div class="work-calendar__today">
-          <h3>
-            <AdminIcon name="clock" size={17} />
-            오늘 일정 <small data-work-today-long></small>
-          </h3>
-          <p class="work-card__empty">일정 저장은 단계 2부터 쓸 수 있습니다. 지금은 계약 일정 화면에서 기한을 바로 계산하세요.</p>
-          <a class="work-card__link" href="/admin/work/schedule/">
-            계약 일정 계산하기
-            <AdminIcon name="chevron-right" size={16} />
-          </a>
-        </div>
+        <p class="work-calendar-link__lead">
+          거래 일정(계약일·중도금·잔금·신고 기한), 날짜 있는 할 일, 직접 넣은 일정(집 보여 주기·상담·반복 일정)을 한 달 달력으로 봅니다. <small data-work-today-long></small>
+        </p>
+        <ul class="work-calendar-link__marks" aria-label="달력 표시">
+          <li><span aria-hidden="true">◆</span> 돈 날짜</li>
+          <li><span aria-hidden="true">▲</span> 기한</li>
+          <li><span aria-hidden="true">●</span> 안내·상담</li>
+          <li><span aria-hidden="true">■</span> 일상</li>
+          <li><span aria-hidden="true">☐</span> 할 일</li>
+        </ul>
+        <a class="work-card__link" href="/admin/work/calendar/">
+          달력 열기
+          <AdminIcon name="chevron-right" size={16} />
+        </a>
       </section>
 
       <div class="work-home__side">
@@ -139,7 +125,11 @@ const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
             </span>
             <h2 id="work-deadline-title">다가오는 기한</h2>
           </div>
-          <p class="work-card__empty">계약별 기한 모아 보기는 단계 2부터 표시됩니다.</p>
+          <p class="work-card__empty">거래마다 저장한 기한은 달력과 대시보드 '다가오는 계약 일정'에 모입니다. 저장하지 않고 기한만 계산하려면 계약 일정 화면을 씁니다.</p>
+          <a class="work-card__link" href="/admin/work/calendar/">
+            달력에서 보기
+            <AdminIcon name="chevron-right" size={16} />
+          </a>
           <a class="work-card__link" href="/admin/work/schedule/">
             계약 일정 계산하기
             <AdminIcon name="chevron-right" size={16} />
@@ -152,82 +142,16 @@ const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
   <script>
     import { todayInKorea } from "../../../lib/work/legal-dates.mjs";
 
-    // 이번 달 달력. 오늘 날짜만 표시하고 저장된 일정은 없다(단계 0은 저장하지 않음).
-    const calendar = document.querySelector<HTMLElement>("[data-work-calendar]");
-    const body = calendar?.querySelector<HTMLElement>("[data-work-calendar-body]");
-    const title = calendar?.querySelector<HTMLElement>("[data-work-calendar-title]");
-    const caption = calendar?.querySelector<HTMLElement>("[data-work-calendar-caption]");
-
-    if (calendar && body && title && caption) {
-      const [todayYear, todayMonth, todayDay] = todayInKorea().split("-").map(Number);
-      const weekdayNames = ["일", "월", "화", "수", "목", "금", "토"];
-      const todayWeekday = weekdayNames[new Date(Date.UTC(todayYear, todayMonth - 1, todayDay)).getUTCDay()];
-      document.querySelectorAll<HTMLElement>("[data-work-today]").forEach((element) => {
-        element.textContent = `${todayYear}.${String(todayMonth).padStart(2, "0")}.${String(todayDay).padStart(2, "0")}(${todayWeekday})`;
-      });
-      document.querySelectorAll<HTMLElement>("[data-work-today-long]").forEach((element) => {
-        element.textContent = `${todayMonth}월 ${todayDay}일 ${todayWeekday}요일`;
-      });
-
-      let year = todayYear;
-      let month = todayMonth;
-
-      const render = () => {
-        const firstWeekday = new Date(Date.UTC(year, month - 1, 1)).getUTCDay();
-        const days = new Date(Date.UTC(year, month, 0)).getUTCDate();
-        title.innerHTML = "";
-        const monthText = document.createElement("span");
-        monthText.textContent = `${month}월`;
-        const yearText = document.createElement("small");
-        yearText.textContent = `${year}년`;
-        title.append(monthText, " ", yearText);
-        caption.textContent = `${year}년 ${month}월 달력`;
-
-        const rows: HTMLTableRowElement[] = [];
-        let row = document.createElement("tr");
-        for (let blank = 0; blank < firstWeekday; blank += 1) row.append(document.createElement("td"));
-        for (let day = 1; day <= days; day += 1) {
-          const cell = document.createElement("td");
-          const mark = document.createElement("span");
-          mark.className = "work-calendar__day";
-          mark.textContent = String(day);
-          if (year === todayYear && month === todayMonth && day === todayDay) {
-            mark.classList.add("is-today");
-            mark.setAttribute("aria-current", "date");
-            const hidden = document.createElement("span");
-            hidden.className = "sr-only";
-            hidden.textContent = " 오늘";
-            mark.append(hidden);
-          }
-          cell.append(mark);
-          row.append(cell);
-          if (row.children.length === 7) {
-            rows.push(row);
-            row = document.createElement("tr");
-          }
-        }
-        if (row.children.length > 0) {
-          while (row.children.length < 7) row.append(document.createElement("td"));
-          rows.push(row);
-        }
-        body.replaceChildren(...rows);
-      };
-
-      calendar.querySelectorAll<HTMLButtonElement>("[data-work-calendar-move]").forEach((button) => {
-        button.addEventListener("click", () => {
-          month += Number(button.dataset.workCalendarMove);
-          if (month < 1) {
-            month = 12;
-            year -= 1;
-          } else if (month > 12) {
-            month = 1;
-            year += 1;
-          }
-          render();
-        });
-      });
-      render();
-    }
+    // 머리의 오늘 날짜와 달력 고리 칸의 오늘 날짜(서버 요청 없음).
+    const [todayYear, todayMonth, todayDay] = todayInKorea().split("-").map(Number);
+    const weekdayNames = ["일", "월", "화", "수", "목", "금", "토"];
+    const todayWeekday = weekdayNames[new Date(Date.UTC(todayYear, todayMonth - 1, todayDay)).getUTCDay()];
+    document.querySelectorAll<HTMLElement>("[data-work-today]").forEach((element) => {
+      element.textContent = `${todayYear}.${String(todayMonth).padStart(2, "0")}.${String(todayDay).padStart(2, "0")}(${todayWeekday})`;
+    });
+    document.querySelectorAll<HTMLElement>("[data-work-today-long]").forEach((element) => {
+      element.textContent = `오늘은 ${todayMonth}월 ${todayDay}일 ${todayWeekday}요일입니다.`;
+    });
   </script>
 
   <script>

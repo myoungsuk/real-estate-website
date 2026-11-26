@@ -9,7 +9,8 @@ export const TASK_DEAL_QUERY_MAX = 30; // 거래 찾기(매출장부와 같음)
 export const TASK_PAGE_SIZE = 50; // 서버 기본·최대
 export const TASK_HOME_SHOWN = 5; // 첫 화면 칸에 보이는 수
 export const TASK_REPEAT_LABELS = Object.freeze({ none: "없음", weekly: "매주", monthly: "매월" });
-export const TASK_NAME_HELP = "손님 이름은 제목에 넣지 않는 것이 좋습니다(캘린더 구독에 보일 수 있음).";
+// 할 일·달력 일정 제목 칸 안내(사용자 답 2026-11-26 08:59 "일정·할 일 둘 다 새 문구"). 달력 화면(calendar-view.mjs)도 이 글을 쓴다.
+export const TASK_NAME_HELP = "제목은 휴대폰 캘린더 구독에도 그대로 실립니다. 손님 이름은 적어도 되지만 전화번호·주민등록번호·계좌번호는 적지 않습니다.";
 export { DEAL_STATUS_LABELS };
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];

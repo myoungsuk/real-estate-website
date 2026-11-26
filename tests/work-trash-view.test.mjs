@@ -189,6 +189,8 @@ test("영구 삭제 글자 확인·결과·오류 글", () => {
   assert.match(trashStateText("WORK_SCHEMA_OUTDATED").body, /업무 자료 구조\(7번\)가 아직 적용되지 않았습니다/u);
   assert.deepEqual(restoredLink("customer"), { text: "손님 목록 열기", href: "/admin/work/customers/" });
   assert.equal(restoredLink("note"), null);
+  assert.deepEqual(restoredLink("event", { events: 1 }), { text: "손님 목록 열기", href: "/admin/work/customers/" }, "거래 일정은 손님 목록으로");
+  assert.deepEqual(restoredLink("event", { events: 1, appointments: 1 }), { text: "달력 열기", href: "/admin/work/calendar/" }, "거래 없는 일정은 달력으로");
 });
 
 test("지우기 화면 알림 글과 확인 글(지시서 4.1 문장 그대로)", () => {

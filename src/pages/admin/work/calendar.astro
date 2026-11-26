@@ -1,0 +1,897 @@
+---
+import AdminIcon from "../../../components/admin/AdminIcon.astro";
+import AdminPageHelp from "../../../components/admin/AdminPageHelp.astro";
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import {
+  APPOINTMENT_ALARMS,
+  APPOINTMENT_MAX_ALARMS,
+  APPOINTMENT_KEEP_NOTICE,
+  APPOINTMENT_REPEAT_LABELS,
+  APPOINTMENT_TAG_FAMILIES,
+  APPOINTMENT_TAG_KEYS,
+  APPOINTMENT_TAGS,
+  APPOINTMENT_TITLE_HELP,
+  APPOINTMENT_TITLE_MAX,
+  CALENDAR_FAMILIES,
+  CALENDAR_FAMILY_KEYS,
+} from "../../../lib/work/calendar-view.mjs";
+import { TRASH_MOVE_NOTICE } from "../../../lib/work/trash-view.mjs";
+
+// 달력(사용자 답 2026-11-25 23:32:21 "C 새 달력 화면, 이대로"·11-26 08:59:51, 일정 넣기 칸 판 2).
+// - 서버 요청은 work-calendar-client.ts 한 곳. 업무 세션이 꺼져 있으면(enabled:false) 달력 자료를 부르지 않는다.
+// - 서버를 부르므로 탭 미리 그리기 prerender 목록에 넣지 않는다(AdminLayout prerenderPages).
+// - 보는 달·고른 날·거르기는 이 화면 메모리에만 둔다(주소·브라우저 저장소에 넣지 않음). 일정 제목은 화면에만 보인다.
+// - 1221px 이상 + 마우스는 넓은 칸(글자 띠), 그 밖은 좁은 칸(모양 표시) + 그날 목록. 979px 이하는 그날 목록이 달력 아래로 간다.
+// - 일정 넣기·고치기는 창(dialog) 하나. 979px 이하에서는 화면 전체 창이고, 저장 단추 줄은 창 아래에 붙어 있다.
+const tagLabels = APPOINTMENT_TAGS as Record<string, string>;
+const tagFamilies = APPOINTMENT_TAG_FAMILIES as Record<string, string>;
+const families = CALENDAR_FAMILIES as Record<string, { name: string; glyph: string }>;
+const repeatLabels = APPOINTMENT_REPEAT_LABELS as Record<string, string>;
+const alarms = APPOINTMENT_ALARMS as Record<string, { label: string; timedOnly: boolean }>;
+---
+
+<AdminLayout
+  title="달력 | 행복한부동산 관리자"
+  description="거래 일정·날짜 있는 할 일·직접 넣은 일정을 한 달 달력으로 보고, 집 보여 주기·상담·반복 일정을 넣는 관리자 업무 도구입니다."
+>
+  <div class="work-ui work-doc cu-doc cu-doc--wide cal-doc" data-cal-page>
+    <header class="work-doc__header">
+      <span class="work-round-icon work-round-icon--title" data-tone="gold">
+        <AdminIcon name="schedule" size={22} />
+      </span>
+      <h1>달력</h1>
+      <span class="admin-stage-badge">서버에 저장 · 관리자만</span>
+    </header>
+    <AdminPageHelp page="/admin/work/calendar/" />
+
+    <p class="rt-boot cu-boot" role="status" data-cal-boot>달력을 불러오고 있습니다…</p>
+    <section class="admin-panel rt-state cu-state" aria-labelledby="cal-state-title" data-cal-state hidden>
+      <div class="admin-empty-state">
+        <span aria-hidden="true" data-cal-state-symbol>!</span>
+        <div>
+          <h2 id="cal-state-title" data-cal-state-title></h2>
+          <p data-cal-state-body></p>
+          <button class="work-secondary-button cu-state__go" type="button" data-cal-state-retry hidden>다시 불러오기</button>
+          <a class="admin-text-link" href="/admin/work/" data-cal-state-home hidden>도구 모음으로</a>
+        </div>
+      </div>
+    </section>
+
+    <div data-cal-main hidden>
+      <p class="tk-saved" role="status" aria-live="polite" tabindex="-1" data-cal-saved hidden></p>
+      <div class="cal-bar">
+        <div class="cal-bar__nav">
+          <button class="cal-icon" type="button" aria-label="앞 달" data-cal-prev><span aria-hidden="true">‹</span></button>
+          <h2 class="cal-month" aria-live="polite" data-cal-month></h2>
+          <button class="cal-icon" type="button" aria-label="다음 달" data-cal-next><span aria-hidden="true">›</span></button>
+          <button class="work-secondary-button cal-today" type="button" data-cal-today>오늘</button>
+        </div>
+        <span class="cal-count" data-cal-count></span>
+        <button class="work-primary-button cal-add" type="button" aria-haspopup="dialog" data-cal-add>
+          <span aria-hidden="true">＋</span><span>일정 넣기</span>
+        </button>
+      </div>
+      <div class="cal-filters" role="group" aria-label="종류 거르기" data-cal-filters>
+        <button class="cal-filter is-all" type="button" aria-pressed="true" data-cal-filter="">
+          <i aria-hidden="true">✓</i>전체
+        </button>
+        {CALENDAR_FAMILY_KEYS.map((key) => (
+          <button class={`cal-filter is-${key}`} type="button" aria-pressed="false" data-cal-filter={key}>
+            <i aria-hidden="true">{families[key].glyph}</i>{families[key].name}
+          </button>
+        ))}
+      </div>
+      <p class="admin-form-status" role="status" aria-live="polite" data-cal-list-status></p>
+      <p class="cal-truncated" role="note" data-cal-truncated hidden></p>
+
+      <div class="cal-split">
+        <div class="cal-grid-home" data-cal-grid></div>
+        <aside class="cal-side" aria-labelledby="cal-day-title">
+          <section class="cal-day">
+            <header class="cal-day__head">
+              <h2 id="cal-day-title" tabindex="-1" data-cal-day-title></h2>
+              <span class="cal-day__count" data-cal-day-count></span>
+            </header>
+            <ul class="cal-rows" data-cal-rows></ul>
+            <p class="cal-empty" data-cal-empty hidden>이 날에는 일정이 없습니다.</p>
+            <button class="work-secondary-button cal-day__add" type="button" aria-haspopup="dialog" data-cal-day-add>
+              <span aria-hidden="true">＋</span> <span data-cal-day-add-text>이 날에 일정 넣기</span>
+            </button>
+          </section>
+        </aside>
+      </div>
+      <p class="cal-note">◆ 돈 날짜 · ▲ 기한 · ● 안내·상담 · ■ 일상 · ☐ 할 일 — 모양과 글자로도 가릅니다. ↻는 반복 일정입니다.</p>
+    </div>
+
+    <dialog class="cal-dialog" aria-labelledby="cal-form-title" data-cal-dialog>
+      <div class="cal-form">
+        <div class="cal-form__head">
+          <h2 id="cal-form-title" data-cal-form-title>일정 넣기</h2>
+          <button class="cal-icon" type="button" aria-label="닫기" data-cal-close><span aria-hidden="true">✕</span></button>
+        </div>
+        <div class="cal-form__body">
+          <fieldset class="cal-field" aria-describedby="cal-tag-help">
+            <legend>종류 <span class="cu-required">필수</span></legend>
+            <div class="cal-picks">
+              {APPOINTMENT_TAG_KEYS.map((tag) => (
+                <label class="cal-pick">
+                  <input type="radio" name="cal-tag" value={tag} autocomplete="off" data-cal-tag />
+                  <span><i aria-hidden="true">{families[tagFamilies[tag]].glyph}</i>{tagLabels[tag]}</span>
+                </label>
+              ))}
+            </div>
+            <small class="cu-error" data-cal-error="tag"></small>
+            <small class="cal-help" id="cal-tag-help">계약일·중도금·잔금·신고 기한은 손님 카드 거래 칸에서 계산해 넣습니다.</small>
+          </fieldset>
+
+          <div class="cal-field">
+            <label for="cal-title">제목 <span class="cu-required">필수</span></label>
+            <input id="cal-title" type="text" maxlength={APPOINTMENT_TITLE_MAX} autocomplete="off" aria-describedby="cal-title-error cal-title-help" data-cal-f="title" />
+            <small class="cu-error" id="cal-title-error" data-cal-error="title"></small>
+            <p class="cal-help cal-help--row"><span id="cal-title-help">{APPOINTMENT_TITLE_HELP}</span><span class="cal-count-n" data-cal-title-count>0 / {APPOINTMENT_TITLE_MAX}</span></p>
+          </div>
+
+          <div class="cal-field">
+            <label for="cal-date">날짜 <span class="cu-required">필수</span></label>
+            <input id="cal-date" type="date" autocomplete="off" aria-describedby="cal-date-error" data-cal-f="startsOn" />
+            <small class="cu-error" id="cal-date-error" data-cal-error="startsOn"></small>
+          </div>
+
+          <fieldset class="cal-field" aria-describedby="cal-time-help">
+            <legend>시각</legend>
+            <label class="work-check cal-allday"><input type="checkbox" autocomplete="off" data-cal-allday /><span>하루 종일</span></label>
+            <div class="cal-range">
+              <div>
+                <label for="cal-start">시작</label>
+                <input id="cal-start" type="time" step="300" autocomplete="off" aria-describedby="cal-start-error" data-cal-f="startTime" />
+              </div>
+              <span class="cal-range__sep" aria-hidden="true">~</span>
+              <div>
+                <label for="cal-end">끝 <small class="tk-opt">없어도 됨</small></label>
+                <input id="cal-end" type="time" step="300" autocomplete="off" aria-describedby="cal-end-error" data-cal-f="endTime" />
+              </div>
+            </div>
+            <small class="cu-error" id="cal-start-error" data-cal-error="startTime"></small>
+            <small class="cu-error" id="cal-end-error" data-cal-error="endTime"></small>
+            <small class="cal-help" id="cal-time-help" data-cal-time-help></small>
+          </fieldset>
+
+          <fieldset class="cal-field" data-cal-repeat-field>
+            <legend>반복</legend>
+            <div class="cal-picks">
+              {Object.keys(repeatLabels).map((rule) => (
+                <label class="cal-pick">
+                  <input type="radio" name="cal-repeat" value={rule} autocomplete="off" data-cal-repeat />
+                  <span>{repeatLabels[rule]}</span>
+                </label>
+              ))}
+            </div>
+            <small class="cu-error" data-cal-error="repeatRule"></small>
+            <div class="cal-repeat-more" data-cal-repeat-more hidden>
+              <p class="cal-summary" data-cal-repeat-summary></p>
+              <div class="cal-end" role="radiogroup" aria-labelledby="cal-until-label">
+                <span class="cal-end__label" id="cal-until-label">끝나는 날</span>
+                <label class="cal-pick"><input type="radio" name="cal-until" value="none" autocomplete="off" data-cal-until /><span>정하지 않음</span></label>
+                <label class="cal-pick"><input type="radio" name="cal-until" value="date" autocomplete="off" data-cal-until /><span>날짜 정하기</span></label>
+              </div>
+              <div class="cal-field" data-cal-until-row hidden>
+                <label for="cal-until">끝나는 날</label>
+                <input id="cal-until" type="date" autocomplete="off" aria-describedby="cal-until-error" data-cal-f="repeatUntil" />
+                <small class="cu-error" id="cal-until-error" data-cal-error="repeatUntil"></small>
+              </div>
+            </div>
+            <p class="cal-help" data-cal-repeat-lock hidden>'이 날만' 고친 일정이라 반복을 바꿀 수 없습니다.</p>
+          </fieldset>
+
+          <fieldset class="cal-field" aria-describedby="cal-alarm-help">
+            <legend>휴대폰 캘린더 알림 <small class="tk-opt">일정마다 최대 {APPOINTMENT_MAX_ALARMS}개</small></legend>
+            <div class="work-checks cal-alarms">
+              {Object.keys(alarms).map((key) => (
+                <label class="work-check" data-cal-alarm-row={key}>
+                  <input type="checkbox" value={key} autocomplete="off" data-cal-alarm />
+                  <span>{alarms[key].label}</span>
+                </label>
+              ))}
+            </div>
+            <small class="cu-error" data-cal-error="alarms"></small>
+            <small class="cal-help" id="cal-alarm-help" data-cal-alarm-help></small>
+          </fieldset>
+        </div>
+
+        <div class="cal-form__foot">
+          <p class="admin-form-status" role="status" aria-live="polite" data-cal-form-status></p>
+          <section class="cal-scope" aria-labelledby="cal-scope-title" data-cal-scope hidden>
+            <h3 id="cal-scope-title" data-cal-scope-title>반복 일정입니다. 어디까지 고칠까요?</h3>
+            <div class="cal-scope__choices" data-cal-scope-choices></div>
+            <button class="work-secondary-button" type="button" data-cal-scope-cancel>그만두기</button>
+          </section>
+          <section class="cu-panel cu-panel--danger cal-delete" aria-labelledby="cal-del-title" data-cal-delete-panel hidden>
+            <h3 id="cal-del-title" class="cu-panel__title">이 일정을 지울까요?</h3>
+            <p>{TRASH_MOVE_NOTICE}</p>
+            <div class="cal-scope__choices" data-cal-delete-choices></div>
+            <button class="work-secondary-button" type="button" data-cal-delete-cancel>그만두기</button>
+          </section>
+          <p class="cal-keep">{APPOINTMENT_KEEP_NOTICE}</p>
+          <div class="cu-actions cal-actions" data-cal-actions>
+            <button class="work-primary-button cu-save" type="button" data-cal-save>일정 저장</button>
+            <button class="work-secondary-button" type="button" data-cal-reload hidden>새 값 보기</button>
+            <button class="work-secondary-button" type="button" data-cal-cancel>그만두기</button>
+          </div>
+          <p class="cal-del-open" data-cal-delete-row hidden>
+            <button class="admin-text-link cu-linkbtn cu-danger" type="button" aria-expanded="false" data-cal-delete>이 일정 지우기</button>
+          </p>
+        </div>
+      </div>
+    </dialog>
+  </div>
+
+  <script>
+    import {
+      WorkApiError,
+      createAppointment,
+      deleteAppointment,
+      getCalendarSession,
+      readAppointment,
+      readCalendar,
+      updateAppointment,
+      type Appointment,
+      type AppointmentInput,
+      type AppointmentWhere,
+      type RepeatScope,
+    } from "../../../lib/work-calendar-client";
+    type PatchBody = AppointmentInput & AppointmentWhere;
+    import { element, setStatus } from "../../../lib/work-customers-dom";
+    import { calendarGrid, dayRow } from "../../../lib/work-calendar-dom";
+    import { showMovedToTrash } from "../../../lib/work-trash-dom";
+    import { todayInKorea } from "../../../lib/work/legal-dates.mjs";
+    import { APPOINTMENT_DATE_EXPIRED_MESSAGE, appointmentCutoffDate } from "../../../lib/work/appointment-rules.mjs";
+    import { customerErrorText, isRetryable } from "../../../lib/work/customers-view.mjs";
+    import {
+      APPOINTMENT_MAX_ALARMS,
+      APPOINTMENT_TITLE_MAX,
+      alarmChoices,
+      appointmentDeleteBody,
+      appointmentExpiredErrors,
+      appointmentFieldErrors,
+      appointmentFormValue,
+      appointmentPatchBody,
+      appointmentSaveExpired,
+      calendarErrorText,
+      checkAppointmentInput,
+      dayShortTitle,
+      dayTitle,
+      defaultAlarms,
+      filterItems,
+      isRepeatingAppointment,
+      itemsByDay,
+      keepAllowedAlarms,
+      monthCountText,
+      monthGrid,
+      monthOf,
+      monthShortName,
+      monthTitle,
+      repeatScopeChoices,
+      repeatSummaryText,
+      shiftMonth,
+      sortDayItems,
+      toCalendarItems,
+      truncatedText,
+      type CalendarItem,
+    } from "../../../lib/work/calendar-view.mjs";
+
+    const root = document.querySelector<HTMLElement>("[data-cal-page]");
+    if (root) {
+      const pick = <T extends HTMLElement>(selector: string) => {
+        const found = root.querySelector<T>(selector);
+        if (!found) throw new Error(`달력 화면 칸이 없습니다: ${selector}`);
+        return found;
+      };
+      const all = <T extends HTMLElement>(selector: string) => [...root.querySelectorAll<T>(selector)];
+      const boot = pick("[data-cal-boot]");
+      const statePanel = pick("[data-cal-state]");
+      const main = pick("[data-cal-main]");
+      const saved = pick("[data-cal-saved]");
+      const monthHead = pick("[data-cal-month]");
+      const prev = pick<HTMLButtonElement>("[data-cal-prev]");
+      const next = pick<HTMLButtonElement>("[data-cal-next]");
+      const todayButton = pick<HTMLButtonElement>("[data-cal-today]");
+      const countLine = pick("[data-cal-count]");
+      const addButton = pick<HTMLButtonElement>("[data-cal-add]");
+      const filterButtons = all<HTMLButtonElement>("[data-cal-filter]");
+      const listStatus = pick("[data-cal-list-status]");
+      const truncatedLine = pick("[data-cal-truncated]");
+      const gridHome = pick("[data-cal-grid]");
+      const dayHead = pick("[data-cal-day-title]");
+      const dayCount = pick("[data-cal-day-count]");
+      const rows = pick("[data-cal-rows]");
+      const emptyDay = pick("[data-cal-empty]");
+      const dayAdd = pick<HTMLButtonElement>("[data-cal-day-add]");
+      const dialog = pick<HTMLDialogElement>("[data-cal-dialog]");
+      const formTitle = pick("[data-cal-form-title]");
+      const tagInputs = all<HTMLInputElement>("[data-cal-tag]");
+      const titleInput = pick<HTMLInputElement>('[data-cal-f="title"]');
+      const titleCount = pick("[data-cal-title-count]");
+      const dateInput = pick<HTMLInputElement>('[data-cal-f="startsOn"]');
+      const allDayInput = pick<HTMLInputElement>("[data-cal-allday]");
+      const startInput = pick<HTMLInputElement>('[data-cal-f="startTime"]');
+      const endInput = pick<HTMLInputElement>('[data-cal-f="endTime"]');
+      const timeHelp = pick("[data-cal-time-help]");
+      const repeatField = pick("[data-cal-repeat-field]");
+      const repeatInputs = all<HTMLInputElement>("[data-cal-repeat]");
+      const repeatMore = pick("[data-cal-repeat-more]");
+      const repeatSummary = pick("[data-cal-repeat-summary]");
+      const repeatLock = pick("[data-cal-repeat-lock]");
+      const untilInputs = all<HTMLInputElement>("[data-cal-until]");
+      const untilRow = pick("[data-cal-until-row]");
+      const untilInput = pick<HTMLInputElement>('[data-cal-f="repeatUntil"]');
+      const alarmInputs = all<HTMLInputElement>("[data-cal-alarm]");
+      const alarmHelp = pick("[data-cal-alarm-help]");
+      const formStatus = pick("[data-cal-form-status]");
+      const scopePanel = pick("[data-cal-scope]");
+      const scopeTitle = pick("[data-cal-scope-title]");
+      const scopeChoices = pick("[data-cal-scope-choices]");
+      const deletePanel = pick("[data-cal-delete-panel]");
+      const deleteChoices = pick("[data-cal-delete-choices]");
+      const actions = pick("[data-cal-actions]");
+      const save = pick<HTMLButtonElement>("[data-cal-save]");
+      const reload = pick<HTMLButtonElement>("[data-cal-reload]");
+      const deleteRow = pick("[data-cal-delete-row]");
+      const deleteButton = pick<HTMLButtonElement>("[data-cal-delete]");
+      const errorCode = (error: unknown) => (error instanceof WorkApiError ? error.code : null);
+      const errorText = (code: string | null) => calendarErrorText(code, customerErrorText(code));
+
+      let today = todayInKorea();
+      let month = monthOf(today);
+      let selected = today;
+      let families = new Set<string>();
+      let items: CalendarItem[] = [];
+      let loadToken = 0;
+      let busy = false;
+      // 고치기 창의 상태: 고치는 원래 줄과 반복 줄의 그날
+      let editing: Appointment | null = null;
+      let alarmsAuto = false; // 처음 넣는 일정에서 알림을 아직 손대지 않았으면 참(하루 종일·시각에 맞는 처음 값을 따라감)
+      let occurrenceOn = "";
+      let returnFocus: HTMLElement | null = null;
+      let formSnapshot = "";
+
+      function showState(title: string, body: string, { symbol = "!", retry = false, home = false } = {}) {
+        boot.hidden = true;
+        main.hidden = true;
+        pick("[data-cal-state-symbol]").textContent = symbol;
+        pick("[data-cal-state-title]").textContent = title;
+        pick("[data-cal-state-body]").textContent = body;
+        pick("[data-cal-state-retry]").hidden = !retry;
+        pick("[data-cal-state-home]").hidden = !home;
+        statePanel.hidden = false;
+      }
+      const showDisabled = () => showState(
+        "업무 도구가 켜지지 않았습니다",
+        "달력은 운영자가 업무 자료 저장을 켜야 쓸 수 있습니다. 중개보수 계산·안내 문자·계약 일정은 지금도 쓸 수 있습니다.",
+        { symbol: "–", home: true },
+      );
+      function showLoadError(error: unknown) {
+        const code = errorCode(error);
+        if (code === "WORK_DISABLED") showDisabled();
+        else if (code === "WORK_SCHEMA_OUTDATED") showState("자료 구조 갱신 전입니다", errorText(code));
+        else showState("달력을 불러오지 못했습니다", errorText(code), { retry: isRetryable(code) });
+      }
+      function showSaved(text: string, state: "success" | "error" = "success") {
+        saved.textContent = text;
+        saved.dataset.state = state;
+        saved.hidden = !text;
+      }
+
+      // ── 달력 그리기 ──
+      function renderDay() {
+        const dayItems = sortDayItems(filterItems(items, families).filter((item) => item.on === selected));
+        dayHead.textContent = dayTitle(selected);
+        dayCount.textContent = `${dayItems.length}개`;
+        rows.replaceChildren(...dayItems.map(dayRow));
+        rows.hidden = dayItems.length === 0;
+        emptyDay.hidden = dayItems.length > 0;
+        pick("[data-cal-day-add-text]").textContent = `${dayShortTitle(selected)}에 일정 넣기`;
+      }
+      function render({ focusDay = false } = {}) {
+        const { year, month: monthName } = monthTitle(month);
+        monthHead.replaceChildren(`${year} `, element("b", "", monthName));
+        prev.setAttribute("aria-label", `${monthShortName(shiftMonth(month, -1) ?? "")} 보기`);
+        next.setAttribute("aria-label", `${monthShortName(shiftMonth(month, 1) ?? "")} 보기`);
+        const shown = filterItems(items, families);
+        countLine.textContent = monthCountText(shown, month);
+        const grid = monthGrid(month, today);
+        gridHome.replaceChildren(calendarGrid(grid.days, itemsByDay(shown), { selected, today, label: `${year} ${monthName} 달력` }));
+        for (const button of filterButtons) {
+          const key = button.dataset.calFilter ?? "";
+          button.setAttribute("aria-pressed", String(key ? families.has(key) : families.size === 0));
+        }
+        renderDay();
+        if (focusDay) gridHome.querySelector<HTMLElement>(`[data-cal-day="${selected}"]`)?.focus();
+      }
+
+      async function load() {
+        const mine = ++loadToken;
+        today = todayInKorea();
+        const grid = monthGrid(month, today);
+        setStatus(listStatus, "불러오고 있습니다…", "saving");
+        try {
+          const range = await readCalendar(grid.fromOn, grid.toOn);
+          if (mine !== loadToken) return false;
+          items = toCalendarItems(range.items, today);
+          const cut = truncatedText(Boolean(range.truncated));
+          truncatedLine.textContent = cut;
+          truncatedLine.hidden = !cut;
+          setStatus(listStatus, "", "idle");
+          return true;
+        } catch (error) {
+          if (mine !== loadToken) return false;
+          const code = errorCode(error);
+          if (code === "WORK_DISABLED" || code === "WORK_SCHEMA_OUTDATED") showLoadError(error);
+          else setStatus(listStatus, `달력을 불러오지 못했습니다. ${errorText(code)}`, "error");
+          throw error;
+        }
+      }
+      async function refresh({ focusDay = false } = {}) {
+        try {
+          if (await load()) render({ focusDay });
+        } catch {
+          // 알림 줄에 이미 적었다. 그사이 보던 달은 그대로 둔다.
+        }
+      }
+      // 다른 달로 옮기면 고른 날은 그 달 1일(오늘이 그 달이면 오늘)로.
+      function goMonth(target: string | null, { focusDay = false } = {}) {
+        if (!target || busy) return;
+        month = target;
+        selected = monthOf(today) === target ? today : `${target}-01`;
+        items = [];
+        render();
+        void refresh({ focusDay });
+      }
+      prev.addEventListener("click", () => goMonth(shiftMonth(month, -1)));
+      next.addEventListener("click", () => goMonth(shiftMonth(month, 1)));
+      todayButton.addEventListener("click", () => {
+        today = todayInKorea();
+        if (month === monthOf(today)) {
+          selected = today;
+          render({ focusDay: true });
+        } else goMonth(monthOf(today), { focusDay: true });
+      });
+      for (const button of filterButtons) {
+        button.addEventListener("click", () => {
+          const key = button.dataset.calFilter ?? "";
+          if (!key) families = new Set();
+          else if (families.has(key)) families.delete(key);
+          else families.add(key);
+          render();
+        });
+      }
+
+      // 칸 고르기: 누르기·방향키(←→ 하루, ↑↓ 한 주, Home·End 그 주 처음·끝). 다른 달로 넘어가면 그 달을 부른다.
+      gridHome.addEventListener("click", (event) => {
+        const cell = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-cal-day]");
+        if (!cell?.dataset.calDay) return;
+        const on = cell.dataset.calDay;
+        if (monthOf(on) !== month) {
+          month = monthOf(on);
+          selected = on;
+          items = [];
+          render({ focusDay: true });
+          void refresh({ focusDay: true });
+          return;
+        }
+        selected = on;
+        render({ focusDay: true });
+      });
+      gridHome.addEventListener("keydown", (event) => {
+        const cell = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-cal-day]");
+        if (!cell?.dataset.calDay) return;
+        const moves: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 };
+        const weekday = new Date(`${cell.dataset.calDay}T00:00:00Z`).getUTCDay();
+        const step = event.key in moves ? moves[event.key] : event.key === "Home" ? -weekday : event.key === "End" ? 6 - weekday : null;
+        if (step === null) return;
+        event.preventDefault();
+        const time = Date.parse(`${cell.dataset.calDay}T00:00:00Z`) + step * 86400000;
+        const on = new Date(time).toISOString().slice(0, 10);
+        selected = on;
+        if (monthOf(on) !== month) {
+          month = monthOf(on);
+          items = [];
+          render({ focusDay: true });
+          void refresh({ focusDay: true });
+        } else render({ focusDay: true });
+      });
+
+      // ── 일정 넣기·고치기 창 ──
+      const checkedValue = (inputs: HTMLInputElement[]) => inputs.find((input) => input.checked)?.value ?? "";
+      const checkedAlarms = () => alarmInputs.filter((input) => input.checked).map((input) => input.value);
+      const readValues = () => ({
+        tag: checkedValue(tagInputs),
+        title: titleInput.value,
+        startsOn: dateInput.value,
+        allDay: allDayInput.checked,
+        startTime: startInput.value,
+        endTime: endInput.value,
+        repeatRule: checkedValue(repeatInputs) || "none",
+        untilMode: (checkedValue(untilInputs) || "none") as "none" | "date",
+        repeatUntil: untilInput.value,
+        alarms: checkedAlarms(),
+      });
+      const snapshotOf = () => JSON.stringify(readValues());
+      const isDirty = () => dialog.open && snapshotOf() !== formSnapshot;
+      const seriesLocked = () => Boolean(editing?.seriesId);
+
+      function showErrors(errors: Record<string, string>) {
+        for (const node of all<HTMLElement>("[data-cal-error]")) {
+          const name = node.dataset.calError ?? "";
+          node.textContent = errors[name] ?? "";
+          const input = root!.querySelector<HTMLElement>(`[data-cal-f="${name}"]`);
+          if (input) {
+            if (errors[name]) input.setAttribute("aria-invalid", "true");
+            else input.removeAttribute("aria-invalid");
+          }
+        }
+      }
+      // 하루 종일이면 시각 칸을 잠그고, 고를 수 없게 된 알림은 체크를 푼다(서버와 같은 판정). 최대 2개가 차면 나머지를 잠근다.
+      function syncForm({ alarmsFollowTime = false } = {}) {
+        titleCount.textContent = `${[...titleInput.value].length} / ${APPOINTMENT_TITLE_MAX}`;
+        const allDay = allDayInput.checked;
+        startInput.disabled = allDay;
+        endInput.disabled = allDay || !startInput.value;
+        timeHelp.textContent = allDay ? "'하루 종일'을 끄면 시작·끝 시각을 넣을 수 있습니다." : "끝 시각은 비워도 되고, 넣으면 시작보다 늦어야 합니다.";
+        const startTime = allDay || !startInput.value ? null : startInput.value;
+        const choices = new Set(alarmChoices(startTime));
+        if (alarmsAuto) {
+          // 사용자 답 2026-11-26 09:18:41: 하루 종일은 '전날 18:00', 시각 있음은 '1시간 전'. 시각을 넣기 전에는 비워 두고, 넣으면 채운다.
+          const wanted = new Set(defaultAlarms(allDay));
+          for (const input of alarmInputs) input.checked = wanted.has(input.value) && choices.has(input.value);
+        } else if (alarmsFollowTime) {
+          const kept = new Set(keepAllowedAlarms(checkedAlarms(), startTime));
+          for (const input of alarmInputs) input.checked = kept.has(input.value);
+        }
+        const full = checkedAlarms().length >= APPOINTMENT_MAX_ALARMS;
+        for (const input of alarmInputs) {
+          const allowed = choices.has(input.value);
+          if (!allowed) input.checked = false;
+          input.disabled = !allowed || (full && !input.checked);
+        }
+        const hidden = alarmInputs.filter((input) => !choices.has(input.value)).map((input) => input.nextElementSibling?.textContent ?? "");
+        alarmHelp.textContent = hidden.length
+          ? `${allDay ? "하루 종일 일정이라" : !startTime ? "시작 시각을 넣기 전이라" : "시작 시각보다 늦게 울려"} '${hidden.join("', '")}'은 고를 수 없습니다. 체크하지 않으면 알림이 없습니다.`
+          : "체크하지 않으면 알림이 없습니다.";
+        const rule = checkedValue(repeatInputs) || "none";
+        const locked = seriesLocked();
+        for (const input of repeatInputs) input.disabled = locked;
+        repeatLock.hidden = !locked;
+        repeatMore.hidden = rule === "none";
+        repeatSummary.textContent = repeatSummaryText(rule, dateInput.value);
+        const untilDate = checkedValue(untilInputs) === "date";
+        untilRow.hidden = !untilDate;
+        untilInput.min = dateInput.value;
+      }
+
+      function fillForm(appointment: Appointment | null, on: string) {
+        const value = appointment
+          ? appointmentFormValue(appointment, on)
+          : { tag: "", title: "", startsOn: on, allDay: true, startTime: "", endTime: "", repeatRule: "none", untilMode: "none", repeatUntil: "", alarms: defaultAlarms(true) };
+        for (const input of tagInputs) input.checked = input.value === value.tag;
+        titleInput.value = value.title;
+        dateInput.value = value.startsOn;
+        allDayInput.checked = value.allDay;
+        startInput.value = value.startTime;
+        endInput.value = value.endTime;
+        for (const input of repeatInputs) input.checked = input.value === value.repeatRule;
+        for (const input of untilInputs) input.checked = input.value === value.untilMode;
+        untilInput.value = value.repeatUntil;
+        for (const input of alarmInputs) input.checked = value.alarms.includes(input.value);
+        alarmsAuto = !appointment;
+      }
+      function openForm(appointment: Appointment | null, on: string, opener: HTMLElement) {
+        if (busy) return;
+        editing = appointment;
+        occurrenceOn = appointment && isRepeatingAppointment(appointment) ? on : "";
+        returnFocus = opener;
+        formTitle.textContent = appointment ? "일정 고치기" : "일정 넣기";
+        save.textContent = appointment ? "고친 것 저장" : "일정 저장";
+        fillForm(appointment, on);
+        showErrors({});
+        setStatus(formStatus, "", "idle");
+        reload.hidden = true;
+        hidePanels();
+        deleteRow.hidden = !appointment;
+        save.disabled = false;
+        syncForm();
+        formSnapshot = snapshotOf();
+        dialog.showModal();
+        (appointment ? titleInput : tagInputs[0])?.focus();
+      }
+      function hidePanels() {
+        scopePanel.hidden = true;
+        deletePanel.hidden = true;
+        actions.hidden = false;
+        deleteRow.hidden = !editing;
+        deleteButton.setAttribute("aria-expanded", "false");
+      }
+      function closeForm() {
+        if (dialog.open) dialog.close();
+      }
+      dialog.addEventListener("close", () => {
+        editing = null;
+        occurrenceOn = "";
+        const back = returnFocus;
+        returnFocus = null;
+        if (back?.isConnected) back.focus();
+        else addButton.focus();
+      });
+      // Esc: 고친 것이 있으면 바로 닫지 않고 알린다('그만두기'로 버림).
+      dialog.addEventListener("cancel", (event) => {
+        if (busy || isDirty()) {
+          event.preventDefault();
+          if (!busy) setStatus(formStatus, "저장하지 않은 내용이 있습니다. 버리려면 '그만두기'를 누릅니다.", "error");
+        }
+      });
+      pick("[data-cal-close]").addEventListener("click", () => {
+        if (busy) return;
+        if (isDirty()) {
+          setStatus(formStatus, "저장하지 않은 내용이 있습니다. 버리려면 '그만두기'를 누릅니다.", "error");
+          pick<HTMLButtonElement>("[data-cal-cancel]").focus();
+          return;
+        }
+        closeForm();
+      });
+      pick("[data-cal-cancel]").addEventListener("click", () => {
+        if (!busy) closeForm();
+      });
+      addButton.addEventListener("click", () => openForm(null, selected, addButton));
+      dayAdd.addEventListener("click", () => openForm(null, selected, dayAdd));
+      rows.addEventListener("click", (event) => {
+        const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-cal-edit]");
+        if (!button) return;
+        const item = items.find((entry) => entry.key === button.dataset.calEdit);
+        if (item?.appointment) openForm(item.appointment as Appointment, item.on, button);
+      });
+      titleInput.addEventListener("input", () => syncForm());
+      dateInput.addEventListener("input", () => syncForm());
+      allDayInput.addEventListener("change", () => {
+        // 처음 넣는 일정에서 알림을 건드리지 않았으면(alarmsAuto) syncForm이 하루 종일 ↔ 시각에 맞는 처음 값으로 바꿔 준다.
+        syncForm({ alarmsFollowTime: true });
+        if (!allDayInput.checked) startInput.focus();
+      });
+      startInput.addEventListener("input", () => syncForm({ alarmsFollowTime: true }));
+      endInput.addEventListener("input", () => syncForm());
+      for (const input of [...tagInputs, ...repeatInputs, ...untilInputs]) input.addEventListener("change", () => syncForm());
+      for (const input of alarmInputs) {
+        input.addEventListener("change", () => {
+          alarmsAuto = false; // 손으로 고른 뒤에는 시각을 바꿔도 고를 수 없게 된 것만 푼다
+          syncForm();
+        });
+      }
+
+      // ── 저장 ──
+      // 처음 틀린 칸에 초점을 두고, 그 칸 아래 글까지 보이게 한다(휴대폰에서 글이 창 아래 끝에 잘리지 않게).
+      function focusFirstError() {
+        const field = root!.querySelector<HTMLElement>('[aria-invalid="true"]');
+        field?.focus();
+        if (field) root!.querySelector<HTMLElement>(`[data-cal-error="${field.dataset.calF ?? ""}"]`)?.scrollIntoView({ block: "nearest" });
+      }
+      function readChecked() {
+        const checked = checkAppointmentInput(readValues());
+        if (!checked.ok) {
+          showErrors(checked.errors ?? {});
+          setStatus(formStatus, "저장하지 않았습니다. 칸 아래 글을 확인해 주세요.", "error");
+          focusFirstError();
+          return null;
+        }
+        showErrors({});
+        return checked.value;
+      }
+      function scopeButtons(box: HTMLElement, action: "edit" | "delete", run: (scope: RepeatScope) => void, disabled: Partial<Record<RepeatScope, string>> = {}) {
+        box.replaceChildren(...repeatScopeChoices(occurrenceOn, action).map((choice) => {
+          const why = disabled[choice.scope as RepeatScope] ?? "";
+          const button = element("button", "work-secondary-button cal-scope__go");
+          button.type = "button";
+          button.append(element("strong", "", `${choice.label} ${action === "delete" ? "지우기" : "고치기"}`), element("small", "", why || choice.help));
+          button.disabled = Boolean(why);
+          button.addEventListener("click", () => run(choice.scope as RepeatScope));
+          return button;
+        }));
+        box.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
+      }
+      // 1년 넘게 지난 날짜: 저장하지 않고 그 칸 아래에 까닭을 보인다(서버 400 APPOINTMENT_DATE_EXPIRED와 같은 글).
+      function showExpired(fields: string[]) {
+        hidePanels();
+        showErrors(appointmentExpiredErrors(fields));
+        setStatus(formStatus, "저장하지 않았습니다. 칸 아래 글을 확인해 주세요.", "error");
+        focusFirstError();
+      }
+      async function send(work: () => Promise<{ appointment: Appointment }>, savedOn: string) {
+        busy = true;
+        save.disabled = true;
+        setStatus(formStatus, "저장하고 있습니다…", "saving");
+        try {
+          await work();
+          busy = false;
+          closeForm();
+          if (monthOf(savedOn) !== month) month = monthOf(savedOn);
+          selected = savedOn;
+          showSaved("✓ 일정을 저장했습니다.");
+          await refresh();
+          saved.focus();
+        } catch (error) {
+          const code = errorCode(error);
+          if (code === "VALIDATION_FAILED" && error instanceof WorkApiError) showErrors(appointmentFieldErrors(error.details));
+          if (code === "APPOINTMENT_DATE_EXPIRED" && error instanceof WorkApiError) showErrors(appointmentExpiredErrors(error.details));
+          hidePanels();
+          setStatus(formStatus, `저장하지 못했습니다. ${errorText(code)}`, "error");
+          reload.hidden = !(editing && (code === "VERSION_CONFLICT" || code === "NOT_FOUND"));
+        } finally {
+          busy = false;
+          save.disabled = false;
+        }
+      }
+      save.addEventListener("click", () => {
+        if (busy) return;
+        const value = readChecked();
+        if (!value) return;
+        const cutoff = appointmentCutoffDate(Date.now());
+        if (!editing) {
+          const expired = appointmentSaveExpired(null, value, cutoff);
+          if (expired) return showExpired(expired);
+          void send(() => createAppointment(value as AppointmentInput), value.startsOn);
+          return;
+        }
+        const original = editing;
+        if (!isRepeatingAppointment(original)) {
+          const body = appointmentPatchBody(original, value);
+          if (!body) {
+            setStatus(formStatus, "바뀐 것이 없습니다.", "idle");
+            return;
+          }
+          const expired = appointmentSaveExpired(original, body, cutoff);
+          if (expired) return showExpired(expired);
+          void send(() => updateAppointment(original.id, body as PatchBody), value.startsOn);
+          return;
+        }
+        // 반복 줄: '이 날만 / 이 날부터 모두'를 묻는다. 반복·끝나는 날을 바꾸면 '이 날만'은 고를 수 없다(서버 400).
+        const repeatChanged = value.repeatRule !== original.repeatRule || (value.repeatUntil ?? null) !== (original.repeatUntil ?? null);
+        const one = appointmentPatchBody(original, value, { scope: "one", occurrenceOn });
+        const following = appointmentPatchBody(original, value, { scope: "following", occurrenceOn });
+        if (!one && !following) {
+          setStatus(formStatus, "바뀐 것이 없습니다.", "idle");
+          return;
+        }
+        // 범위마다 새로 생기는 줄이 다르므로 따로 본다. 고를 수 있는 범위가 하나도 없고 날짜 때문이면 묻지 않고 칸 아래에 알린다.
+        const oneExpired = one ? appointmentSaveExpired(original, one, cutoff) : null;
+        const followingExpired = following ? appointmentSaveExpired(original, following, cutoff) : null;
+        const oneBlocked = repeatChanged || !one ? "반복·끝나는 날을 바꾸면 '이 날부터 모두'로만 저장합니다." : oneExpired ? APPOINTMENT_DATE_EXPIRED_MESSAGE : "";
+        const followingBlocked = !following ? "바뀐 것이 없습니다." : followingExpired ? APPOINTMENT_DATE_EXPIRED_MESSAGE : "";
+        if (oneBlocked && followingBlocked && (oneExpired || followingExpired)) return showExpired(followingExpired ?? oneExpired ?? []);
+        setStatus(formStatus, "", "idle");
+        actions.hidden = true;
+        deleteRow.hidden = true;
+        scopeTitle.textContent = `반복 일정입니다. ${dayShortTitle(occurrenceOn)} 일정을 어디까지 고칠까요?`;
+        scopePanel.hidden = false;
+        scopeButtons(scopeChoices, "edit", (scope) => {
+          const body = scope === "one" ? one : following;
+          if (!body) return;
+          void send(() => updateAppointment(original.id, body as PatchBody), value.startsOn);
+        }, { one: oneBlocked, following: followingBlocked });
+      });
+      pick("[data-cal-scope-cancel]").addEventListener("click", () => {
+        hidePanels();
+        save.focus();
+      });
+      // 다른 곳에서 먼저 고쳤을 때: 그 일정의 새 값으로 다시 채운다.
+      reload.addEventListener("click", async () => {
+        if (busy || !editing) return;
+        busy = true;
+        try {
+          const fresh = await readAppointment(editing.id);
+          editing = fresh.appointment;
+          fillForm(editing, occurrenceOn || editing.startsOn);
+          syncForm();
+          formSnapshot = snapshotOf();
+          reload.hidden = true;
+          setStatus(formStatus, "새 값을 불러왔습니다. 다시 고친 뒤 저장해 주세요.", "idle");
+        } catch (error) {
+          setStatus(formStatus, `새 값을 불러오지 못했습니다. ${errorText(errorCode(error))}`, "error");
+        } finally {
+          busy = false;
+        }
+      });
+
+      // ── 지우기(휴지통) ──
+      async function remove(scope: RepeatScope | null) {
+        if (busy || !editing) return;
+        const original = editing;
+        busy = true;
+        setStatus(formStatus, "지우고 있습니다…", "saving");
+        try {
+          const body = scope ? appointmentDeleteBody(original, { scope, occurrenceOn }) : appointmentDeleteBody(original);
+          const result = await deleteAppointment(original.id, body);
+          busy = false;
+          closeForm();
+          showMovedToTrash(saved, "일정", result.trash, {
+            reload: () => refresh(),
+            begin: () => (busy ? false : (busy = true)),
+            end: () => {
+              busy = false;
+            },
+          });
+          await refresh();
+          saved.focus();
+        } catch (error) {
+          hidePanels();
+          setStatus(formStatus, `지우지 못했습니다. ${errorText(errorCode(error))}`, "error");
+        } finally {
+          busy = false;
+        }
+      }
+      deleteButton.addEventListener("click", () => {
+        if (!editing) return;
+        actions.hidden = true;
+        deleteRow.hidden = true;
+        deletePanel.hidden = false;
+        deleteButton.setAttribute("aria-expanded", "true");
+        if (isRepeatingAppointment(editing)) scopeButtons(deleteChoices, "delete", (scope) => void remove(scope));
+        else {
+          const go = element("button", "work-primary-button cu-save cu-delete-go", "지우기");
+          go.type = "button";
+          go.addEventListener("click", () => void remove(null));
+          deleteChoices.replaceChildren(go);
+          go.focus();
+        }
+      });
+      pick("[data-cal-delete-cancel]").addEventListener("click", () => {
+        hidePanels();
+        deleteButton.focus();
+      });
+
+      // 저장하지 않은 넣기·고치기가 있으면 떠나기 전에 묻는다.
+      window.addEventListener("beforeunload", (event) => {
+        if (!isDirty()) return;
+        event.preventDefault();
+      });
+
+      // ── 처음 불러오기: 업무 세션(켜짐) → 이 달 ──
+      async function start() {
+        statePanel.hidden = true;
+        main.hidden = true;
+        boot.hidden = false;
+        try {
+          const session = await getCalendarSession({ refresh: true });
+          if (!session.enabled) {
+            showDisabled();
+            return;
+          }
+          if (!(await load())) return;
+        } catch (error) {
+          showLoadError(error);
+          return;
+        }
+        boot.hidden = true;
+        main.hidden = false;
+        render();
+      }
+      pick("[data-cal-state-retry]").addEventListener("click", () => void start());
+
+      // 열 때마다(뒤로 가기 캐시 복원 포함) 창·거르기를 비우고 오늘이 있는 달을 다시 불러온다.
+      const reset = () => {
+        today = todayInKorea();
+        month = monthOf(today);
+        selected = today;
+        families = new Set();
+        items = [];
+        busy = false;
+        closeForm();
+        gridHome.replaceChildren();
+        rows.replaceChildren();
+        showSaved("");
+        setStatus(listStatus, "", "idle");
+        void start();
+      };
+      window.addEventListener("pageshow", (event) => {
+        if (event.persisted) reset();
+      });
+      reset();
+    }
+  </script>
+</AdminLayout>

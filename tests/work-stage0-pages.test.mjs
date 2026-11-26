@@ -324,6 +324,7 @@ test("계약 일정 구독 칸의 '알림이 오지 않을 때'는 Google 캘린
   assert.equal(steps.length, 2, "두 단계");
   assert.match(steps[0], /'종일 일정 알림'에 전날 오후 6시 알림을 더합니다\. 두 분 계정에서 따로/u);
   assert.match(steps[1], /'동기화'를 켭니다/u);
+  assert.match(steps[1], /시각이 있는 일정\(달력에 넣은 상담 등\)은 같은 곳에서 '일정 알림'도 켜 두어야 할 수 있습니다\./u, "시각 있는 일정 알림 한 줄(사용자 답 2026-11-26 10:32:14 '안내 한 줄 더함')");
   assert.match(fold, /iPhone 설정에서 캘린더 알림이 켜져 있는지 확인/u, "iPhone은 단정하지 않음");
   assert.doesNotMatch(schedulePage, /알림 설정을 켜 주세요/u, "옛 문장 없음");
   // 주소를 막 만들었을 때와 이미 있을 때 모두 보인다

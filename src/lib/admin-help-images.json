@@ -235,7 +235,7 @@
     },
     "calendar-feed": {
       "route": "/admin/work/schedule/",
-      "sources": "283d5f4dee469bc32ca77e4603fec8be68991ebef81230737fdd41f6870f5eba",
+      "sources": "da01748185a57bd40e8dac3d01f3fb685e6f3b7fe7217e0f1ce0c2b0d4a2a768",
       "shots": {
         "calendar-phone-1-empty": {
           "width": 772,

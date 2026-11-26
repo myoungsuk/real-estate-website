@@ -316,7 +316,8 @@ for (const width of [360, 1280]) {
     }
     const current = menu.getByRole("link", { name: "매출장부" });
     await expect(current).toHaveAttribute("aria-current", "page");
-    const hrefs = ["/admin/work/", "/admin/work/tasks/", "/admin/work/customers/", "/admin/work/ledger/", "/admin/work/fee/", "/admin/work/messages/", "/admin/work/schedule/", "/admin/work/realprice/", "/admin/work/blog/", "/admin/work/paper/", "/admin/work/listing-paper/"];
+    // 2026-11-26 사용자 답 08:59:51: 알약 순서 도구 모음 · 달력 · 할 일
+    const hrefs = ["/admin/work/", "/admin/work/calendar/", "/admin/work/tasks/", "/admin/work/customers/", "/admin/work/ledger/", "/admin/work/fee/", "/admin/work/messages/", "/admin/work/schedule/", "/admin/work/realprice/", "/admin/work/blog/", "/admin/work/paper/", "/admin/work/listing-paper/"];
     await menu.locator('a[href="/admin/work/"]').last().focus();
     const order = [];
     for (let index = 0; index < hrefs.length; index += 1) {

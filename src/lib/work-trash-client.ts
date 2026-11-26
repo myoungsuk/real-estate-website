@@ -7,7 +7,7 @@ export { WorkApiError, getCustomerSession as getTrashSession } from "./work-cust
 export type TrashKind = "customer" | "deal" | "note" | "event" | "ledger" | "task" | "file";
 // 지우는 요청 6곳의 응답에 붙는 값(7일 뒤 영구 삭제)
 export interface TrashRef { batchId: string; purgeAfter: string }
-export interface TrashCounts { customers: number; deals: number; parties: number; events: number; notes: number; tasks: number; ledger: number; files?: number; links: number }
+export interface TrashCounts { customers: number; deals: number; parties: number; events: number; notes: number; tasks: number; ledger: number; files?: number; links: number; appointments?: number }
 export interface TrashItem {
   batchId: string;
   kind: TrashKind;

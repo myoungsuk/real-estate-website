@@ -41,7 +41,7 @@ const navigationIcons: Record<string, AdminIconName> = {
   "/admin/help/": "help",
 };
 
-// 위 알약 메뉴의 그림(사용자 승인 2026-11-23 11:34:13 시안). 구역 10개와 아래 단계 13개에 하나씩이고, 그림과 색은 AdminPillIcon·admin.css에 있다.
+// 위 알약 메뉴의 그림(사용자 승인 2026-11-23 11:34:13 시안). 구역 10개와 아래 단계 14개에 하나씩이고, 그림과 색은 AdminPillIcon·admin.css에 있다.
 const sectionPills: Record<string, AdminPillName> = {
   "/admin/": "dashboard",
   "/admin/work/": "work",
@@ -56,6 +56,7 @@ const sectionPills: Record<string, AdminPillName> = {
 };
 const subPills: Record<string, AdminPillName> = {
   "/admin/work/": "work-home",
+  "/admin/work/calendar/": "calendar",
   "/admin/work/tasks/": "tasks",
   "/admin/work/customers/": "customers",
   "/admin/work/ledger/": "ledger",
@@ -83,10 +84,12 @@ const navigationGroups = [
 // 아래 단계가 있는 구역. 지금 구역이면 위 알약 줄로 보여 주고, 전체 메뉴 창에서는 그 구역 아래에 펼친다.
 // group: 이웃한 같은 group끼리 한 묶음(role="group" + 보이는 제목 aria-labelledby)으로 보인다. 업무 도구 묶음 3개는 사용자 선택 2026-11-21 03:09:45 B안.
 // '할 일'은 group 없이 '업무 도구 처음' 바로 뒤(제목 없는 첫 묶음, 사용자 선택 2026-11-22 13:22:11 메뉴 A안).
+// '달력'은 '도구 모음'과 '할 일' 사이(같은 제목 없는 첫 묶음, 사용자 답 2026-11-26 08:59 "도구 모음 · 달력 · 할 일").
 type NavigationSubItem = { href: string; label: string; group?: string };
 const navigationSubItems: Record<string, NavigationSubItem[]> = {
   "/admin/work/": [
     { href: "/admin/work/", label: "도구 모음" },
+    { href: "/admin/work/calendar/", label: "달력" },
     { href: "/admin/work/tasks/", label: "할 일" },
     { href: "/admin/work/customers/", label: "손님", group: "손님·돈" },
     { href: "/admin/work/ledger/", label: "매출장부", group: "손님·돈" },

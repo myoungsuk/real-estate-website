@@ -52,7 +52,8 @@ test("할 일 화면은 form 제출이 없고 입력칸 자동 완성을 끄며,
 
 test("메뉴 A안(2026-11-22 13:22:11): '할 일'은 업무 도구 처음 바로 뒤, 탭 미리 그리기(prerender) 목록에는 넣지 않는다", async () => {
   const layout = await readSource("src/layouts/AdminLayout.astro");
-  assert.match(layout, /\{ href: "\/admin\/work\/", label: "도구 모음" \},\r?\n\s*\{ href: "\/admin\/work\/tasks\/", label: "할 일" \},/u);
+  // 2026-11-26 08:59 사용자 답 "도구 모음 · 달력 · 할 일": '달력'이 둘 사이에 들어간다.
+  assert.match(layout, /\{ href: "\/admin\/work\/", label: "도구 모음" \},\r?\n\s*\{ href: "\/admin\/work\/calendar\/", label: "달력" \},\r?\n\s*\{ href: "\/admin\/work\/tasks\/", label: "할 일" \},/u);
   const prerender = /const prerenderPages = \[([^\]]*)\];/u.exec(layout)?.[1] ?? "";
   assert.doesNotMatch(prerender, /tasks/u, "서버를 부르는 할 일 화면은 미리 그리지 않음");
 });
