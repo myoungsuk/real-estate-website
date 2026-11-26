@@ -175,6 +175,7 @@ const TASK_REPEAT_RULES = Object.freeze({ weekly: "weekly", monthly: "monthly" }
 /**
  * 업무 API `calendar` 응답 항목 → 화면 항목. 서버는 late·past를 주지 않으므로 today로 계산한다(날개-2 API 판 1 3절).
  * 거래 일정 칸 글자는 '종류 + 거래 이름'(직접 넣은 거래 일정은 '거래 일정 + 그 제목'), 할 일·거래 없는 일정은 제목이다.
+ * (그날 목록 줄은 이 둘을 쓰고, 넓은 칸 글자 띠는 `chipText`의 한 조각만 쓴다.)
  * 모르는 source·날짜 꼴이 틀린 항목은 버린다(화면이 깨지지 않게).
  * @param {any[]} apiItems @param {string} today YYYY-MM-DD
  * @returns {CalendarItem[]}
@@ -259,6 +260,17 @@ export function filterItems(items, families) {
 /** 넓은 칸의 글자 띠: 3개까지, 넘치면 남은 수. @param {CalendarItem[]} dayItems */
 export function chipsFor(dayItems, shown = CALENDAR_CHIPS_SHOWN) {
   return dayItems.length > shown ? { items: dayItems.slice(0, shown), more: dayItems.length - shown } : { items: dayItems, more: 0 };
+}
+/**
+ * 넓은 칸 글자 띠에 보일 한 조각(사용자 답 2026-11-26 11:22:26 "뜻 있는 한 조각"). 종류가 정해진 거래 일정(계약일·중도금·잔금·
+ * 거래신고·자금조달계획서·임대차 신고)은 그 이름, 할 일·거래 없는 일정·이름 붙인 거래 일정('거래 일정')은 적어 둔 제목이고,
+ * 제목이 비면 이름이다. 손님·거래 이름은 칸에 넣지 않고 그날 목록에서 본다.
+ * @param {CalendarItem} item
+ */
+export function chipText(item) {
+  const fixedDealKind = item.source === "deal" && item.label !== DEAL_EVENT_FAMILIES.custom.label;
+  if (fixedDealKind) return item.label;
+  return item.title.trim() || item.label;
 }
 /** 좁은 칸의 모양 표시: 3개까지, 4개 이상이면 2개 + '+'. @param {CalendarItem[]} dayItems */
 export function marksFor(dayItems, shown = CALENDAR_MARKS_SHOWN) {

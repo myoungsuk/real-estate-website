@@ -13,6 +13,7 @@ import {
   appointmentPatchBody,
   cellLabel,
   checkAppointmentInput,
+  chipText,
   chipsFor,
   dateLongText,
   dayTitle,
@@ -115,6 +116,45 @@ test("그날 차례·칸 표시: 하루 종일 먼저, 넓은 칸 3개 + 'n개 �
   assert.equal(marksFor(many).plus, true);
   assert.equal(cellLabel("2026-11-20", day, TODAY), "11월 20일 금요일, 일정 3개, 지난 일정 2개", "열린 잔금·할 일 둘(거래 없는 일정은 세지 않음)");
   assert.equal(cellLabel(TODAY, [], TODAY), "11월 26일 목요일, 오늘, 일정 없음");
+});
+
+test("넓은 칸 글자 띠는 뜻 있는 한 조각만: 종류가 정해진 거래 일정은 그 이름, 그 밖은 적어 둔 제목(사용자 답 2026-11-26 11:22:26)", () => {
+  const deal = { id: "d-1", title: "가상숲1단지 84㎡ 매매" };
+  const customer = { id: "c-1", displayName: "가상손님" };
+  const raw = [
+    { key: "k-contract", source: "deal", kind: "contract", title: "계약일", deal, customer },
+    { key: "k-middle", source: "deal", kind: "middle_payment", title: "중도금", deal, customer },
+    { key: "k-balance", source: "deal", kind: "balance", title: "잔금", deal, customer },
+    { key: "k-report", source: "deal", kind: "transaction_report", title: "거래신고", deal, customer },
+    { key: "k-funding", source: "deal", kind: "funding_plan_submit", title: "자금조달계획서", deal, customer },
+    { key: "k-lease", source: "deal", kind: "lease_report", title: "임대차 신고", deal, customer },
+    { key: "k-custom", source: "deal", kind: "custom", title: "가상 이사 날짜 확인", deal, customer },
+    { key: "k-custom-empty", source: "deal", kind: "custom", title: "  ", deal, customer },
+    { key: "k-unknown", source: "deal", kind: "something_new", title: "가상 새 종류 일정", deal, customer },
+    { key: "k-task", source: "task", title: "가상 서류 받기", done: false, repeat: "none" },
+    { key: "k-task-empty", source: "task", title: "", done: false, repeat: "none" },
+    { key: "k-appt", source: "appointment", title: "가상 전세 상담", appointment: { tag: "consult", repeatRule: "none" } },
+    { key: "k-appt-empty", source: "appointment", title: "", appointment: { tag: "routine", repeatRule: "none" } },
+  ].map((item) => ({ on: "2026-11-24", id: item.key, ...item }));
+  const text = Object.fromEntries(toCalendarItems(raw, TODAY).map((item) => [item.key, chipText(item)]));
+  assert.deepEqual(text, {
+    "k-contract": "계약일",
+    "k-middle": "중도금",
+    "k-balance": "잔금",
+    "k-report": "거래신고",
+    "k-funding": "자금조달계획서",
+    "k-lease": "임대차 신고",
+    "k-custom": "가상 이사 날짜 확인",
+    "k-custom-empty": "거래 일정",
+    "k-unknown": "가상 새 종류 일정",
+    "k-task": "가상 서류 받기",
+    "k-task-empty": "할 일",
+    "k-appt": "가상 전세 상담",
+    "k-appt-empty": "일상",
+  });
+  for (const value of Object.values(text)) {
+    assert.ok(!value.includes("가상숲") && !value.includes("가상손님"), "손님·거래 이름은 칸에 넣지 않음(그날 목록에서 봄)");
+  }
 });
 
 test("거르기·모양·줄 글은 색 말고도 기호와 글자로 가른다", () => {
