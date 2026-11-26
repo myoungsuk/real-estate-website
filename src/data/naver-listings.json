@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-11-25",
+  "checkedAt": "2026-11-26",
   "items": [
     {
       "id": "2645736151",
@@ -1106,6 +1106,62 @@
       "registeredAt": "2026-11-02",
       "source": "네이버페이 부동산",
       "url": "https://fin.land.naver.com/articles/2659251557"
+    },
+    {
+      "id": "2663985354",
+      "title": "리더스시티 4블록 407동",
+      "propertyType": "아파트",
+      "tradeType": "sale",
+      "priceLabel": "4억 5,000",
+      "areaLabel": "98㎡ · 전용 74.96㎡",
+      "floorLabel": "저/27층",
+      "direction": null,
+      "summary": "네이버에 공개된 광고 매물입니다. 자세한 조건은 상세 화면에서 확인해 주세요.",
+      "registeredAt": "2026-11-25",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2663985354"
+    },
+    {
+      "id": "2663985705",
+      "title": "리더스시티 5블록 506동",
+      "propertyType": "아파트",
+      "tradeType": "sale",
+      "priceLabel": "4억",
+      "areaLabel": "81㎡ · 전용 59.94㎡",
+      "floorLabel": "저/28층",
+      "direction": null,
+      "summary": "네이버에 공개된 광고 매물입니다. 자세한 조건은 상세 화면에서 확인해 주세요.",
+      "registeredAt": "2026-11-25",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2663985705"
+    },
+    {
+      "id": "2663985852",
+      "title": "리더스시티 4블록 403동",
+      "propertyType": "아파트",
+      "tradeType": "sale",
+      "priceLabel": "3억 8,000",
+      "areaLabel": "79㎡ · 전용 59.64㎡",
+      "floorLabel": "24/29층",
+      "direction": null,
+      "summary": "네이버에 공개된 광고 매물입니다. 자세한 조건은 상세 화면에서 확인해 주세요.",
+      "registeredAt": "2026-11-25",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2663985852"
+    },
+    {
+      "id": "2663994060",
+      "title": "대전롯데캐슬더퍼스트 107동",
+      "propertyType": "아파트분양권",
+      "tradeType": "sale",
+      "priceLabel": "4억 3,738",
+      "areaLabel": "82㎡ · 전용 59.99㎡",
+      "floorLabel": "9/33층",
+      "direction": null,
+      "summary": "네이버에 공개된 광고 매물입니다. 자세한 조건은 상세 화면에서 확인해 주세요.",
+      "registeredAt": "2026-11-25",
+      "source": "네이버페이 부동산",
+      "url": "https://fin.land.naver.com/articles/2663994060"
     }
   ]
 }
