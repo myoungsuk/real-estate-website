@@ -1558,6 +1558,17 @@ html:has(.rt-pick-bar:not([hidden])) { scroll-padding-bottom: calc(var(--rt-pick
 .rt-step__download small { display: block; margin-top: 4px; color: var(--ds-ink-soft); font-size: 1rem; }
 .rt-step__downloads .rt-promo__download { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 52px; font-size: 1.0625rem; text-decoration: none; }
 .rt-step__downloads .work-primary-button.is-done { border: 1.5px solid var(--ds-navy); color: var(--ds-navy); background: var(--ds-paper); }
+/* 홍보 그림 '카톡·문자로 보내기'·'그림 복사'(2026-11-25, work-card-share.ts): 저장 단추 아래 한 줄, 좁으면 줄을 바꾼다. 단추가 하나도 없으면(안 되는 브라우저) 칸도 없다.
+   누르는 곳은 work-secondary-button 그대로(44px, 1221px 이상 + 마우스 36px). 실거래가 홍보물·미리보기 칸, 글 초안 카드 그림이 쓴다. */
+.work-card-share { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.work-card-share:empty { display: none; }
+.work-card-share > button.work-secondary-button { flex: 1 1 140px; width: auto; min-width: 0; margin: 0; }
+.rt-preview__act > .work-card-share { margin-top: 0; }
+/* 979px 이하: '카톡·문자로 보내기(n장)'가 두 줄로 꺾이지 않게 한 줄을 혼자 쓰고, 복사 단추들은 그 아래 한 줄에 나눠 선다(2026-11-26 사용자 선택 "휴대폰에서 단추를 한 줄 넓게"). */
+@media (max-width: 979px) {
+  .work-card-share > button[data-card-share] { flex: 1 1 100%; }
+  .work-card-share > button[data-card-copy] { flex: 1 1 0; }
+}
 .rt-places__title { margin: 20px 0 8px; color: var(--ds-navy); font-size: 1.125rem; font-weight: 800; }
 .rt-places { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .rt-place { display: grid; align-content: center; gap: 0; min-height: 56px; padding: 4px; border: 1.5px solid var(--ds-field-edge); border-radius: var(--ad-radius); color: var(--ds-ink); background: var(--ds-paper); font: inherit; text-align: center; cursor: pointer; }

@@ -275,6 +275,7 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
             <p class="bl-cardset__status" role="status" data-bl-cardset-status></p>
             <ul class="bl-cardset__list" data-bl-cardset-list></ul>
             <button class="work-secondary-button" type="button" data-bl-cardset-save hidden></button>
+            <div class="work-card-share" data-bl-cardset-share></div>
             <p class="bl-soft">사무소 명시사항 5항목이 카드마다 붙습니다. 하나라도 비면 만들지 않습니다.</p>
           </section>
           <section class="bl-disc" aria-labelledby="bl-disc-title">
@@ -338,6 +339,7 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
     import { matchesBlogSourceQuery } from "../../../lib/work/blog-sources.mjs";
     import { todayInKorea } from "../../../lib/work/legal-dates.mjs";
     import { renderBlogCards, type BlogCard } from "../../../lib/work-blog-card";
+    import { createCardShareButtons } from "../../../lib/work-card-share";
     import { createBlogCardOptions } from "../../../lib/work-blog-backgrounds";
     import { BLOG_SET_DEFAULT, isSetSize, makeCountView, makeWaitText, openSetIds, setProgressView, setTag } from "../../../lib/work/blog-set-view.mjs";
     import { createBlogWaitNotice } from "../../../lib/work-blog-wait";
@@ -479,6 +481,7 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
         const cardsetStatus = pick("[data-bl-cardset-status]");
         const cardsetList = pick<HTMLUListElement>("[data-bl-cardset-list]");
         const cardsetSave = pick<HTMLButtonElement>("[data-bl-cardset-save]");
+        const cardsetShare = pick("[data-bl-cardset-share]");
         const draftsFold = pick<HTMLDetailsElement>("[data-bl-drafts-fold]");
         const draftsStatus = pick("[data-bl-drafts-status]");
         const draftsList = pick<HTMLUListElement>("[data-bl-drafts]");
@@ -1503,6 +1506,7 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
         function showCardsetMessage(message: string) {
           cardsetList.replaceChildren();
           cardsetSave.hidden = true;
+          cardsetShare.replaceChildren();
           cardsetStatus.textContent = message;
           cardImages = [];
           renderCardBits();
@@ -1567,6 +1571,13 @@ const cardData = JSON.stringify(complexes.map(complexCardData).filter(Boolean)).
             }));
             cardsetSave.textContent = many ? `카드 ${result.images.length}장 저장` : "표지 저장";
             cardsetSave.hidden = false;
+            // 저장 단추와 같은 그림·파일 이름으로 '카톡·문자로 보내기'(모두 한 번에)·장마다 '복사'. 안 되는 브라우저에서는 단추가 없다.
+            cardsetShare.replaceChildren(...createCardShareButtons(result.images.map((image, index) => ({
+              dataUrl: image.dataUrl,
+              fileName: blogCardFileName(today, { name: source.title, index, listing: source.type !== "complex" }),
+            })), (text) => {
+              cardsetStatus.textContent = text;
+            }));
             cardsetStatus.textContent = "";
             cardImages = result.images.map((image) => image.dataUrl);
             renderCardBits();

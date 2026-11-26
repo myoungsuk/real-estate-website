@@ -67,6 +67,7 @@ const listHref = "/admin/work/realprice/";
         <p class="rt-promo__warn" data-promo-card-warn hidden>글이 길어 그림 아래 칸과 겹칠 수 있습니다. 그림을 확인해 주세요.</p>
         <p class="work-help">1080×1350 PNG(인스타그램 세로 피드 크기)입니다. 4건까지 한 장, 5건 이상은 3건씩 두 장으로 나눕니다.</p>
         <div class="rt-step__downloads" data-promo-downloads></div>
+        <div class="work-card-share" data-promo-share></div>
 
         <h3 class="rt-places__title" id="promo-copy-title">올릴 곳에 맞춘 글 복사</h3>
         <div class="rt-places" role="group" aria-labelledby="promo-copy-title">
@@ -101,6 +102,7 @@ const listHref = "/admin/work/realprice/";
     import office from "../../../../data/office.json";
     import { getWorkSession, readWork, WorkApiError } from "../../../../lib/work-realprice-client";
     import { renderPromoCard, type PromoCard, type PromoStyle } from "../../../../lib/work-realprice-card";
+    import { createCardShareButtons, type CardImage } from "../../../../lib/work-card-share";
     import { todayInKorea } from "../../../../lib/work/legal-dates.mjs";
     import {
       PROMO_PLACES,
@@ -143,6 +145,7 @@ const listHref = "/admin/work/realprice/";
       const cardLoading = pick("[data-promo-card-loading]");
       const cardWarn = pick("[data-promo-card-warn]");
       const downloads = pick("[data-promo-downloads]");
+      const shareRow = pick("[data-promo-share]");
       const stepPost = pick("[data-promo-step-post]");
       const textFold = pick<HTMLDetailsElement>("[data-promo-text-fold]");
       const previewLabel = pick("[data-promo-preview-label]");
@@ -252,6 +255,7 @@ const listHref = "/admin/work/realprice/";
         const figures: HTMLElement[] = [];
         const links: HTMLElement[] = [];
         const prints: HTMLImageElement[] = [];
+        const shared: CardImage[] = [];
         let overflow = false;
         for (const [index, card] of cards.entries()) {
           const result = await renderPromoCard(canvas, card);
@@ -275,6 +279,7 @@ const listHref = "/admin/work/realprice/";
           link.href = result.dataUrl;
           link.download = name;
           link.dataset.promoDownload = "";
+          shared.push({ dataUrl: result.dataUrl, fileName: name });
           const label = cards.length > 1 ? `${index + 1}장 저장` : "그림 저장";
           link.textContent = label;
           link.addEventListener("click", () => {
@@ -292,6 +297,11 @@ const listHref = "/admin/work/realprice/";
         }
         cardList.replaceChildren(...figures);
         downloads.replaceChildren(...links);
+        // 저장 단추와 같은 그림·파일 이름으로 '카톡·문자로 보내기'(모두 한 번에)·장마다 '복사'. 안 되는 브라우저에서는 단추가 없다.
+        shareRow.replaceChildren(...createCardShareButtons(shared, (text, state) => {
+          status.textContent = text;
+          status.dataset.state = state;
+        }));
         sheet.replaceChildren(...prints);
         sheet.dataset.count = String(cards.length);
         cardWarn.hidden = !overflow;

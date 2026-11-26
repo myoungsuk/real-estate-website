@@ -107,6 +107,8 @@ const metaOf = (source: (typeof sources)[number]) => {
           <div class="work-receipt__actions">
             <button class="work-primary-button" type="button" disabled data-lp-make>안내지 그림 만들기</button>
             <a class="work-primary-button" data-lp-download hidden>그림 저장</a>
+            <button class="work-secondary-button" type="button" data-lp-share hidden>카톡·문자로 보내기</button>
+            <button class="work-secondary-button" type="button" data-lp-copy hidden>그림 복사</button>
             <button class="work-secondary-button" type="button" data-lp-print hidden>종이로 뽑기(A4)</button>
           </div>
           <p class="admin-form-status" role="status" aria-live="polite" data-lp-status></p>
@@ -132,6 +134,7 @@ const metaOf = (source: (typeof sources)[number]) => {
     import { todayInKorea } from "../../../lib/work/legal-dates.mjs";
     import { checkPaperCopy } from "../../../lib/work/paper-copy.mjs";
     import { bindCopyFields } from "../../../lib/work-paper-copy";
+    import { bindCardShare } from "../../../lib/work-card-share";
     import {
       LISTING_PICK_MAX,
       buildCompareSheet,
@@ -160,6 +163,8 @@ const metaOf = (source: (typeof sources)[number]) => {
         const fillEmpty = pick<HTMLElement>("[data-lp-fill-empty]");
         const make = pick<HTMLButtonElement>("[data-lp-make]");
         const download = pick<HTMLAnchorElement>("[data-lp-download]");
+        const share = pick<HTMLButtonElement>("[data-lp-share]");
+        const copy = pick<HTMLButtonElement>("[data-lp-copy]");
         const print = pick<HTMLButtonElement>("[data-lp-print]");
         const status = pick<HTMLElement>("[data-lp-status]");
         const preview = pick<HTMLElement>("[data-lp-preview]");
@@ -183,12 +188,15 @@ const metaOf = (source: (typeof sources)[number]) => {
           status.textContent = text;
           status.dataset.state = state;
         };
+        // '카톡·문자로 보내기'·'그림 복사'는 '그림 저장'이 보일 때만 보인다(같은 그림·같은 파일 이름). 명시사항이 비어 그림을 못 만들면 셋 다 없다.
+        const syncShare = bindCardShare(share, copy, download, setStatus);
         // 칸이나 담은 매물이 바뀌면 만든 그림을 버린다(만드는 중에 바뀌면 끝난 그림도 버림).
         const clearImage = () => {
           token += 1;
           download.hidden = true;
           download.removeAttribute("href");
           download.removeAttribute("download");
+          syncShare();
           print.hidden = true;
           preview.hidden = true;
           image.removeAttribute("src");
@@ -362,6 +370,7 @@ const metaOf = (source: (typeof sources)[number]) => {
             download.href = result.dataUrl;
             download.download = listingFileName(todayInKorea(), ready.length);
             download.hidden = false;
+            syncShare();
             const printed = document.createElement("img");
             printed.src = result.dataUrl;
             printed.alt = alt;
