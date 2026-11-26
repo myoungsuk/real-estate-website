@@ -40,13 +40,19 @@ export const TRASH_COLUMNS = Object.freeze({
     "id", "kind", "deal_id", "payer_role", "label", "entry_on", "amount_won", "vat_won", "received_won", "received_on", "snap_contract_on",
     "snap_balance_on", "memo", "version", "created_at", "updated_at",
   ]),
+  // 거래 없는 일정(0009). 손님·거래에 붙지 않아 되살릴 때 늘 넣을 수 있다.
+  appointments: Object.freeze([
+    "id", "tag", "title", "starts_on", "start_time", "end_time", "repeat_rule", "repeat_until", "skip_dates", "alarms", "series_id", "series_on", "version",
+    "created_at", "updated_at",
+  ]),
 });
-// 되살리는 순서(고정, R-1): 손님 → 거래 → 파일 → 참여자 → 일정 → 메모 → 할 일 → 장부 줄. 그 뒤에 끊은 연결을 되돌린다.
+// 되살리는 순서(고정, R-1): 손님 → 거래 → 파일 → 참여자 → 일정 → 메모 → 할 일 → 장부 줄 → 거래 없는 일정. 그 뒤에 끊은 연결·줄인 반복을 되돌린다.
 // 파일은 손님·거래 뒤(외래 키), 메모 앞(메모의 file_id가 되살린 파일을 가리키게, F-6).
-const ROW_TABLES = Object.freeze(["customers", "deals", "files", "deal_parties", "deal_events", "notes", "tasks", "ledger_entries"]);
+const ROW_TABLES = Object.freeze(["customers", "deals", "files", "deal_parties", "deal_events", "notes", "tasks", "ledger_entries", "appointments"]);
 // 응답(counts·restored·skipped)의 표 이름.
 const VIEW_KEY = Object.freeze({
   customers: "customers", deals: "deals", files: "files", deal_parties: "parties", deal_events: "events", notes: "notes", tasks: "tasks", ledger_entries: "ledger",
+  appointments: "appointments",
 });
 const CURRENT_SCHEMA = "(SELECT CAST(value_json AS INTEGER) FROM settings WHERE key = 'schema_version')";
 // 미리보기 사본(Q-2)의 R2 키 = 원본 키 + 이 꼬리(확장자 없음, WebP·JPEG는 httpMetadata.contentType으로 구분. D1 칸 없음). 영구 삭제·만료는 두 키를 함께 지운다.
@@ -85,6 +91,9 @@ const LINK_SOURCES = Object.freeze({
   note_customer: ["notes", "json_object('id', id, 'customer_id', customer_id)"],
   note_deal: ["notes", "json_object('id', id, 'deal_id', deal_id)"],
   ledger_deal: ["ledger_entries", "json_object('id', id, 'deal_id', deal_id, 'snap_contract_on', snap_contract_on, 'snap_balance_on', snap_balance_on, 'label', label, 'version_after', version + 1)"],
+  // 반복 일정 줄이기('이 날만' 지우기·'이 날부터 모두' 지우기, 0009): 줄이기 전 끝나는 날·뺀 날과 줄인 뒤 version을 적어 둔다.
+  // 되살릴 때 그 줄의 version이 version_after 그대로일 때만 옛 값으로 돌린다(그사이 고쳤으면 'changed'로 건너뜀).
+  appt_series: ["appointments", "json_object('id', id, 'repeat_until', repeat_until, 'skip_dates', json(skip_dates), 'version_after', version + 1)"],
 });
 
 export function trashLinksSql(op, whereSql) {
@@ -127,6 +136,22 @@ export function trashBatchFor(ctx, kind, targetId) {
   };
 }
 
+// 거래 없는 일정 묶음(0009): 종류는 기존 '일정'(event)을 같이 쓴다(휴지통 거르기·글을 늘리지 않음).
+// 이름은 그 순간의 일정 제목에 Worker가 정한 날짜 꼬리(반복 줄의 하루 지우기면 " · 12월 10일", 아니면 "")를 붙인다(꼬리를 넣어도 80자 안).
+const APPOINTMENT_BATCH_SQL = "INSERT INTO trash_batches (id, kind, target_id, label, schema_version, deleted_at, deleted_by, request_id, purge_after)"
+  + " SELECT ?, 'event', id, substr(title, 1, 80 - length(?)) || ?, " + CURRENT_SCHEMA + ", ?, ?, ?, ? FROM appointments WHERE id = ?";
+
+export function trashAppointmentBatchFor(ctx, targetId, labelTail = "") {
+  const batchId = ctx.randomUUID();
+  const purgeAfter = iso(ctx.now + TRASH_KEEP_DAYS * DAY_MS);
+  return {
+    batchId,
+    purgeAfter,
+    statement: ctx.db.prepare(APPOINTMENT_BATCH_SQL).bind(batchId, labelTail, labelTail, iso(ctx.now), ctx.actor.email.toLowerCase(), ctx.requestId, purgeAfter, targetId),
+    trash: { batchId, purgeAfter },
+  };
+}
+
 // 이름 붙인 batch(R-3): 결과의 바뀐 행 수를 자리 번호 대신 문장 이름으로 읽는다. 손님·거래 삭제 batch에만 쓴다.
 export function namedStatements(entries) {
   const names = entries.map(([name]) => name);
@@ -163,7 +188,8 @@ function auditBase(ctx, action, extra = {}) {
 
 // 목록 줄의 함께 든 것 수: 지울 때 값이 아니라 지금 trash_rows에서 센다(일부만 되살리고 남은 묶음도 맞게 보이게, 대장 2026-11-22).
 const COUNT_COLUMNS = ROW_TABLES.map((table) => "(SELECT count(*) FROM trash_rows r WHERE r.batch_id = b.id AND r.op = 'row' AND r.table_name = '"
-  + table + "') AS n_" + VIEW_KEY[table]).join(", ");
+  + table + "') AS n_" + VIEW_KEY[table]).join(", ")
+  + ", (SELECT count(*) FROM trash_rows r WHERE r.batch_id = b.id AND r.op = 'appt_series') AS n_appt_series";
 
 // T: UPDATE trash_rows 문장 안에서 옮겨 적은 칸 값. J: trash_rows r을 읽는 SELECT 안에서 옮겨 적은 칸 값.
 const T = (column) => "json_extract(trash_rows.row_json, '$." + column + "')";
@@ -205,6 +231,7 @@ const linkRow = (table, op, condition) => "EXISTS (SELECT 1 FROM trash_rows r WH
   + "' AND r.row_id = " + table + ".id AND " + UNMARKED + " AND " + condition + ")";
 const NOTE_GONE = "NOT EXISTS (SELECT 1 FROM notes n WHERE n.id = trash_rows.row_id)";
 const ENTRY_GONE = "NOT EXISTS (SELECT 1 FROM ledger_entries e WHERE e.id = trash_rows.row_id)";
+const APPOINTMENT_GONE = "NOT EXISTS (SELECT 1 FROM appointments a WHERE a.id = trash_rows.row_id)";
 
 // 까닭: 다 된 것(exists·relinked·changed)은 휴지통에서 지우고, 없는 대상(*_missing)은 휴지통에 남긴다(R-2). 표 이름은 응답 이름.
 // 앞(넣기 전)에 보는 것: 같은 행이 이미 있음, 끊었던 연결을 그사이 다시 붙임, 장부 줄을 그사이 고침.
@@ -214,6 +241,8 @@ const SKIP_BEFORE = Object.freeze([
   { table: "noteDeal", reason: "relinked", sql: markSql("notes", "note_deal", "EXISTS (SELECT 1 FROM notes n WHERE n.id = trash_rows.row_id AND n.deal_id IS NOT NULL)") },
   { table: "ledgerDeal", reason: "changed", sql: markSql("ledger_entries", "ledger_deal", "EXISTS (SELECT 1 FROM ledger_entries e WHERE e.id = trash_rows.row_id"
     + " AND (e.deal_id IS NOT NULL OR e.version <> " + T("version_after") + "))") },
+  { table: "appointmentSeries", reason: "changed", sql: markSql("appointments", "appt_series", "EXISTS (SELECT 1 FROM appointments a WHERE a.id = trash_rows.row_id"
+    + " AND a.version <> " + T("version_after") + ")") },
 ]);
 // 뒤(넣은 뒤)에 보는 것: 넣지 못한 행. 앞 줄이 먼저 표시하므로 둘 다 없으면 앞 까닭(거래 없음·메모 없음)이 된다.
 const SKIP_AFTER = Object.freeze([
@@ -228,12 +257,14 @@ const SKIP_AFTER = Object.freeze([
   { table: "noteDeal", reason: "deal_missing", sql: markSql("notes", "note_deal", "NOT EXISTS (SELECT 1 FROM notes n WHERE n.id = trash_rows.row_id AND n.deal_id IS NOT NULL)") },
   { table: "ledgerDeal", reason: "entry_missing", sql: markSql("ledger_entries", "ledger_deal", ENTRY_GONE) },
   { table: "ledgerDeal", reason: "deal_missing", sql: markSql("ledger_entries", "ledger_deal", "NOT EXISTS (SELECT 1 FROM ledger_entries e WHERE e.id = trash_rows.row_id AND e.deal_id IS NOT NULL)") },
+  // 줄인 반복 줄이 그사이 지워졌으면 휴지통에 남긴다(그 줄의 묶음을 되살린 뒤 다시 누르면 돌아감).
+  { table: "appointmentSeries", reason: "appointment_missing", sql: markSql("appointments", "appt_series", APPOINTMENT_GONE) },
 ]);
 
 const SQL = Object.freeze({
   list:
     "SELECT b.id, b.kind, b.label, b.deleted_at, b.purge_after, b.schema_version = " + CURRENT_SCHEMA + " AS restorable, " + COUNT_COLUMNS + ","
-    + " (SELECT count(*) FROM trash_rows r WHERE r.batch_id = b.id AND r.op <> 'row') AS n_links FROM trash_batches b"
+    + " (SELECT count(*) FROM trash_rows r WHERE r.batch_id = b.id AND r.op NOT IN ('row', 'appt_series')) AS n_links FROM trash_batches b"
     + " WHERE (? IS NULL OR b.deleted_at < ? OR (b.deleted_at = ? AND b.id < ?)) ORDER BY b.deleted_at DESC, b.id DESC LIMIT ?",
   batchById: "SELECT id, schema_version = " + CURRENT_SCHEMA + " AS restorable FROM trash_batches WHERE id = ?",
   // batch 첫 문장(guard): 조건이 깨졌으면 json('guard')(잘못된 JSON)로 batch 전체를 되돌린다(설계서 8.5절).
@@ -281,6 +312,15 @@ const SQL = Object.freeze({
     + ", label = " + linkSub("ledger_entries", "ledger_deal", "label")
     + ", version = version + 1, updated_at = ? WHERE deal_id IS NULL AND "
     + linkRow("ledger_entries", "ledger_deal", existsIn("deals", "deal_id") + " AND ledger_entries.version = " + J("version_after")),
+  // 거래 없는 일정(0009): 늘 넣는다('이 날만 고친' 줄의 원래 반복 줄이 없어도 혼자 서는 일정이 됨).
+  restoreAppointments: restoreInsertSql("appointments"),
+  // 줄인 반복 줄: 줄인 직후 그대로(version = version_after)일 때만 줄이기 전 끝나는 날·뺀 날로, version + 1. ? 순서: 묶음 id ×3, updated_at, 묶음 id.
+  relinkAppointmentSeries:
+    "UPDATE appointments SET repeat_until = " + linkSub("appointments", "appt_series", "repeat_until")
+    + ", skip_dates = json(" + "(SELECT json_extract(r.row_json, '$.skip_dates') FROM trash_rows r WHERE r.batch_id = ? AND r.table_name = 'appointments' AND r.op = 'appt_series'"
+    + " AND r.row_id = appointments.id))"
+    + ", version = version + 1, updated_at = ? WHERE "
+    + linkRow("appointments", "appt_series", "appointments.version = " + J("version_after")),
   // 감사(trash.restore): 건너뛴 행 수를 batch 안에서 센다(표시가 붙은 행 = 건너뜀).
   restoreAudit:
     "INSERT INTO audit_events (at, actor_email, action, target_type, target_id, request_id, outcome, reason)"
@@ -329,8 +369,11 @@ function itemView(row, nowMs) {
     daysLeft: trashDaysLeft(row.purge_after, nowMs),
     restorable: row.restorable === 1,
     counts: {
-      customers: row.n_customers, deals: row.n_deals, files: row.n_files, parties: row.n_parties, events: row.n_events,
+      customers: row.n_customers, deals: row.n_deals, files: row.n_files, parties: row.n_parties,
+      // 거래 없는 일정(0009)은 화면에서 '일정'으로 함께 센다(지운 줄 + 줄인 반복 줄). appointments는 그 몫이 있을 때만 넣는다(그 밖의 묶음 응답은 0009 전과 같음).
+      events: row.n_events + row.n_appointments + row.n_appt_series,
       notes: row.n_notes, tasks: row.n_tasks, ledger: row.n_ledger, links: row.n_links,
+      ...(row.n_appointments + row.n_appt_series > 0 ? { appointments: row.n_appointments + row.n_appt_series } : {}),
     },
   };
 }
@@ -362,6 +405,7 @@ async function restoreBatch(ctx, batchId) {
   const restores = [
     ["customers", SQL.restoreCustomers], ["deals", SQL.restoreDeals], ["files", SQL.restoreFiles], ["parties", SQL.restoreParties], ["events", SQL.restoreEvents],
     ["notes", SQL.restoreNotes], ["notesUnlinked", SQL.restoreNotesUnlinked], ["tasks", SQL.restoreTasks], ["ledger", SQL.restoreLedger],
+    ["appointments", SQL.restoreAppointments],
   ];
   const entries = [
     ["guard", prepare(SQL.restoreGuard).bind(batchId)],
@@ -370,6 +414,7 @@ async function restoreBatch(ctx, batchId) {
     ["link:noteCustomer", prepare(SQL.relinkNoteCustomer).bind(batchId, batchId)],
     ["link:noteDeal", prepare(SQL.relinkNoteDeal).bind(batchId, batchId)],
     ["link:ledgerDeal", prepare(SQL.relinkLedger).bind(batchId, batchId, batchId, batchId, at, batchId)],
+    ["link:appointmentSeries", prepare(SQL.relinkAppointmentSeries).bind(batchId, batchId, at, batchId)],
     ...SKIP_AFTER.map((skip, index) => [`after${index}`, prepare(skip.sql).bind(skip.reason, batchId)]),
     ["audit", prepare(SQL.restoreAudit).bind(at, ctx.actor.email.toLowerCase(), batchId, ctx.requestId, batchId)],
     ["cleanup", prepare(SQL.restoreCleanup).bind(batchId)],
@@ -397,12 +442,14 @@ async function restoreBatch(ctx, batchId) {
         deals: n("restore:deals"),
         files: n("restore:files"),
         parties: n("restore:parties"),
-        events: n("restore:events"),
+        events: n("restore:events") + n("restore:appointments") + n("link:appointmentSeries"),
         notes: n("restore:notes") + n("restore:notesUnlinked"),
         tasks: n("restore:tasks"),
         ledger: n("restore:ledger"),
         links: n("link:noteCustomer") + n("link:noteDeal") + n("link:ledgerDeal"),
         notesUnlinked: n("restore:notesUnlinked"),
+        // 거래 없는 일정은 휴지통 화면에서 '일정'으로 함께 센다(되살린 줄 + 되돌린 반복 줄). appointments는 그 몫이 있을 때만 넣는다.
+        ...(n("restore:appointments") + n("link:appointmentSeries") > 0 ? { appointments: n("restore:appointments") + n("link:appointmentSeries") } : {}),
       },
       skipped,
       remaining: n("unmark"),

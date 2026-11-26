@@ -115,7 +115,7 @@ test("TK-59 0004는 0001 ~ 0003 위에 blog_drafts를 더하고 구조 번호 4�
     const text = (await readFile(new URL(`../migrations/work/${name}`, import.meta.url), "utf8")).replace(/\r\n/gu, "\n");
     assert.equal(createHash("sha256").update(text).digest("hex"), hash, name);
   }
-  assert.deepEqual(migrationFiles, [...Object.keys(fixed), "0008_realprice_regions.sql"]);
+  assert.deepEqual(migrationFiles, [...Object.keys(fixed), "0008_realprice_regions.sql", "0009_appointments.sql"]);
 
   const database = new DatabaseSync(":memory:");
   database.exec("PRAGMA foreign_keys = ON;");
@@ -177,7 +177,7 @@ test("TK-44 글 초안 켜기 값·OpenAI 설정: 정확히 true가 아니면 50
   // 글 초안만 켬: 세션 blogEnabled true·realpriceEnabled false·업무 CSRF 토큰, 실거래가·단계 2 경로는 꺼진 그대로.
   const session = await work(blogEnv(db), "/public-tools/session");
   assert.equal(session.status, 200);
-  assert.deepEqual([session.json.data.realpriceEnabled, session.json.data.blogEnabled, session.json.data.schemaVersion], [false, true, 8]);
+  assert.deepEqual([session.json.data.realpriceEnabled, session.json.data.blogEnabled, session.json.data.schemaVersion], [false, true, 9]);
   assert.match(session.json.data.csrfToken, /^\d+\.[A-Za-z0-9_-]+$/u);
   assert.equal((await work(blogEnv(db), "/realprice/status")).json.error.code, "REALPRICE_DISABLED");
   assert.equal((await work(blogEnv(db), "/session")).json.data.enabled, false);

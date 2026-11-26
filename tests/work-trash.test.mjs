@@ -16,7 +16,7 @@ const SHARED = "22222222-2222-4222-8222-000000000002"; // A·B 함께
 const BONLY = "22222222-2222-4222-8222-000000000003"; // B만
 // 일정 3333…·메모 4444…·할 일 5555…·장부 줄 6666…(업무 API 경로가 UUID만 받음). 끝 번호: 일정 1 단독·2 함께, 메모 1 손님 A·2 단독 거래·3 함께 거래·4 A가 쓴 함께 거래·5 B가 단독 거래에 건 것,
 // 할 일 1 단독 거래·2 거래 없음, 장부 줄 1 단독 거래(이름 없음)·2 함께 거래·3 거래 없음.
-const TABLES = ["customers", "deals", "files", "deal_parties", "deal_events", "notes", "tasks", "ledger_entries"];
+const TABLES = ["customers", "deals", "files", "deal_parties", "deal_events", "notes", "tasks", "ledger_entries", "appointments"];
 const ORDER = { deal_parties: "deal_id, customer_id, role" };
 
 // 손님 A·B, 거래 3개, 참여자 4줄, 일정 2개, 메모 5개, 할 일 2개, 장부 줄 3개.
@@ -56,7 +56,7 @@ const list = async (env, query = "", options = {}) => work(env, `/trash${query}`
 
 test("0007은 0001 ~ 0006 위에 trash_batches·trash_rows 두 표와 색인 2개만 더하고 구조 번호를 7로 올리며, CHECK가 모르는 종류·표·연결·깨진 JSON·빈 이름을 막는다", () => {
   assert.equal(migrationFiles[6], "0007_trash.sql");
-  assert.equal(migrationFiles.length, 8, "그 뒤는 0008(대전 5개 구)만");
+  assert.equal(migrationFiles.length, 9, "그 뒤는 0008(대전 5개 구)·0009(거래 없는 일정)만");
   const database = new DatabaseSync(":memory:");
   database.exec("PRAGMA foreign_keys = ON;");
   for (const sql of allMigrationSql.slice(0, 6)) database.exec(sql);
@@ -121,7 +121,7 @@ test("T2-83·T2-92f 손님 삭제 → 휴지통 목록 1줄(남은 날 7·함께
     nextCursor: null,
   });
   const batchRow = rows(database, "SELECT kind, target_id, schema_version, deleted_by, request_id FROM trash_batches")[0];
-  assert.deepEqual([batchRow.kind, batchRow.target_id, batchRow.schema_version, batchRow.deleted_by], ["customer", A, 8, OWNER]);
+  assert.deepEqual([batchRow.kind, batchRow.target_id, batchRow.schema_version, batchRow.deleted_by], ["customer", A, 9, OWNER]);
   const deleteAudit = audit(database).find((entry) => entry.action === "customer.delete");
   assert.equal(deleteAudit.request_id, batchRow.request_id, "묶음과 감사 기록이 같은 요청 번호");
   assert.deepEqual(audit(database).at(-1), { actor_email: OWNER, action: "trash.list", target_type: null, target_id: null, request_id: listed.json.requestId, outcome: "ok", reason: "result_count=1" });
@@ -147,7 +147,7 @@ test("T2-92b 손님·거래 삭제에서 원래 표마다 사라진 행 수 = �
   const customerDeleted = await deleteCustomerA(filesEnv);
   assert.equal(customerDeleted.status, 200, JSON.stringify(customerDeleted.json));
   assert.equal(customerDeleted.json.data.deleted.files, 2);
-  assert.deepEqual(check(customerCase.database, beforeCustomer, "손님 삭제"), { customers: 1, deals: 1, files: 2, deal_parties: 2, deal_events: 1, notes: 2, tasks: 1, ledger_entries: 0 },
+  assert.deepEqual(check(customerCase.database, beforeCustomer, "손님 삭제"), { customers: 1, deals: 1, files: 2, deal_parties: 2, deal_events: 1, notes: 2, tasks: 1, ledger_entries: 0, appointments: 0 },
     "단독 거래의 참여자 줄(연쇄 삭제)과 이 손님의 함께 거래 참여자 줄, 손님 사진이 모두 옮겨짐");
   assert.equal(rows(customerCase.database, "SELECT count(*) AS n FROM files WHERE customer_id IS NULL AND deal_id IS NULL")[0].n, 0, "주인 없는 사진 0(T2-137d)");
   assert.deepEqual(filesEnv.WORK_FILES.calls, [], "손님 삭제는 R2를 부르지 않음");
@@ -155,7 +155,7 @@ test("T2-92b 손님·거래 삭제에서 원래 표마다 사라진 행 수 = �
   const dealCase = seeded();
   const beforeDeal = counts(dealCase.database);
   assert.equal((await deleteShared(dealCase.env)).status, 200);
-  assert.deepEqual(check(dealCase.database, beforeDeal, "거래 삭제"), { customers: 0, deals: 1, files: 0, deal_parties: 2, deal_events: 1, notes: 1, tasks: 0, ledger_entries: 0 });
+  assert.deepEqual(check(dealCase.database, beforeDeal, "거래 삭제"), { customers: 0, deals: 1, files: 0, deal_parties: 2, deal_events: 1, notes: 1, tasks: 0, ledger_entries: 0, appointments: 0 });
   assert.deepEqual(rows(dealCase.database, "SELECT table_name, op, row_id FROM trash_rows WHERE op <> 'row' ORDER BY row_id"), [
     { table_name: "notes", op: "note_deal", row_id: "44444444-4444-4444-8444-000000000004" },
     { table_name: "ledger_entries", op: "ledger_deal", row_id: "66666666-6666-4666-8666-000000000002" },
