@@ -80,7 +80,14 @@ export const confirmed = (body) => ({
   kept: [],
 });
 
-// 가짜 업무 API. ai: { enabled, list, groups(Map id → 차례대로 돌려줄 묶음 응답 배열, 마지막 것을 계속), estimate(pages), create(body), cancel, confirm(body) }
+// 거래에 넣은 뒤 '매출장부에 보수 줄 넣기' 칸(2026-11-25)이 받는 장부 줄(GET·POST /ledger, camelCase, 가상 값)
+export const ledgerEntry = (n, body = {}) => ({
+  id: uuid(1000 + n), kind: "fee", dealId: DEAL_A, payerRole: "buyer", label: "가상숲1단지 84㎡ 매매", entryOn: null, amountWon: 1_400_000, vatWon: 140_000, receivedWon: 0, receivedOn: null,
+  snapContractOn: "2026-11-02", snapBalanceOn: "2026-12-20", memo: "", version: 1, createdAt: "2026-11-23T05:00:00.000Z", updatedAt: "2026-11-23T05:00:00.000Z", unpaidWon: 1_540_000, basisOn: "2026-12-20", ...body,
+});
+
+// 가짜 업무 API. ai: { enabled, list, groups(Map id → 차례대로 돌려줄 묶음 응답 배열, 마지막 것을 계속), estimate(pages), create(body), cancel, confirm(body),
+//   ledger: { list(searchParams), create(body) }(없으면 장부 줄 0개·만들기 201) }
 export async function setup(page, { width = 390, aiEnabled = true, copiesA = 2, dealStatus = "contracted", ai = {} } = {}) {
   await page.addInitScript(() => {
     window.__blobUrls = 0;
@@ -150,6 +157,11 @@ export async function setup(page, { width = 390, aiEnabled = true, copiesA = 2, 
       return route.fulfill(answer.status && answer.json ? answer : envelope(answer));
     }
     if (path === `/deals/${DEAL_A}` && method === "GET") return route.fulfill(ai.deal ? ai.deal() : envelope({ deal: reviewDeal({ status: dealStatus }), parties: [{ customerId: CUSTOMER_ID, role: "buyer", displayName: "가상 손님 1" }], events: [] }));
+    if (path === "/ledger" && method === "GET") return route.fulfill(ai.ledger?.list ? ai.ledger.list(url.searchParams) : envelope({ items: [], nextCursor: null, undatedCount: 0 }));
+    if (path === "/ledger" && method === "POST") {
+      const body = request.postDataJSON();
+      return route.fulfill(ai.ledger?.create ? ai.ledger.create(body) : envelope({ entry: ledgerEntry(calls.writes.length, body), warnings: [] }, 201));
+    }
     const content = path.match(/^\/files\/([^/]+)\/content$/u);
     if (content) return route.fulfill({ status: 200, contentType: "image/png", body: PNG });
     return route.fulfill(failure(404, "NOT_FOUND"));

@@ -3107,6 +3107,10 @@ nav.tr-homelinks { display: flex; flex-wrap: wrap; gap: 0 24px; margin: 0 0 14px
 .axr-status:empty { display: none; }
 .axr-reload { justify-self: start; width: auto; padding: 0 18px; }
 .axr-reload[hidden] { display: none; }
+/* 거래에 넣은 뒤 '매출장부에 보수 줄 넣기' 칸(2026-11-25). 손님 카드 '보수 줄 만들기'의 .lg-pair 꼴을 그대로 쓰고, 쪽마다 묶은 fieldset만 기본 테두리·최소 폭을 덜어 낸다. */
+.axl { display: grid; gap: 8px; min-width: 0; }
+.axl .lg-pair { margin-top: 0; }
+.axl fieldset.lg-pair__one { min-width: 0; margin: 0; }
 html:has(.axr-foot:not([hidden])) { scroll-padding-bottom: 96px; }
 @media (min-width: 980px) {
   .axr-grid { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.25fr); }
