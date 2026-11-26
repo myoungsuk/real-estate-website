@@ -3,6 +3,7 @@
 import { element } from "./work-customers-dom";
 import {
   cellLabel,
+  chipText,
   chipsFor,
   itemGlyph,
   itemHref,
@@ -22,7 +23,7 @@ function chip(item: CalendarItem) {
   node.append(element("i", "", itemGlyph(item)));
   node.lastElementChild?.setAttribute("aria-hidden", "true");
   if (item.late) node.append(element("b", "cal-chip__late", "!"));
-  node.append(element("b", "", item.label), element("span", "", item.title));
+  node.append(element("span", "cal-chip__text", chipText(item)));
   if (item.repeatRule !== "none") {
     const mark = element("em", "", "↻");
     mark.setAttribute("aria-hidden", "true");

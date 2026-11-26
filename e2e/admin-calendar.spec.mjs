@@ -80,7 +80,8 @@ test("PC: 넓은 칸 글자 띠·오른쪽 그날 칸, 거르기는 고른 종�
   await setupCalendar(page, { width: 1280 });
   await page.goto(PATH);
   await expect(cell(page, "2026-11-20").locator(".cal-chips")).toBeVisible();
-  await expect(cell(page, "2026-11-20").locator(".cal-chip")).toContainText(["잔금가상숲1단지 84㎡ 매매"]);
+  // 꼬리표는 뜻 있는 한 조각만(사용자 답 2026-11-26 11:22:26): 잔금은 종류 이름만, 거래·손님 이름은 오른쪽 그날 칸에서 본다.
+  await expect(cell(page, "2026-11-20").locator(".cal-chip")).toHaveText(["◆잔금"]);
   await expect(page.locator("[data-cal-add]")).toBeVisible();
   const side = await page.locator(".cal-side").boundingBox();
   const grid = await page.locator(".cal-grid").boundingBox();
