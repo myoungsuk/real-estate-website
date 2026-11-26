@@ -114,7 +114,7 @@ function versionConflict() {
   return new WorkApiError("VERSION_CONFLICT", "다른 화면에서 먼저 고쳤습니다. 다시 불러온 뒤 고쳐 주세요.", 409);
 }
 
-// 1년 넘게 지난 날짜(2026-11-26 09:52:45 사용자 답 "막고 까닭을 알림"): 저장하면 다음 03:00 정리에 지워질 줄은 만들지 않는다.
+// 1년 넘게 지난 날짜(2026-11-26 09:52:45 사용자 답 "막고 까닭을 알림", 10:16:42 "딱 1년 전도 막음"): 저장하면 다음 03:00 정리에 지워질 줄은 만들지 않는다.
 // 형식 검사(VALIDATION_FAILED)를 통과한 저장할 상태에만 쓴다. 지우기는 막지 않는다.
 function assertNotExpired(ctx, state) {
   const fields = appointmentDateExpired(state, appointmentCutoffDate(ctx.now));
