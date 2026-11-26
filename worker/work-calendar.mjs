@@ -32,11 +32,29 @@ export function dealIcsFileName(dateText) {
   return `work-deal-${formatIcsDate(dateText)}.ics`;
 }
 
+// 시각 있는 거래 없는 일정(0009)의 알림: 시작 시각에서 거꾸로 센 값(appointment-rules.mjs appointmentAlarmTrigger, 예 -PT22H·-PT1H30M)이라
+// 위 세 값 목록에 없다. 시작 시각 기준 앞(음수) 또는 시작 그때(PT0S)만, 최대 2개, 겹침 없음.
+const TIMED_TRIGGER_PATTERN = /^(?:-PT(?=\d)(?:\d+H)?(?:\d+M)?|PT0S)$/u;
+export function isAllowedTimedAlarmTriggers(triggers) {
+  return Array.isArray(triggers)
+    && triggers.length <= MAX_ALARMS_PER_EVENT
+    && new Set(triggers).size === triggers.length
+    && triggers.every((trigger) => typeof trigger === "string" && TIMED_TRIGGER_PATTERN.test(trigger));
+}
+
+const CLOCK_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/u;
+// 한국 날짜 + 한국 시각 HH:MM → UTC 'YYYYMMDDTHHMMSSZ'(한국은 일광 절약 시간이 없어 늘 +09:00).
+export function koreaDateTimeToIcs(dateText, clock) {
+  formatIcsDate(dateText);
+  if (typeof clock !== "string" || !CLOCK_PATTERN.test(clock)) throw new TypeError("시각이 올바르지 않습니다.");
+  return formatIcsTimestamp(new Date(Date.parse(`${dateText}T${clock}:00+09:00`)));
+}
+
 /**
  * 거래 일정 캘린더. UID는 `${uidKey}@leaderscityhappy.com`이다. uidKey는 부르는 쪽이 정한다(거래 ID-종류 또는 일정 id, work-events.mjs).
  * 같은 일정을 다시 내려받으면 같은 UID가 나와 캘린더 앱이 중복 대신 갱신할 수 있다(앱마다 다름).
  * 일정이 0개면 일정 없는 빈 캘린더를 돌려준다(RFC 5545상 정상, 화면에서 "내려받을 일정이 없습니다"를 안내).
- * @param {{ events: Array<{ uidKey: string, date: string, title: string, description?: string, alarmTriggers?: string[] }>, now: Date }} options
+ * @param {{ events: Array<{ uidKey: string, date: string, title: string, description?: string, alarmTriggers?: string[], startTime?: string, endTime?: string | null }>, now: Date }} options
  */
 export function buildDealIcsCalendar({ events, now }) {
   const timestamp = formatIcsTimestamp(now);
@@ -51,15 +69,18 @@ export function buildDealIcsCalendar({ events, now }) {
   for (const event of events) {
     const title = cleanSingleLine(event.title, 80);
     const description = cleanMultiLine(event.description, 500);
-    const triggers = isAllowedAlarmTriggers(event.alarmTriggers) ? event.alarmTriggers : [];
-    lines.push(
-      "BEGIN:VEVENT",
-      `UID:${event.uidKey}@${UID_DOMAIN}`,
-      `DTSTAMP:${timestamp}`,
-      `DTSTART;VALUE=DATE:${formatIcsDate(event.date)}`,
-      `DTEND;VALUE=DATE:${formatIcsDate(addCalendarDays(event.date, 1))}`,
-      `SUMMARY:${escapeIcsText(title)}`,
-    );
+    // 시각 있는 일정(거래 없는 일정만 startTime을 줌): DTSTART·DTEND를 UTC 시각으로. 끝 시각이 없으면 DTEND 없이(RFC 5545상 시작 그 순간 일정).
+    const timed = typeof event.startTime === "string";
+    const allowed = timed ? isAllowedTimedAlarmTriggers(event.alarmTriggers) : isAllowedAlarmTriggers(event.alarmTriggers);
+    const triggers = allowed ? event.alarmTriggers : [];
+    lines.push("BEGIN:VEVENT", `UID:${event.uidKey}@${UID_DOMAIN}`, `DTSTAMP:${timestamp}`);
+    if (timed) {
+      lines.push(`DTSTART:${koreaDateTimeToIcs(event.date, event.startTime)}`);
+      if (typeof event.endTime === "string") lines.push(`DTEND:${koreaDateTimeToIcs(event.date, event.endTime)}`);
+    } else {
+      lines.push(`DTSTART;VALUE=DATE:${formatIcsDate(event.date)}`, `DTEND;VALUE=DATE:${formatIcsDate(addCalendarDays(event.date, 1))}`);
+    }
+    lines.push(`SUMMARY:${escapeIcsText(title)}`);
     if (description) lines.push(`DESCRIPTION:${escapeIcsText(description)}`);
     lines.push("TRANSP:TRANSPARENT");
     for (const trigger of triggers) {

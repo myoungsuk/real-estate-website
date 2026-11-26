@@ -393,6 +393,20 @@ export async function loadCalendarRange(db, from, to) {
   return { from, to, truncated, items: items.slice(0, CALENDAR_ITEM_LIMIT) };
 }
 
+// 휴대폰 캘린더 구독(.ics, work-calendar-feeds.mjs)용: [from, to] 안의 거래 없는 일정을 날짜마다 하나씩, 달력과 같은 차례로 limit개까지.
+// 넘으면 늦은 날짜(먼 미래)부터 뺀다. 줄은 달력과 같은 문장으로 CALENDAR_ROW_LIMIT줄까지 읽는다(시작일 순, 넘는 줄은 시작일이 늦은 것부터 빠짐).
+export async function loadAppointmentOccurrences(db, from, to, limit) {
+  const rows = await all(db.prepare(SQL.calendarAppointments).bind(to, from, from, CALENDAR_ROW_LIMIT));
+  const items = [];
+  for (const row of rows) {
+    const view = appointmentView(row);
+    for (const on of appointmentOccurrences(repeatOf(view), from, to)) {
+      items.push({ key: `appt-${view.id}-${on.replaceAll("-", "")}`, on, startTime: view.startTime, appointment: view });
+    }
+  }
+  return items.sort(compareItems).slice(0, limit);
+}
+
 async function readCalendar(ctx) {
   const { from, to } = parseCalendarQuery(ctx.url.searchParams);
   return loadThenAudit(ctx.db, async () => ({ ...(await loadCalendarRange(ctx.db, from, to)), today: koreaDate(ctx.now) }),

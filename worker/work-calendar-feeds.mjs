@@ -13,6 +13,8 @@ import { all, auditBase, methodNotAllowed, notFound } from "./work-customers.mjs
 import { DEFAULT_ALARM_TRIGGERS, buildDealIcsCalendar } from "./work-calendar.mjs";
 import { EVENT_KIND_LABELS, ruleText } from "./work-events.mjs";
 import { WORK_SCHEMA_VERSION, readSchemaVersion } from "./work-api.mjs";
+import { loadAppointmentOccurrences } from "./work-appointments.mjs";
+import { APPOINTMENT_TAGS, appointmentAlarmTrigger } from "../src/lib/work/appointment-rules.mjs";
 
 export const CALENDAR_FEED_PREFIX = "/api/calendar/";
 export const FEED_TOKEN_BYTES = 32;
@@ -21,6 +23,9 @@ export const FEED_PEPPER_MIN = 32;
 export const FEED_PAST_DAYS = 30;
 // 구독 한 번에 넣는 최대 개수(일정·할 일 각각). 넘으면 날짜가 늦은 것(다가올 일정)부터 넣고 오래된 것을 뺀다.
 export const FEED_ITEM_LIMIT = 500;
+// 거래 없는 일정(0009, 6.15절): 한국 날짜 오늘 −30일 ~ +180일을 날짜마다 펼쳐 500개까지(넘으면 먼 미래부터 뺌, 대장 결정 2026-11-26).
+export const FEED_APPOINTMENT_FUTURE_DAYS = 180;
+export const FEED_APPOINTMENT_LIMIT = 500;
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
 const FEED_PATH_PATTERN = /^\/api\/calendar\/([^/]+)\.ics$/u;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -221,6 +226,24 @@ export function feedCalendarEvents(events, tasks) {
   return items.sort((left, right) => (left.date < right.date ? -1 : left.date > right.date ? 1 : 0));
 }
 
+// 거래 없는 일정: 이름 '꼬리표 · 제목', 설명 '직접 넣은 일정', UID 'appt-<id>-<YYYYMMDD>'(날마다 따로, 달력 key와 같음).
+// 시각 있으면 startTime·endTime을 실어 시각 일정으로. 알림은 일정의 알림 키를 그날 시작 시각 기준으로 바꾼 값이고, 오늘 전 날에는 넣지 않는다.
+// 끝내기 칸이 없어 "완료 · "는 붙지 않는다. 손님 칸이 없어 손님 정보는 없다(제목에 사무소가 적은 글만, 처리방침 8항).
+export function feedAppointmentEvents(occurrences, today) {
+  return occurrences.map(({ key, on, appointment }) => {
+    const tag = APPOINTMENT_TAGS[appointment.tag] ?? "";
+    const triggers = on < today ? [] : appointment.alarms.map((alarm) => appointmentAlarmTrigger(alarm, appointment.startTime));
+    return {
+      uidKey: key,
+      date: on,
+      title: tag ? `${tag} · ${appointment.title}` : appointment.title,
+      description: "직접 넣은 일정",
+      alarmTriggers: triggers.every((trigger) => trigger !== null) ? triggers : [],
+      ...(appointment.startTime === null ? {} : { startTime: appointment.startTime, endTime: appointment.endTime }),
+    };
+  });
+}
+
 function logFeed(log, entry) {
   try {
     log({ event: "calendar_feed", ...entry });
@@ -264,7 +287,11 @@ async function answerFeed(request, env, options, { touch }) {
     const cutoff = koreaDate(now - FEED_PAST_DAYS * DAY_MS);
     const events = await all(db.prepare(SQL.feedEvents).bind(cutoff, FEED_ITEM_LIMIT));
     const tasks = await all(db.prepare(SQL.feedTasks).bind(cutoff, FEED_ITEM_LIMIT));
-    const body = buildDealIcsCalendar({ now: new Date(now), events: feedCalendarEvents(events, tasks) });
+    const today = koreaDate(now);
+    const appointments = await loadAppointmentOccurrences(db, cutoff, koreaDate(now + FEED_APPOINTMENT_FUTURE_DAYS * DAY_MS), FEED_APPOINTMENT_LIMIT);
+    const items = [...feedCalendarEvents(events, tasks), ...feedAppointmentEvents(appointments, today)]
+      .sort((left, right) => (left.date < right.date ? -1 : left.date > right.date ? 1 : 0));
+    const body = buildDealIcsCalendar({ now: new Date(now), events: items });
     const dayStart = koreaDayStartIso(now);
     if (touch && (feed.last_used_at === null || feed.last_used_at < dayStart)) {
       try {
