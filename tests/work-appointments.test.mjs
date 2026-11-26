@@ -1,10 +1,11 @@
-// 거래 없는 일정 API(worker/work-appointments.mjs, 0009)·달력 한 달 읽기·휴지통 되살리기·1년 자동 삭제 시험(설계서 6.15절).
+// 거래 없는 일정 API(worker/work-appointments.mjs, 0009)·달력 한 달 읽기·휴지통 되살리기·1년 자동 삭제·1년 넘게 지난 날짜 막기 시험(설계서 6.15절).
 // 이름·제목은 모두 가상 값이다. 실제 원격 D1·외부 요청을 부르지 않는다.
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import {
   APPOINTMENT_ALARM_KEYS, APPOINTMENT_TAG_KEYS, DEFAULT_APPOINTMENT_ALARMS, appointmentAlarmAllowed, appointmentAlarmChoices, appointmentAlarmTrigger,
+  appointmentCutoffDate as rulesCutoffDate, appointmentDateExpired,
 } from "../src/lib/work/appointment-rules.mjs";
 import { appointmentOccurrences, seriesEndBefore } from "../src/lib/work/appointment-repeat.mjs";
 import { APPOINTMENT_SKIP_MAX, CALENDAR_ITEM_LIMIT, CALENDAR_ROW_LIMIT, appointmentCutoffDate } from "../worker/work-appointments.mjs";
@@ -451,4 +452,72 @@ test("1년 자동 삭제: 기준일은 한국 날짜에서 해만 1 뺌(2월 29�
   const outcome = await runRealpriceCron({ WORK_DB: db }, { now: () => AT_0305, log: (entry) => cronLog.push(entry) });
   assert.equal(outcome.outcome, "disabled");
   assert.deepEqual([ids(database), cronLog.filter((entry) => entry.event === "appointment_expire")], [[], [{ event: "appointment_expire", deleted: 1, left: false }]]);
+});
+
+// ── 1년 넘게 지난 날짜 막기(2026-11-26 09:52:45 사용자 답 "막고 까닭을 알림", 10:16:42 "딱 1년 전도 막음") ──────────────────────
+const EXPIRED_MESSAGE = "지난 지 1년이 된 날짜는 자동으로 지워져 넣을 수 없습니다. 날짜를 확인해 주세요.";
+const LATER = Date.parse("2026-11-25T05:00:00.000Z"); // 한국 2026-11-25 14:00, 기준일 2025-11-25
+const expiredOf = (result) => [result.status, result.json.error?.code, result.json.error?.message, result.json.error?.retryable, result.json.error?.details];
+
+test("1년 막기 순수 함수: 반복 없음은 시작일, 끝 있는 반복은 끝나는 날이 기준일과 같거나 앞이면 막고(다음 날은 통과), 끝 없는 반복은 늘 통과. 서버는 화면과 같은 기준일 함수를 다시 내보낸다", () => {
+  assert.equal(rulesCutoffDate, appointmentCutoffDate);
+  assert.equal(rulesCutoffDate(NOW), "2025-11-17");
+  for (const [state, expected] of [
+    [{ startsOn: "2025-11-16", repeatRule: "none", repeatUntil: null }, ["startsOn"]],
+    [{ startsOn: "2025-11-17", repeatRule: "none", repeatUntil: null }, ["startsOn"]],
+    [{ startsOn: "2025-11-18", repeatRule: "none", repeatUntil: null }, null],
+    [{ startsOn: "2025-01-07", repeatRule: "weekly", repeatUntil: "2025-11-16" }, ["repeatUntil"]],
+    [{ startsOn: "2025-01-07", repeatRule: "weekly", repeatUntil: "2025-11-17" }, ["repeatUntil"]],
+    [{ startsOn: "2025-01-07", repeatRule: "weekly", repeatUntil: "2025-11-18" }, null],
+    [{ startsOn: "2020-01-01", repeatRule: "yearly", repeatUntil: null }, null],
+    [{ startsOn: "2020-01-01", repeatRule: "monthly" }, null],
+  ]) assert.deepEqual(appointmentDateExpired(state, "2025-11-17"), expected, JSON.stringify(state));
+});
+
+test("1년 막기 만들기: 기준일 앞·당일 시작일·끝나는 날은 400 APPOINTMENT_DATE_EXPIRED(칸 이름, 다시 시도 안 함), 기준일 다음 날·끝 없는 옛 반복은 201. 형식 오류가 먼저, 막힌 줄은 저장·감사 없음", async () => {
+  const { database, env } = setup();
+  assert.deepEqual(expiredOf(await create(env, { startsOn: "2025-11-16" })), [400, "APPOINTMENT_DATE_EXPIRED", EXPIRED_MESSAGE, false, ["startsOn"]]);
+  assert.deepEqual(expiredOf(await create(env, { startsOn: "2025-01-07", repeatRule: "weekly", repeatUntil: "2025-11-16" })),
+    [400, "APPOINTMENT_DATE_EXPIRED", EXPIRED_MESSAGE, false, ["repeatUntil"]]);
+  assert.deepEqual(expiredOf(await create(env, { startsOn: "2025-11-17" })), [400, "APPOINTMENT_DATE_EXPIRED", EXPIRED_MESSAGE, false, ["startsOn"]]);
+  assert.deepEqual(expiredOf(await create(env, { startsOn: "2025-01-07", repeatRule: "weekly", repeatUntil: "2025-11-17" })),
+    [400, "APPOINTMENT_DATE_EXPIRED", EXPIRED_MESSAGE, false, ["repeatUntil"]]);
+  const wrong = await create(env, { startsOn: "2025-11-16", endTime: "10:00" });
+  assert.deepEqual([wrong.status, wrong.json.error.code, wrong.json.error.details], [400, "VALIDATION_FAILED", ["startTime"]]);
+  assert.equal(rows(database, "SELECT COUNT(*) AS n FROM appointments")[0].n, 0);
+  for (const body of [{ startsOn: "2025-11-18" }, { startsOn: "2025-01-07", repeatRule: "weekly", repeatUntil: "2025-11-18" }, { startsOn: "2024-01-02", repeatRule: "weekly" }]) {
+    assert.equal((await create(env, body)).status, 201, JSON.stringify(body));
+  }
+  assert.deepEqual(audits(database).map((row) => row.action), ["appointment.create", "appointment.create", "appointment.create"]);
+});
+
+test("1년 막기 고치기: 날짜·반복을 바꿀 때와 '이 날만'·'이 날부터 모두'로 새로 생기는 줄만 보고, 제목만 고치기·지우기는 옛 줄이어도 막지 않는다. 막히면 원래 줄은 그대로", async () => {
+  const { database, env } = setup();
+  const later = (id, body, method = "PATCH") => work(env, `/appointments/${id}`, { method, body, now: LATER });
+  const single = (await create(env, { startsOn: "2025-11-20" })).json.data.appointment;
+  assert.equal((await later(single.id, { version: 1, title: "가상 제목만" })).status, 200);
+  assert.deepEqual(expiredOf(await later(single.id, { version: 2, startsOn: "2025-11-21" })), [400, "APPOINTMENT_DATE_EXPIRED", EXPIRED_MESSAGE, false, ["startsOn"]]);
+  assert.equal(apptRow(database, single.id).version, 2);
+  assert.deepEqual(expiredOf(await later(single.id, { version: 2, startsOn: "2025-11-25" })), [400, "APPOINTMENT_DATE_EXPIRED", EXPIRED_MESSAGE, false, ["startsOn"]]);
+  assert.equal((await later(single.id, { version: 2, startsOn: "2025-11-26" })).status, 200);
+
+  const series = (await create(env, { startsOn: "2025-11-04", repeatRule: "weekly" })).json.data.appointment; // 끝 없는 매주
+  assert.deepEqual(expiredOf(await later(series.id, { version: 1, scope: "one", occurrenceOn: "2025-11-11", title: "가상 하루" })),
+    [400, "APPOINTMENT_DATE_EXPIRED", EXPIRED_MESSAGE, false, ["startsOn"]]);
+  assert.deepEqual([apptRow(database, series.id).version, apptRow(database, series.id).skip_dates], [1, "[]"]);
+  const moved = await later(series.id, { version: 1, scope: "one", occurrenceOn: "2025-11-11", startsOn: "2025-12-01" });
+  assert.deepEqual([moved.status, moved.json.data.appointment.startsOn], [201, "2025-12-01"]);
+  assert.deepEqual(expiredOf(await later(series.id, { version: 2, scope: "following", occurrenceOn: "2025-11-18", repeatUntil: "2025-11-24" })),
+    [400, "APPOINTMENT_DATE_EXPIRED", EXPIRED_MESSAGE, false, ["repeatUntil"]]);
+  const split = await later(series.id, { version: 2, scope: "following", occurrenceOn: "2025-11-18", title: "가상 뒤" });
+  assert.deepEqual([split.status, split.json.data.series.repeatUntil, split.json.data.appointment.repeatUntil], [201, "2025-11-17", null]);
+  // 원래 줄은 이제 2025-11-17에 끝나 1년이 지났다. 첫날 그 자리 고치기에서 제목만이면 통과, 끝나는 날을 바꾸면 막는다.
+  assert.equal((await later(series.id, { version: 3, scope: "following", occurrenceOn: "2025-11-04", title: "가상 앞" })).status, 200);
+  assert.deepEqual(expiredOf(await later(series.id, { version: 4, scope: "following", occurrenceOn: "2025-11-04", repeatRule: "monthly" })),
+    [400, "APPOINTMENT_DATE_EXPIRED", EXPIRED_MESSAGE, false, ["repeatUntil"]]);
+  assert.deepEqual(expiredOf(await later(series.id, { version: 4, scope: "following", occurrenceOn: "2025-11-04", repeatUntil: "2025-11-10" })),
+    [400, "APPOINTMENT_DATE_EXPIRED", EXPIRED_MESSAGE, false, ["repeatUntil"]]);
+  assert.equal(apptRow(database, series.id).repeat_until, "2025-11-17");
+  assert.equal((await later(single.id, {}, "DELETE")).status, 200);
+  assert.equal((await later(series.id, { version: 4, scope: "following", occurrenceOn: "2025-11-04" }, "DELETE")).status, 200);
 });

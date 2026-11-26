@@ -7,6 +7,9 @@
 // - 지우기는 모두 휴지통(0007·0009)으로 옮긴다. 반복 줄을 줄일 때는 줄이기 전 끝나는 날·뺀 날을 'appt_series'로 적어 되살릴 수 있게 한다.
 // - 일정 제목에는 손님 이름이 들어갈 수 있다. 감사 reason·로그·주소에 넣지 않는다(reason은 처리 코드만).
 import { appointmentOccurrences } from "../src/lib/work/appointment-repeat.mjs";
+import {
+  APPOINTMENT_DATE_EXPIRED_MESSAGE, APPOINTMENT_KEEP_YEARS, appointmentCutoffDate, appointmentDateExpired,
+} from "../src/lib/work/appointment-rules.mjs";
 import { WorkApiError } from "./work-security.mjs";
 import { auditStatement, changesOf, loadThenAudit, runBatch } from "./work-audit.mjs";
 import {
@@ -111,6 +114,17 @@ function versionConflict() {
   return new WorkApiError("VERSION_CONFLICT", "다른 화면에서 먼저 고쳤습니다. 다시 불러온 뒤 고쳐 주세요.", 409);
 }
 
+// 1년 넘게 지난 날짜(2026-11-26 09:52:45 사용자 답 "막고 까닭을 알림", 10:16:42 "딱 1년 전도 막음"): 저장하면 다음 03:00 정리에 지워질 줄은 만들지 않는다.
+// 형식 검사(VALIDATION_FAILED)를 통과한 저장할 상태에만 쓴다. 지우기는 막지 않는다.
+function assertNotExpired(ctx, state) {
+  const fields = appointmentDateExpired(state, appointmentCutoffDate(ctx.now));
+  if (fields !== null) throw new WorkApiError("APPOINTMENT_DATE_EXPIRED", APPOINTMENT_DATE_EXPIRED_MESSAGE, 400, false, fields);
+}
+
+// 그 자리 고치기는 날짜·반복 값이 바뀔 때만 본다(제목·꼬리표·시각·알림만 고치면 옛 줄이어도 통과, 대장 추천).
+const dateChanged = (before, after) => before.startsOn !== after.startsOn || before.repeatRule !== after.repeatRule
+  || (before.repeatUntil ?? null) !== (after.repeatUntil ?? null);
+
 function skipLimitReached() {
   return new WorkApiError("SKIP_LIMIT_REACHED", "이 반복은 뺀 날이 너무 많습니다. '이 날부터 모두'로 나눠 주세요.", 409);
 }
@@ -169,6 +183,7 @@ async function runGuarded(ctx, id, version, statements) {
 
 async function createAppointment(ctx) {
   const { appointment, rrnMasked } = parseAppointmentCreate(ctx.body);
+  assertNotExpired(ctx, appointment);
   const id = ctx.randomUUID();
   const at = new Date(ctx.now).toISOString();
   await runBatch(ctx.db, [
@@ -206,6 +221,7 @@ async function updateAppointment(ctx, id) {
     if (wrongScope.length > 0) throw invalid(wrongScope);
     const single = { ...merged, startsOn: input.changes.startsOn ?? input.occurrenceOn, repeatRule: "none", repeatUntil: null, skipDates: [] };
     assertState(single);
+    assertNotExpired(ctx, single);
     if (current.skipDates.length >= APPOINTMENT_SKIP_MAX) throw skipLimitReached();
     const newId = ctx.randomUUID();
     await runGuarded(ctx, id, input.version, [
@@ -228,6 +244,7 @@ async function updateAppointment(ctx, id) {
         skipDates: current.skipDates.filter((date) => date >= input.occurrenceOn),
       });
       assertState(next);
+      assertNotExpired(ctx, next);
       const newId = ctx.randomUUID();
       await runGuarded(ctx, id, input.version, [
         ctx.db.prepare(SQL.versionGuard).bind(id, input.version),
@@ -244,6 +261,7 @@ async function updateAppointment(ctx, id) {
   const state = normalize(merged);
   if (current.seriesId !== null && state.repeatRule !== "none") throw invalid(["repeatRule"]); // '이 날만 고친' 줄은 반복이 될 수 없음(0009 CHECK)
   assertState(state);
+  if (dateChanged(current, state)) assertNotExpired(ctx, state);
   await runGuarded(ctx, id, input.version, [
     ctx.db.prepare(SQL.versionGuard).bind(id, input.version),
     updateStatement(ctx.db, id, input.version, state, at),
@@ -387,18 +405,12 @@ async function readCalendar(ctx) {
 // - 1년은 한국 날짜에서 해만 1 뺀 글자다. 2월 29일이면 '그 전해 02-29' 글자가 되어 02-28까지 지우고 03-01은 남긴다(덜 지우는 쪽).
 // - '이 날만 고친' 줄도 반복 없는 줄이라 자기 날짜로 따로 지운다. 원래 반복의 뺀 날은 그대로 두어 그날이 다시 보이지 않게 한다.
 // - 지운 일은 감사 로그에 적지 않고, 로그에는 지운 줄 수와 남았는지만 남긴다(제목·id 없음).
-export const APPOINTMENT_KEEP_YEARS = 1;
+export { APPOINTMENT_KEEP_YEARS, appointmentCutoffDate }; // 기준 날짜는 화면과 같은 함수(appointment-rules.mjs)
 export const APPOINTMENT_EXPIRE_PER_ROUND = 500;
 export const APPOINTMENT_EXPIRE_MAX_ROUNDS = 4;
 const EXPIRED_WHERE = "(repeat_rule = 'none' AND starts_on < ?1) OR (repeat_rule <> 'none' AND repeat_until IS NOT NULL AND repeat_until < ?1)";
 const APPOINTMENT_EXPIRE_SQL = "DELETE FROM appointments WHERE id IN (SELECT id FROM appointments WHERE " + EXPIRED_WHERE + " ORDER BY starts_on, id LIMIT ?2)";
 const APPOINTMENT_LEFT_SQL = "SELECT 1 AS n FROM appointments WHERE " + EXPIRED_WHERE + " LIMIT 1";
-
-// 이 날짜보다 앞(starts_on·repeat_until < 이 글자)이면 1년 지난 일정이다.
-export function appointmentCutoffDate(nowMs) {
-  const today = koreaDate(nowMs);
-  return `${String(Number(today.slice(0, 4)) - APPOINTMENT_KEEP_YEARS).padStart(4, "0")}${today.slice(4)}`;
-}
 
 export async function expireAppointments(db, nowMs) {
   const cutoff = appointmentCutoffDate(nowMs);
