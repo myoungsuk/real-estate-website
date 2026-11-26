@@ -112,6 +112,8 @@ const cropMarks = [
       <div class="work-receipt__actions">
         <button class="work-primary-button" type="button" data-done-make>알림 그림 만들기</button>
         <a class="work-primary-button" data-done-download hidden>그림 저장</a>
+        <button class="work-secondary-button" type="button" data-done-share hidden>카톡·문자로 보내기</button>
+        <button class="work-secondary-button" type="button" data-done-copy hidden>그림 복사</button>
         <button class="work-secondary-button" type="button" data-done-print hidden>종이로 뽑기(A4)</button>
       </div>
       <p class="work-help" data-done-timing>계약 직후보다 시간을 두고 올리면 거래하신 분이 덜 드러납니다.</p>
@@ -137,6 +139,8 @@ const cropMarks = [
       <div class="work-receipt__actions">
         <button class="work-primary-button" type="button" data-intro-make>소개 그림 만들기</button>
         <a class="work-primary-button" data-intro-download hidden>그림 저장</a>
+        <button class="work-secondary-button" type="button" data-intro-share hidden>카톡·문자로 보내기</button>
+        <button class="work-secondary-button" type="button" data-intro-copy hidden>그림 복사</button>
       </div>
       <p class="admin-form-status" role="status" aria-live="polite" data-intro-status></p>
       <figure class="paper-done__preview" data-intro-preview hidden>
@@ -212,6 +216,7 @@ const cropMarks = [
     import { todayInKorea } from "../../../lib/work/legal-dates.mjs";
     import { checkPaperCopy } from "../../../lib/work/paper-copy.mjs";
     import { bindCopyFields } from "../../../lib/work-paper-copy";
+    import { bindCardShare } from "../../../lib/work-card-share";
 
     const root = document.querySelector<HTMLElement>("[data-paper]");
 
@@ -232,6 +237,8 @@ const cropMarks = [
       const areaPreview = root.querySelector<HTMLElement>("[data-done-area-preview]");
       const make = root.querySelector<HTMLButtonElement>("[data-done-make]");
       const download = root.querySelector<HTMLAnchorElement>("[data-done-download]");
+      const share = root.querySelector<HTMLButtonElement>("[data-done-share]");
+      const copy = root.querySelector<HTMLButtonElement>("[data-done-copy]");
       const print = root.querySelector<HTMLButtonElement>("[data-done-print]");
       const status = root.querySelector<HTMLElement>("[data-done-status]");
       const preview = root.querySelector<HTMLElement>("[data-done-preview]");
@@ -248,7 +255,7 @@ const cropMarks = [
         delete document.body.dataset.paperPrint;
       });
 
-      if (name && deal && area && priceOn && amount && deposit && monthly && amountLabel && areaPreview && make && download && print && status && preview && image && canvas && sheet) {
+      if (name && deal && area && priceOn && amount && deposit && monthly && amountLabel && areaPreview && make && download && share && copy && print && status && preview && image && canvas && sheet) {
         const AREA_HINT = "그림에는 정수로 내려 '전용 84㎡대'처럼 나옵니다.";
         // 입력이 바뀌면 만든 그림을 버린다(그림을 만드는 중에 바뀌면 끝난 그림도 버림). 입력값·고른 모양은 이 칸과 변수에만 있고 저장·전송하지 않는다.
         let token = 0;
@@ -256,10 +263,13 @@ const cropMarks = [
           status.textContent = text;
           status.dataset.state = state;
         };
+        // '카톡·문자로 보내기'·'그림 복사'는 '그림 저장'이 보일 때만 보인다(같은 그림·같은 파일 이름).
+        const syncShare = bindCardShare(share, copy, download, setStatus);
         const clearImage = () => {
           token += 1;
           download.hidden = true;
           download.removeAttribute("href");
+          syncShare();
           print.hidden = true;
           preview.hidden = true;
           image.removeAttribute("src");
@@ -324,6 +334,7 @@ const cropMarks = [
             download.href = result.dataUrl;
             download.download = doneFileName(todayInKorea());
             download.hidden = false;
+            syncShare();
             const printed = document.createElement("img");
             printed.src = result.dataUrl;
             printed.alt = alt;
@@ -373,21 +384,25 @@ const cropMarks = [
       const introShapes = [...root.querySelectorAll<HTMLInputElement>("[data-intro-shape]")];
       const introMake = root.querySelector<HTMLButtonElement>("[data-intro-make]");
       const introDownload = root.querySelector<HTMLAnchorElement>("[data-intro-download]");
+      const introShare = root.querySelector<HTMLButtonElement>("[data-intro-share]");
+      const introCopyButton = root.querySelector<HTMLButtonElement>("[data-intro-copy]");
       const introStatus = root.querySelector<HTMLElement>("[data-intro-status]");
       const introPreview = root.querySelector<HTMLElement>("[data-intro-preview]");
       const introImage = root.querySelector<HTMLImageElement>("[data-intro-image]");
       const introCanvas = root.querySelector<HTMLCanvasElement>("[data-intro-canvas]");
-      if (introMake && introDownload && introStatus && introPreview && introImage && introCanvas) {
+      if (introMake && introDownload && introShare && introCopyButton && introStatus && introPreview && introImage && introCanvas) {
         let introToken = 0;
         const setIntroStatus = (text: string, state: "idle" | "success" | "error") => {
           introStatus.textContent = text;
           introStatus.dataset.state = state;
         };
+        const syncIntroShare = bindCardShare(introShare, introCopyButton, introDownload, setIntroStatus);
         const introShape = () => (introShapes.find((input) => input.checked)?.value ?? "white") as IntroShape;
         const clearIntro = () => {
           introToken += 1;
           introDownload.hidden = true;
           introDownload.removeAttribute("href");
+          syncIntroShare();
           introPreview.hidden = true;
           introImage.removeAttribute("src");
           introImage.alt = "";
@@ -422,6 +437,7 @@ const cropMarks = [
             introDownload.href = result.dataUrl;
             introDownload.download = introFileName(todayInKorea());
             introDownload.hidden = false;
+            syncIntroShare();
             setIntroStatus("✓ 그림을 만들었습니다. '그림 저장'으로 내려받으세요.", "success");
           } catch {
             if (mine === introToken) setIntroStatus("그림을 만들지 못했습니다. 다시 눌러 주세요.", "error");

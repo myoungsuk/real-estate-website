@@ -311,6 +311,7 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
         </div>
         <div class="rt-preview__act" data-rt-preview-act hidden>
           <div class="rt-preview__downloads" data-rt-preview-downloads></div>
+          <div class="work-card-share" data-rt-preview-share></div>
           <p class="rt-preview__size" data-rt-preview-size></p>
           <p class="rt-preview__where" id="rt-preview-copy-title">올릴 곳에 맞춘 글 복사</p>
           <div class="rt-places rt-places--panel" role="group" aria-labelledby="rt-preview-copy-title">
@@ -376,6 +377,7 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
   <script>
     import office from "../../../../data/office.json";
     import { renderPromoCard, type PromoCard, type PromoStyle } from "../../../../lib/work-realprice-card";
+    import { createCardShareButtons, type CardImage } from "../../../../lib/work-card-share";
     import { getWorkSession, readWork, WorkApiError } from "../../../../lib/work-realprice-client";
     import { renderBackfillBars } from "../../../../lib/work-realprice-dom";
     import { todayInKorea } from "../../../../lib/work/legal-dates.mjs";
@@ -725,6 +727,7 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
       const previewWarn = pick("[data-rt-preview-warn]");
       const previewAct = pick("[data-rt-preview-act]");
       const previewDownloads = pick("[data-rt-preview-downloads]");
+      const previewShare = pick("[data-rt-preview-share]");
       const previewCopyButtons = [...root.querySelectorAll<HTMLButtonElement>("[data-rt-preview-copy]")];
       const previewPost = pick("[data-rt-preview-post]");
       const previewStatus = pick("[data-rt-preview-status]");
@@ -854,6 +857,7 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
         previewImages = [];
         previewCards.replaceChildren();
         previewDownloads.replaceChildren();
+        previewShare.replaceChildren();
         previewWarn.hidden = true;
         previewBlocked.hidden = true;
         previewAct.hidden = true;
@@ -903,6 +907,7 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
         const figures: HTMLElement[] = [];
         const links: HTMLElement[] = [];
         const images: { src: string; alt: string }[] = [];
+        const shared: CardImage[] = [];
         let overflow = false;
         try {
           for (const [index, card] of cards.entries()) {
@@ -922,6 +927,7 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
             link.href = result.dataUrl;
             link.download = promoFileName(today, index, cards.length);
             link.dataset.rtPreviewDownload = "";
+            shared.push({ dataUrl: result.dataUrl, fileName: link.download });
             link.textContent = cards.length > 1 ? `${index + 1}장 저장` : "그림 저장";
             link.addEventListener("click", () => {
               link.textContent = `✓ ${cards.length > 1 ? `${index + 1}장` : "그림"} 저장함`;
@@ -937,6 +943,11 @@ const chipTextOf = (key: "period" | "area" | "price") => chipText(key, String(de
         previewImages = images;
         previewCards.replaceChildren(...figures);
         previewDownloads.replaceChildren(...links);
+        // 저장 단추와 같은 그림·파일 이름으로 '카톡·문자로 보내기'(모두 한 번에)·장마다 '복사'(홍보물 화면과 같음). 안 되는 브라우저에서는 단추가 없다.
+        previewShare.replaceChildren(...createCardShareButtons(shared, (text, state) => {
+          previewStatus.textContent = text;
+          previewStatus.dataset.state = state;
+        }));
         pick("[data-rt-preview-size]").textContent = `1080×1350 PNG · ${cards.length}장`;
         previewCount.textContent = `담은 거래 ${count}건 · 그림 ${cards.length}장`;
         previewWarn.hidden = !overflow;

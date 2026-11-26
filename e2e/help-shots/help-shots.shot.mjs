@@ -438,7 +438,7 @@ for (const [device, width] of DEVICES) {
     await expect(image).toHaveAttribute("src", /^data:image\/png;base64,/u);
     await expect.poll(() => image.evaluate((node) => node.complete && node.naturalWidth)).toBeGreaterThan(0);
     const download = page.locator("[data-lp-download]");
-    await snap(page, `listing-${device}-3-image`, { clip: [make, image, download], targets: [{ text: make }, { text: download }] });
+    await snap(page, `listing-${device}-3-image`, { clip: [make, page.locator("[data-lp-status]"), image, download], targets: [{ text: make }, { text: download }] });
   });
 
   test(`그림 찍기: 부동산뱅크 엑셀 가져오기 ${device}`, async ({ page }) => {

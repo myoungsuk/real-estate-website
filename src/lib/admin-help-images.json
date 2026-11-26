@@ -532,7 +532,7 @@
     },
     "blog-draft": {
       "route": "/admin/work/blog/",
-      "sources": "5064a0ea3a39b4ee8c1cbc26ded0764adecdaf50c998763eb2edc1398670c8e9",
+      "sources": "cd12b4702a2a217301c3da273d65aad54932a4c894d4b55f3d8443d7fd0678a6",
       "shots": {
         "blog-phone-1-source": {
           "width": 772,
@@ -750,7 +750,7 @@
     },
     "promo-pick": {
       "route": "/admin/work/realprice/",
-      "sources": "7ce983ec7c14272b14d6f07aa4f34d7ef63221da7935c95592fd88afac254fa9",
+      "sources": "43ddf3faa99da04a727b9277d7a51d701fc096ed2d1cbceccefcc150de7d26db",
       "shots": {
         "promo-phone-1-pick": {
           "width": 780,
@@ -760,13 +760,13 @@
           "marks": [
             [
               0.8513,
-              0.2658,
+              0.2691,
               0.9641,
-              0.3147
+              0.318
             ],
             [
               0.4641,
-              0.9633,
+              0.9667,
               0.7637,
               1
             ]
@@ -775,8 +775,8 @@
         "promo-wide-1-pick": {
           "width": 1520,
           "height": 619,
-          "bytes": 47670,
-          "sha256": "c1eebfd3868843e52ab2ff16dd22ac8b81979bd08bd799933d00ed31e529552e",
+          "bytes": 48102,
+          "sha256": "a8f579761ac59521ab361af9f3272c0d8c6966f63fc2348efb9d3c00476543d9",
           "marks": [
             [
               0.0234,
@@ -792,9 +792,9 @@
             ],
             [
               0.6945,
-              0.7424,
+              0.6482,
               0.9648,
-              0.8416
+              0.7474
             ]
           ]
         }
@@ -802,7 +802,7 @@
     },
     "promo-make": {
       "route": "/admin/work/realprice/promo/",
-      "sources": "534e37a9fa62c21492d230caf759657d136b7c562a1df63b6114265d0dfe2fc8",
+      "sources": "f8eac73bd0079ee03da3de380d114a09c7d0b643fa4b5144d3e3e515b2faac0e",
       "shots": {
         "promo-phone-2-card": {
           "width": 780,
@@ -827,8 +827,8 @@
         "promo-phone-3-post": {
           "width": 780,
           "height": 590,
-          "bytes": 20736,
-          "sha256": "1107051ad1d8754fb04f08029e44debc727185b1b0349c717136f0ac8e902d2e",
+          "bytes": 21058,
+          "sha256": "32c9771e020c1ec87589297ce4edbb9a3d816ea11c82df4aaad8af258310fd1a",
           "marks": [
             [
               0.0949,
@@ -876,7 +876,7 @@
     },
     "listing-paper": {
       "route": "/admin/work/listing-paper/",
-      "sources": "50742512e6f5277c3aa7157957de52f66d474b340c0f10d5ac98322a7e7f7021",
+      "sources": "153f0e13b0f21252e711f4a3a722d0985d476b2bc1745e6f29c5db7e7992b1f9",
       "shots": {
         "listing-phone-1-pick": {
           "width": 772,
@@ -920,21 +920,21 @@
         },
         "listing-phone-3-image": {
           "width": 772,
-          "height": 1404,
-          "bytes": 56384,
-          "sha256": "c9b75ef169eacecf8226e9bae7954365b160fa80389205131ed5ca4c79096339",
+          "height": 1516,
+          "bytes": 57414,
+          "sha256": "fe7aa8e579536fd9f559dda93062c40ebc7286b16e15c2c721fab7c54de32cc4",
           "marks": [
             [
               0.3277,
-              0.0356,
+              0.033,
               0.6722,
-              0.0697
+              0.0646
             ],
             [
               0.4139,
-              0.1205,
+              0.1116,
               0.5861,
-              0.1547
+              0.1433
             ]
           ]
         },
@@ -979,21 +979,21 @@
           ]
         },
         "listing-wide-3-image": {
-          "width": 1428,
-          "height": 1304,
-          "bytes": 64104,
-          "sha256": "5e5a8686120cb8568054587569cc5c6239d0c0c73c8dcf201ee2d5b54ba69d40",
+          "width": 1520,
+          "height": 931,
+          "bytes": 46558,
+          "sha256": "2a2238efa2191524f7f0b5b57a052f541c6fad86df7be9689b1c3a5f18f11c53",
           "marks": [
             [
-              0.1626,
+              0.0681,
               0.0383,
-              0.3486,
+              0.1931,
               0.0751
             ],
             [
-              0.6979,
+              0.3456,
               0.0383,
-              0.7909,
+              0.4081,
               0.0751
             ]
           ]
