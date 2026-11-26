@@ -3,6 +3,7 @@
 // 동그라미 색은 admin.css가 그림 이름(data-pill)으로 정하고, 지금 화면의 알약에서는 흰 동그라미 + 색 선으로 뒤집는다. 뜻은 옆의 글자가 전하므로 그림은 읽지 않는다(aria-hidden).
 export type AdminPillName =
   | "work-home"
+  | "calendar"
   | "tasks"
   | "customers"
   | "ledger"
@@ -37,6 +38,12 @@ const { name } = Astro.props;
   <circle class="admin-pill-icon__disc" cx="12" cy="12" r="12" />
   <g class="admin-pill-icon__line" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
     {name === "work-home" && <path d="M7 12.2 12 7.6l5 4.6v4.6h-3.4v-3h-3.2v3H7z" />}
+    {name === "calendar" && (
+      <>
+        <rect x="7" y="7.6" width="10" height="9.4" rx="1.2" />
+        <path d="M7 10.6h10M9.6 13h.1M12 13h.1M14.4 13h.1M9.6 15h.1M12 15h.1" />
+      </>
+    )}
     {name === "tasks" && <path d="m7.6 12.4 3 3 5.8-6.4" />}
     {name === "customers" && (
       <>

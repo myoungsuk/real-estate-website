@@ -102,7 +102,7 @@ const guideSections = ADMIN_HELP_GUIDE.flatMap((group) => group.sections);
 
 test("관리 화면마다 제목 아래에 자기 주소의 '이 화면 사용법' 상자가 한 개씩 있다", async () => {
   const pages = await listAdminPages();
-  assert.equal(pages.length, 26, "관리 화면 26개(사용 안내 화면 제외, 2026-11-19 실거래가·실거래가 설정, 2026-11-20 홍보물 만들기·글 초안·홍보 종이·매물 안내지, 2026-11-21 손님·손님 카드·메모 창고·매출장부, 2026-11-22 할 일·휴지통, 2026-11-23 계약서 AI 결과 고르기, 2026-11-25 거래 완료 소식 추가)");
+  assert.equal(pages.length, 27, "관리 화면 27개(사용 안내 화면 제외, 2026-11-19 실거래가·실거래가 설정, 2026-11-20 홍보물 만들기·글 초안·홍보 종이·매물 안내지, 2026-11-21 손님·손님 카드·메모 창고·매출장부, 2026-11-22 할 일·휴지통, 2026-11-23 계약서 AI 결과 고르기, 2026-11-25 거래 완료 소식 추가, 2026-11-26 달력)");
   const routes = [];
   for (const file of pages) {
     const source = await readSource(`src/pages/admin/${file}`);

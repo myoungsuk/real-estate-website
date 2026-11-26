@@ -263,7 +263,7 @@ const kindLabels = TRASH_KIND_LABELS as Record<string, string>;
             const text = restoreResultText(item.label, result, item.kind);
             if (text.remaining) partial.add(item.batchId);
             else partial.delete(item.batchId);
-            showNotice(text.lead, { lines: text.lines, state: text.state, link: restoredLink(item.kind) });
+            showNotice(text.lead, { lines: text.lines, state: text.state, link: restoredLink(item.kind, item.counts) });
             await loadList();
           } catch (error) {
             const code = errorCode(error);

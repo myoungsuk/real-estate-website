@@ -67,9 +67,9 @@ test("손님 카드 주소에는 무작위 ID만 넣고, 손님 이름은 제목
   assert.match(detail, /id = customerIdFromSearch\(location\.search\);/u);
 });
 
-test("관리자 메뉴에는 업무 도구 처음·할 일(메뉴 A안 2026-11-22 13:22:11) 바로 뒤 '손님·돈' 묶음에 '손님'·'매출장부'를 넣고(메뉴 B안 2026-11-21 03:09:45), 메모 창고는 손님 화면 안 링크로만 두며, 세 화면 모두 탭 미리 그리기(prerender)에서 뺀다(사용자 선택 2026-11-21 02:26:01)", async () => {
+test("관리자 메뉴에는 업무 도구 처음·달력(2026-11-26)·할 일(메뉴 A안 2026-11-22 13:22:11) 바로 뒤 '손님·돈' 묶음에 '손님'·'매출장부'를 넣고(메뉴 B안 2026-11-21 03:09:45), 메모 창고는 손님 화면 안 링크로만 두며, 세 화면 모두 탭 미리 그리기(prerender)에서 뺀다(사용자 선택 2026-11-21 02:26:01)", async () => {
   const [layout, list] = await Promise.all([readSource("src/layouts/AdminLayout.astro"), readSource(PAGES[0])]);
-  assert.match(layout, /\{ href: "\/admin\/work\/", label: "도구 모음" \},\r?\n\s*\{ href: "\/admin\/work\/tasks\/", label: "할 일" \},\r?\n\s*\{ href: "\/admin\/work\/customers\/", label: "손님", group: "손님·돈" \},\r?\n\s*\{ href: "\/admin\/work\/ledger\/", label: "매출장부", group: "손님·돈" \},\r?\n\s*\{ href: "\/admin\/work\/fee\/"/u);
+  assert.match(layout, /\{ href: "\/admin\/work\/", label: "도구 모음" \},\r?\n\s*\{ href: "\/admin\/work\/calendar\/", label: "달력" \},\r?\n\s*\{ href: "\/admin\/work\/tasks\/", label: "할 일" \},\r?\n\s*\{ href: "\/admin\/work\/customers\/", label: "손님", group: "손님·돈" \},\r?\n\s*\{ href: "\/admin\/work\/ledger\/", label: "매출장부", group: "손님·돈" \},\r?\n\s*\{ href: "\/admin\/work\/fee\/"/u);
   assert.doesNotMatch(layout, /\/admin\/work\/notes\/|메모 창고/u, "메모 창고는 메뉴에 없음");
   const prerender = /const prerenderPages = \[([^\]]*)\];/u.exec(layout)?.[1] ?? "";
   assert.doesNotMatch(prerender, /customers|notes|ledger/u, "서버를 부르는 화면은 미리 그리지 않음");

@@ -28,7 +28,7 @@ export const TRASH_BACKUP_NOTICE = "영구 삭제한 뒤에도 백업에는 개�
 // 손님이 자기 자료를 지워 달라고 할 때(손님 카드·휴지통 사용법, 날개-2 안)
 export const TRASH_ERASE_REQUEST = "손님이 자기 자료를 지워 달라고 하면: 손님 카드에서 지운 뒤 휴지통에서 그 묶음을 '영구 삭제'까지 하세요. 휴지통에 두면 7일 동안 남습니다.";
 
-/** @typedef {{ customers?: number, deals?: number, parties?: number, events?: number, notes?: number, tasks?: number, ledger?: number, files?: number, links?: number }} TrashCountsView */
+/** @typedef {{ customers?: number, deals?: number, parties?: number, events?: number, notes?: number, tasks?: number, ledger?: number, files?: number, links?: number, appointments?: number }} TrashCountsView */
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 const KOREA_OFFSET_MS = 9 * 60 * 60 * 1000;
@@ -203,9 +203,11 @@ const RESTORED_LINKS = Object.freeze({
   // 사진·계약서 사본은 손님 카드에 있지만 되살리기 응답에 손님 id가 없어 손님 목록으로(지시서 4.1, 대장 판단)
   file: ["손님 목록 열기", "/admin/work/customers/"],
 });
-/** @param {string} kind @returns {{ text: string, href: string } | null} */
-export function restoredLink(kind) {
-  const link = RESTORED_LINKS[kind];
+// 거래 없는 일정(달력에서 넣은 일정)도 종류는 '일정'(event)이고 events에 함께 센다. 응답의 counts.appointments가 1 이상이면 달력으로 간다(날개-2 서버 응답).
+const APPOINTMENT_RESTORED_LINK = Object.freeze(["달력 열기", "/admin/work/calendar/"]);
+/** @param {string} kind @param {TrashCountsView} [counts] @returns {{ text: string, href: string } | null} */
+export function restoredLink(kind, counts) {
+  const link = kind === "event" && (counts?.appointments ?? 0) > 0 ? APPOINTMENT_RESTORED_LINK : RESTORED_LINKS[kind];
   return link ? { text: link[0], href: link[1] } : null;
 }
 

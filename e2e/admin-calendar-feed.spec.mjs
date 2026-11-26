@@ -108,6 +108,7 @@ test("구독 칸: 주소가 없으면 '구독 주소 만들기', 만들면 그 �
   await expect(alarmHelp.locator("ol li")).toHaveCount(2);
   await expect(alarmHelp.locator("ol li").first()).toContainText("'종일 일정 알림'");
   await expect(alarmHelp.locator("ol li").last()).toContainText("'동기화'");
+  await expect(alarmHelp.locator("ol li").last()).toContainText("'일정 알림'도 켜 두어야 할 수 있습니다");
   await expect(panel.getByRole("link", { name: "iPhone 캘린더에 넣기" })).toHaveAttribute("href", `webcal://127.0.0.1:4321/api/calendar/${TOKEN}.ics`);
   const google = new URL(await panel.getByRole("link", { name: "Google 캘린더에 넣기" }).getAttribute("href"));
   expect(google.origin + google.pathname).toBe("https://calendar.google.com/calendar/r");
