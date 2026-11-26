@@ -47,6 +47,10 @@ export const aiLedgerDoneText = (made, warned) =>
 export const aiLedgerPartialText = (made, reason) =>
   `보수 줄 ${made}개만 넣었습니다. 나머지는 넣지 못했습니다. ${reason} 빠진 쪽은 손님 카드의 '장부 보기' → '보수 줄 만들기'에서 넣어 주세요.`;
 
+/** 한 줄 이상 넣은 뒤 다음 줄이 답 없이 끊겼을 때(코드 없음·5xx). 서버가 넣고 답만 잃었을 수 있어 "넣지 못했다"고 단정하지 않는다. @param {number} made */
+export const aiLedgerPartialUnsureText = (made) =>
+  `보수 줄 ${made}개는 넣었지만, 다음 줄은 답이 오지 않아 들어갔는지 확인하지 못했습니다. 손님 카드의 '장부 보기'에서 확인한 뒤, 빠진 쪽만 '보수 줄 만들기'로 넣어 주세요.`;
+
 /**
  * 공급가액 칸을 고쳤을 때 부가세 칸에 넣을 글. 고치기 전 부가세가 그 전 공급가액의 10%(원 미만 버림, calculateVatWon)였을 때만 따라 바꾸고,
  * 사람이 부가세를 따로 고쳤거나 글이 숫자가 아니면 null(그대로 둠). 공급가액을 비우면 부가세도 비운다.

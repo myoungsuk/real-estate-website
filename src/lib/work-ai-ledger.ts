@@ -16,6 +16,7 @@ import {
   aiLedgerExistingText,
   aiLedgerFeeCount,
   aiLedgerPartialText,
+  aiLedgerPartialUnsureText,
   aiLedgerPrefill,
   aiLedgerVatFollow,
 } from "./work/ai-ledger-prefill.mjs";
@@ -212,7 +213,8 @@ export function aiLedgerSection(deal: PrefillDeal, partyRoles: string[]): HTMLEl
         if (made > 0) {
           // 한 줄이라도 들어갔으면 칸을 다시 보이지 않는다(같은 줄을 두 번 만들지 않게).
           content.replaceChildren(ledgerLink());
-          setStatus(status, aiLedgerPartialText(made, reason), "error");
+          // 답 없이 끊겼으면 그 줄도 들어갔을 수 있어 "넣지 못했다"고 단정하지 않는다(손으로 다시 넣어 같은 줄이 두 번 생기지 않게).
+          setStatus(status, dealSaveUnsure(code, httpOf(error)) ? aiLedgerPartialUnsureText(made) : aiLedgerPartialText(made, reason), "error");
         } else if (dealSaveUnsure(code, httpOf(error))) {
           await recheck(reason);
         } else {

@@ -428,7 +428,7 @@
     },
     "contract-ai-review": {
       "route": "/admin/work/ai/review/",
-      "sources": "366782c84183fd9159b341b3fe7fbdf9dcb4a3f774f892f05779bf92be91d4c8",
+      "sources": "359002e4afa221d9754dd086642224f3e2823c7e75eb2e5f613f4a71a065ce06",
       "shots": {
         "aireview-phone-1-pick": {
           "width": 780,
@@ -524,7 +524,7 @@
         }
       },
       "files": {
-        "src/lib/work-ai-review.ts": "aa224030313a2c0716fa4675a19487ce8db3cf9b4b2a51432526f2e929ffcac2",
+        "src/lib/work-ai-review.ts": "243fa71e174e554e399ccf5362daf2b1069dbf94989bcef42613bf670f65e69b",
         "src/lib/work/contract-ai-view.mjs": "3c78fa23c782c42f3b124b79699b05123cd6340fff75a1c3e6b6d6f4dd6650f1",
         "src/lib/work/contract-compare.mjs": "310ec8d0bb88591e81d2fef2596a19108199afae6eac8588d6a2857c1494df88",
         "src/pages/admin/work/ai/review.astro": "d3bbc1c1ed94ee4da0c4aa84f2b8b22c124c5cdd4f64a4a488888a950168bbd2"

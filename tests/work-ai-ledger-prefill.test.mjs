@@ -9,6 +9,7 @@ import {
   aiLedgerExistingText,
   aiLedgerFeeCount,
   aiLedgerPartialText,
+  aiLedgerPartialUnsureText,
   aiLedgerPrefill,
   aiLedgerVatFollow,
 } from "../src/lib/work/ai-ledger-prefill.mjs";
@@ -70,6 +71,8 @@ test("단추·결과 글", () => {
   assert.match(aiLedgerDoneText(1, false), /^✓ 보수 줄 1개를 장부에 넣었습니다\. 보수를 받으면/u);
   assert.match(aiLedgerDoneText(2, true), /경고가 있습니다/u);
   assert.match(aiLedgerPartialText(1, "가상 까닭."), /^보수 줄 1개만 넣었습니다\. 나머지는 넣지 못했습니다\. 가상 까닭\. /u);
+  assert.match(aiLedgerPartialUnsureText(1), /^보수 줄 1개는 넣었지만, 다음 줄은 답이 오지 않아 들어갔는지 확인하지 못했습니다\. /u);
+  assert.doesNotMatch(aiLedgerPartialUnsureText(1), /넣지 못했습니다/u);
 });
 
 test("공급가액을 고치면 부가세가 10%였을 때만 따라 바뀐다(매출장부 표와 같은 규칙)", () => {

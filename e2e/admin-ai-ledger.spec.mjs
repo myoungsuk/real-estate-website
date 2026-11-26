@@ -183,6 +183,26 @@ test("두 쪽 중 하나만 들어감: 칸을 다시 보이지 않고 빠진 쪽
   done();
 });
 
+test("두 쪽 중 둘째가 답 없이 끊김: 넣지 못했다고 단정하지 않고 장부 보기에서 확인하라고 알린다", async ({ page }) => {
+  const done = collectErrors(page);
+  let creates = 0;
+  const calls = await setup(page, {
+    width: 390,
+    ai: {
+      groups: groups(),
+      ledger: { create: (body) => (creates++ === 0 ? envelope({ entry: ledgerEntry(1, body), warnings: [] }, 201) : failure(502, "UPSTREAM_ERROR")) },
+    },
+  });
+  await confirmReview(page);
+  const box = section(page);
+  await box.locator("label.work-choice", { hasText: "매도인" }).click();
+  await box.locator("[data-axl-save]").click();
+  await expect(box.locator("[data-axl-status]")).toHaveText(/^보수 줄 1개는 넣었지만, 다음 줄은 답이 오지 않아 들어갔는지 확인하지 못했습니다\. .*'장부 보기'에서 확인한 뒤, 빠진 쪽만 '보수 줄 만들기'로 넣어 주세요\.$/u);
+  await expect(box.locator("[data-axl-save]")).toHaveCount(0);
+  expect(ledgerPosts(calls), "자동으로 다시 보내지 않음").toHaveLength(2);
+  done();
+});
+
 test("장부 목록을 못 읽으면 미리 채우지 않고 '다시 확인하기'로만 다시 읽는다", async ({ page }) => {
   const done = collectErrors(page);
   let reads = 0;
