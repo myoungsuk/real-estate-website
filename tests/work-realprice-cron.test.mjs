@@ -106,7 +106,7 @@ test("TK-22 켜기 값이 꺼짐(없음·TRUE·1·' true')이면 D1·외부 요�
   assert.equal(calls.length, 0);
 });
 
-test("TK-07·TK-22 구조 번호 2(0003 적용 전 D1)·7(0008 적용 전 D1)·9(앞선 코드로 되돌림)이면 공공데이터포털 호출 0번·D1 쓰기 0·경고 로그만", async () => {
+test("TK-07·TK-22 구조 번호 2(0003 적용 전 D1)·7(0008 적용 전 D1)·8(0009 적용 전 D1)·10(앞선 코드로 되돌림)이면 공공데이터포털 호출 0번·D1 쓰기 0·경고 로그만", async () => {
   const database = new DatabaseSync(":memory:");
   database.exec("PRAGMA foreign_keys = ON;");
   for (const sql of allMigrationSql.slice(0, 2)) database.exec(sql);
@@ -126,8 +126,16 @@ test("TK-07·TK-22 구조 번호 2(0003 적용 전 D1)·7(0008 적용 전 D1)·9
   assert.deepEqual(await cron(cronEnv(before0008), { fetcher }), { outcome: "schema_mismatch", code: "WORK_SCHEMA_OUTDATED" });
   assert.deepEqual([before0008.stats.batches.length, calls.length], [0, 0]);
 
+  // 0009를 넣기 전에 새 코드가 배포된 경우도 같다.
+  const before0009Db = new DatabaseSync(":memory:");
+  before0009Db.exec("PRAGMA foreign_keys = ON;");
+  for (const sql of allMigrationSql.slice(0, 8)) before0009Db.exec(sql);
+  const before0009 = createD1(before0009Db);
+  assert.deepEqual(await cron(cronEnv(before0009), { fetcher }), { outcome: "schema_mismatch", code: "WORK_SCHEMA_OUTDATED" });
+  assert.deepEqual([before0009.stats.batches.length, calls.length], [0, 0]);
+
   const ahead = freshDb();
-  ahead.database.exec("UPDATE settings SET value_json = '9' WHERE key = 'schema_version'");
+  ahead.database.exec("UPDATE settings SET value_json = '10' WHERE key = 'schema_version'");
   assert.equal((await cron(cronEnv(ahead.db), { fetcher })).code, "WORK_SCHEMA_AHEAD");
   assert.equal(calls.length, 0);
   assert.equal(ahead.db.stats.batches.length, 0);

@@ -3,6 +3,8 @@ import { WorkApiError } from "./work-security.mjs";
 import { DEFAULT_ALARM_TRIGGERS, isAllowedAlarmTriggers } from "./work-calendar.mjs";
 import { cleanMultiLine, cleanSingleLine } from "../src/lib/work/work-format.mjs";
 import { TASK_REPEAT_RULES } from "../src/lib/work/task-repeat.mjs";
+import { APPOINTMENT_REPEAT_RULES } from "../src/lib/work/appointment-repeat.mjs";
+import { APPOINTMENT_TAG_KEYS, DEFAULT_APPOINTMENT_ALARMS, appointmentAlarmsValid, isClockTime } from "../src/lib/work/appointment-rules.mjs";
 
 export const CUSTOMER_STATUSES = Object.freeze(["consulting", "contracting", "completed", "on_hold"]);
 export const LIST_LIMIT_DEFAULT = 20;
@@ -800,6 +802,125 @@ export function parseTaskQuery(params) {
     cursor: status === "open" ? decodeTaskCursor(cursorText) : decodeCursor(cursorText),
     limit: limitText === null || limitText === "" ? TASK_LIST_LIMIT_DEFAULT : parseLimit(limitText),
   };
+}
+
+// 거래 없는 일정(설계서 6.15절, 0009 appointments). 제목은 할 일과 같은 규칙(한 줄 정리 뒤 1 ~ 80자, 주민번호 형태 가림).
+// 꼬리표·반복·알림 목록은 DB CHECK 없이 여기서 검사한다(appointment-rules.mjs·appointment-repeat.mjs, 사용자 답 "코드가 검사").
+// 칸 하나하나의 꼴은 parse*가, 칸 사이 규칙(끝 시각·끝나는 날·알림)은 저장할 최종 상태로 appointmentStateErrors가 본다.
+const APPOINTMENT_FIELDS = Object.freeze(["tag", "title", "startsOn", "startTime", "endTime", "repeatRule", "repeatUntil", "alarms"]);
+export const APPOINTMENT_SCOPES = Object.freeze(["one", "following"]);
+export const CALENDAR_RANGE_MAX_DAYS = 42; // 달력 6주
+
+function readClock(body, key) {
+  if (!(key in body) || body[key] === undefined) return undefined;
+  if (body[key] === null || body[key] === "") return null;
+  if (!isClockTime(body[key])) throw invalid([key]);
+  return body[key];
+}
+
+function readAppointmentFields(body) {
+  const fields = {};
+  let rrnMasked = 0;
+  const tag = readEnum(body, "tag", APPOINTMENT_TAG_KEYS);
+  if (tag !== undefined) fields.tag = tag;
+  const title = readTaskTitle(body, { required: false });
+  if (title !== undefined) {
+    fields.title = title.text;
+    rrnMasked = title.count;
+  }
+  if ("startsOn" in body && body.startsOn !== undefined) {
+    if (!isCalendarDate(body.startsOn)) throw invalid(["startsOn"]);
+    fields.startsOn = body.startsOn;
+  }
+  const startTime = readClock(body, "startTime");
+  if (startTime !== undefined) fields.startTime = startTime;
+  const endTime = readClock(body, "endTime");
+  if (endTime !== undefined) fields.endTime = endTime;
+  const repeatRule = readEnum(body, "repeatRule", APPOINTMENT_REPEAT_RULES);
+  if (repeatRule !== undefined) fields.repeatRule = repeatRule;
+  const repeatUntil = readDate(body, "repeatUntil");
+  if (repeatUntil !== undefined) fields.repeatUntil = repeatUntil;
+  if ("alarms" in body && body.alarms !== undefined) {
+    if (!Array.isArray(body.alarms) || !body.alarms.every((alarm) => typeof alarm === "string")) throw invalid(["alarms"]);
+    fields.alarms = [...body.alarms];
+  }
+  return { fields, rrnMasked };
+}
+
+// 저장할 최종 상태의 칸 사이 규칙. 어긴 칸 이름 배열(없으면 []).
+// 끝 시각은 시작 시각이 있어야 하고 더 늦어야 한다(같으면 안 됨, 사용자 답 11-25 23:32:21). 끝나는 날은 반복일 때만, 시작일 이후.
+// 알림은 0 ~ 2개·겹침 없음·고를 수 있는 것만(하루 종일에 '1시간 전', 시작보다 늦게 울리는 알림은 안 됨).
+export function appointmentStateErrors(state) {
+  const wrong = [];
+  if (state.endTime !== null && state.startTime === null) wrong.push("startTime");
+  else if (state.endTime !== null && state.endTime <= state.startTime) wrong.push("endTime");
+  if (state.repeatUntil !== null && (state.repeatRule === "none" || state.repeatUntil < state.startsOn)) wrong.push("repeatUntil");
+  if (!appointmentAlarmsValid(state.alarms, state.startTime)) wrong.push("alarms");
+  return wrong;
+}
+
+export function parseAppointmentCreate(body) {
+  if (!isPlainObject(body)) throw invalid(["body"]);
+  rejectUnknown(body, APPOINTMENT_FIELDS);
+  const missing = ["tag", "title", "startsOn"].filter((key) => !(key in body) || body[key] === undefined);
+  if (missing.length > 0) throw invalid(missing);
+  const { fields, rrnMasked } = readAppointmentFields(body);
+  const appointment = {
+    tag: fields.tag,
+    title: fields.title,
+    startsOn: fields.startsOn,
+    startTime: fields.startTime ?? null,
+    endTime: fields.endTime ?? null,
+    repeatRule: fields.repeatRule ?? "none",
+    repeatUntil: fields.repeatUntil ?? null,
+    alarms: fields.alarms ?? [...DEFAULT_APPOINTMENT_ALARMS],
+  };
+  const wrong = appointmentStateErrors(appointment);
+  if (wrong.length > 0) throw invalid(wrong);
+  return { appointment, rrnMasked };
+}
+
+// 반복 줄의 어느 날인지(scope·occurrenceOn). 둘은 함께 오거나 함께 없어야 한다. 반복 줄인지는 work-appointments.mjs가 저장된 줄로 본다.
+function readScope(body) {
+  const hasScope = "scope" in body && body.scope !== undefined;
+  const hasOn = "occurrenceOn" in body && body.occurrenceOn !== undefined;
+  if (!hasScope && !hasOn) return { scope: null, occurrenceOn: null };
+  if (!hasScope || !APPOINTMENT_SCOPES.includes(body.scope)) throw invalid(["scope"]);
+  if (!hasOn || !isCalendarDate(body.occurrenceOn)) throw invalid(["occurrenceOn"]);
+  return { scope: body.scope, occurrenceOn: body.occurrenceOn };
+}
+
+// 고치기: 보낸 칸만 돌려준다(startTime·endTime·repeatUntil은 null이면 지움). 바꿀 칸이 하나도 없으면 400.
+export function parseAppointmentPatch(body) {
+  if (!isPlainObject(body)) throw invalid(["body"]);
+  rejectUnknown(body, ["version", "scope", "occurrenceOn", ...APPOINTMENT_FIELDS]);
+  const version = readVersion(body);
+  const { scope, occurrenceOn } = readScope(body);
+  const { fields, rrnMasked } = readAppointmentFields(body);
+  if (Object.keys(fields).length === 0) throw invalid(["body"]);
+  return { version, scope, occurrenceOn, changes: fields, rrnMasked };
+}
+
+// 지우기: 반복 없는 줄은 본문 없음(null), 반복 줄은 { version, scope, occurrenceOn } 셋 다.
+export function parseAppointmentDelete(body) {
+  if (body === null || body === undefined || (isPlainObject(body) && Object.keys(body).length === 0)) return null;
+  if (!isPlainObject(body)) throw invalid(["body"]);
+  rejectUnknown(body, ["version", "scope", "occurrenceOn"]);
+  const version = readVersion(body);
+  const { scope, occurrenceOn } = readScope(body);
+  if (scope === null) throw invalid(["scope"]);
+  return { version, scope, occurrenceOn };
+}
+
+// 달력 읽기: ?from=YYYY-MM-DD&to=YYYY-MM-DD(둘 다 필수, from ≤ to, 1 ~ 42일).
+export function parseCalendarQuery(params) {
+  const from = params.get("from");
+  const to = params.get("to");
+  if (!isCalendarDate(from)) throw invalid(["from"]);
+  if (!isCalendarDate(to) || to < from) throw invalid(["to"]);
+  const days = (Date.parse(`${to}T00:00:00.000Z`) - Date.parse(`${from}T00:00:00.000Z`)) / 86_400_000 + 1;
+  if (days > CALENDAR_RANGE_MAX_DAYS) throw invalid(["to"]);
+  return { from, to };
 }
 
 // 휴지통(설계서 8.7절, 0007). 목록: ?cursor=&limit=(기본 50, 최대 50). 커서는 (지운 시각, 묶음 id).
