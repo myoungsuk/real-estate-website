@@ -89,3 +89,31 @@ export function appointmentAlarmTrigger(alarm, startTime) {
   if (startTime === null || startTime === undefined) return ICS_ALARM_OPTIONS[alarm].trigger;
   return formatDuration(appointmentAlarmOffset(alarm, startTime));
 }
+
+// ── 1년 넘게 지난 날짜 막기(2026-11-26 09:52:45 사용자 답 "막고 까닭을 알림") ─────────────────
+// 03:00 정리(worker/work-appointments.mjs expireAppointments)가 지우는 기준과 같은 날짜로, 저장하면 다음 정리에 지워질 줄은 만들지 않는다.
+// 서버(만들기·고치기 400 APPOINTMENT_DATE_EXPIRED)와 화면(일정 넣기)이 같은 함수를 쓴다.
+export const APPOINTMENT_KEEP_YEARS = 1;
+export const APPOINTMENT_DATE_EXPIRED_MESSAGE = "1년 넘게 지난 날짜는 자동으로 지워져 넣을 수 없습니다. 날짜를 확인해 주세요.";
+const KOREA_OFFSET_MS = 9 * 60 * 60 * 1000;
+
+/**
+ * 이 날짜보다 앞(starts_on·repeat_until < 이 글자)이면 1년 지난 일정이다. 한국 날짜에서 해만 1 뺀 글자이고 같은 날은 지난 것이 아니다.
+ * 2월 29일이면 '그 전해 02-29' 글자가 되어 02-28까지 지난 것, 03-01은 아니다(덜 지우는 쪽).
+ * @param {number} nowMs
+ */
+export function appointmentCutoffDate(nowMs) {
+  const today = new Date(nowMs + KOREA_OFFSET_MS).toISOString().slice(0, 10);
+  return `${String(Number(today.slice(0, 4)) - APPOINTMENT_KEEP_YEARS).padStart(4, "0")}${today.slice(4)}`;
+}
+
+/**
+ * 저장할 줄이 1년 넘게 지났으면 막을 칸 이름 배열, 아니면 null.
+ * 반복 없음: 시작일 → ["startsOn"]. 끝 있는 반복: 끝나는 날 → ["repeatUntil"]. 끝 없는 반복: 늘 null.
+ * @param {{ startsOn: string, repeatRule: string, repeatUntil?: string | null }} state @param {string} cutoff appointmentCutoffDate 값
+ */
+export function appointmentDateExpired(state, cutoff) {
+  if (state.repeatRule === "none") return state.startsOn < cutoff ? ["startsOn"] : null;
+  if (typeof state.repeatUntil !== "string") return null;
+  return state.repeatUntil < cutoff ? ["repeatUntil"] : null;
+}
