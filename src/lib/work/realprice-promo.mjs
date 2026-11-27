@@ -45,13 +45,7 @@ const promoPlace = (items) => {
 };
 export const promoAreaLabel = (items) => `${promoPlace(items)} 아파트 실거래가`;
 export const PROMO_SOURCE = "국토교통부 실거래가 공개 자료(공공데이터포털)";
-export const PROMO_NOTICE = "계약일 기준입니다. 신고 기한(계약 후 30일) 때문에 최근 거래는 늘어날 수 있고, 해제된 거래는 뺐습니다.";
 export const PROMO_NOTICE_SHORT = "계약일 기준, 최근 거래는 신고 기한(30일) 때문에 늘어날 수 있음, 해제 거래 제외.";
-const compareFromText = `${PROMO_COMPARE_FROM.slice(0, 4)}년 ${Number(PROMO_COMPARE_FROM.slice(4))}월`;
-// 판정 규칙은 worker/realprice-query.mjs의 REALPRICE_PRIOR_SQL·isRecordHighTarget과 같다(같은 단지 번호·같은 전용면적, 계약일이 앞선 매매, 해제·직거래 뺌).
-export const PROMO_HIGH_RULE = `신고가: 같은 단지·같은 전용면적에서 계약일이 앞선 매매(해제·직거래 뺌) 최고가보다 높은 매매입니다. ${compareFromText} 이후 매매와 비교했습니다.`;
-// 스레드(500자)·카카오톡용 짧은 판정 기준(같은 뜻, 3건이 한 줄씩 들어가게)
-export const PROMO_HIGH_RULE_SHORT = `신고가: 같은 단지·전용면적의 앞선 매매(${compareFromText} 이후, 해제·직거래 뺌) 최고가보다 높은 거래.`;
 
 // 사무소 명시사항 5항목(DEC-WT-23, 설계서 22.10절)은 ad-disclosure.mjs 한 곳에 둔다(보드 45번 C). 기존 이름은 그대로 다시 내보낸다.
 export const PROMO_DISCLOSURE_FIELDS = OFFICE_DISCLOSURE_FIELDS;
@@ -144,6 +138,9 @@ export function promoSelection(data) {
 // 명시사항 5항목 가운데 빈 칸의 이름(빈 배열이면 통과). ad-disclosure.mjs officeFieldsMissing과 같은 함수.
 export const disclosureProblems = officeFieldsMissing;
 
+// 그림 아래 칸 3줄. ad-disclosure.mjs officeLines와 같은 함수(다른 화면·시험이 이 이름으로 씀).
+export const disclosureLines = officeLines;
+
 // 만들 수 없는 이유(없으면 null). 화면은 이 문장을 보여 주고 복사·내려받기·인쇄를 막는다.
 export function promoBlockReason({ items, receivedAt, office }) {
   const missing = disclosureProblems(office);
@@ -172,14 +169,6 @@ export const priceText = (item) => {
   const parts = priceParts(item);
   return parts.monthly ? `${parts.main} ${parts.monthly}` : parts.main;
 };
-const metaLine = (item) => `전용 ${areaText(item.areaM2)} · ${floorText(item.floor)} · 계약 ${dateText(item.dealDate)}`;
-const prevText = (item) => `같은 단지·같은 전용면적 앞선 최고 ${formatKoreanWon(item.prevMaxWon)}`;
-const shortReceived = (iso) => {
-  const p = kstParts(iso);
-  return `${p.month}. ${p.day}. ${p.hour}:${p.minute} 받음`;
-};
-const shortDate = (isoDate) => `${Number(isoDate.slice(5, 7))}. ${Number(isoDate.slice(8, 10))}.`;
-
 export function promoTitle(items) {
   if (items.length === 1) {
     const item = items[0];
@@ -188,21 +177,11 @@ export function promoTitle(items) {
   return allHigh(items) ? `매매 신고가 ${items.length}건` : `실거래 ${items.length}건`;
 }
 
-export function monthsText(items) {
-  const months = [...new Set(items.map((item) => item.dealDate.slice(0, 7)))].sort();
-  const [y1, m1] = months[0].split("-");
-  const [y2, m2] = months.at(-1).split("-");
-  if (months.length === 1) return `${y1}년 ${Number(m1)}월 계약`;
-  return y1 === y2 ? `${y1}년 ${Number(m1)} ~ ${Number(m2)}월 계약` : `${y1}년 ${Number(m1)}월 ~ ${y2}년 ${Number(m2)}월 계약`;
-}
-
 function dealRange(items) {
   const dates = items.map((item) => item.dealDate).sort();
   return dates[0] === dates.at(-1) ? `계약일 ${dateText(dates[0])}` : `계약일 ${dateText(dates[0])} ~ ${dateText(dates.at(-1))}`;
 }
 
-// 그림 아래 칸 3줄. ad-disclosure.mjs officeLines와 같은 함수.
-export const disclosureLines = officeLines;
 // 해시태그(P1-f, 2026-11-20 운영자 답 "10개 안팎·단지 이름 넣음"): 고정 4개 → 거래 종류 → #신고가(있을 때) → 법정동 최대 3개 →
 // 전용면적 최대 2개(#전용84, ㎡ 소수점 버림) → 단지 이름 최대 3개(띄어쓰기·기호 뺌). 겹치면 하나, 모두 PROMO_HASHTAGS_MAX개 안.
 // 개수가 넘치면 단지 이름은 지키고 전용면적 → 법정동 순으로 줄인다. 동 번호는 넣지 않는다.
@@ -229,112 +208,69 @@ export function hashtags(items) {
   const areas = firstTags(items.map((item) => `전용${Math.floor(Number(item.areaM2))}`), Math.min(2, room));
   return [...new Set([...must, ...dongs, ...areas, ...names])];
 }
-const tradeBlock = (item) => [`${item.aptName}(${item.umdName}) ${kindLabel(item)} ${priceText(item)}`, metaLine(item), ...(isHigh(item) ? [`신고가 · ${prevText(item)}`] : [])];
-const compactLine = (item) => `- ${item.aptName} ${kindLabel(item)} ${priceText(item)}, 전용 ${areaText(item.areaM2)} ${floorText(item.floor)}, 계약 ${shortDate(item.dealDate)}${isHigh(item) ? " 신고가" : ""}`;
-// 스레드 글이 500자를 넘을 때만 쓰는 더 짧은 거래 줄: '전용'·'계약' 낱말만 빼고 숫자는 그대로 둔다(2026-11-25).
-const tightLine = (item) => `- ${item.aptName} ${kindLabel(item)} ${priceText(item)}, ${areaText(item.areaM2)} ${floorText(item.floor)}, ${shortDate(item.dealDate)}${isHigh(item) ? " 신고가" : ""}`;
-const headLine = (items) => `[${promoAreaLabel(items)}] ${items.length === 1 ? promoTitle(items) : `${promoTitle(items)}(${monthsText(items)})`}`;
-
 // ── 글 4가지 ──
 
-// 올릴 곳마다 글 끝에 붙일 것(2026-11-25 사용자 요청 "출처랑 명함부분은 한군데만 나오면 되니까 표에만 나오게끔 고쳐줘").
-// source: 출처·받은 시각·계약일 기준 안내 줄과 흐름 기준 줄. false면 그 글에는 넣지 않는다(카드 그림 아래 칸에는 늘 있다, promoCards).
-// office: 사무소 명시사항. true = 5항목 전부(블로그 5줄·카카오톡 한 줄, 그 전 글 그대로), "line" = 상호·연락처·등록번호 한 줄(officeShortLine), false = 넣지 않음.
-// 스레드와 인스타그램(2026-11-25 16:42:29 사용자 답 "전부 추천대로")은 출처를 빼고, 사무소는 한 줄만 남긴다(16:57:36 사용자 "1").
-// 두 곳은 늘 카드 그림을 함께 올린다는 전제다(5항목 전부·출처는 그림에 있다). 블로그·카카오톡은 글만 따로 읽힐 수 있어 그대로 둔다.
-// 신고가 판정 기준 줄(과 인스타그램 해시태그)은 이 표와 상관없이 남는다.
-export const PROMO_TEXT_TAIL = Object.freeze({
-  threads: Object.freeze({ source: false, office: "line" }),
-  instagram: Object.freeze({ source: false, office: "line" }),
-  blog: Object.freeze({ source: true, office: true }),
-  kakao: Object.freeze({ source: true, office: true }),
-});
-// 사무소 한 줄: 카카오톡 글의 5항목 한 줄에서 대표·소재지를 뺀 꼴. 값은 명시사항 칸(office, ad-disclosure.mjs OFFICE_DISCLOSURE_FIELDS의 칸 이름)을 그대로 쓴다.
-// 칸이 비면 글 4가지를 만들지 않는 규칙(P1-e, promoBlockReason)은 그대로다.
-export const officeShortLine = (office) => `${office.legalName} · ${office.mobile} · 등록번호 ${office.registrationNumber}`;
-// 스레드·인스타그램 글 끝 사무소 줄: "line"이면 한 줄, true면 그림 아래 칸과 같은 3줄, false면 없음.
-const officeTail = (office, mode) => (mode === "line" ? [officeShortLine(office)] : mode ? disclosureLines(office) : []);
-// 짧은 출처 줄(카카오톡 글, 그리고 표에서 켰을 때의 스레드 글). 카드 그림은 연도까지 적은 두 줄을 따로 쓴다(promoCards의 source).
-const shortSource = (receivedAt) => `출처: ${PROMO_SOURCE}, ${shortReceived(receivedAt)}. ${PROMO_NOTICE_SHORT}`;
+// 2026-11-27 사용자 요청 "홍보물 글내용이 너무 복잡해서 보기가 힘드네 … 부동산 이름 하고 전화번호만 나오게하고"(질문 도구 답 15:54:03,
+// "글 4곳 모두, 그림은 그대로"·"법적 상호"·"그림 그대로"·"줄 끝에 '신고가'만"): 글 4가지는 제목 → 빈 줄 → 거래 한 줄씩 → 빈 줄 → 상호·연락처 한 줄이다.
+// 인스타그램은 끝에 해시태그를, 블로그는 첫 줄에 '제목:'을 더한다. 출처·받은 시각·계약일 기준 안내·흐름 기준·신고가 판정 기준·대표·소재지·등록번호는
+// 글에 넣지 않는다. 카드 그림 아래 칸(promoCards: 명시사항 5항목·출처 두 줄·흐름 기준)은 그대로이고, 칸이 비면 만들지 않는 규칙(DEC-WT-23)도 그대로다.
 
-// 흐름 기준 줄(TR-11 PR #156 검토 권함 2, 2026-11-25): 카드 그림에 흐름(흐름선·직전·최고가 대비·3개월)을 그린 거래가 있을 때만,
-// 카드와 같은 promoFlow·promoBasisLine으로 실제로 그린 항목만 적는다. 흐름을 받지 못했거나 매매가 없으면 빈 배열(줄 없음).
-export const PROMO_BASIS_LABEL = "흐름 기준";
-function basisLines(items, insights) {
-  const basis = promoBasisLine(items.map((item) => itemFlow(item, insights?.[item.tradeKey] ?? null)));
-  return basis ? [`${PROMO_BASIS_LABEL}: ${basis}`] : [];
+// 제목: "동구 매매 실거래 (11.21)". 구는 고른 거래가 모두 한 구일 때 그 구('동구'), 섞이면 '대전'(0008). 거래 종류가 모두 같을 때만 종류 말을 넣고,
+// 날짜는 계약일이 하루면 그날, 여러 날이면 첫날 ~ 끝날이다(해가 다르면 '25.12.30 ~ 26.1.5'처럼 두 자리 연도를 붙임).
+const shortRegion = (items) => regionName(promoRegion(items) ?? "") || "대전";
+const sameKind = (items) => {
+  const kinds = new Set(items.map(kindLabel));
+  return kinds.size === 1 ? [...kinds][0] : "";
+};
+const shortDay = (isoDate, withYear) => `${withYear ? `${isoDate.slice(2, 4)}.` : ""}${Number(isoDate.slice(5, 7))}.${Number(isoDate.slice(8, 10))}`;
+export function shortDealRange(items) {
+  const dates = items.map((item) => item.dealDate).sort();
+  const [first, last] = [dates[0], dates.at(-1)];
+  if (first === last) return shortDay(first, false);
+  const years = first.slice(0, 4) !== last.slice(0, 4);
+  return `${shortDay(first, years)} ~ ${shortDay(last, years)}`;
+}
+export function shortTitle(items) {
+  return [shortRegion(items), sameKind(items), "실거래", `(${shortDealRange(items)})`].filter(Boolean).join(" ");
 }
 
-function fullText({ items, receivedAt, office, insights }, tail) {
-  const lines = [headLine(items), ""];
-  items.forEach((item, index) => {
-    if (index) lines.push("");
-    lines.push(...tradeBlock(item));
-  });
-  const notes = [...(tail.source ? [`출처: ${PROMO_SOURCE}, ${receivedText(receivedAt)} 받은 자료`, PROMO_NOTICE, ...basisLines(items, insights)] : []), ...(anyHigh(items) ? [PROMO_HIGH_RULE] : [])];
-  if (notes.length > 0) lines.push("", ...notes);
-  const officeLines = officeTail(office, tail.office);
-  if (officeLines.length > 0) lines.push("", ...officeLines);
-  return lines.join("\n");
+// 짧은 금액: 만 원 단위를 줄여 "4억 2,000"·"5억"·"8,400만"으로 쓴다(그림처럼 '만 원'을 붙이지 않음, 1억이 안 되면 '만'만 붙임).
+// 만 원 단위로 떨어지지 않는 금액(공개 자료에는 없음)은 지어내지 않고 원 단위 글 그대로 쓴다. 월세는 "보증금 / 월 월세"다.
+const groupMan = (value) => value.toLocaleString("en-US");
+export function shortAmount(won) {
+  if (won === 0) return "0";
+  if (!Number.isSafeInteger(won) || won < 0 || won % 10_000 !== 0) return formatKoreanWon(won);
+  const man = won / 10_000;
+  const eok = Math.floor(man / 10_000);
+  const rest = man % 10_000;
+  if (eok === 0) return `${groupMan(rest)}만`;
+  return rest === 0 ? `${groupMan(eok)}억` : `${groupMan(eok)}억 ${groupMan(rest)}`;
+}
+export function shortPrice(item) {
+  if (item.kind !== "rent") return Number.isSafeInteger(item.priceWon) ? shortAmount(item.priceWon) : "금액 없음";
+  const deposit = Number.isSafeInteger(item.depositWon) ? item.depositWon : 0;
+  return item.monthlyRentWon ? `${shortAmount(deposit)} / 월 ${shortAmount(item.monthlyRentWon)}` : shortAmount(deposit);
 }
 
-// 스레드: 머리 줄 → 빈 줄 → 1건은 자세히, 여러 건은 한 줄씩. 500자를 넘으면 거래 줄을 짧게(tightLine), 그래도 넘으면 거래 줄 대신 "그림에 정리" 한 줄로 줄인다.
-// 2026-11-25부터 출처·흐름 기준·사무소 명시사항 5항목은 글에 넣지 않고 카드 그림에만 두며, 글 끝에는 사무소 한 줄만 둔다(PROMO_TEXT_TAIL.threads).
-// 사무소 한 줄은 모든 단계의 끝(end)에 붙으므로 어느 단계에서도 빠지지 않고, 500자는 그 줄까지 넣고 잰다.
-// 표를 다시 켰을 때: 흐름 기준 줄은 거래 줄보다 뒤로 미룬다(각 단계에서 기준 줄을 넣어 500자 안이면 넣고, 넘으면 그 단계는 기준 줄 없이 본다).
-function threadsText(input, tail) {
-  const { items, receivedAt, office } = input;
-  const fits = (text) => [...text].length <= PROMO_LIMITS.threads;
-  const plain = { ...input, insights: undefined };
-  const end = (from) => {
-    const notes = [...(tail.source ? [shortSource(receivedAt), ...basisLines(items, from.insights)] : []), ...(anyHigh(items) ? [PROMO_HIGH_RULE_SHORT] : [])];
-    const officeLines = officeTail(office, tail.office);
-    return [...(notes.length > 0 ? ["", ...notes] : []), ...(officeLines.length > 0 ? ["", ...officeLines] : [])];
-  };
-  const compact = (from, line = compactLine) => [headLine(items), "", ...items.map(line), ...end(from)].join("\n");
-  const summary = (from) => [headLine(items), `거래 ${items.length}건(${dealRange(items)})은 그림에 정리했습니다.`, ...end(from)].join("\n");
-  const tries = [...(items.length === 1 ? [fullText(input, tail), fullText(plain, tail)] : []), compact(input), compact(plain), compact(plain, tightLine), summary(input)];
-  return tries.find(fits) ?? summary(plain);
-}
+// 거래 한 줄: "신흥SKVIEW 59㎡ 4억 2,000 · 27층". 전용면적은 소수점을 버리고(해시태그 #전용84와 같은 셈), 종류가 섞이면 단지 이름 뒤에 종류를 넣는다.
+// 신고가(recordHigh가 true이고 앞선 최고가가 있을 때)만 줄 끝에 " · 신고가"를 붙인다. 동 번호·지번은 넣지 않는다(DEC-WT-22).
+const shortLine = (item, withKind) => {
+  const floor = floorText(item.floor);
+  return `${item.aptName}${withKind ? ` ${kindLabel(item)}` : ""} ${Math.floor(Number(item.areaM2))}㎡ ${shortPrice(item)}${floor ? ` · ${floor}` : ""}${isHigh(item) ? " · 신고가" : ""}`;
+};
+// 글 끝 사무소 한 줄: 법적 상호와 연락처뿐이다(값은 명시사항 칸 office를 그대로 씀).
+export const promoOfficeLine = (office) => `${office.legalName} ${office.mobile}`;
+const shortBody = (items) => items.map((item) => shortLine(item, !sameKind(items)));
 
-// 인스타그램: 자세한 글(신고가가 있으면 판정 기준 한 줄) → 빈 줄 → 사무소 한 줄 → 빈 줄 → 해시태그. 출처·흐름 기준·명시사항 5항목은 함께 올리는 카드 그림에 있다(PROMO_TEXT_TAIL.instagram).
-function instagramText(input, tail) {
-  return [fullText(input, tail), "", hashtags(input.items).join(" ")].join("\n");
+// 스레드 500자: 거래 줄까지 넣어 넘으면(아주 긴 단지 이름) 거래 줄 대신 "거래 n건은 그림에 정리했습니다." 한 줄로 줄인다(자르지 않음).
+function threadsText({ items, office }) {
+  const full = [shortTitle(items), "", ...shortBody(items), "", promoOfficeLine(office)].join("\n");
+  if ([...full].length <= PROMO_LIMITS.threads) return full;
+  return [shortTitle(items), "", `거래 ${items.length}건은 그림에 정리했습니다.`, "", promoOfficeLine(office)].join("\n");
 }
-
-function blogText({ items, receivedAt, office, insights }, tail) {
-  const head = items.length === 1
-    ? `${promoPlace(items)} ${items[0].aptName} ${kindLabel(items[0])}${isHigh(items[0]) ? " 신고가" : ""} ${priceText(items[0])}(${monthsText(items)})`
-    : `${promoPlace(items)} 아파트 ${promoTitle(items)}(${monthsText(items)})`;
-  const lines = [`제목: ${head}`, "", `국토교통부 실거래가 공개 자료에서 ${promoPlace(items)} 아파트 거래를 정리했습니다.`, ""];
-  for (const item of items) {
-    lines.push(`■ ${item.aptName}(${item.umdName}) ${kindLabel(item)}${isHigh(item) ? " · 신고가" : ""}`);
-    lines.push(`- 금액: ${priceText(item)}`, `- 전용면적: ${areaText(item.areaM2)}`, `- 층: ${floorText(item.floor)}`, `- 계약일: ${dateText(item.dealDate)}`);
-    if (isHigh(item)) lines.push(`- 같은 단지·같은 전용면적 앞선 최고: ${formatKoreanWon(item.prevMaxWon)}`);
-    lines.push("");
-  }
-  if (anyHigh(items)) lines.push(PROMO_HIGH_RULE, "");
-  if (tail.source) lines.push(`출처: ${PROMO_SOURCE}, ${receivedText(receivedAt)} 받은 자료`, PROMO_NOTICE, ...basisLines(items, insights), "");
-  if (tail.office) lines.push(...PROMO_DISCLOSURE_FIELDS.map(([key, label]) => `${label}: ${office[key]}`));
-  while (lines.at(-1) === "") lines.pop();
-  return lines.join("\n");
-}
-
-// 카카오톡: 1:1 채팅에 붙여 넣는 짧은 글(2026-11-20 운영자 답 "권하는 대로").
-function kakaoText({ items, receivedAt, office, insights }, tail) {
-  const lines = [`[${promoAreaLabel(items)}] ${promoTitle(items)}`];
-  if (items.length === 1) {
-    const item = items[0];
-    lines.push(`${priceText(item)} · ${metaLine(item)}`);
-    if (isHigh(item)) lines.push(`(${prevText(item)})`);
-  } else {
-    lines.push(...items.map(compactLine));
-  }
-  if (tail.source) lines.push(shortSource(receivedAt), ...basisLines(items, insights));
-  if (anyHigh(items)) lines.push(PROMO_HIGH_RULE_SHORT);
-  if (tail.office) lines.push(`${office.legalName} · 대표 ${office.representative} · ${office.address} · ${office.mobile} · 등록번호 ${office.registrationNumber}`);
-  return lines.join("\n");
-}
+const kakaoText = ({ items, office }) => [shortTitle(items), "", ...shortBody(items), "", promoOfficeLine(office)].join("\n");
+const instagramText = (input) => [kakaoText(input), "", hashtags(input.items).join(" ")].join("\n");
+const blogText = ({ items, office }) => [`제목: ${shortTitle(items)}`, "", ...shortBody(items), "", promoOfficeLine(office)].join("\n");
 
 export const PROMO_TEXT_KINDS = Object.freeze([
   ["threads", "스레드"],
@@ -371,11 +307,10 @@ export function promoSteps(kind, { cardCount = 1, counted }) {
   return { image, text, post: posts[kind] ?? posts.instagram };
 }
 
-// 글 4가지. 만들 수 없으면(promoBlockReason) null. input.insights(거래 ID → 거래 흐름 응답, 없어도 됨)가 있으면 출처 줄 아래에 흐름 기준 줄을 붙인다(출처 줄을 넣는 글만).
-// tails는 올릴 곳마다 글 끝에 붙일 것(PROMO_TEXT_TAIL). 화면은 넘기지 않고, 시험이 표의 다른 값을 볼 때만 넘긴다.
-export function promoTexts(input, tails = PROMO_TEXT_TAIL) {
+// 글 4가지. 만들 수 없으면(promoBlockReason) null. 글에는 흐름을 쓰지 않으므로 input.insights는 보지 않는다(카드 그림만 씀).
+export function promoTexts(input) {
   if (promoBlockReason(input)) return null;
-  return { threads: threadsText(input, tails.threads), instagram: instagramText(input, tails.instagram), blog: blogText(input, tails.blog), kakao: kakaoText(input, tails.kakao) };
+  return { threads: threadsText(input), instagram: instagramText(input), blog: blogText(input), kakao: kakaoText(input) };
 }
 
 // 글자 수(한글 한 자 = 1자, 코드 포인트 기준)와 상한 넘음 여부.
@@ -389,7 +324,10 @@ export function textCount(kind, text) {
 
 // ── 카드 그림 자료(그리기는 src/lib/work-realprice-card.ts) ──
 
-// flow: 거래 흐름(보드 63번). 계산하지 못한 거래·흐름을 받지 못한 때는 null이라 지금 모양 그대로 그린다. 글 4가지의 흐름 기준 줄도 같은 값을 쓴다.
+// 흐름 기준 줄의 머리말(TR-11 PR #156 검토 권함 2, 2026-11-25). 카드 그림 아래 칸에서 basis 앞에 붙인다(work-realprice-card.ts).
+export const PROMO_BASIS_LABEL = "흐름 기준";
+
+// flow: 거래 흐름(보드 63번). 계산하지 못한 거래·흐름을 받지 못한 때는 null이라 지금 모양 그대로 그린다.
 const itemFlow = (item, insight) => (item.kind === "sale" && insight ? promoFlow(insight, { high: isHigh(item), buildYear: item.buildYear ?? null }) : null);
 const cardItem = (item, insight) => ({
   name: item.aptName,
@@ -431,8 +369,8 @@ export function promoUpText(item) {
 // 장마다 그림 자료. 여러 장이면 제목 끝에 " · 1/2장". 아래 칸에는 사무소 명시사항 5항목과, 그 위 작은 글로 출처 두 줄(source: 출처·받은 시각 /
 // 계약일 기준·신고 기한 안내·해제 거래 제외)과 흐름 기준 줄(basis, 그 장에 흐름을 그린 거래가 있을 때만)을 장마다 둔다(2026-11-25 사용자 요청
 // "출처랑 명함부분은 … 표에만 나오게끔". 2026-11-24 "완전히 뺌"으로 뺐던 출처 상자와 같은 날 뺀 흐름 기준 줄을 작은 글로 되돌림).
-// 신고가 판정 기준은 그림에 넣지 않고 글 4가지에 남는다(P1-e 받은 시각 막기도 그대로). 글의 출처·흐름 기준 줄(basisLines)·명시사항은 PROMO_TEXT_TAIL을 따르므로
-// 지금은 블로그·카카오톡 글에만 있고, 스레드·인스타그램 글에는 이 그림에만 있다(글 끝에는 사무소 한 줄만, 두 곳은 늘 그림을 함께 올린다는 전제, 2026-11-25 16:42:29·16:57:36 사용자 답).
+// 신고가 판정 기준은 그림에도 넣지 않는다(P1-e 받은 시각 막기는 그대로). 2026-11-27부터 글 4가지에는 출처·흐름 기준·명시사항 5항목을 넣지 않으므로
+// 이 셋은 그림 아래 칸에만 있다(글 끝에는 상호·연락처 한 줄만, 2026-11-27 사용자 답 15:54:03).
 // insights: 거래 ID → 거래 흐름 응답 한 개(없거나 못 받았으면 빈 값). basis는 그 장에 실제로 그린 흐름 항목만 적는다.
 export function promoCards({ items, receivedAt, office, insights = {}, style = PROMO_STYLE_DEFAULT }) {
   if (promoBlockReason({ items, receivedAt, office })) return [];

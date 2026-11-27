@@ -808,21 +808,15 @@ test("P1-e TK-39 홍보물 화면: ids로만 다시 읽고 카드 PNG 1080×1350
     // Windows 클립보드는 줄바꿈을 CRLF로 바꿔 돌려주므로 줄바꿈만 맞춰 비교한다.
     texts[value] = (await page.evaluate(() => navigator.clipboard.readText())).replaceAll("\r\n", "\n");
     expect(await preview.inputValue(), `${name}: 복사한 글 = 글 미리 보기`).toBe(texts[value]);
-    for (const money of ["4억 100만 원", "보증금 2,000만 / 월 85만 원", "4억 300만 원"]) expect(texts[value], `${name}: ${money}`).toContain(money);
+    // 글 4가지는 제목·거래 한 줄씩·상호·연락처 한 줄만(2026-11-27 사용자 "부동산 이름 하고 전화번호만"·15:54:03 답). 금액은 짧은 모양.
+    for (const money of ["4억 100", "2,000만 / 월 85만", "4억 300"]) expect(texts[value], `${name}: ${money}`).toContain(money);
+    expect(texts[value], `${name}: 긴 금액 없음`).not.toContain("만 원");
     expect(texts[value], `${name}: 층 숫자 그대로`).toContain("지하 1층");
     expect(texts[value], `${name}: 동 번호 0`).not.toMatch(/103동/u);
-    if (value === "threads" || value === "instagram") {
-      // 스레드·인스타그램 글은 출처·받은 시각·사무소 명시사항 5항목을 넣지 않는다(2026-11-25 사용자 요청 "출처랑 명함부분은 … 표에만"·16:42:29 답, 카드 그림에만).
-      // 사무소는 상호·연락처·등록번호 한 줄만 둔다(16:57:36 사용자 "1"). 소재지는 그림에만.
-      expect(texts[value], `${name}: 출처·받은 시각 없음`).not.toMatch(/국토교통부|받음|받은 자료/u);
-      expect(texts[value].split("\n"), `${name}: 사무소 한 줄`).toContain("리더스시티행복한공인중개사사무소 · 010-2790-8675 · 등록번호 30110-2023-00028");
-      expect(texts[value].split("010-2790-8675").length - 1, `${name}: 연락처는 한 번`).toBe(1);
-      expect(texts[value], `${name}: 소재지 없음`).not.toContain("안샘로14번길");
-      continue;
-    }
-    expect(texts[value], `${name}: 받은 시각(한국 12:10)`).toMatch(/11\. 19\. 12:10 받/u);
-    expect(texts[value], `${name}: 출처는 글에 그대로`).toContain("국토교통부");
-    expect(texts[value]).toContain("010-2790-8675");
+    expect(texts[value], `${name}: 출처·받은 시각·판정 기준 없음`).not.toMatch(/국토교통부|받음|받은 자료|2006년/u);
+    expect(texts[value].split("\n"), `${name}: 사무소 한 줄`).toContain("리더스시티행복한공인중개사사무소 010-2790-8675");
+    expect(texts[value].split("010-2790-8675").length - 1, `${name}: 연락처는 한 번`).toBe(1);
+    for (const hidden of ["안샘로14번길", "30110-2023-00028", "805-05-02602", "백진옥"]) expect(texts[value], `${name}: ${hidden} 없음(그림에만)`).not.toContain(hidden);
   }
   await expect(page.locator("[data-promo-count]")).toHaveText(/자$/u);
   await page.getByRole("button", { name: "인스타그램 글 복사" }).click();
@@ -1096,15 +1090,13 @@ test("거래 흐름 홍보물: 담은 매매 ID만 한 번 묻고, 흐름을 못
     await page.goto(`/admin/work/realprice/promo/?ids=${ids}`);
     await expect(page.locator(".rt-promo__card img").first()).toHaveAttribute("src", /^data:image\/png;base64,/u);
     expect(calls.insights.at(-1), state).toBe([firstPage[0].tradeKey, firstPage[3].tradeKey].join(","));
-    // 흐름 기준 줄(2026-11-25): 흐름을 그렸으면 글 출처 줄 아래 한 줄, 못 받았으면 줄 없음(글은 흐름을 받은 뒤 만든다).
-    // 처음 보이는 인스타그램 글에는 출처 줄이 없어 기준 줄도 없다(16:42:29 사용자 답, 그림에만). 출처 줄이 있는 블로그 글로 본다.
+    // 흐름 기준 줄: 2026-11-27부터 글 4가지에는 흐름 기준을 넣지 않는다(흐름을 받았든 못 받았든, 흐름은 그림에만).
     expect(await page.locator("[data-promo-preview]").inputValue(), `${state}: 인스타그램 글`).not.toContain("흐름 기준");
     await page.context().grantPermissions(["clipboard-read", "clipboard-write"], { origin: new URL(page.url()).origin });
     await page.getByRole("button", { name: "블로그 글 복사" }).click();
     await expect(page.locator("[data-promo-preview-label]")).toHaveText("블로그 글");
     const text = await page.locator("[data-promo-preview]").inputValue();
-    if (state === "ok") expect(text.split("\n"), state).toContain("흐름 기준: 같은 단지·같은 전용면적 · 흐름선: 12개월 월별 가운데 값 · 최고·직전: 실제 거래");
-    else expect(text, state).not.toContain("흐름 기준");
+    expect(text, state).not.toContain("흐름 기준");
   }
   assertNoErrors();
 });

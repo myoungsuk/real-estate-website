@@ -15,7 +15,7 @@ import { buildCompareSheet, buildListingSheet, buildShapeSheet, checkListingInpu
 import { MESSAGE_TEMPLATES, MESSAGE_VARIANTS, buildWorkMessage } from "../src/lib/work/message-templates.mjs";
 import { checkPaperCopy, copyTextProblem, paperCopyFields } from "../src/lib/work/paper-copy.mjs";
 import { buildDoneNotice, businessCardView } from "../src/lib/work/promo-paper.mjs";
-import { officeShortLine, promoCards, promoTexts } from "../src/lib/work/realprice-promo.mjs";
+import { promoCards, promoOfficeLine, promoTexts } from "../src/lib/work/realprice-promo.mjs";
 
 const readJson = async (path) => JSON.parse(await readFile(new URL(`../${path}`, import.meta.url), "utf8"));
 const real = await readJson("src/data/office.json");
@@ -77,7 +77,7 @@ test("명시사항 줄·그림 아래 3줄·사무소 한 줄은 office 값만 �
   assertNoReal(officeLine(fake), "officeLine");
   assertHasFake(officeLines(fake), "officeLines");
   assertNoReal(officeLines(fake), "officeLines");
-  assert.equal(officeShortLine(fake), `${fake.legalName} · ${fake.mobile} · 등록번호 ${fake.registrationNumber}`);
+  assert.equal(promoOfficeLine(fake), `${fake.legalName} ${fake.mobile}`);
   const complex = buildDisclosure({ source: { type: "complex" }, office: fake, rules });
   assert.equal(complex.text, officeLine(fake));
 });
@@ -98,10 +98,11 @@ test("실거래가 홍보물 글 4가지와 카드 그림 글 묶음은 office �
     const texts = promoTexts(input);
     assert.ok(texts, "글 4가지를 만듦");
     for (const [kind, text] of Object.entries(texts)) assertNoReal(text, `promoTexts ${kind} ${items.length}건`);
-    assert.ok(texts.threads.split("\n").includes(officeShortLine(fake)), "스레드 끝 사무소 한 줄");
-    assert.ok(texts.instagram.split("\n").includes(officeShortLine(fake)), "인스타그램 사무소 한 줄");
-    assertHasFake(texts.blog, `블로그 ${items.length}건`);
-    assertHasFake(texts.kakao, `카카오톡 ${items.length}건`);
+    // 2026-11-27부터 글 4가지 끝은 상호·연락처 한 줄뿐이다(5항목은 카드 그림에만, 아래 promoCards).
+    for (const [kind, text] of Object.entries(texts)) {
+      assert.ok(text.split("\n").includes(promoOfficeLine(fake)), `${kind} 사무소 한 줄`);
+      assertHasFake(text, `${kind} ${items.length}건`, [fake.legalName, fake.mobile]);
+    }
     const cards = promoCards(input);
     assert.ok(cards.length >= 1);
     assertNoReal(cards, `promoCards ${items.length}건`);
