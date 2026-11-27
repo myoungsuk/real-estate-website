@@ -23,7 +23,7 @@ const listHref = "/admin/work/realprice/";
       <span class="admin-stage-badge">국토교통부 공개 자료</span>
     </header>
 
-    <p class="work-doc__lead rt-promo__lead">담은 실거래(최대 {PROMO_IDS_MAX}건)로 올릴 그림과 글을 만듭니다. 숫자는 받은 자료 그대로이고, 그림에는 출처·받은 시각·사무소 명시사항이 자동으로 붙습니다(스레드·인스타그램 글에는 상호·연락처·등록번호 한 줄만 붙습니다).</p>
+    <p class="work-doc__lead rt-promo__lead">담은 실거래(최대 {PROMO_IDS_MAX}건)로 올릴 그림과 글을 만듭니다. 숫자는 받은 자료 그대로이고, 그림에는 출처·받은 시각·사무소 명시사항이 자동으로 붙습니다(글에는 상호·연락처 한 줄만 붙습니다).</p>
 
     <AdminPageHelp page="/admin/work/realprice/promo/" />
 
@@ -78,7 +78,7 @@ const listHref = "/admin/work/realprice/";
             </button>
           ))}
         </div>
-        <p class="rt-places__post" id="promo-post" data-promo-step-post>그림을 저장한 뒤 올릴 곳 단추를 누르면 그곳에 맞춘 글이 복사됩니다(출처·명시사항은 그림에 있고, 스레드·인스타그램 글에는 상호·연락처·등록번호 한 줄만).</p>
+        <p class="rt-places__post" id="promo-post" data-promo-step-post>그림을 저장한 뒤 올릴 곳 단추를 누르면 그곳에 맞춘 글이 복사됩니다(출처·명시사항은 그림에 있고, 글에는 상호·연락처 한 줄만).</p>
         <p class="admin-form-status" role="status" aria-live="polite" data-promo-status></p>
 
         <details class="rt-promo__fold" data-promo-text-fold>
@@ -357,7 +357,7 @@ const listHref = "/admin/work/realprice/";
           return;
         }
         // 거래 흐름(보드 63번): 담은 매매의 흐름을 한 번에 묻는다. 못 받거나 계산하지 못한 거래는 지금 모양 그대로 그린다.
-        // 글 4가지는 흐름을 받은 뒤 만든다: 그린 흐름이 있을 때만 출처 줄 아래에 흐름 기준 줄이 붙는다(2026-11-25, 못 받으면 줄 없음. 스레드·인스타그램 글은 출처 줄을 넣지 않아 기준 줄도 없음).
+        // 글 4가지는 흐름을 쓰지 않는다(2026-11-27부터 제목·거래 줄·상호·연락처만). 흐름은 그림에만 그린다.
         let insights: Record<string, unknown> = {};
         const saleIds = selection.items.filter((item: PromoItem) => item.kind === "sale").map((item: PromoItem) => item.tradeKey);
         if (saleIds.length > 0) {

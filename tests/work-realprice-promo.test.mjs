@@ -1,4 +1,4 @@
-// 실거래가 홍보물(P1-e) 순수 함수(src/lib/work/realprice-promo.mjs). TK-38: 글 4가지의 자동 첨부(스레드·인스타그램은 2026-11-25부터 그림에만)·동 번호 0·층 숫자·금액, 해제 거래 빼기.
+// 실거래가 홍보물(P1-e) 순수 함수(src/lib/work/realprice-promo.mjs). TK-38: 글 4가지(2026-11-27부터 제목·거래 줄·상호·연락처만, 출처·명시사항 5항목은 그림에만)·동 번호 0·층 숫자·금액, 해제 거래 빼기.
 // 거래는 모두 가상 단지이고 사무소 정보는 공개 office.json이다.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -7,17 +7,13 @@ import { REALPRICE_IDS_MAX, parseTradeIds } from "../worker/realprice-query.mjs"
 import { REALPRICE_START_MONTHS } from "../worker/realprice-store.mjs";
 import {
   PROMO_COMPARE_FROM,
-  PROMO_HIGH_RULE,
-  PROMO_HIGH_RULE_SHORT,
   PROMO_IDS_MAX,
   PROMO_LIMITS,
-  PROMO_NOTICE,
   PROMO_NOTICE_SHORT,
   PROMO_ONE_CARD_MAX,
   PROMO_SOURCE,
   PROMO_STYLES,
   PROMO_STYLE_DEFAULT,
-  PROMO_TEXT_TAIL,
   disclosureProblems,
   isPromoStyle,
   priceSplit,
@@ -35,11 +31,14 @@ import {
   promoNumbers,
   promoSelection,
   promoTexts,
+  promoOfficeLine,
+  shortAmount,
+  shortDealRange,
+  shortPrice,
   promoTitle,
   receivedText,
   PROMO_HASHTAGS_MAX,
   PROMO_BASIS_LABEL,
-  officeShortLine,
   PROMO_PLACES,
   PROMO_TEXT_KINDS,
   hashtags,
@@ -66,7 +65,6 @@ const input = (items, extra = {}) => ({ items, receivedAt: RECEIVED, office, ...
 
 // 넣지 않을 것: 동 번호(101동·203동·아파트 동 칸 값), 호수, 지번, 평 단위, 생활 편의·거리 표현(근거 없는 광고 문구)
 const FORBIDDEN = [/\d+\s?동(?![구\w])/u, /\d+\s?호/u, /123-4/u, /평(?![가균])/u, /역세권|학세권|숲세권|편의시설|도보|직선거리|학군|조망/u];
-const withoutAddress = (text) => text.replaceAll(office.address, "");
 
 test("서버 상수와 같은 값: 고를 수 있는 수, 거래 ID 형식(worker parseTradeIds와 같은 답), 신고가 비교 시작 연월", () => {
   assert.equal(PROMO_IDS_MAX, REALPRICE_IDS_MAX);
@@ -140,68 +138,53 @@ test("P1-f 해시태그: 고정 4개 → 거래 종류 → #신고가 → 법정
   for (const tag of tags) assert.doesNotMatch(tag, /\d+동$|\d+호/u, `동 번호·호수 없음: ${tag}`);
 });
 
-test("TK-38 글 4가지(가상 거래 3건): 출처·받은 시각·계약일 기준·신고 기한·해제 제외·명시사항 5항목(스레드·인스타그램 글은 그림에만, 글 끝에 사무소 한 줄), 동 번호 0, 층 숫자 그대로, 금액이 자료와 같음", () => {
+test("TK-38 글 4가지(가상 거래 3건, 2026-11-27 짧은 글): 제목 → 거래 한 줄씩 → 상호·연락처 한 줄. 출처·안내·흐름 기준·판정 기준·대표·소재지·등록번호 없음, 동 번호 0, 층 숫자 그대로", () => {
   const texts = promoTexts(input(THREE));
   assert.deepEqual(Object.keys(texts), ["threads", "instagram", "blog", "kakao"]);
+  // 2026-11-27 사용자 요청(질문 도구 답 15:54:03): 그림처럼 제목 → 거래 줄 → 부동산 이름·전화번호. 면적은 소수점을 버리고 날짜는 제목에만 쓴다.
+  const body = [
+    "동구 매매 실거래 (10.30 ~ 11.12)",
+    "",
+    "가상숲1단지 84㎡ 5억 2,000 · 15층 · 신고가",
+    "가상숲2단지 59㎡ 3억 8,500 · 7층 · 신고가",
+    "가상들마을 101㎡ 6억 1,000 · 지하 1층",
+    "",
+    "리더스시티행복한공인중개사사무소 010-2790-8675",
+  ];
+  assert.equal(promoOfficeLine(office), `${office.legalName} ${office.mobile}`, "법적 상호와 연락처(office.json 값)");
+  assert.equal(body.at(-1), promoOfficeLine(office));
+  assert.equal(texts.kakao, body.join("\n"));
+  assert.equal(texts.threads, body.join("\n"));
+  assert.equal(texts.blog, [`제목: ${body[0]}`, ...body.slice(1)].join("\n"), "블로그는 첫 줄에 '제목:'만 더함");
+  assert.equal(texts.instagram, [...body, "", hashtags(THREE).join(" ")].join("\n"), "인스타그램은 끝에 해시태그만 더함");
   for (const [kind, text] of Object.entries(texts)) {
-    const short = kind === "threads" || kind === "kakao";
-    if (kind === "threads" || kind === "instagram") {
-      // 스레드·인스타그램 글은 출처·받은 시각·안내·흐름 기준·사무소 명시사항 5항목을 넣지 않는다(2026-11-25 사용자 요청·16:42:29 답, 늘 함께 올리는 카드 그림에만).
-      // 사무소는 상호·연락처·등록번호 한 줄만 글 끝 쪽에 한 번 둔다(16:57:36 사용자 "1"). 대표·소재지는 그림에만.
-      assert.ok(!text.includes(PROMO_SOURCE) && !text.includes("출처") && !text.includes("받음") && !text.includes("받은 자료") && !text.includes("신고 기한") && !text.includes(PROMO_BASIS_LABEL), `${kind}: 출처·받은 시각·안내·흐름 기준 없음`);
-      for (const field of ["address", "representative"]) assert.ok(!text.includes(office[field]), `${kind}: 명시사항 ${field} 없음(그림에만)`);
-      assert.equal(officeShortLine(office), `${office.legalName} · ${office.mobile} · 등록번호 ${office.registrationNumber}`, "사무소 한 줄 꼴");
-      const lines = text.split("\n");
-      assert.equal(lines.filter((line) => line === officeShortLine(office)).length, 1, `${kind}: 사무소 한 줄 한 번`);
-      for (const field of ["legalName", "mobile", "registrationNumber"]) assert.equal(text.split(office[field]).length - 1, 1, `${kind}: ${field}는 그 한 줄에만`);
-      assert.equal(lines.at(kind === "threads" ? -1 : -3), officeShortLine(office), `${kind}: 끝(인스타그램은 해시태그 앞)`);
-    } else {
-      assert.ok(text.includes(PROMO_SOURCE), `${kind}: 출처`);
-      assert.ok(text.includes(short ? "11. 20. 09:50 받음" : "2026. 11. 20. 09:50 받은 자료"), `${kind}: 받은 시각(한국 시각)`);
-      assert.ok(/계약일 기준/u.test(text) && /신고 기한/u.test(text) && /해제/u.test(text), `${kind}: 계약일 기준·신고 기한·해제 제외 안내`);
-      for (const field of ["legalName", "address", "mobile", "registrationNumber", "representative"]) assert.ok(text.includes(office[field]), `${kind}: 명시사항 ${field}`);
+    for (const gone of [PROMO_SOURCE, "출처", "받음", "받은 자료", "신고 기한", "계약일 기준", "흐름 기준", "2006년", "등록번호", office.registrationNumber, office.address, office.representative]) {
+      assert.ok(!text.includes(gone), `${kind}: ${gone} 없음`);
     }
-    for (const pattern of FORBIDDEN) assert.doesNotMatch(withoutAddress(text), pattern, `${kind}: ${pattern}`);
-    for (const money of ["5억 2,000만 원", "3억 8,500만 원", "6억 1,000만 원"]) assert.ok(text.includes(money), `${kind}: 금액 ${money}`);
-    assert.ok(text.includes("15층") && text.includes("7층") && text.includes("지하 1층"), `${kind}: 층 숫자 그대로`);
-    assert.ok(text.includes("84.97㎡") && text.includes("59.98㎡"), `${kind}: 전용면적`);
-    assert.ok(text.includes(short ? PROMO_HIGH_RULE_SHORT : PROMO_HIGH_RULE), `${kind}: 신고가가 있으면 판정 기준과 비교 범위`);
-    assert.ok(text.includes("2006년 1월 이후"), `${kind}: 비교 범위`);
+    assert.equal(text.split(office.mobile).length - 1, 1, `${kind}: 연락처 한 번`);
+    for (const pattern of FORBIDDEN) assert.doesNotMatch(text, pattern, `${kind}: ${pattern}`);
   }
-  assert.match(PROMO_HIGH_RULE, /2006년 1월 이후 매매와 비교/u);
-  assert.ok(texts.instagram.endsWith(`\n${hashtags(THREE).join(" ")}`), "인스타그램 끝에 해시태그 12개(P1-f)");
   assert.equal(textCount("instagram", texts.instagram).tags, 12);
-  assert.match(texts.blog, /^제목: 대전 동구 아파트 실거래 3건\(2026년 10 ~ 11월 계약\)/u);
-  assert.match(texts.blog, /중개사무소 명칭: .+\n소재지: .+\n연락처: .+\n등록번호: .+\n대표 성명: .+$/u, "블로그 끝 명시사항 5줄");
-  // 스레드 3건: 머리 줄 → 빈 줄 → 거래 한 줄씩 → 빈 줄 → 신고가 판정 기준 한 줄. 글자까지 이 모양이다.
-  assert.equal(texts.threads, [
-    "[대전 동구 아파트 실거래가] 실거래 3건(2026년 10 ~ 11월 계약)",
-    "",
-    "- 가상숲1단지 매매 5억 2,000만 원, 전용 84.97㎡ 15층, 계약 11. 12. 신고가",
-    "- 가상숲2단지 매매 3억 8,500만 원, 전용 59.98㎡ 7층, 계약 11. 8. 신고가",
-    "- 가상들마을 매매 6억 1,000만 원, 전용 101.62㎡ 지하 1층, 계약 10. 30.",
-    "",
-    PROMO_HIGH_RULE_SHORT,
-    "",
-    officeShortLine(office),
-  ].join("\n"));
-  assert.ok(textCount("threads", texts.threads).count <= PROMO_LIMITS.threads, "스레드 500자 안");
-  assert.ok(!textCount("instagram", texts.instagram).over, "인스타그램 2,200자·해시태그 30개 안");
+  assert.ok(!textCount("threads", texts.threads).over && !textCount("instagram", texts.instagram).over, "스레드 500자·인스타그램 2,200자 안");
 });
 
-test("금액 모양: 매매·분양권은 거래 금액, 전세는 보증금, 월세는 보증금 / 월세. 숫자 목록은 글과 그림이 같은 값을 쓰는지 대조할 때 쓴다", () => {
+test("금액 모양: 글은 만 원을 줄인 짧은 금액(매매·분양권은 거래 금액, 전세는 보증금, 월세는 보증금 / 월 월세), 그림은 원 단위 그대로. 숫자 목록은 그림 글자를 대조할 때 쓴다", () => {
   const items = [MONTHLY, JEONSE, PRESALE];
   const texts = promoTexts(input(items));
+  assert.match(texts.kakao, /^동구 실거래 \(11\.1 ~ 11\.5\)\n/u, "종류가 섞이면 제목에 종류 말이 없음");
   for (const text of Object.values(texts)) {
-    assert.ok(text.includes("보증금 5,000만 / 월 85만 원"), "월세");
-    assert.ok(text.includes("보증금 3억 원"), "전세");
-    assert.ok(text.includes("분양권") && text.includes("4억 5,500만 원"), "분양권");
+    assert.ok(text.includes("\n가상숲2단지 월세 59㎡ 5,000만 / 월 85만 · 4층\n"), "월세(종류가 섞이면 줄에 종류)");
+    assert.ok(text.includes("\n가상숲2단지 전세 59㎡ 3억 · 11층\n"), "전세");
+    assert.ok(text.includes("\n가상센트럴 분양권 84㎡ 4억 5,500 · 22층\n"), "분양권");
     assert.doesNotMatch(text, /신고가/u, "신고가가 없으면 '신고가' 말을 쓰지 않음");
   }
+  assert.deepEqual([384_000_000, 500_000_000, 84_000_000, 1_250_000_000, 0].map(shortAmount), ["3억 8,400", "5억", "8,400만", "12억 5,000", "0"]);
+  assert.match(shortAmount(123_456_789), /원$/u, "만 원으로 떨어지지 않으면 원 단위 글 그대로(지어내지 않음)");
+  assert.deepEqual([shortPrice(MONTHLY), shortPrice(JEONSE), shortPrice({ ...PLAIN, priceWon: null })], ["5,000만 / 월 85만", "3억", "금액 없음"]);
   assert.deepEqual(promoNumbers([MONTHLY]), ["보증금 5,000만 / 월 85만 원", "59.98㎡", "4층", "2026. 11. 2."]);
   const cards = promoCards(input(items));
   const drawn = cards.flatMap((card) => card.items.flatMap((item) => [item.priceText, item.area, item.floor, item.date]));
-  assert.deepEqual(drawn, promoNumbers(items), "그림 숫자 = 글 숫자");
+  assert.deepEqual(drawn, promoNumbers(items), "그림 숫자는 원 단위·소수점 그대로");
 });
 
 test("대장 조건 4: recordHigh가 null(판정 준비 전·첫 상한 날)이면 카드와 글에 '신고가' 말을 쓰지 않고 평소 거래 틀로 쓴다", () => {
@@ -246,42 +229,24 @@ test("DEC-WT-23: 명시사항 5항목이 하나라도 비면 만들지 않는다
   assert.equal(promoBlockReason(input(THREE)), null);
 });
 
-test("스레드 500자: 1건은 자세히, 여러 건은 한 줄씩(6건도 들어감), 넘으면 거래 줄을 '그림에 정리' 한 줄로 줄인다", () => {
-  const one = promoTexts(input([HIGH])).threads;
-  assert.match(one, /^\[대전 동구 아파트 실거래가\] 가상숲1단지 매매 신고가\n\n가상숲1단지\(천동\) 매매 5억 2,000만 원\n전용 84\.97㎡ · 15층 · 계약 2026\. 11\. 12\.\n신고가 · 같은 단지·같은 전용면적 앞선 최고 4억 9,500만 원/u);
-  assert.ok(one.endsWith(`\n\n${PROMO_HIGH_RULE}\n\n${officeShortLine(office)}`), "1건 신고가: 판정 기준 한 줄 → 사무소 한 줄");
-  assert.equal(promoTexts(input([PLAIN])).threads, "[대전 동구 아파트 실거래가] 가상들마을 매매\n\n가상들마을(신흥동) 매매 6억 1,000만 원\n전용 101.62㎡ · 지하 1층 · 계약 2026. 10. 30.\n\n리더스시티행복한공인중개사사무소 · 010-2790-8675 · 등록번호 30110-2023-00028", "1건 신고가 아님: 머리 줄과 거래, 사무소 한 줄");
-  // 6건: 출처·명시사항을 뺀 뒤로는 14자 단지 이름 여섯 건도 한 줄씩 들어간다(그 전에는 '그림에 정리'로 줄었다).
+test("스레드 500자: 6건도 거래 한 줄씩 들어가고, 넘으면(아주 긴 단지 이름) 거래 줄 대신 '그림에 정리' 한 줄로 줄인다. 상호·연락처 줄은 늘 남는다", () => {
+  assert.equal(promoTexts(input([HIGH])).threads, ["동구 매매 실거래 (11.12)", "", "가상숲1단지 84㎡ 5억 2,000 · 15층 · 신고가", "", promoOfficeLine(office)].join("\n"), "1건: 계약일 하루");
+  assert.deepEqual([shortDealRange([HIGH, HIGH2]), shortDealRange([{ dealDate: "2025-12-30" }, { dealDate: "2026-01-05" }])], ["11.8 ~ 11.12", "25.12.30 ~ 26.1.5"], "해가 다르면 두 자리 연도");
   const six = [HIGH, HIGH2, PLAIN, MONTHLY, JEONSE, PRESALE].map((item) => ({ ...item, aptName: `${item.aptName}센트럴파크리버뷰` }));
-  const sixLines = promoTexts(input(six)).threads.split("\n");
-  assert.ok([...sixLines.join("\n")].length <= PROMO_LIMITS.threads, `${[...sixLines.join("\n")].length}자`);
-  assert.deepEqual([sixLines[1], sixLines.filter((line) => line.startsWith("- ")).length, sixLines.slice(2, 8).every((line) => line.startsWith("- "))], ["", 6, true], "머리 줄 → 빈 줄 → 거래 6줄");
-  assert.ok(sixLines[2].startsWith("- 가상숲1단지센트럴파크리버뷰 매매 5억 2,000만 원") && sixLines[5].includes("보증금 5,000만 / 월 85만 원"), "거래 줄에 금액");
-  // 한 줄씩이 500자를 넘으면 먼저 거래 줄을 짧게('전용'·'계약' 낱말만 빼고 숫자는 그대로) 한다: 10자 단지 이름 월세 여섯 건(지하 층)은 짧은 줄로 들어간다.
-  // (사무소 한 줄을 더한 뒤로 이 꼴의 짧은 줄 한계는 월세 12자·11억 원대 신고가 매매 11자다. 그보다 길면 '그림에 정리'.)
-  const name10 = "가상센트럴파크3단지";
-  const tight = [1, 2, 3, 4, 5, 6].map((n) => ({ ...MONTHLY, tradeKey: key("rent", "202611", 30 + n), aptName: name10, areaM2: 101.62, floor: -1, dealDate: `2026-11-1${n}`, depositWon: 150_000_000, monthlyRentWon: 1_250_000 }));
-  const tightText = promoTexts(input(tight)).threads;
-  const tightLines = tightText.split("\n").filter((line) => line.startsWith("- "));
-  assert.ok([...tightText].length <= PROMO_LIMITS.threads, `${[...tightText].length}자`);
-  assert.ok(tightLines.length === 6 && !tightText.includes("그림에 정리"), "짧은 거래 줄 6개");
-  assert.equal(tightLines[0], `- ${name10} 월세 보증금 1억 5,000만 / 월 125만 원, 101.62㎡ 지하 1층, 11. 11.`, "숫자는 그대로, '전용'·'계약'만 뺌");
-  // 같은 이름의 매매 신고가 여섯 건도 짧은 줄 + 판정 기준 한 줄로 들어간다.
-  const tightHigh = tight.map((item) => ({ ...HIGH, tradeKey: item.tradeKey.replace("rent", "sale"), aptName: name10, areaM2: 101.62, floor: 15, dealDate: item.dealDate, priceWon: 1_125_500_000, prevMaxWon: 1_098_000_000 }));
-  const tightHighText = promoTexts(input(tightHigh)).threads;
-  assert.ok([...tightHighText].length <= PROMO_LIMITS.threads && tightHighText.split("\n").filter((line) => line.startsWith("- ")).length === 6, `${[...tightHighText].length}자`);
-  assert.ok(tightHighText.endsWith(`\n\n${PROMO_HIGH_RULE_SHORT}\n\n${officeShortLine(office)}`), "신고가 판정 기준 한 줄과 사무소 한 줄은 남음");
-  // 20자 단지 이름 매매 신고가 여섯 건(가장 긴 꼴)은 사무소 한 줄을 넣으면 짧은 줄로도 넘어 '그림에 정리'로 줄고, 사무소 한 줄은 그래도 남는다.
-  const longest = tightHigh.map((item) => ({ ...item, aptName: "가상더샵센트럴파크리버뷰포레스트3단지" }));
-  const longestText = promoTexts(input(longest)).threads;
-  assert.ok(longestText.includes("그림에 정리") && longestText.endsWith(`\n\n${PROMO_HIGH_RULE_SHORT}\n\n${officeShortLine(office)}`) && [...longestText].length <= PROMO_LIMITS.threads, `${[...longestText].length}자`);
-  // 그래도 500자를 넘는 긴 단지 이름(40자) 여섯 건은 거래 줄 대신 '그림에 정리' 한 줄로 줄인다(자르지 않음).
-  const long = six.map((item) => ({ ...item, aptName: `${item.aptName}${"가".repeat(26)}` }));
-  const threads = promoTexts(input(long)).threads;
-  assert.ok([...threads].length <= PROMO_LIMITS.threads, `${[...threads].length}자`);
-  assert.match(threads, /거래 6건\(계약일 2026\. 10\. 30\. ~ 2026\. 11\. 12\.\)은 그림에 정리했습니다\./u);
-  assert.ok(threads.endsWith(officeShortLine(office)), "줄인 글에도 사무소 한 줄");
-  assert.ok(!threads.includes("- "), "줄인 글에는 거래 줄이 없음");
+  const sixText = promoTexts(input(six)).threads;
+  assert.ok([...sixText].length <= PROMO_LIMITS.threads, `${[...sixText].length}자`);
+  assert.equal(sixText.split("\n").length, 10, "제목 → 빈 줄 → 거래 6줄 → 빈 줄 → 사무소");
+  // 500자를 넘는 긴 단지 이름 여섯 건은 거래 줄 대신 한 줄로 줄인다(자르지 않음).
+  const long = six.map((item) => ({ ...item, aptName: `${item.aptName}${"가".repeat(60)}` }));
+  assert.equal(promoTexts(input(long)).threads, ["동구 실거래 (10.30 ~ 11.12)", "", "거래 6건은 그림에 정리했습니다.", "", promoOfficeLine(office)].join("\n"));
+  // 경계: 딱 500자면 거래 줄 그대로, 501자가 되면 줄인 글.
+  const rows = (length) => [1, 2, 3, 4, 5, 6].map((n) => ({ ...PLAIN, tradeKey: key("sale", "202611", 60 + n), aptName: n === 1 ? `가${"나".repeat(length - 1)}` : "가상들마을", dealDate: `2026-11-1${n}` }));
+  const full = (text) => !text.includes("그림에 정리");
+  let edge = 0;
+  for (let length = 1; length <= 500 && full(promoTexts(input(rows(length))).threads); length += 1) edge = length;
+  assert.ok(edge > 1, "한 줄씩 글이 들어가는 길이가 있음");
+  assert.equal([...promoTexts(input(rows(edge))).threads].length, PROMO_LIMITS.threads, "가장 긴 한 줄씩 글은 사무소 줄까지 딱 500자");
+  assert.ok(!full(promoTexts(input(rows(edge + 1))).threads), "501자가 되면 줄인 글");
   assert.equal(textCount("threads", "가".repeat(501)).over, true);
   assert.equal(textCount("instagram", Array.from({ length: 31 }, (_, n) => `#t${n}`).join(" ")).over, true, "해시태그 31개");
   assert.deepEqual(textCount("blog", "가나다"), { count: 3, limit: null, tags: 0, over: false, label: "3자" });
@@ -326,7 +291,7 @@ test("카드 금액·딱지: 큰 숫자와 작은 단위로 나누고, '▲ 오�
   assert.deepEqual(card.items.map((item) => [item.high, item.presale, item.up]), [[true, false, "▲ 2,500만"], [false, true, ""], [false, false, ""]]);
 });
 
-test("카드: 여러 장이면 제목 끝 ' · 1/2장', 장마다 출처 두 줄(출처·받은 시각 / 계약일 기준 안내)과 사무소 명시사항 5항목(상호 크게). 신고가 판정 기준은 글에만", () => {
+test("카드: 여러 장이면 제목 끝 ' · 1/2장', 장마다 출처 두 줄(출처·받은 시각 / 계약일 기준 안내)과 사무소 명시사항 5항목(상호 크게). 신고가 판정 기준 글은 그림에 없음", () => {
   assert.equal(promoCards(input(THREE)).length, 1);
   const six = [HIGH, HIGH2, PLAIN, MONTHLY, JEONSE, PRESALE];
   const cards = promoCards(input(six));
@@ -340,7 +305,7 @@ test("카드: 여러 장이면 제목 끝 ' · 1/2장', 장마다 출처 두 줄
     assert.deepEqual(card.office, { name: office.legalName, representative: office.representative, address: office.address, mobile: office.mobile, registrationNumber: office.registrationNumber });
     for (const gone of ["highRule", "disclosure"]) assert.equal(Object.hasOwn(card, gone), false, `그림 자료에 ${gone} 없음`);
     const drawn = JSON.stringify(card);
-    for (const text of [PROMO_NOTICE, PROMO_HIGH_RULE, PROMO_HIGH_RULE_SHORT]) assert.equal(drawn.includes(text), false, "그림에는 긴 안내·판정 기준 글이 없음");
+    for (const text of ["신고 기한(계약 후 30일)", "2006년 1월 이후"]) assert.equal(drawn.includes(text), false, "그림에는 긴 안내·판정 기준 글이 없음");
     assert.equal(card.allHigh, false, "여러 장이면 줄마다 신고가 표");
     for (const item of card.items) assert.equal(Object.hasOwn(item, "aptDong"), false, "카드에 동 번호 칸 없음");
   }
@@ -350,65 +315,18 @@ test("카드: 여러 장이면 제목 끝 ' · 1/2장', 장마다 출처 두 줄
   assert.equal(JSON.stringify(cards).match(/\d+\s?동(?![구\w])/u), null, "카드 자료 전체에 동 번호 0");
 });
 
-test("스레드 500자 경계(2026-11-25 검토 권함): 딱 500자면 그 단계 글 그대로, 501자면 다음 단계(짧은 줄)로 간다", () => {
-  // 여섯 건 가운데 한 건의 단지 이름만 한 자씩 늘린다. 머리 줄에는 단지 이름이 없어 한 줄씩 글은 한 자씩 길어진다.
-  const rows = (length) => [1, 2, 3, 4, 5, 6].map((n) => ({ ...PLAIN, tradeKey: key("sale", "202611", 60 + n), aptName: n === 1 ? `가${"나".repeat(length - 1)}` : "가상들마을", dealDate: `2026-11-1${n}` }));
-  const isFull = (text) => text.split("\n").filter((line) => line.startsWith("- ")).every((line) => line.includes(", 전용 ") && line.includes(", 계약 "));
-  let edge = 0;
-  for (let length = 1; length <= 300 && isFull(promoTexts(input(rows(length))).threads); length += 1) edge = length;
-  assert.ok(edge > 1, "한 줄씩 글이 들어가는 길이가 있음");
-  const at500 = promoTexts(input(rows(edge))).threads;
-  assert.equal([...at500].length, PROMO_LIMITS.threads, "가장 긴 한 줄씩 글은 사무소 한 줄까지 딱 500자(그대로 씀)");
-  assert.ok(at500.endsWith(`\n\n${officeShortLine(office)}`), "500자에 사무소 한 줄이 들어 있음");
-  assert.equal([...promoTexts(input(rows(edge - 1))).threads].length, PROMO_LIMITS.threads - 1, "한 자 짧으면 499자");
-  const at501 = promoTexts(input(rows(edge + 1))).threads;
-  assert.ok(!isFull(at501) && !at501.includes("그림에 정리"), "501자가 되는 글은 짧은 줄 단계로");
-  assert.equal(at501.split("\n").filter((line) => line.startsWith("- ")).length, 6, "짧은 줄도 거래 6줄");
-  assert.ok([...at501].length < PROMO_LIMITS.threads && at501.endsWith(`\n\n${officeShortLine(office)}`), `${[...at501].length}자, 사무소 한 줄 그대로`);
-});
-
-test("올릴 곳마다 글 끝에 붙일 것(PROMO_TEXT_TAIL): 스레드·인스타그램은 출처·명시사항 5항목을 빼고(그림에만) 사무소 한 줄만, 블로그·카카오톡은 그대로. 신고가 판정 기준은 글 4가지에 남는다", () => {
-  assert.deepEqual(PROMO_TEXT_TAIL, { threads: { source: false, office: "line" }, instagram: { source: false, office: "line" }, blog: { source: true, office: true }, kakao: { source: true, office: true } });
-  assert.deepEqual(Object.keys(PROMO_TEXT_TAIL).sort(), PROMO_TEXT_KINDS.map(([kind]) => kind).sort(), "글 종류와 같은 4가지");
-  assert.ok(Object.isFrozen(PROMO_TEXT_TAIL) && Object.isFrozen(PROMO_TEXT_TAIL.threads), "표는 바꿀 수 없음");
+test("글에서 뺀 것은 그림에 있다(2026-11-27 사용자 답 '글 4곳 모두, 그림은 그대로'): 카드 그림 아래 칸은 장마다 출처·받은 시각과 사무소 명시사항 5항목", () => {
   const texts = promoTexts(input([HIGH, PLAIN]));
   for (const [kind, text] of Object.entries(texts)) {
-    const on = PROMO_TEXT_TAIL[kind];
-    assert.equal(text.includes("국토교통부"), on.source, `${kind} 출처`);
-    assert.equal(text.includes("09:50"), on.source, `${kind} 받은 시각`);
-    assert.equal(/신고 기한|30일/u.test(text), on.source, `${kind} 신고 기한`);
-    assert.equal(text.includes(office.mobile) && text.includes(office.registrationNumber), on.office !== false, `${kind} 사무소 연락처·등록번호`);
-    assert.equal(text.includes(office.address) && text.includes(office.representative), on.office === true, `${kind} 사무소 소재지·대표(5항목 전부일 때만)`);
-    assert.equal(text.split("\n").includes(officeShortLine(office)), on.office === "line", `${kind} 사무소 한 줄`);
-    assert.ok(text.includes("2006년 1월 이후"), `${kind} 신고가 판정 기준`);
+    assert.ok(!text.includes("국토교통부") && !text.includes("09:50") && !text.includes(office.registrationNumber), `${kind}: 출처·받은 시각·등록번호 없음`);
+    assert.equal(text.split("\n").filter((line) => line === promoOfficeLine(office)).length, 1, `${kind}: 상호·연락처 한 줄`);
+    assert.ok(!text.endsWith("\n") && !text.includes("\n\n\n"), `${kind}: 빈 줄이 겹치지 않음`);
   }
-  // 글에서 뺀 출처·명시사항은 그림에 장마다 있다(한 곳에는 꼭 나옴).
+  assert.equal(texts.instagram.split("\n").at(-3), promoOfficeLine(office), "인스타그램은 사무소 줄 → 빈 줄 → 해시태그");
   for (const card of promoCards(input([HIGH, HIGH2, PLAIN, MONTHLY, JEONSE, PRESALE]))) {
     assert.ok(card.source.join(" ").includes(PROMO_SOURCE) && card.source.join(" ").includes("09:50"), "그림 출처·받은 시각");
-    assert.deepEqual([card.office.name, card.office.mobile], [office.legalName, office.mobile], "그림 사무소 명시사항");
+    assert.deepEqual(card.office, { name: office.legalName, representative: office.representative, address: office.address, mobile: office.mobile, registrationNumber: office.registrationNumber }, "그림 사무소 명시사항 5항목");
   }
-  // 표의 값을 바꾸면 그 글만 바뀐다: 모두 끄면 네 글 모두 출처·명시사항이 없고, 스레드를 켜면 그 전(2026-11-24) 글처럼 붙는다.
-  const off = { source: false, office: false };
-  const none = promoTexts(input([HIGH, PLAIN]), { threads: off, instagram: off, blog: off, kakao: off });
-  for (const [kind, text] of Object.entries(none)) {
-    // 블로그 본문 첫 문장("국토교통부 실거래가 공개 자료에서 … 정리했습니다")은 꼬리가 아니라 그대로 남으므로 '출처:' 줄로 본다.
-    assert.ok(!text.includes("출처:") && !text.includes(PROMO_SOURCE) && !text.includes(office.mobile) && !text.includes(office.registrationNumber), `${kind}: 모두 끔`);
-    assert.ok(text.includes("5억 2,000만 원") && text.includes("6억 1,000만 원") && text.includes("2006년 1월 이후"), `${kind}: 거래와 판정 기준은 그대로`);
-    assert.ok(!text.endsWith("\n") && !text.includes("\n\n\n"), `${kind}: 빈 줄이 남지 않음`);
-  }
-  assert.ok(none.instagram.endsWith(`\n${hashtags([HIGH, PLAIN]).join(" ")}`), "인스타그램 해시태그는 그대로");
-  const on = promoTexts(input([HIGH, PLAIN]), { ...PROMO_TEXT_TAIL, threads: { source: true, office: true } });
-  assert.ok(on.threads.includes(`출처: ${PROMO_SOURCE}, 11. 20. 09:50 받음. ${PROMO_NOTICE_SHORT}`) && on.threads.includes(office.mobile), "스레드를 켜면 출처 줄·명시사항");
-  assert.ok([...on.threads].length <= PROMO_LIMITS.threads, "켜도 500자 안");
-  for (const kind of ["instagram", "blog", "kakao"]) assert.equal(on[kind], texts[kind], `${kind}: 다른 글은 그대로`);
-  // 인스타그램: 남는 것은 거래 글·신고가 판정 기준·사무소 한 줄·해시태그뿐이고, 표를 켜면 그 전(2026-11-25 앞) 글처럼 출처·흐름 기준·명시사항이 붙는다.
-  const insta = texts.instagram.split("\n");
-  assert.deepEqual(insta.slice(-5), [PROMO_HIGH_RULE, "", officeShortLine(office), "", hashtags([HIGH, PLAIN]).join(" ")], "인스타그램 끝: 판정 기준 → 사무소 한 줄 → 해시태그");
-  const instaOn = promoTexts(input([HIGH, PLAIN]), { ...PROMO_TEXT_TAIL, instagram: { source: true, office: true } }).instagram;
-  assert.ok(instaOn.includes(`출처: ${PROMO_SOURCE}, 2026. 11. 20. 09:50 받은 자료`) && instaOn.includes(office.mobile) && instaOn.endsWith(hashtags([HIGH, PLAIN]).join(" ")), "인스타그램을 켜면 출처·명시사항 뒤에 해시태그");
-  assert.ok(!promoTexts(input([PLAIN])).instagram.includes("2006년 1월 이후"), "신고가가 없으면 인스타그램에도 판정 기준 줄 없음");
-  const half = promoTexts(input([HIGH, PLAIN]), { ...PROMO_TEXT_TAIL, kakao: { source: true, office: false } }).kakao;
-  assert.ok(half.includes("국토교통부") && !half.includes(office.mobile), "출처만 남기고 명시사항만 뺄 수도 있음");
 });
 
 // 거래 흐름 응답(보드 63번, 가상 값): FLOW는 흐름선·직전·앞선 최고가 모두 있는 거래, ONE_MONTH는 거래 있는 달이 하나뿐인 첫 거래.
@@ -417,58 +335,23 @@ const FLOW = (tradeKey) => ({ tradeKey, available: true, series: flowSeries([nul
 const ONE_MONTH = (tradeKey) => ({ tradeKey, available: true, series: flowSeries([null, null, null, null, null, null, null, null, null, null, null, 610_000_000]), prev: null, prevMaxWon: null, ratioPct: null, recent3m: 1, households: null });
 const FULL_BASIS = "흐름 기준: 같은 단지·같은 전용면적 · 흐름선: 12개월 월별 가운데 값 · 최고·직전: 실제 거래";
 
-test("흐름 기준 줄(TR-11 PR #156 권함 2, 2026-11-25): 카드에 흐름을 그린 거래가 있을 때만 출처 줄을 넣는 글(블로그·카카오톡, 표에서 켠 스레드·인스타그램)의 출처 줄 바로 아래와 그림에, 그린 항목만", () => {
+test("흐름 기준 줄(TR-11 PR #156 권함 2, 2026-11-25): 카드에 흐름을 그린 장에만 그림 아래 칸에 그린 항목만 적는다. 글 4가지에는 흐름을 받아도 넣지 않는다(2026-11-27)", () => {
   const insights = { [HIGH.tradeKey]: FLOW(HIGH.tradeKey) };
-  const texts = promoTexts(input(THREE, { insights }));
-  // 스레드 글은 출처 줄을 넣지 않으므로 흐름 기준 줄도 없다(1건·3건·6건 모두 흐름이 없을 때의 글과 같다). 기준은 그림에 있다.
-  assert.equal(texts.threads, promoTexts(input(THREE)).threads, "스레드 3건: 흐름이 있어도 같은 글");
-  const single = promoTexts(input([HIGH], { insights }));
-  assert.equal(single.threads, promoTexts(input([HIGH])).threads, "스레드 1건: 흐름이 있어도 같은 글");
-  assert.doesNotMatch(`${texts.threads}\n${single.threads}`, /흐름 기준/u);
-  // 인스타그램도 출처 줄을 넣지 않으므로(2026-11-25 16:42:29 답) 흐름이 있어도 같은 글이다.
-  assert.equal(texts.instagram, promoTexts(input(THREE)).instagram, "인스타그램 3건: 흐름이 있어도 같은 글");
-  assert.doesNotMatch(texts.instagram, /흐름 기준/u);
-  const instagramOn = { ...PROMO_TEXT_TAIL, instagram: { source: true, office: true } };
-  // 표에서 스레드 출처를 켜면 그 전처럼 들어갈 때만 기준 줄이 붙는다(1건은 붙고, 3건은 500자를 넘어 빼고 거래 줄은 그대로).
-  const threadsOn = { ...PROMO_TEXT_TAIL, threads: { source: true, office: true } };
-  const singleOn = promoTexts(input([HIGH], { insights }), threadsOn).threads;
-  assert.equal(promoTexts(input(THREE, { insights }), threadsOn).threads, promoTexts(input(THREE), threadsOn).threads, "켠 스레드 3건: 들어가지 않으면 기준 줄 없이");
-  const checks = [...Object.entries(texts).filter(([kind]) => kind !== "threads" && kind !== "instagram").map(([kind, text]) => [kind, text, promoTexts(input(THREE))[kind]]), ["threads(표에서 켠 1건)", singleOn, promoTexts(input([HIGH]), threadsOn).threads], ["instagram(표에서 켬)", promoTexts(input(THREE, { insights }), instagramOn).instagram, promoTexts(input(THREE), instagramOn).instagram]];
-  for (const [kind, text, before] of checks) {
-    const lines = text.split("\n");
-    const at = lines.indexOf(FULL_BASIS);
-    assert.ok(at > 0, `${kind}: 흐름 기준 줄 하나`);
-    assert.equal(lines.filter((line) => line.startsWith("흐름 기준:")).length, 1, `${kind}: 한 번만`);
-    // 바로 위가 출처 줄(스레드·카카오톡은 출처·안내 한 줄) 또는 계약일 기준 안내 줄이다.
-    const above = lines[at - 1];
-    assert.ok(above.startsWith(`출처: ${PROMO_SOURCE}`) || above === PROMO_NOTICE, `${kind}: 출처 줄 아래(${above})`);
-    // 신고가 판정 기준·명시사항 줄은 그대로 남는다.
-    assert.ok(text.includes(kind === "kakao" ? PROMO_HIGH_RULE_SHORT : PROMO_HIGH_RULE) || text.includes(PROMO_HIGH_RULE_SHORT), `${kind}: 신고가 기준 그대로`);
-    for (const field of ["legalName", "address", "mobile", "registrationNumber", "representative"]) assert.ok(text.includes(office[field]), `${kind}: 명시사항 ${field}`);
-    // 줄을 빼면 흐름이 없을 때의 글과 같다(다른 줄은 바꾸지 않음).
-    assert.equal(lines.filter((_, index) => index !== at).join("\n"), before, `${kind}: 다른 줄 그대로`);
-  }
-  assert.ok(textCount("threads", singleOn).count <= PROMO_LIMITS.threads, "스레드 500자 안");
-  // 거래 6건: 지금 스레드 글에는 기준 줄이 없고, 표에서 켜면 '그림에 정리' 한 줄로 줄인 글에 붙는다.
-  const six = [HIGH, HIGH2, PLAIN, { ...PLAIN, tradeKey: "p2" }, { ...PLAIN, tradeKey: "p3" }, { ...PLAIN, tradeKey: "p4" }];
-  assert.doesNotMatch(promoTexts(input(six, { insights })).threads, /흐름 기준/u, "스레드 6건에도 없음");
-  const sixThreads = promoTexts(input(six, { insights }), threadsOn).threads;
-  assert.ok(sixThreads.split("\n").includes(FULL_BASIS) && [...sixThreads].length <= PROMO_LIMITS.threads, "켠 스레드 요약 글에는 붙음");
-  // 흐름을 받지 못했거나(빈 값·계산 못 함) 매매가 없으면 줄이 없다.
-  for (const none of [{}, { [HIGH.tradeKey]: { tradeKey: HIGH.tradeKey, available: false, reason: "budget" } }, undefined]) {
-    for (const [kind, text] of Object.entries(promoTexts(input(THREE, { insights: none })))) assert.doesNotMatch(text, /흐름 기준/u, `${kind}: 그린 흐름 없음`);
-  }
-  const rentOnly = promoTexts(input([MONTHLY], { insights: { [MONTHLY.tradeKey]: FLOW(MONTHLY.tradeKey) } }));
-  for (const [kind, text] of Object.entries(rentOnly)) assert.doesNotMatch(text, /흐름 기준/u, `${kind}: 전월세는 흐름을 그리지 않음`);
-  // 흐름선을 그리지 못한(거래 있는 달이 하나) 첫 거래만이면 3개월 거래 수 기준만 적는다(카드와 같은 promoBasisLine).
-  const first = promoTexts(input([PLAIN], { insights: { [PLAIN.tradeKey]: ONE_MONTH(PLAIN.tradeKey) } }));
-  for (const [kind, text] of Object.entries(first)) assert.equal(text.includes("흐름 기준: 같은 단지·같은 전용면적 · 최근 3개월: 계약일 기준 거래 수"), kind !== "threads" && kind !== "instagram", kind);
-  // 글의 기준 줄은 카드 자료의 basis 칸과 같은 글이다(그림에는 2026-11-25부터 출처 두 줄 아래 작은 글로 그린다, 흐름을 그린 장에만).
-  assert.equal(promoCards(input(THREE, { insights }))[0].basis, FULL_BASIS.replace("흐름 기준: ", ""));
+  assert.deepEqual(promoTexts(input(THREE, { insights })), promoTexts(input(THREE)), "흐름이 있어도 글 4가지는 같음");
+  for (const text of Object.values(promoTexts(input(THREE, { insights })))) assert.doesNotMatch(text, /흐름 기준|흐름선/u);
+  const card = promoCards(input(THREE, { insights }))[0];
+  assert.equal(`${PROMO_BASIS_LABEL}: ${card.basis}`, FULL_BASIS, "그림 아래 칸 기준 줄(머리말은 그리기에서 붙임)");
   assert.equal(promoCards(input(THREE))[0].basis, "", "흐름을 그리지 않은 장에는 기준 줄이 없음");
+  for (const none of [{}, { [HIGH.tradeKey]: { tradeKey: HIGH.tradeKey, available: false, reason: "budget" } }, undefined]) {
+    assert.equal(promoCards(input(THREE, { insights: none }))[0].basis, "", "흐름을 받지 못하면 기준 줄 없음");
+  }
+  assert.equal(promoCards(input([MONTHLY], { insights: { [MONTHLY.tradeKey]: FLOW(MONTHLY.tradeKey) } }))[0].basis, "", "전월세는 흐름을 그리지 않음");
+  // 흐름선을 그리지 못한(거래 있는 달이 하나) 첫 거래만이면 3개월 거래 수 기준만 적는다.
+  const first = promoCards(input([PLAIN], { insights: { [PLAIN.tradeKey]: ONE_MONTH(PLAIN.tradeKey) } }))[0].basis;
+  assert.ok(first.includes("같은 단지·같은 전용면적 · 최근 3개월: 계약일 기준 거래 수") && !first.includes("흐름선"), first);
   const twoPages = promoCards(input([PLAIN, MONTHLY, JEONSE, HIGH, HIGH2, PRESALE], { insights }));
-  assert.deepEqual(twoPages.map((card) => card.basis !== ""), [false, true], "여러 장이면 흐름을 그린 장에만");
-  assert.deepEqual(twoPages.map((card) => card.source), [twoPages[0].source, twoPages[0].source], "출처 두 줄은 장마다 같음");
+  assert.deepEqual(twoPages.map((page) => page.basis !== ""), [false, true], "여러 장이면 흐름을 그린 장에만");
+  assert.deepEqual(twoPages.map((page) => page.source), [twoPages[0].source, twoPages[0].source], "출처 두 줄은 장마다 같음");
 });
 
 test("파일 이름은 날짜만(realprice-YYYYMMDD.png, 두 장이면 -1·-2), 받은 시각은 한국 시각", () => {
@@ -500,20 +383,17 @@ test("TK-146 대전 5개 구(0008): 고정돼 있던 '대전 동구' 자리만 �
   assert.deepEqual([promoRegionTags(seo), promoRegionTags(mix)], [["#대전서구", "#서구아파트"], []]);
   assert.deepEqual(hashtags(seo).slice(0, 4), ["#대전서구", "#서구아파트", "#대전아파트", "#아파트실거래가"]);
   assert.ok(!hashtags(mix).some((tag) => /동구|서구|유성구/u.test(tag)), hashtags(mix).join(" "));
-  const before = promoTexts(input(THREE));
-  // 사무소 주소(명시사항, '대전광역시 동구 …')는 구와 상관없이 늘 붙으므로 빼고 센다.
-  const strip = (texts) => Object.fromEntries(Object.entries(texts).map(([kind, text]) => [kind, text.replaceAll(office.address, "")]));
-  const seoTexts = strip(promoTexts(input(seo)));
-  const mixTexts = strip(promoTexts(input(mix)));
-  const dongTexts = strip(promoTexts(input([HIGH, PLAIN])));
+  // 글 제목(2026-11-27 짧은 글): 한 구면 '서구 매매 실거래', 섞이면 '대전 매매 실거래'. 구 이름은 제목 자리(와 인스타그램 구 해시태그)에만 나온다.
+  const seoTexts = promoTexts(input(seo));
+  const mixTexts = promoTexts(input(mix));
   for (const [kind, text] of Object.entries(seoTexts)) {
     assert.ok(!text.includes("동구"), `${kind}: 서구 거래에 동구 말 없음`);
-    assert.equal((text.match(/서구/gu) ?? []).length, (dongTexts[kind].match(/동구/gu) ?? []).length, `${kind}: 동구가 나오던 자리 수만큼만 서구`);
+    assert.equal(text.split("\n")[0], kind === "blog" ? "제목: 서구 매매 실거래 (10.30 ~ 11.12)" : "서구 매매 실거래 (10.30 ~ 11.12)", `${kind}: 제목`);
   }
-  for (const [kind, text] of Object.entries(mixTexts)) assert.ok(!/동구|서구|유성구/u.test(text), `${kind}: 섞이면 구 이름 없이 '대전'`);
-  assert.match(seoTexts.blog, /^제목: 대전 서구 아파트 실거래 2건/u);
-  assert.match(mixTexts.blog, /^제목: 대전 아파트 실거래 2건/u);
-  assert.match(mixTexts.blog, /공개 자료에서 대전 아파트 거래를 정리했습니다/u);
-  assert.equal(before.blog, promoTexts(input(THREE.map((item) => ({ ...item, lawdCd: "30110" })))).blog, "동구 거래는 0008 전과 같은 글");
+  for (const [kind, text] of Object.entries(mixTexts)) {
+    assert.ok(!/동구|서구|유성구/u.test(text), `${kind}: 섞이면 구 이름 없이 '대전'`);
+    assert.ok(text.split("\n")[0].endsWith("대전 매매 실거래 (10.30 ~ 11.12)"), `${kind}: 제목`);
+  }
+  assert.deepEqual(promoTexts(input(THREE)), promoTexts(input(THREE.map((item) => ({ ...item, lawdCd: "30110" })))), "동구 거래는 구 코드가 없을 때와 같은 글");
   assert.deepEqual([promoCards(input(seo))[0].areaLabel, promoCards(input(mix))[0].areaLabel], ["대전 서구 아파트 실거래가", "대전 아파트 실거래가"]);
 });
