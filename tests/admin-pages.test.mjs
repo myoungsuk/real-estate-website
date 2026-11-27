@@ -60,8 +60,8 @@ test("메인페이지 선택 개선은 기존 데이터와 URL을 재사용한�
   // 홈 대표 제목·설명은 운영자가 관리자 화면에서 바꾸는 문구라 글자 대신 있는지만 본다(내용 검사는 content-validation).
   assert.equal(typeof homeContent.broker.headline, "string");
   assert.ok(homeContent.broker.headline.trim().length > 0);
-  assert.equal(typeof homeContent.broker.lead, "string");
-  assert.ok(homeContent.broker.lead.trim().length > 0);
+  assert.ok(Array.isArray(homeContent.broker.points) && homeContent.broker.points.length > 0);
+  for (const point of homeContent.broker.points) assert.ok(point.title.trim().length > 0 && point.description.trim().length > 0);
   assert.match(home, /href="\/properties\/">현재 매물 \{naverListings\.length\}건 보기/);
   assert.match(home, /\/properties\/\?trade=sale/);
   assert.match(home, /\/properties\/\?trade=jeonse/);

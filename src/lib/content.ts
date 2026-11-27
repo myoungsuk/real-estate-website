@@ -25,11 +25,18 @@ export interface ExternalContent {
   thumbnail: ContentImage | null;
 }
 
+// 홈 매물 종이 아래 대표 소개 항목(2026-11-27 사용자 요청 "사무소 소개를 아랫걸로 바꿔 줄 수 있어?"·답 "4칸 목록으로"·"이모지 그대로"). icon은 비워도 된다.
+export interface HomeBrokerPoint {
+  icon: string;
+  title: string;
+  description: string;
+}
+
 export interface HomeContent {
   broker: {
     eyebrow: string;
     headline: string;
-    lead: string;
+    points: HomeBrokerPoint[];
     portrait: ContentImage;
   };
   office: {

@@ -63,7 +63,7 @@ test("공개 스키마에 없는 루트와 중첩 필드를 거부한다", () =>
   );
   assert.match(
     findUnexpectedKeys("homeContent", {
-      broker: { eyebrow: "대표", headline: "제목", lead: "설명", portrait: { src: "/images/a.webp", alt: "사진", token: "x" } },
+      broker: { eyebrow: "대표", headline: "제목", points: [{ icon: "", title: "항목", description: "설명" }], portrait: { src: "/images/a.webp", alt: "사진", token: "x" } },
     }).join("\n"),
     /portrait\.token/,
   );
@@ -511,7 +511,7 @@ test("인스타그램 콘텐츠는 게시물 주소(/p/·/reel/)·썸네일 필�
 
 test("홈 대표·사무소·지역 소개 문구와 이미지를 검증한다", () => {
   const homeContent = {
-    broker: { eyebrow: "대표", headline: "신뢰", lead: "안내", portrait: { src: "/images/office/representative.webp", alt: "대표" } },
+    broker: { eyebrow: "대표", headline: "신뢰", points: [{ icon: "🏠", title: "가까움", description: "안내" }], portrait: { src: "/images/office/representative.webp", alt: "대표" } },
     office: { eyebrow: "사무소", title: "지역 전문", description: "설명", image: { src: "/images/office/storefront.webp", alt: "사무소" }, badges: ["대전 동구"] },
     areaGuide: { eyebrow: "지역", title: "리더스시티", description: "설명", cards: [{ title: "현장", description: "안내" }] },
   };
@@ -538,11 +538,12 @@ test("홈 문구 칸별 최대 글자 수: 지금 자료와 최대 글자는 통
     return copy;
   };
   const cases = [
-    ["broker.eyebrow", "broker.eyebrow"], ["broker.headline", "broker.headline"], ["broker.lead", "broker.lead"],
+    ["broker.eyebrow", "broker.eyebrow"], ["broker.headline", "broker.headline"],
     ["office.eyebrow", "office.eyebrow"], ["office.title", "office.title"], ["office.description", "office.description"],
     ["areaGuide.eyebrow", "areaGuide.eyebrow"], ["areaGuide.title", "areaGuide.title"], ["areaGuide.description", "areaGuide.description"],
     ["broker.portrait.alt", "imageAlt"], ["office.image.alt", "imageAlt"],
     ["office.badges.0", "badge"], ["areaGuide.cards.0.title", "cardTitle"], ["areaGuide.cards.0.description", "cardDescription"],
+    ["broker.points.0.icon", "pointIcon"], ["broker.points.0.title", "pointTitle"], ["broker.points.0.description", "pointDescription"],
   ];
   for (const [path, limitKey] of cases) {
     const max = HOME_CONTENT_MAX_LENGTHS[limitKey];
@@ -557,7 +558,23 @@ test("홈 문구 칸별 최대 글자 수: 지금 자료와 최대 글자는 통
   assert.match(validateAdminResource("home-content", over, await currentAdminResources()).join("\n"), /broker\.headline: 최대 50자/u, "다른 자료와 함께 보는 저장 경로");
   const page = await readFile(new URL("../src/pages/admin/content/index.astro", import.meta.url), "utf8");
   assert.match(page, /HOME_CONTENT_MAX_LENGTHS as MAX/u, "관리자 입력 칸도 같은 값을 씀");
-  assert.equal((page.match(/maxlength=\{MAX/gu) ?? []).length, 13);
+  assert.equal((page.match(/maxlength=\{MAX/gu) ?? []).length, 15);
+});
+
+test("홈 대표 소개 항목(2026-11-27): 1 ~ 6개, 제목·설명은 꼭 있고 그림 문자는 비워도 되며, 옛 broker.lead 칸은 받지 않는다", async () => {
+  const homeContent = await readRepoJson("src/data/home-content.json");
+  assert.equal(homeContent.broker.points.length, 4);
+  assert.equal("lead" in homeContent.broker, false);
+  const withPoints = (points) => ({ ...homeContent, broker: { ...homeContent.broker, points } });
+  const one = homeContent.broker.points[0];
+  assert.deepEqual(validateHomeContent(withPoints([{ ...one, icon: "" }])), [], "그림 문자 없이 한 개");
+  assert.deepEqual(validateHomeContent(withPoints(Array(6).fill(one))), [], "6개까지");
+  assert.match(validateHomeContent(withPoints(Array(7).fill(one))).join("\n"), /최대 6개/u);
+  assert.match(validateHomeContent(withPoints([])).join("\n"), /한 개 이상의 대표 소개 항목/u);
+  assert.match(validateHomeContent(withPoints([{ ...one, title: " " }])).join("\n"), /points\[0\]: 제목과 설명이 필요합니다/u);
+  assert.match(validateHomeContent(withPoints([{ title: one.title, description: one.description }])).join("\n"), /points\[0\]\.icon/u, "icon 칸이 아예 없으면 막음");
+  const legacy = { ...homeContent, broker: { ...homeContent.broker, lead: "옛 소개 글" } };
+  assert.ok(validateAdminResource("home-content", legacy).length > 0, "옛 lead 칸이 남은 자료는 저장 막음");
 });
 
 test("확정 공개 정보 9가지는 승인값과 같아야 저장되고, 영업시간·주차·소개·링크는 바꿀 수 있다", async () => {

@@ -196,7 +196,12 @@ const publicContentSchemas = Object.freeze({
     thumbnail: imageSchema,
   })),
   homeContent: objectSchema({
-    broker: objectSchema({ eyebrow: valueSchema, headline: valueSchema, lead: valueSchema, portrait: imageSchema }),
+    broker: objectSchema({
+      eyebrow: valueSchema,
+      headline: valueSchema,
+      points: arraySchema(objectSchema({ icon: valueSchema, title: valueSchema, description: valueSchema })),
+      portrait: imageSchema,
+    }),
     office: objectSchema({
       eyebrow: valueSchema,
       title: valueSchema,
@@ -984,7 +989,6 @@ export function validateExternalLinks(externalLinks) {
 export const HOME_CONTENT_MAX_LENGTHS = Object.freeze({
   "broker.eyebrow": 30,
   "broker.headline": 50,
-  "broker.lead": 200,
   "office.eyebrow": 40,
   "office.title": 50,
   "office.description": 150,
@@ -995,6 +999,11 @@ export const HOME_CONTENT_MAX_LENGTHS = Object.freeze({
   badge: 24,
   cardTitle: 30,
   cardDescription: 120,
+  // 대표 소개 항목(2026-11-27, broker.lead 200자 칸을 대신함): 그림 문자 한두 개·제목·설명. 항목은 1 ~ 6개.
+  pointIcon: 8,
+  pointTitle: 30,
+  pointDescription: 120,
+  pointsMax: 6,
 });
 
 function tooLong(value, max) {
@@ -1010,7 +1019,6 @@ export function validateHomeContent(homeContent) {
   const requiredStrings = [
     ["broker.eyebrow", homeContent?.broker?.eyebrow],
     ["broker.headline", homeContent?.broker?.headline],
-    ["broker.lead", homeContent?.broker?.lead],
     ["office.eyebrow", homeContent?.office?.eyebrow],
     ["office.title", homeContent?.office?.title],
     ["office.description", homeContent?.office?.description],
@@ -1022,6 +1030,20 @@ export function validateHomeContent(homeContent) {
     if (!isNonEmptyString(value)) errors.push(`homeContent.${path}: 공개 문구가 필요합니다.`);
     else if (tooLong(value, HOME_CONTENT_MAX_LENGTHS[path])) errors.push(lengthError(`homeContent.${path}`, HOME_CONTENT_MAX_LENGTHS[path]));
   });
+  const points = homeContent?.broker?.points;
+  if (!Array.isArray(points) || points.length === 0) {
+    errors.push("homeContent.broker.points: 한 개 이상의 대표 소개 항목이 필요합니다.");
+  } else {
+    if (points.length > HOME_CONTENT_MAX_LENGTHS.pointsMax) errors.push(`homeContent.broker.points: 최대 ${HOME_CONTENT_MAX_LENGTHS.pointsMax}개까지 쓸 수 있습니다.`);
+    points.forEach((point, index) => {
+      const path = `homeContent.broker.points[${index}]`;
+      if (!isNonEmptyString(point?.title) || !isNonEmptyString(point?.description)) errors.push(`${path}: 제목과 설명이 필요합니다.`);
+      if (typeof point?.icon !== "string") errors.push(`${path}.icon: 그림 문자는 글자여야 합니다(없으면 빈 글자).`);
+      if (tooLong(point?.icon, HOME_CONTENT_MAX_LENGTHS.pointIcon)) errors.push(lengthError(`${path}.icon`, HOME_CONTENT_MAX_LENGTHS.pointIcon));
+      if (tooLong(point?.title, HOME_CONTENT_MAX_LENGTHS.pointTitle)) errors.push(lengthError(`${path}.title`, HOME_CONTENT_MAX_LENGTHS.pointTitle));
+      if (tooLong(point?.description, HOME_CONTENT_MAX_LENGTHS.pointDescription)) errors.push(lengthError(`${path}.description`, HOME_CONTENT_MAX_LENGTHS.pointDescription));
+    });
+  }
   errors.push(...validateImage(homeContent?.broker?.portrait, "homeContent.broker.portrait", { required: true }));
   errors.push(...validateImage(homeContent?.office?.image, "homeContent.office.image", { required: true }));
   for (const [path, image] of [["broker.portrait", homeContent?.broker?.portrait], ["office.image", homeContent?.office?.image]]) {
