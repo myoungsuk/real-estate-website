@@ -210,10 +210,32 @@ const weekdayHours = office.hours.find((hour) => hour.label === "평일") ?? off
     padding: 28px 0 36px;
   }
 
-  .hw__lead {
+  /* 대표 소개 항목(2026-11-27): 제목 굵게 + 설명 한 줄. 그림 문자는 화면 읽기 프로그램에서 숨긴다. */
+  .hw__points {
+    display: grid;
+    gap: 14px;
     margin: 0 0 18px;
+    padding: 0;
+    list-style: none;
+  }
+
+  .hw__point-title {
+    display: flex;
+    gap: 8px;
+    margin: 0;
     font-size: 1.05rem;
-    line-height: 1.75;
+    font-weight: 700;
+    line-height: 1.5;
+  }
+
+  .hw__point-icon {
+    flex: none;
+  }
+
+  .hw__point-text {
+    margin: 2px 0 0;
+    font-size: 1rem;
+    line-height: 1.7;
   }
 
   .hw__person {
@@ -386,7 +408,14 @@ const weekdayHours = office.hours.find((hour) => hour.label === "평일") ?? off
   </div>
 
   <div class="shell hw__intro" data-home-reveal>
-    <p class="hw__lead">{homeContent.broker.lead}</p>
+    <ul class="hw__points">
+      {homeContent.broker.points.map((point) => (
+        <li>
+          <p class="hw__point-title">{point.icon && <span class="hw__point-icon" aria-hidden="true">{point.icon}</span>}<span>{point.title}</span></p>
+          <p class="hw__point-text">{point.description}</p>
+        </li>
+      ))}
+    </ul>
     <div class="hw__person">
       <img src={homeContent.broker.portrait.src} alt={homeContent.broker.portrait.alt} width="900" height="900" loading="lazy" decoding="async" />
       <div>

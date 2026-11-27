@@ -60,7 +60,7 @@ const FIELD_LABELS = Object.freeze({
 const EXACT_LABELS = Object.freeze({
   "home-content:broker.eyebrow": "대표 영역 작은 제목",
   "home-content:broker.headline": "대표 문장",
-  "home-content:broker.lead": "대표 소개 설명",
+  "home-content:broker.points": "대표 소개 항목",
   "home-content:broker.portrait.src": "대표 사진",
   "home-content:broker.portrait.alt": "대표 사진 설명",
   "home-content:office.eyebrow": "현장 사진 작은 제목",

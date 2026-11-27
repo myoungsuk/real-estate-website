@@ -30,7 +30,14 @@ import { HOME_CONTENT_MAX_LENGTHS as MAX } from "../../../../scripts/content-val
       <div class="admin-form-grid">
         <div class="admin-field"><label for="broker-eyebrow">작은 제목</label><input id="broker-eyebrow" name="brokerEyebrow" value={homeContent.broker.eyebrow} maxlength={MAX["broker.eyebrow"]} required data-write-control disabled /></div>
         <div class="admin-field admin-field--wide"><label for="broker-headline">대표 문장</label><textarea id="broker-headline" name="brokerHeadline" rows="3" maxlength={MAX["broker.headline"]} required data-write-control disabled>{homeContent.broker.headline}</textarea></div>
-        <div class="admin-field admin-field--wide"><label for="broker-lead">소개 설명</label><textarea id="broker-lead" name="brokerLead" rows="4" maxlength={MAX["broker.lead"]} required data-write-control disabled>{homeContent.broker.lead}</textarea></div>
+        {homeContent.broker.points.map((point, index) => (
+          <fieldset class="admin-subform admin-field--wide">
+            <legend>소개 항목 {index + 1}</legend>
+            <div class="admin-field"><label for={`broker-point-icon-${index}`}>그림 문자</label><input id={`broker-point-icon-${index}`} name={`brokerPointIcon${index}`} value={point.icon} maxlength={MAX.pointIcon} data-write-control disabled /><small>이모지 한 개(비워도 됨)</small></div>
+            <div class="admin-field"><label for={`broker-point-title-${index}`}>제목</label><input id={`broker-point-title-${index}`} name={`brokerPointTitle${index}`} value={point.title} maxlength={MAX.pointTitle} required data-write-control disabled /></div>
+            <div class="admin-field admin-field--wide"><label for={`broker-point-description-${index}`}>설명</label><textarea id={`broker-point-description-${index}`} name={`brokerPointDescription${index}`} rows="3" maxlength={MAX.pointDescription} required data-write-control disabled>{point.description}</textarea></div>
+          </fieldset>
+        ))}
         <div class="admin-field"><label for="broker-alt">대표 사진 설명</label><input id="broker-alt" name="brokerAlt" value={homeContent.broker.portrait.alt} maxlength={MAX.imageAlt} required data-write-control disabled /></div>
         <div class="admin-field"><label for="broker-image">대표 사진 교체</label><input id="broker-image" name="brokerImage" type="file" accept="image/jpeg,image/png,image/webp" data-write-control disabled /><small>자동으로 WebP·최대 1600px로 최적화합니다.</small></div>
       </div>
@@ -93,7 +100,6 @@ import { HOME_CONTENT_MAX_LENGTHS as MAX } from "../../../../scripts/content-val
       const values: Record<string, string> = {
         brokerEyebrow: data.broker.eyebrow,
         brokerHeadline: data.broker.headline,
-        brokerLead: data.broker.lead,
         brokerAlt: data.broker.portrait.alt,
         officeEyebrow: data.office.eyebrow,
         officeTitle: data.office.title,
@@ -104,6 +110,11 @@ import { HOME_CONTENT_MAX_LENGTHS as MAX } from "../../../../scripts/content-val
         areaTitle: data.areaGuide.title,
         areaDescription: data.areaGuide.description,
       };
+      data.broker.points.forEach((point, index) => {
+        values[`brokerPointIcon${index}`] = point.icon;
+        values[`brokerPointTitle${index}`] = point.title;
+        values[`brokerPointDescription${index}`] = point.description;
+      });
       data.areaGuide.cards.forEach((card, index) => {
         values[`areaCardTitle${index}`] = card.title;
         values[`areaCardDescription${index}`] = card.description;
@@ -114,7 +125,7 @@ import { HOME_CONTENT_MAX_LENGTHS as MAX } from "../../../../scripts/content-val
       if (!resource) return null;
       const value = (name: string) => field(name)?.value.trim() ?? "";
       return {
-        broker: { eyebrow: value("brokerEyebrow"), headline: value("brokerHeadline"), lead: value("brokerLead"), portrait: { src: portraitSrc, alt: value("brokerAlt") } },
+        broker: { eyebrow: value("brokerEyebrow"), headline: value("brokerHeadline"), points: resource.data.broker.points.map((_, index) => ({ icon: value(`brokerPointIcon${index}`), title: value(`brokerPointTitle${index}`), description: value(`brokerPointDescription${index}`) })), portrait: { src: portraitSrc, alt: value("brokerAlt") } },
         office: { eyebrow: value("officeEyebrow"), title: value("officeTitle"), description: value("officeDescription"), image: { src: officeImageSrc, alt: value("officeAlt") }, badges: value("officeBadges").split("\n").map((item) => item.trim()).filter(Boolean) },
         areaGuide: { eyebrow: value("areaEyebrow"), title: value("areaTitle"), description: value("areaDescription"), cards: resource.data.areaGuide.cards.map((_, index) => ({ title: value(`areaCardTitle${index}`), description: value(`areaCardDescription${index}`) })) },
       } satisfies HomeContent;
